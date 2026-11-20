@@ -24,4 +24,5 @@ Luke's mobile "life in your pocket" game: SEED meets One Hour One Life. Built st
 - To test needs quickly, raise settings.needsSpeed (60 makes an hour pass in a minute). Put it back to 1 before pushing.
 - game-data.json is loaded with fetch, so opening index.html straight from the disk won't work. Test with a local server (python3 -m http.server) or the test link.
 - Hosting: GitHub Pages serves the main branch at https://lukeogston97-hash.github.io/pocket-life/ (the test link). Each push to main updates it within a minute or two.
+- When a change is ready, push it to main, not only to a separate branch, so the test link updates. Luke tests on the live link, usually on his phone.
 - No em-dashes in anything Luke reads.
