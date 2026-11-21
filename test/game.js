@@ -1943,6 +1943,7 @@ function taskName(t, now) {
   return '';
 }
 // the list above the bottom bar: what your person is doing now, then what's next
+let queueOpen = false; // the full list is showing
 function drawQueue() {
   for (const b of badges) removeLabel(b);
   badges = [];
@@ -1953,7 +1954,8 @@ function drawQueue() {
   $('queueNow').textContent = cur ? taskName(cur, true) : 'Waiting for something to do';
   $('queueNowRow').classList.toggle('idle', !cur);
   const next = tasks.list.map((t, i) => ({ t, i })).filter(({ t }) => t.type !== 'drop');
-  const rows = next.slice(0, 5).map(({ t, i }, k) => {
+  const shown = queueOpen ? 25 : 2; // folded: the next 2; tap the list to see them all
+  const rows = next.slice(0, shown).map(({ t, i }, k) => {
     const li = document.createElement('li');
     const name = document.createElement('span');
     const num = document.createElement('span');
@@ -1969,7 +1971,17 @@ function drawQueue() {
     li.append(name, x);
     return li;
   });
-  if (next.length > 5) { const li = document.createElement('li'); li.className = 'more'; li.textContent = `+${next.length - 5} more`; rows.push(li); }
+  if (next.length > 2) {
+    const li = document.createElement('li');
+    li.className = 'more';
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'q-more';
+    b.textContent = queueOpen ? 'Show less' : `+${next.length - shown} more`;
+    b.addEventListener('click', () => { queueOpen = !queueOpen; drawQueue(); });
+    li.appendChild(b);
+    rows.push(li);
+  } else queueOpen = false;
   $('queueList').replaceChildren(...rows);
   $('queueList').hidden = rows.length === 0;
   $('queueStop').hidden = !cur && !next.length;

@@ -1,6 +1,6 @@
 {
   "version": "0.0.6",
-  "build": 1,
+  "build": 2,
   "settings": {
     "carryCapacity": 30,
     "walkSpeed": 2.2,
