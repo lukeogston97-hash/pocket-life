@@ -2113,10 +2113,11 @@ let queueOpen = false; // the full list is showing
 function drawQueue() {
   for (const b of badges) removeLabel(b);
   badges = [];
-  const show = ui.mode === 'world' && !!player && !you.dead;
+  const cur = tasks.current;
+  // only shown while your person has something to do
+  const show = ui.mode === 'world' && !!player && !you.dead && !!(cur || tasks.list.some((t) => t.type !== 'drop'));
   $('queue').hidden = !show;
   if (!show) return;
-  const cur = tasks.current;
   $('queueNow').textContent = cur ? taskName(cur, true) : 'Waiting for something to do';
   $('queueNowRow').classList.toggle('idle', !cur);
   const next = tasks.list.map((t, i) => ({ t, i })).filter(({ t }) => t.type !== 'drop');

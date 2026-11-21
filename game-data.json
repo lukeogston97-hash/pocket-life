@@ -1,6 +1,6 @@
 {
   "version": "0.0.8",
-  "build": 3,
+  "build": 4,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,
@@ -552,7 +552,8 @@
         "Patch: leave the game open without touching it for 3 minutes and your person goes on autopilot (eats, drinks, picks berries, strolls). Tap to take over.",
         "Patch: people strolling while away walk round the pond, not through it.",
         "Patch 3: people away (and on autopilot) stay within about 25 m of the pond.",
-        "Patch 3: name tags fade out behind the top and bottom bars, tap menus stay clear of them, and the Say box opens just under the top info."
+        "Patch 3: name tags fade out behind the top and bottom bars, tap menus stay clear of them, and the Say box opens just under the top info.",
+        "Patch 4: the task list only shows while your person is doing something. Inventory and pop-ups sit above the bottom bars again."
       ]
     },
     {
