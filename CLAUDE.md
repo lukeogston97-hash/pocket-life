@@ -19,7 +19,7 @@ Luke's mobile "life in your pocket" game: SEED meets One Hour One Life. Built st
 - Planned next (decided with Luke 21 Nov 2026, build in small updates):
   - Crafting (built 0.0.9): the Craft (hammer) button at the bottom right opens its own sheet of recipe cards: what it makes, chips showing what it needs and how many you have (green when enough), and Make (or Need more); Make is checked by the server ('craft'). Recipes in game-data.json, copied to server/game.json. First recipe: stone axe = 2 sticks + 3 stones. Tools (items with tool.uses) show in your hand and have a wear bar; the server keeps wear per person (p.wear). Simple now, more complex later.
   - Stone axe: shows in your hand; chop a tree (about 15 s, gives 1 log; the tree becomes a stump and grows back over 3 real days, but removing a stump means it's gone for good); chop a log into sticks; wears out after about 20 chops (a small wear bar). A log weighs 10.
-  - Rest (a new need, realistic like the others): awake about 16 h, sleep about 8 h; tap yourself to Sleep, best at night; away people sleep at night by themselves; no rest for about 3 days and you collapse and can die.
+  - Rest (built 0.1.1, the moon ring between Health and Hunger): perHour -6.25 awake, whileAsleep +12.5; tap yourself for Sleep / Wake up; any task wakes you; sleeping people lie down with 'sleeping' under their name; away and autopilot people sleep when Rest < away.sleepBelow (35) until full (night-time sleeping can come later); no rest for about 3 days and you die.
   - No families or babies: everyone starts as an adult person they make.
 - Later: everything saved on the server, day planner, skills, more stats, regions and time zones, app store wrapper.
 
@@ -27,7 +27,7 @@ Luke's mobile "life in your pocket" game: SEED meets One Hour One Life. Built st
 - Files (the same set in test/, the root and releases/<version>/): index.html is the page and a small loader; style.css is the look of the menus and buttons; game.js is the game code (three.js r170 from jsDelivr through an import map); game-data.json is all the content. No build step.
 - The loader fetches game-data.json fresh, then loads style.css and game.js with its version and build added to their addresses, so phones never mix old and new files.
 - game-data.json: all content. Items, recipes, needs (stats), things to use (sources), day and night colours, character looks, body shapes, settings. It has a "help" section explaining each part.
-- Adding content should almost always be a small edit to game-data.json, not code.
+- Adding content should almost always be a small edit to game-data.json, not code. New items automatically appear in the admin's Add list, the Inventory and Craft (with a picture drawn from the 3D model); keep it that way for placeables and buildings when they come.
 - The world is settings.worldSize metres square (100 for now), with thick forest past the edge. The clearing round the start is laid out from its own random numbers and the rest of the world from a second set, so changing the world never reshuffles the clearing.
 - Keep it light for phones. Lots of copies of a shape are drawn as one InstancedMesh, split into chunks of the map. Grass is only drawn near the camera. Far-off trees use simpler shapes.
 - Since 0.0.7 nothing about the game is saved on the phone except settings (graphics, mutes, the admin code) and the phone's random id. The server holds people (one storage key per person, p:<id>), the world, feedback and reports.

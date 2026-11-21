@@ -970,37 +970,83 @@ function rodGeo(len, t, twig) {
   }
   return rodGeos.get(key);
 }
-const axeHeadGeo = jitterGeo(new THREE.BoxGeometry(0.075, 0.07, 0.19), 0.12, 9);
+// Things you can carry. Each look gets a little variety of its own (Math.random, never the world's random numbers,
+// so the layout of the world never shifts).
+const tinted = (hex, l = 0.05) => { const m = mat(new THREE.Color(hex).offsetHSL(0, (Math.random() - 0.5) * 0.04, (Math.random() - 0.5) * l)); return m; };
+// a stick: two gently bent pieces of wood with a short side twig, a little thinner at the tip
+const stickGeos = new Map();
+function stickGeo(len, t, twig) {
+  const key = `${len}|${t}|${!!twig}`;
+  if (!stickGeos.has(key)) {
+    const half = len / 2;
+    const a = new THREE.CylinderGeometry(t * 0.92, t, half + t * 0.6, 6).rotateZ(Math.PI / 2 + 0.07).translate(-half / 2, -0.004, 0);
+    const b = new THREE.CylinderGeometry(t * 0.62, t * 0.92, half + t * 0.6, 6).rotateZ(Math.PI / 2 - 0.07).translate(half / 2, -0.004, 0);
+    const parts = [a, b];
+    if (twig) {
+      const nub = new THREE.CylinderGeometry(t * 0.35, t * 0.55, len * 0.24, 5);
+      nub.applyMatrix4(new THREE.Matrix4().compose(V(len * 0.12, t * 0.3, t * 1.9), new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, 0, -0.75)), V(1, 1, 1)));
+      parts.push(nub);
+    }
+    stickGeos.set(key, mergeGeometries(parts.map((g) => g.toNonIndexed())));
+  }
+  return stickGeos.get(key);
+}
+// a stone: a smooth, slightly flat pebble
+const pebbleGeos = [1, 2, 3].map((k) => jitterGeo(new THREE.IcosahedronGeometry(1, 1), 0.16, 40 + k));
+// the stone axe: a handle that's thicker at the grip, a wedge of stone with a sharp edge, and a lashing where they meet
+const axeHeadGeo = (() => {
+  const g = new THREE.BoxGeometry(0.07, 0.075, 0.2, 1, 1, 2).toNonIndexed();
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) { // taper to a blade along z, rounded back
+    const z = p.getZ(i), k = (z + 0.1) / 0.2;
+    p.setX(i, p.getX(i) * (1 - k * 0.82));
+    p.setY(i, p.getY(i) * (1 + k * 0.35));
+  }
+  g.computeVertexNormals();
+  return g;
+})();
 const SHAPES = {
-  // a handle with a stone head lashed across one end
   axe(look) {
     const len = look.length ?? 0.55, t = look.thickness ?? 0.025;
     const g = new THREE.Group();
-    g.add(new THREE.Mesh(rodGeo(len, t, false), matFor(look.colour)));
-    const head = new THREE.Mesh(axeHeadGeo, matFor(look.head || '#8f8a80'));
-    head.position.set(len / 2 - 0.05, 0.005, 0.045);
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(t * 0.85, t * 1.15, len, 6).rotateZ(Math.PI / 2), tinted(look.colour || '#8a6847', 0.04));
+    g.add(handle);
+    const head = new THREE.Mesh(axeHeadGeo, tinted(look.head || '#8f8a80', 0.06));
+    head.position.set(len / 2 - 0.055, 0.004, 0.05);
     g.add(head);
-    return { model: g, rest: 0.035, hold: 'rod', hit: [len + 0.3, 0.3, 0.4] };
+    const lash = new THREE.Mesh(new THREE.CylinderGeometry(t * 1.45, t * 1.45, 0.05, 7).rotateZ(Math.PI / 2), matFor(look.lashing || '#5b4330'));
+    lash.position.set(len / 2 - 0.055, 0, 0);
+    g.add(lash);
+    return { model: g, rest: 0.04, hold: 'rod', hit: [len + 0.3, 0.3, 0.42] };
   },
   rod(look) {
     const len = look.length ?? 0.6, t = look.thickness ?? 0.03;
     const g = new THREE.Group();
-    g.add(new THREE.Mesh(rodGeo(len, t, look.twig), matFor(look.colour)));
+    const m = new THREE.Mesh(stickGeo(len, t, look.twig), tinted(look.colour, 0.07));
+    m.rotation.x = (Math.random() - 0.5) * 0.6;
+    g.add(m);
     return { model: g, rest: t, hold: 'rod', hit: [len + 0.3, 0.3, 0.36] };
   },
   rock(look) {
     const s = look.size ?? 0.12;
-    const m = new THREE.Mesh(rockGeos[Math.floor(rand() * rockGeos.length)], matFor(look.colour));
-    m.scale.set(s, s * 0.72, s * 0.9);
-    m.rotation.set(rand(), rand() * 6, rand());
+    const m = new THREE.Mesh(pebbleGeos[Math.floor(Math.random() * pebbleGeos.length)], tinted(look.colour, 0.09));
+    m.scale.set(s * (0.85 + Math.random() * 0.3), s * 0.62, s * (0.8 + Math.random() * 0.25));
+    m.rotation.set((Math.random() - 0.5) * 0.3, Math.random() * 6, (Math.random() - 0.5) * 0.3);
     const g = new THREE.Group();
     g.add(m);
-    return { model: g, rest: s * 0.42, hold: 'palm', hitR: Math.max(0.2, s * 1.7) };
+    return { model: g, rest: s * 0.5, hold: 'palm', hitR: Math.max(0.2, s * 1.7) };
   },
+  // a berry: shiny and round, with a little green crown on top
   ball(look) {
     const s = look.size ?? 0.08;
     const g = new THREE.Group();
-    g.add(new THREE.Mesh(new THREE.IcosahedronGeometry(s, 1), matFor(look.colour)));
+    g.add(new THREE.Mesh(new THREE.IcosahedronGeometry(s, 1), mat(look.colour, { roughness: 0.35 })));
+    if (look.leaf !== false) {
+      const crown = new THREE.Mesh(new THREE.ConeGeometry(s * 0.55, s * 0.5, 5), matFor(look.leaf || '#4f7a3a'));
+      crown.position.y = s * 0.95;
+      crown.rotation.x = Math.PI;
+      g.add(crown);
+    }
     return { model: g, rest: s * 0.95, hold: 'palm', hitR: Math.max(0.18, s * 2.2) };
   },
   box(look) {
@@ -1267,6 +1313,7 @@ const itemViews = new Map();
 let nextItemId = 1;
 // every thing on the ground has an invisible hit area round it, a bit bigger than it is, so it's easy to tap or click
 const HIT_MAT = new THREE.MeshBasicMaterial({ visible: false });
+HIT_MAT.userData.shared = true;
 const HIT_BOX = new THREE.BoxGeometry(1, 1, 1), HIT_BALL = new THREE.SphereGeometry(1, 8, 6);
 function addWorldItem(kind, x, z, rot, id) {
   if (id != null && itemViews.has(id)) return getItem(id); // already here
@@ -1293,6 +1340,7 @@ function removeWorldItem(id) {
   const view = itemViews.get(id);
   if (view) {
     scene.remove(view);
+    disposeMaterials(view); // each item has its own slightly different colour
     const j = interactive.indexOf(view);
     if (j >= 0) interactive.splice(j, 1);
     itemViews.delete(id);
@@ -1535,7 +1583,7 @@ function stepStats(hours) {
   const st = you.stats;
   const empty = STATS.filter((s) => s.atZero && st[s.id] <= 0);
   const change = {};
-  for (const s of STATS) change[s.id] = s.onlyWhenFine && empty.length ? 0 : s.perHour;
+  for (const s of STATS) change[s.id] = s.onlyWhenFine && empty.length ? 0 : you.sleeping && Number.isFinite(s.whileAsleep) ? s.whileAsleep : s.perHour;
   for (const s of empty) for (const [k, v] of Object.entries(s.atZero)) if (k in change) change[k] += v;
   for (const s of STATS) st[s.id] = clampStat(st[s.id] + change[s.id] * hours);
 }
@@ -1602,6 +1650,54 @@ function applyDaylight() {
   app.classList.toggle('night', lum < 0.5);
 }
 
+/* ---------- little pictures of things, for the inventory and craft lists ----------
+   Drawn once from the real 3D models with a small separate renderer, then that renderer is let go. */
+const itemIcons = new Map();
+function makeItemIcons() {
+  if (itemIcons.size) return;
+  let r = null;
+  try {
+    r = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
+    r.setPixelRatio(1);
+    r.setSize(96, 96);
+    r.toneMapping = renderer.toneMapping;
+    r.outputColorSpace = renderer.outputColorSpace;
+    const sc = new THREE.Scene();
+    sc.add(new THREE.HemisphereLight('#fffaf0', '#6a6a58', 2.2));
+    const key = new THREE.DirectionalLight('#fff4e0', 2.4);
+    key.position.set(1.5, 3, 2);
+    sc.add(key);
+    const cam = new THREE.PerspectiveCamera(30, 1, 0.01, 20);
+    const box = new THREE.Box3(), size = V(), mid = V();
+    for (const kind of Object.keys(ITEMS)) {
+      const { model } = buildItem(kind);
+      model.rotation.y = 0.5;
+      sc.add(model);
+      box.setFromObject(model);
+      box.getSize(size); box.getCenter(mid);
+      const rad = Math.max(size.x, size.y, size.z) * 0.62;
+      const dist = rad / Math.tan(deg(15));
+      cam.position.copy(mid).add(V(0.45, 0.75, 0.9).normalize().multiplyScalar(dist));
+      cam.lookAt(mid);
+      r.render(sc, cam);
+      itemIcons.set(kind, r.domElement.toDataURL('image/png'));
+      sc.remove(model);
+      disposeMaterials(model);
+    }
+  } catch (err) { console.warn('Item pictures could not be drawn', err); }
+  if (r) { r.dispose(); r.forceContextLoss(); }
+}
+// a picture of the thing (or its colour, if the picture couldn't be drawn)
+function itemPic(kind) {
+  makeItemIcons();
+  const url = itemIcons.get(kind);
+  if (url) { const img = document.createElement('img'); img.className = 'pic'; img.src = url; img.alt = ''; return img; }
+  const dot = document.createElement('span');
+  dot.className = 'dot';
+  dot.style.background = ITEMS[kind].look.head || ITEMS[kind].look.colour || '#9a948a';
+  return dot;
+}
+
 /* ---------- your inventory: see what you're carrying, put things down, make things ---------- */
 const bagOpen = () => $('bag').classList.contains('open');
 function smallButton(text, onClick, primary) {
@@ -1612,12 +1708,10 @@ function smallButton(text, onClick, primary) {
   b.addEventListener('click', onClick);
   return b;
 }
-function bagRow(colour, title, detail, buttons) {
+function bagRow(kind, title, detail, buttons) {
   const li = document.createElement('li');
   li.className = 'bag-row';
-  const dot = document.createElement('span');
-  dot.className = 'dot';
-  dot.style.background = colour || '#9a948a';
+  const dot = itemPic(kind);
   const what = document.createElement('span');
   what.className = 'what';
   what.textContent = title;
@@ -1660,7 +1754,7 @@ function drawBag() {
     if (n > 1) buttons.push(smallButton('Drop all', () => dropItems(kind, n)));
     const it = ITEMS[kind];
     const left = it.uses ? (you.wear[kind] ?? it.uses) : 0;
-    const row = bagRow(it.look.head || it.look.colour, countLabel(kind, n), `Weight ${fmt(it.weight * n)}${it.uses ? ` · ${left} ${left === 1 ? 'use' : 'uses'} left` : ''}`, buttons);
+    const row = bagRow(kind, countLabel(kind, n), `Weight ${fmt(it.weight * n)}${it.uses ? ` · ${left} ${left === 1 ? 'use' : 'uses'} left` : ''}`, buttons);
     if (it.uses) { // a small wear bar for tools
       const bar = document.createElement('span');
       bar.className = 'wear';
@@ -1680,9 +1774,7 @@ function drawCraft() {
     li.className = 'craft-card';
     const head = document.createElement('div');
     head.className = 'craft-head';
-    const dot = document.createElement('span');
-    dot.className = 'dot';
-    dot.style.background = it.look.head || it.look.colour || '#9a948a';
+    const dot = itemPic(makes);
     const title = document.createElement('strong');
     title.textContent = r.name || it.name;
     const info = document.createElement('small');
@@ -2009,6 +2101,7 @@ function cantUse(t, planning) {
   return useHelps(src) ? null : fullLabel(src);
 }
 function queueTask(t) {
+  wakeUp();
   if (t.type === 'pickup') {
     if (allTasks().some((q) => q.type === 'pickup' && q.id === t.id)) return;
     const w = ITEMS[getItem(t.id).kind].weight;
@@ -2091,6 +2184,9 @@ function autopilot() {
   }
   if (busy() || now < auto.nextAt) return;
   const st = you.stats;
+  // tired: lie down until rested
+  if (you.sleeping) { if (st.rest != null && st.rest >= 99) setSleeping(false); return; }
+  if (st.rest != null && st.rest < (AWAY.sleepBelow || 35)) { setSleeping(true); return; }
   // eat what you carry when hungry
   for (let n = 0; n < 6 && st.hunger < AWAY.eatBelow; n++) {
     const food = Object.keys(you.carry).find((k) => ITEMS[k] && ITEMS[k].eat);
@@ -2128,8 +2224,28 @@ function bushTask(b) {
     stop: Math.max(box.max.x - box.min.x, box.max.z - box.min.z) / 2 + 0.3 };
 }
 setInterval(autopilot, 2000);
+// Sleeping: lie down where you are (Rest fills up); giving your person anything to do wakes them
+function setSleeping(on, fromServer = false) {
+  on = !!on;
+  if (!player || you.dead) { you.sleeping = on; return; }
+  const was = !!you.sleeping;
+  you.sleeping = on;
+  if (on) {
+    stopQueue();
+    player.rotation.x = -Math.PI / 2;
+    player.position.y = playerGround + 0.2;
+    if (!was) showTag('Zzz…', headTop(), 2.5);
+  } else if (was) {
+    resetPose();
+    if (!fromServer) showTag('Awake', headTop(), 1.5);
+  }
+  if (!fromServer && online()) net.sock.send(JSON.stringify({ t: 'sleep', on }));
+  drawNeeds();
+}
+const wakeUp = () => { if (you.sleeping) setSleeping(false); };
 // a walk joins the end of the queue, so it never interrupts anything
 function walkFirst(p) {
+  wakeUp();
   const t = { type: 'walk', x: p.x, z: p.z };
   const last = tasks.list[tasks.list.length - 1];
   if (last && last.type === 'walk') tasks.list.pop(); // a new walk replaces one still waiting at the end
@@ -2479,10 +2595,7 @@ function handleTap(px, py) {
   if (!online()) { showTag('Reconnecting…', headTop(), 1.5); return; }
   const t = pickTarget(px, py);
   if (!t) return;
-  if (t.kind === 'you') {
-    if (admin.on) { firstTap = null; openMenuAt(px, py, { kind: 'self', name: 'You' }); return; }
-    showTag('You', headTop(), 2); return;
-  }
+  if (t.kind === 'you') { firstTap = null; openMenuAt(px, py, { kind: 'self', name: 'You' }); return; }
   // a stick, stone, berry bush or the pond: open the menu of what you can do with it
   if (t.kind === 'item' || t.kind === 'use' || t.kind === 'person' || t.kind === 'grave') { firstTap = null; openMenuAt(px, py, t); return; }
   // the ground (or a rock, tree or log): one tap opens Walk here, a quick double-tap walks straight there
@@ -2528,7 +2641,11 @@ function menuActions(t) {
   if (t.kind === 'ground' || t.kind === 'thing' || t.kind === 'shore') {
     return [{ label: 'Walk here', run: () => walkToTarget(t) }, ...adminMore(adminGroundActions(t.point || (t.hit && t.hit.point)))];
   }
-  if (t.kind === 'self') return admin.on ? [{ label: 'Fill my needs', run: () => adminSend({ t: 'a.fill', id: net.myId }) }] : [];
+  if (t.kind === 'self') {
+    const rest = you.stats && you.stats.rest != null ? Math.round(you.stats.rest) : null;
+    return [you.sleeping ? { label: 'Wake up', run: () => setSleeping(false) } : { label: 'Sleep', note: rest != null ? `Rest ${rest}` : '', run: () => setSleeping(true) },
+      ...adminMore(admin.on ? [{ label: 'Fill my needs', run: () => adminSend({ t: 'a.fill', id: net.myId }) }] : [])];
+  }
   if (t.kind === 'grave') return [{ label: 'Walk here', run: () => walkFirst(V(t.x + 0.8, 0, t.z)) }];
   if (t.kind === 'item') {
     const it = t.item;
@@ -2968,7 +3085,7 @@ function frame() {
     if (previewPerson) previewPerson.rotation.y = previewSpin;
     renderCreator(w, h);
   } else if (player) {
-    if (!you.dead && !paused) updatePlayer(dt);
+    if (!you.dead && !paused && !you.sleeping) updatePlayer(dt);
     if (!paused) keyCamera(dt);
     updateOthers(dt);
     fadeTapRing(dt);
@@ -3177,6 +3294,7 @@ function applyMe(m, spawn = false) {
   for (const kind of shared.taking.values()) carry[kind] = (carry[kind] || 0) + 1;
   you.carry = carry;
   you.wear = m.wear || {};
+  if (!!m.sleeping !== !!you.sleeping) setSleeping(m.sleeping, true);
   you.lastKind = carry[you.lastKind] ? you.lastKind : (ITEMS[m.lastKind] && carry[m.lastKind] ? m.lastKind : Object.keys(carry)[0] || null);
   tickStats();
   drawNeeds();
@@ -3573,10 +3691,10 @@ function drawTag(o) {
   const el = o.name.el;
   o.name.bw = o.name.bh = 0;
   el.textContent = tagText(o.title, o.badge);
-  if (o.state === 'away' || o.state === 'asleep') {
+  if (o.state === 'away' || o.state === 'asleep' || o.state === 'sleeping') {
     const sub = document.createElement('small');
     sub.className = 'tag-sub';
-    sub.textContent = o.state === 'asleep' ? 'asleep · zz' : 'away';
+    sub.textContent = o.state === 'asleep' ? 'asleep · zz' : o.state === 'sleeping' ? 'sleeping · zz' : 'away';
     el.appendChild(sub);
   }
 }
@@ -3591,7 +3709,7 @@ function roundThePond(x, z, ux, uz, step) {
 }
 // sleepers lie on the ground
 function poseOther(o) {
-  const lying = o.state === 'asleep';
+  const lying = o.state === 'asleep' || o.state === 'sleeping';
   o.mesh.rotation.x = lying ? -Math.PI / 2 : 0;
   o.name.offset.y = lying ? 0.7 : 2.0;
 }
@@ -3628,7 +3746,7 @@ function updateOthers(dt) {
     }
     const dx = gx - m.position.x, dz = gz - m.position.z, d = Math.hypot(dx, dz);
     const P = m.userData.parts;
-    if (o.state === 'asleep') { m.position.x = o.tx; m.position.z = o.tz; m.position.y = groundY(m.position.x, m.position.z) + 0.2; continue; }
+    if (o.state === 'asleep' || o.state === 'sleeping') { m.position.x = o.tx; m.position.z = o.tz; m.position.y = groundY(m.position.x, m.position.z) + 0.2; continue; }
     if (d > (o.speed ? 120 : 8)) { m.position.x = o.tx; m.position.z = o.tz; } // too far behind: jump there
     else if (d > 0.02) {
       // someone away strolls at their own pace; a player here is caught up quickly

@@ -4,6 +4,12 @@
 export const HOUR = 3600000, MINUTE = 60000;
 const clampStat = (v) => Math.max(0, Math.min(100, v));
 
+// how long a sleep takes to fill rest, in ms (at normal speed)
+export function sleepMs(p, G) {
+  const r = G.needs.find((s) => s.id === 'rest');
+  if (!r || !r.whileAsleep) return 0;
+  return Math.max(60000, ((100 - (p.stats.rest ?? 0)) / r.whileAsleep) * HOUR);
+}
 export function freshStats(G) {
   const st = {};
   for (const s of G.needs) st[s.id] = clampStat(s.start ?? 100);
@@ -11,10 +17,11 @@ export function freshStats(G) {
 }
 // one slice of time, the same as in the game: every need moves by perHour, an empty need (atZero)
 // drags others down, and needs marked onlyWhenFine (health) only recover while nothing is empty
-function step(st, hours, G) {
+// (asleep: needs with whileAsleep, like Rest, change by that instead)
+function step(st, hours, G, asleep) {
   const empty = G.needs.filter((s) => s.atZero && st[s.id] <= 0);
   const change = {};
-  for (const s of G.needs) change[s.id] = s.onlyWhenFine && empty.length ? 0 : s.perHour;
+  for (const s of G.needs) change[s.id] = s.onlyWhenFine && empty.length ? 0 : asleep && s.whileAsleep != null ? s.whileAsleep : s.perHour;
   for (const s of empty) for (const [k, v] of Object.entries(s.atZero)) if (k in change) change[k] += v;
   for (const s of G.needs) st[s.id] = clampStat((st[s.id] ?? 0) + change[s.id] * hours);
 }
@@ -30,7 +37,7 @@ export function advanceStats(p, to, G, speed) {
   while (t < to) {
     const next = Math.min(to, t + MINUTE);
     const fast = speed && t < speed.until ? speed.x : 1;
-    step(p.stats, ((next - t) / HOUR) * fast, G);
+    step(p.stats, ((next - t) / HOUR) * fast, G, !!p.sleeping);
     t = next;
     if (G.needs.some((s) => s.deadAtZero && p.stats[s.id] <= 0)) { p.statsAt = t; return { at: t, cause: causeOf(p.stats, G) }; }
   }

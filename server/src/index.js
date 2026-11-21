@@ -9,7 +9,7 @@ import WORLDS from '../worlds.json'; // minimum version for each link
 import FILTER from '../words.json'; // the chat filter, copied from game-data.json by tools/worlds.py
 import G from '../game.json'; // needs, items, berry bushes, away rules: copied from game-data.json by tools/worlds.py
 import { starText, badName } from './filter.js';
-import { HOUR, MINUTE, freshStats, advanceStats, weightOf, addCarry, takeCarry, applyGives, eatOne, posAt, dist, craft } from './people.js';
+import { HOUR, MINUTE, freshStats, advanceStats, weightOf, addCarry, takeCarry, applyGives, eatOne, posAt, dist, craft, sleepMs } from './people.js';
 
 const PROTOCOL = 2; // bump when the game and server stop understanding each other
 const CORS = { 'Access-Control-Allow-Origin': '*' };
@@ -17,7 +17,7 @@ const WORLD_FORMAT = 1;
 const clean = (s, n) => String(s ?? '').replace(/[\u0000-\u001f]/g, '').slice(0, n);
 const num = (v) => (Number.isFinite(v) ? Math.round(v * 100) / 100 : 0);
 const kindOk = (k) => typeof k === 'string' && /^[a-z0-9-]{1,24}$/.test(k);
-const AWAY = { wanderMin: 25, wanderMax: 50, strollSpeed: 1.2, eatBelow: 60, drinkBelow: 55, sleepAfterHours: 24, goneAfterDays: 7, graveHours: 24, ...(G.away || {}) };
+const AWAY = { sleepBelow: 35, wanderMin: 25, wanderMax: 50, strollSpeed: 1.2, eatBelow: 60, drinkBelow: 55, sleepAfterHours: 24, goneAfterDays: 7, graveHours: 24, ...(G.away || {}) };
 const START = G.start || { x: 0.6, z: 1.9 };
 // '0.0.6' with build 5 is [0,0,6,5]; a minVersion of '0.0.6' only checks the first three
 const parts = (v) => String(v || '0').split('.').map((n) => parseInt(n, 10) || 0);
@@ -29,7 +29,7 @@ function tooOld(v, b, min) {
 }
 const FEEDBACK_KEEP = 300, REPORTS_KEEP = 300;
 // Spam limits: each kind of message refills at so many a second, up to a small burst. The admin is never limited.
-const LIMITS = { craft: [1, 3], act: [3, 6], say: [1, 3], take: [5, 10], pick: [5, 10], drop: [2, 6], move: [12, 20], eat: [3, 6], drink: [1, 3], create: [1 / 5, 3],
+const LIMITS = { sleep: [1, 4], craft: [1, 3], act: [3, 6], say: [1, 3], take: [5, 10], pick: [5, 10], drop: [2, 6], move: [12, 20], eat: [3, 6], drink: [1, 3], create: [1 / 5, 3],
   feedback: [1 / 30, 3], report: [1 / 30, 3], adminLogin: [1 / 5, 3] };
 const buckets = new WeakMap(); // per connection, kept in memory only
 const lastHeard = new WeakMap(); // per connection: when it last sent anything (the game pings every 25 seconds)
@@ -117,7 +117,8 @@ export class World extends DurableObject {
   /* ---------- people ---------- */
   alive(p) { return p && p.state === 'alive'; }
   isOnline(who) { return !!this.sockets().find(({ p }) => p.who === who && p.alive); }
-  stateOf(p) { return this.isOnline(p.who) ? 'online' : p.asleep ? 'asleep' : 'away'; }
+  // online, away, asleep (a day away, needs paused) or sleeping (resting, by choice or when tired)
+  stateOf(p) { return p.asleep && !this.isOnline(p.who) ? 'asleep' : p.sleeping ? 'sleeping' : this.isOnline(p.who) ? 'online' : 'away'; }
   // what everyone else is told about a person
   pub(p, now = Date.now()) {
     const s = this.socketOf(p.who), state = this.stateOf(p);
@@ -130,7 +131,7 @@ export class World extends DurableObject {
   // what the player is told about their own person
   mine(p) {
     return { t: 'me', name: p.name, look: p.look, age: p.age, born: p.born, x: num(p.x), z: num(p.z), ry: num(p.ry),
-      stats: p.stats, statsAt: p.statsAt, carry: p.carry, wear: p.wear || {}, lastKind: p.lastKind };
+      stats: p.stats, statsAt: p.statsAt, carry: p.carry, wear: p.wear || {}, lastKind: p.lastKind, sleeping: !!p.sleeping };
   }
   catchUp(p, now = Date.now()) {
     if (!this.alive(p)) return;
@@ -206,6 +207,12 @@ export class World extends DurableObject {
     }
   }
   arrive(p, plan, t) {
+    if (plan.kind === 'sleep') { // rested: up again
+      p.sleeping = false;
+      if (plan.arrive > Date.now() - 30000) this.send({ t: 'state', id: p.who, state: 'away', x: num(p.x), z: num(p.z) }, null);
+      this.touch(p);
+      return;
+    }
     if (plan.then === 'drink') {
       const src = G.sources[plan.source];
       for (let n = 0; n < 8 && src && p.stats.thirst != null && p.stats.thirst < 95; n++) { applyGives(p, src.gives); p.log.drank++; }
@@ -222,6 +229,15 @@ export class World extends DurableObject {
   decide(p, t, now, L) {
     while (p.stats.hunger != null && p.stats.hunger < AWAY.eatBelow && eatOne(p, G)) p.log.ate++;
     const at = [p.x, p.z];
+    // tired (or already lying down): sleep where they are until rest is full
+    if (p.sleeping || (p.stats.rest != null && p.stats.rest < AWAY.sleepBelow)) {
+      const was = p.sleeping;
+      p.sleeping = true;
+      p.plan = { kind: 'sleep', start: t, arrive: t + sleepMs(p, G) / (this.speed && t < this.speed.until ? this.speed.x : 1) };
+      if (!was) p.log.slept = true;
+      if (!was && p.plan.arrive > now) this.send({ t: 'state', id: p.who, state: 'sleeping', x: num(p.x), z: num(p.z) }, null);
+      return;
+    }
     const walk = (to, extra) => {
       const ms = (dist(at, to) / AWAY.strollSpeed) * 1000 + 500;
       p.plan = { kind: 'walk', from: at, to: [num(to[0]), num(to[1])], start: t, arrive: t + ms, ...extra };
@@ -384,6 +400,11 @@ export class World extends DurableObject {
       p.x = num(m.x); p.z = num(m.z); p.ry = num(m.ry);
       this.touch(p);
       this.send({ t: 'move', id: me.id, x: p.x, z: p.z, ry: p.ry, doing: clean(m.doing, 24) }, me.id);
+    } else if (m.t === 'sleep') { // lie down to rest, or get up
+      p.sleeping = !!m.on;
+      save();
+      reply(this.mine(p));
+      this.send({ t: 'state', id: me.id, state: p.sleeping ? 'sleeping' : 'online', x: num(p.x), z: num(p.z) }, me.id);
     } else if (m.t === 'craft') {
       if (craft(p, (G.recipes || {})[m.id], G)) save();
       reply(this.mine(p));
@@ -447,7 +468,7 @@ export class World extends DurableObject {
         this.advanceAway(p, Date.now());
         if (this.alive(p)) {
           away = { ms: Date.now() - p.leftAt, ...(p.log || {}) };
-          p.plan = null; p.asleep = false; p.leftAt = 0; p.log = { ate: 0, drank: 0, picked: 0 };
+          p.plan = null; p.asleep = false; p.sleeping = false; p.leftAt = 0; p.log = { ate: 0, drank: 0, picked: 0 }; // back: awake
           this.touch(p);
         }
       }

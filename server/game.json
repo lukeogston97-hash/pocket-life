@@ -12,6 +12,21 @@
       "lowLabel": "Weak"
     },
     {
+      "id": "rest",
+      "name": "Rest",
+      "colour": "#a99be0",
+      "icon": "moon",
+      "start": 80,
+      "perHour": -6.25,
+      "whileAsleep": 12.5,
+      "lowAt": 25,
+      "lowLabel": "Tired",
+      "atZero": {
+        "health": -1.4
+      },
+      "fullLabel": "Not tired"
+    },
+    {
       "id": "hunger",
       "name": "Hunger",
       "colour": "#d9973a",
@@ -105,7 +120,8 @@
     "goneAfterDays": 7,
     "graveHours": 24,
     "idleMinutes": 3,
-    "near": "pond"
+    "near": "pond",
+    "sleepBelow": 35
   },
   "start": {
     "x": 0.6,
