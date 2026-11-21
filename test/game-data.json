@@ -1,6 +1,7 @@
 {
   "version": "0.0.6",
-  "build": 2,
+  "build": 3,
+  "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,
     "walkSpeed": 2.2,
@@ -428,6 +429,7 @@
     "sources": "Things in the world you can use, matched by name (\"Pond\", \"Berry bush\"). action is the button in the tap menu, like \"Drink\". gives adds to stats each time, for example one drink at the pond gives 10 thirst. harvest is what one pick puts in your inventory (1 berry), holds is how many a full bush has (up to 15, shown on the bush), and regrowHours is how long a picked-bare bush takes to grow them all back; picked berries grow back one at a time. seconds is how long it takes. pose is kneel, pick or bend.",
     "defaultLook": "How a new person starts on the Make your person screen.",
     "daylight": "Day and night follow the player's real local time. Each entry is how the world looks at that hour, and the game blends between them. sky is the haze colour, skyLight and groundLight light things from above and below, brightness is how strong that is, sun is the sun or moon colour, sunStrength how strong, sunHeight its angle in degrees.",
-    "version": "version is the game version and build counts the test copies of that version (start build at 1 for each new version, count up for each test copy). Both only need changing here."
+    "version": "version is the game version and build counts the test copies of that version (start build at 1 for each new version, count up for each test copy). Both only need changing here.",
+    "server": "server is the address of the online world. The test link joins the test world and the release joins the live world. Leave it empty to play offline."
   }
 }

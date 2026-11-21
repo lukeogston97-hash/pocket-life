@@ -1355,6 +1355,7 @@ function spawnPlayer(look) {
   drawHeld();
 }
 function removePlayer() {
+  goOffline();
   if (!player) return;
   scene.remove(player);
   disposeMaterials(player);
@@ -2218,7 +2219,8 @@ $('pause').addEventListener('click', (e) => { if (e.target === $('pause')) close
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape' || ui.mode !== 'world') return;
   e.preventDefault();
-  if (!$('actMenu').hidden) closeMenu();
+  if (!$('sayBox').hidden) closeSay();
+  else if (!$('actMenu').hidden) closeMenu();
   else if (!$('confirm').hidden) $('confirm').hidden = true;
   else if (!$('death').hidden) return;
   else if (bagOpen()) closeBag();
@@ -2447,6 +2449,7 @@ function enterWorld() {
   drawQueue();
   placeCamera();
   showHint();
+  goOnline();
 }
 $('sheet').addEventListener('submit', (e) => {
   e.preventDefault();
@@ -2531,6 +2534,8 @@ function frame() {
   } else if (player) {
     if (!you.dead && !paused) updatePlayer(dt);
     if (!paused) keyCamera(dt);
+    updateOthers(dt);
+    sendMove();
     followPlayer(dt);
     controls.update();
     updateDetails(controls.target.x, controls.target.z);
@@ -2550,6 +2555,138 @@ function frame() {
   window.__frames = (window.__frames || 0) + 1;
   requestAnimationFrame(frame);
 }
+
+/* ---------- online: other people in the same world, and speech bubbles ---------- */
+// The server (game-data.json "server") passes everyone's moves and speech to everyone else in the
+// same world. The test link joins the test world, the release joins the live world. If the server
+// can't be reached, the game carries on as normal and keeps trying quietly.
+const SERVER = typeof DATA.server === 'string' ? DATA.server : '';
+const others = new Map(); // id -> { mesh, tx, tz, tr, phase, name, bubble }
+const net = { sock: null, myId: null, wanted: false, retry: 1000, sentAt: 0, last: null };
+function cleanLook(look) {
+  const l = { ...DEFAULT_LOOK, ...(look || {}) };
+  for (const k of ['sex', 'skin', 'build', 'hair', 'hairColour', 'tunic']) l[k] = pickId(LOOKS[k], l[k]);
+  l.age = Math.round(Math.min(LOOKS.age.max, Math.max(LOOKS.age.min, Number(l.age) || LOOKS.age.start)));
+  l.name = String(l.name || 'Someone').slice(0, 20);
+  return l;
+}
+function goOnline() {
+  net.wanted = true;
+  if (!SERVER || net.sock || !player) return;
+  let sock;
+  try { sock = new WebSocket(`${SERVER}?world=${TEST_BUILD ? 'test' : 'live'}`); } catch (err) { return; }
+  net.sock = sock;
+  sock.onopen = () => {
+    net.retry = 1000;
+    net.last = null;
+    sock.send(JSON.stringify({ t: 'hello', name: you.look.name, look: you.look, x: player.position.x, z: player.position.z, ry: player.rotation.y, v: VERSION }));
+  };
+  sock.onmessage = (e) => {
+    let m;
+    try { m = JSON.parse(e.data); } catch (err) { return; }
+    if (m.t === 'welcome') { net.myId = m.id; for (const p of m.people || []) addOther(p); }
+    else if (m.t === 'join') addOther(m.person);
+    else if (m.t === 'leave') removeOther(m.id);
+    else if (m.t === 'move') { const o = others.get(m.id); if (o) Object.assign(o, { tx: m.x, tz: m.z, tr: m.ry }); }
+    else if (m.t === 'say') {
+      if (m.id === net.myId) { if (player) bubble(null, m.text); }
+      else if (others.has(m.id)) bubble(others.get(m.id), m.text);
+    }
+  };
+  sock.onclose = () => {
+    if (net.sock === sock) net.sock = null;
+    net.myId = null;
+    for (const id of [...others.keys()]) removeOther(id);
+    if (net.wanted) { setTimeout(goOnline, net.retry); net.retry = Math.min(30000, net.retry * 2); }
+  };
+  sock.onerror = () => {};
+}
+function goOffline() {
+  net.wanted = false;
+  if (net.sock) { try { net.sock.close(); } catch (err) { /* already closed */ } }
+  net.sock = null;
+}
+const online = () => net.sock && net.sock.readyState === 1 && net.myId;
+function addOther(p) {
+  if (!p || !p.id || p.id === net.myId) return;
+  removeOther(p.id);
+  const mesh = makePerson(cleanLook({ ...p.look, name: p.name }));
+  const x = Number(p.x) || 0, z = Number(p.z) || 0;
+  mesh.position.set(x, groundY(x, z), z);
+  mesh.rotation.y = Number(p.ry) || 0;
+  mesh.userData.label = p.name || 'Someone';
+  scene.add(mesh);
+  const name = addLabel({ cls: 'name-tag', text: p.name || 'Someone', anchor: mesh.position, offset: V(0, 2.0, 0), gap: 0 });
+  others.set(p.id, { mesh, tx: x, tz: z, tr: mesh.rotation.y, phase: 0, name, bubble: null });
+}
+function removeOther(id) {
+  const o = others.get(id);
+  if (!o) return;
+  scene.remove(o.mesh);
+  disposeMaterials(o.mesh);
+  removeLabel(o.name);
+  if (o.bubble) removeLabel(o.bubble);
+  others.delete(id);
+}
+// other people glide to where the server says they are, legs moving while they walk
+function updateOthers(dt) {
+  for (const o of others.values()) {
+    const m = o.mesh, dx = o.tx - m.position.x, dz = o.tz - m.position.z, d = Math.hypot(dx, dz);
+    const P = m.userData.parts;
+    if (d > 8) { m.position.x = o.tx; m.position.z = o.tz; } // too far behind: jump there
+    else if (d > 0.02) {
+      const step = Math.min(d, Math.max(SETTINGS.walkSpeed * 1.15, d * 3) * dt);
+      m.position.x += (dx / d) * step;
+      m.position.z += (dz / d) * step;
+      m.rotation.y = lerpAngle(m.rotation.y, Math.atan2(dx, dz), Math.min(1, dt * 10));
+      o.phase += dt * 9;
+      if (P) setLegs(P, Math.sin(o.phase));
+    } else {
+      m.rotation.y = lerpAngle(m.rotation.y, o.tr, Math.min(1, dt * 6));
+      if (P) setLegs(P, 0);
+    }
+    m.position.y = groundY(m.position.x, m.position.z);
+  }
+}
+// tell the server where you are, a few times a second while you move
+function sendMove() {
+  if (!online() || !player || elapsed - net.sentAt < 0.2) return;
+  const x = player.position.x, z = player.position.z, ry = player.rotation.y;
+  const l = net.last;
+  if (l && Math.hypot(x - l.x, z - l.z) < 0.03 && Math.abs(ry - l.ry) < 0.05) return;
+  net.sentAt = elapsed;
+  net.last = { x, z, ry };
+  net.sock.send(JSON.stringify({ t: 'move', x, z, ry, doing: tasks.current ? taskName(tasks.current, true) : '' }));
+}
+// speech bubbles: what you say shows over your head for everyone nearby
+function bubble(o, text) {
+  const anchor = o ? o.mesh.position : player.position;
+  if (o && o.bubble) removeLabel(o.bubble);
+  if (!o && net.myBubble) removeLabel(net.myBubble);
+  const L = addLabel({ cls: 'bubble', text, anchor, offset: V(0, o ? 2.35 : 2.0, 0), ttl: 7, gap: 4 });
+  if (o) o.bubble = L; else net.myBubble = L;
+}
+function openSay() {
+  if (ui.mode !== 'world' || !player || you.dead) return;
+  closeMenu();
+  $('sayBox').hidden = false;
+  $('sayInput').value = '';
+  $('sayInput').focus();
+}
+function closeSay() { $('sayBox').hidden = true; $('sayInput').blur(); }
+$('sayBtn').addEventListener('click', () => ($('sayBox').hidden ? openSay() : closeSay()));
+$('sayBox').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const text = $('sayInput').value.trim().slice(0, 80);
+  closeSay();
+  if (!text) return;
+  if (online()) net.sock.send(JSON.stringify({ t: 'say', text }));
+  else bubble(null, text); // offline: you still see it yourself
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && ui.mode === 'world' && !paused && !typing(e.target) && $('sayBox').hidden) { e.preventDefault(); openSay(); }
+});
+
 /* ---------- saving on this phone ---------- */
 // The test link and the release each keep their own save, so testing never touches your real game.
 // Everything saved is plain data, ready to move to a server when the world goes online.

@@ -14,7 +14,8 @@ Luke's mobile "life in your pocket" game: SEED meets One Hour One Life. Built st
 - Your person walks round rocks, bushes, logs, stumps and tree trunks.
 - Controls (same on phone and computer): tap or left-click the ground to walk. Tap or click a stick, stone, berry bush or the pond to open a small menu (Pick up Stick, Harvest Berries, Drink, Walk here); right-click or holding a finger down opens it too. A walk joins the end of the task queue, so it never interrupts anything. A small list above the bottom bar shows what your person is doing now (or "Waiting for something to do") and what's next, with an x on each task and Stop all. Escape, or the Menu button at the top right, opens the pause menu (Resume, Inventory, New person). On a computer, W A S D move the camera, Q and E turn it round your person, and R and F tilt it.
 - While testing, settings.autoName fills in a name from testNames on the Make your person screen.
-- Later: shared persistent world (needs a server and database), day planner, skills, more stats, regions and time zones, app store wrapper.
+- Online (started in 0.0.6): one world for everyone. The test link joins the test world, the release joins the live world. Other people show with a name tag and walk about; the Say button (or Enter) shows a speech bubble over your head. Next: shared items and berries, giving and trading, then needs and people saved on the server, and admin controls.
+- Later: everything saved on the server, day planner, skills, more stats, regions and time zones, app store wrapper.
 
 ## How the code is laid out
 - Files (the same set in test/, the root and releases/<version>/): index.html is the page and a small loader; style.css is the look of the menus and buttons; game.js is the game code (three.js r170 from jsDelivr through an import map); game-data.json is all the content. No build step.
@@ -24,6 +25,7 @@ Luke's mobile "life in your pocket" game: SEED meets One Hour One Life. Built st
 - The world is settings.worldSize metres square (100 for now), with thick forest past the edge. The clearing round the start is laid out from its own random numbers and the rest of the world from a second set, so changing the world never reshuffles the clearing.
 - Keep it light for phones. Lots of copies of a shape are drawn as one InstancedMesh, split into chunks of the map. Grass, flowers and pebbles are only drawn near the camera. Far-off trees use simpler shapes.
 - The game saves on the phone (localStorage) every few seconds and when the page is hidden: your person, inventory, needs, where things lie and how far each berry bush has grown back. The test link and the release keep separate saves. Saves are plain data (SAVE_FORMAT in index.html; bump it if the save's shape changes), ready to move to a server when the world goes online.
+- server/ is the online world: a Cloudflare Worker (named pocket-life) with one Durable Object per world (test, live), at wss://pocket-life.misty-glade-6e8e.workers.dev/world. Cloudflare builds and deploys it from the server folder on every push to main. The game finds it through "server" in game-data.json, and plays offline if it can't connect.
 - If the frame rate drops below about 45, the game lowers its sharpness a step (pixel ratio), never below 1.
 
 ## Working on it

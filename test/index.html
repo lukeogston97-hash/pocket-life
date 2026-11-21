@@ -21,10 +21,19 @@
       <div class="meta"><span id="hudAge">25</span> years old</div>
       <div class="meta" id="hudTime">9:00 am</div>
     </div>
-    <button id="menuBtn" class="pill-btn" type="button" aria-controls="pause">Menu</button>
+    <div class="top-btns">
+      <button id="sayBtn" class="pill-btn" type="button" aria-controls="sayBox">Say</button>
+      <button id="menuBtn" class="pill-btn" type="button" aria-controls="pause">Menu</button>
+    </div>
   </header>
 
-  <p id="hint" class="hint" hidden>Tap the ground to walk. Tap a stick, stone, berry bush or the pond to see what you can do (do a few to queue them). Menu is at the top right.</p>
+  <form id="sayBox" class="say-box" hidden autocomplete="off">
+    <label for="sayInput" class="sr-only">Say something</label>
+    <input id="sayInput" type="text" maxlength="80" placeholder="Say something" enterkeyhint="send">
+    <button type="submit" class="small-btn go">Say</button>
+  </form>
+
+  <p id="hint" class="hint" hidden>Tap the ground to walk. Tap a stick, stone, berry bush or the pond to see what you can do (do a few to queue them). Say lets you talk, Menu is at the top right.</p>
 
   <div id="queue" class="queue" hidden aria-live="polite">
     <div id="queueNowRow" class="q-now"><small>Now</small><span id="queueNow">Waiting for something to do</span></div>
