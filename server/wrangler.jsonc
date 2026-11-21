@@ -1,6 +1,6 @@
 // Pocket Life server, deployed by Cloudflare from this folder on every push to main.
 {
-  "name": "pocket-life-server",
+  "name": "pocket-life",
   "main": "src/index.js",
   "compatibility_date": "2026-10-01",
   "durable_objects": {
