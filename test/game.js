@@ -1480,6 +1480,7 @@ function drawCarry() {
   const w = carried();
   $('carryWeight').textContent = fmt(w);
   $('carryMax').textContent = fmt(SETTINGS.carryCapacity);
+  $('bagBtn').classList.toggle('full', w >= SETTINGS.carryCapacity);
   if (bagOpen()) drawBag();
 }
 let hintTimer = 0;
@@ -1489,33 +1490,40 @@ function hideHint() { $('hint').hidden = true; }
 /* ---------- needs: they change with real time, even while you're away ---------- */
 const clampStat = (v) => Math.max(0, Math.min(100, v));
 const freshStats = () => Object.fromEntries(STATS.map((s) => [s.id, clampStat(s.start)]));
+// Needs are small rings (how full) with an icon; tap them to see the names and numbers.
+const NEED_ICONS = {
+  heart: '<path d="M19.5 12.6 12 20l-7.5-7.4A5 5 0 1 1 12 6a5 5 0 1 1 7.5 6.6z"/>',
+  food: '<path d="M12 7c1-2 3-3 5-3"/><path d="M12 8c-2.5-1.5-7-1-7 4.5C5 17 8 21 10 21c1 0 1.5-.5 2-.5s1 .5 2 .5c2 0 5-4 5-8.5C19 7 14.5 6.5 12 8z"/>',
+  drop: '<path d="M12 3.5 6.5 11a6.5 6.5 0 1 0 11 0z"/>',
+  moon: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
+};
+const iconFor = (s) => NEED_ICONS[s.icon] || NEED_ICONS[{ health: 'heart', hunger: 'food', thirst: 'drop', rest: 'moon' }[s.id]] || NEED_ICONS.heart;
 function buildNeeds() {
   $('needs').replaceChildren(...STATS.map((s) => {
     const row = document.createElement('div');
     row.className = 'need';
-    row.setAttribute('role', 'img');
-    const name = document.createElement('span');
-    name.textContent = s.name;
-    const bar = document.createElement('span');
-    bar.className = 'bar';
-    const fill = document.createElement('i');
-    fill.style.setProperty('--c', s.colour);
-    bar.appendChild(fill);
+    row.style.setProperty('--c', s.colour);
+    const ring = document.createElement('span');
+    ring.className = 'ring';
+    ring.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${iconFor(s)}</svg>`;
+    const label = document.createElement('span');
+    label.className = 'need-label';
     const warn = document.createElement('span');
     warn.className = 'warn';
-    warn.textContent = s.lowLabel || 'Low';
     warn.hidden = true;
-    row.append(name, bar, warn);
-    s.view = { row, fill, warn };
+    row.append(ring, label, warn);
+    s.view = { row, fill: row, warn, label };
     return row;
   }));
 }
+$('needs').addEventListener('click', () => { $('needs').classList.toggle('open'); drawNeeds(); setTimeout(measureHud, 50); });
 buildNeeds();
 function drawNeeds() {
   if (!you.stats) return;
   for (const s of STATS) {
     const v = you.stats[s.id];
     s.view.fill.style.setProperty('--v', (v / 100).toFixed(3));
+    s.view.label.textContent = `${s.name} ${Math.round(v)}`;
     s.view.warn.hidden = !(s.lowAt != null && v <= s.lowAt);
     s.view.row.classList.toggle('low', !s.view.warn.hidden); // shown as a coloured label in the bottom tray
     s.view.row.setAttribute('aria-label', `${s.name} ${Math.round(v)} out of 100`);
