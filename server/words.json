@@ -67,5 +67,19 @@
     "kill urself",
     "kill your self",
     "go die"
-  ]
+  ],
+  "names": {
+    "anywhere": [
+      "admin",
+      "moderator",
+      "official"
+    ],
+    "words": [
+      "mod",
+      "mods",
+      "dev",
+      "staff",
+      "owner"
+    ]
+  }
 }

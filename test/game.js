@@ -2683,8 +2683,9 @@ function starText(text, F) {
   }
   return out;
 }
-const badName = (name, F) => String(name).split(/[\s._-]+/).some((t) => badWord(t, F))
+const badNameIn = (name, F) => String(name).split(/[\s._-]+/).some((t) => badWord(t, F))
   || (F.anywhere || []).some((r) => leet(name).replace(/[^a-z]/g, '').includes(r)) || starText(name, F) !== String(name);
+const badName = (name, F) => badNameIn(name, F) || (!!F.names && badNameIn(name, F.names)); // names also can't say admin, mod and so on
 const FILTER = DATA.chatFilter || {};
 // a random id for this phone, so mutes and reports stick to the same person (others only see a scrambled tag)
 const PID_KEY = 'pocket-life:pid', MUTE_KEY = 'pocket-life:muted';
@@ -2716,6 +2717,7 @@ function goOnline() {
     else if (m.t === 'maintenance') showMaintenance(m.text);
     else if (m.t === 'thanks') showTag('Thanks for the feedback!', headTop(), 2.5);
     else if (m.t.startsWith('admin') || ['announce', 'kicked', 'banned', 'badge', 'reset'].includes(m.t)) adminMessage(m);
+    else if (m.t === 'slow') showTag('Slow down a little', headTop(), 2);
     else if (m.t === 'reported') showTag(m.ok ? 'Thanks, your report was sent' : "They've left, so it couldn't be sent", headTop(), 2.5);
     else if (m.t === 'welcome') {
       net.myId = m.id;

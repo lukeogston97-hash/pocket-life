@@ -19,6 +19,22 @@ function tooOld(v, b, min) {
   return false;
 }
 const FEEDBACK_KEEP = 300, REPORTS_KEEP = 300;
+// Spam limits: each kind of message refills at so many a second, up to a small burst. The admin is never limited.
+const LIMITS = { say: [1, 3], take: [5, 10], pick: [5, 10], drop: [2, 6], move: [12, 20], feedback: [1 / 30, 3], report: [1 / 30, 3], adminLogin: [1 / 5, 3] };
+const buckets = new WeakMap(); // per connection, kept in memory only
+function allowed(ws, me, t) {
+  const lim = LIMITS[t];
+  if (!lim || me.admin) return true;
+  const [rate, burst] = lim, now = Date.now() / 1000;
+  let b = buckets.get(ws);
+  if (!b) buckets.set(ws, (b = {}));
+  const k = b[t] || (b[t] = { n: burst, at: now });
+  k.n = Math.min(burst, k.n + (now - k.at) * rate);
+  k.at = now;
+  if (k.n < 1) return false;
+  k.n -= 1;
+  return true;
+}
 // Chat filter (the same code is in the game and on the server): bad words become stars, bad names are refused.
 const LEET = { 0: 'o', 1: 'i', 3: 'e', 4: 'a', 5: 's', 7: 't', 8: 'b', '@': 'a', $: 's', '!': 'i', '|': 'i', '+': 't' };
 const leet = (s) => s.toLowerCase().replace(/[0134578@$!|+]/g, (c) => LEET[c]);
@@ -40,8 +56,9 @@ function starText(text, F) {
   }
   return out;
 }
-const badName = (name, F) => String(name).split(/[\s._-]+/).some((t) => badWord(t, F))
+const badNameIn = (name, F) => String(name).split(/[\s._-]+/).some((t) => badWord(t, F))
   || (F.anywhere || []).some((r) => leet(name).replace(/[^a-z]/g, '').includes(r)) || starText(name, F) !== String(name);
+const badName = (name, F) => badNameIn(name, F) || (!!F.names && badNameIn(name, F.names)); // names also can't say admin, mod and so on
 // a short public tag for a phone, so mutes and reports stick to the same person across visits
 async function tagOf(pid) {
   const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`pocket-life:${clean(pid, 40)}`)));
@@ -137,7 +154,7 @@ export class World extends DurableObject {
       if (min && tooOld(m.v, m.b, min)) { this.boot(ws, { t: 'update', min }); return; }
       if (m.adminCode && !isAdmin) reply({ t: 'adminNo' });
       const name = clean(m.name, 20).trim();
-      Object.assign(me, { id: me.id || crypto.randomUUID().slice(0, 8), who, admin: isAdmin, tag: m.adminTag !== false, name: !name || badName(name, FILTER) ? 'Someone' : name, said: me.said || [], look: m.look && typeof m.look === 'object' ? m.look : {}, x: num(m.x), z: num(m.z), ry: num(m.ry), v: clean(m.v, 20), link });
+      Object.assign(me, { id: me.id || crypto.randomUUID().slice(0, 8), who, admin: isAdmin, tag: m.adminTag !== false, name: !name || (!isAdmin && badName(name, FILTER)) ? 'Someone' : name, said: me.said || [], look: m.look && typeof m.look === 'object' ? m.look : {}, x: num(m.x), z: num(m.z), ry: num(m.ry), v: clean(m.v, 20), link });
       ws.serializeAttachment(me);
       if (isAdmin) reply(this.adminState(me));
       reply({ t: 'welcome', id: me.id, people: this.people(me.id), world: this.view(), needSeed: !this.world, count: this.people().length });
@@ -146,6 +163,12 @@ export class World extends DurableObject {
       return;
     }
     if (!me.id) return;
+    if (!allowed(ws, me, m.t)) {
+      if (m.t === 'take') reply({ t: 'took', id: m.id, ok: false });
+      else if (m.t === 'pick') reply({ t: 'picked', bush: m.bush, ok: false });
+      else if (m.t !== 'move') reply({ t: 'slow' });
+      return;
+    }
     if (m.t === 'feedback') { await this.addFeedback(m, me.world); reply({ t: 'thanks' }); return; }
     if (m.t === 'adminLogin') {
       me.tries = (me.tries || 0) + 1;
