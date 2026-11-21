@@ -1,6 +1,6 @@
 {
-  "version": "0.0.6",
-  "build": 9,
+  "version": "0.0.7",
+  "build": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,
@@ -54,11 +54,11 @@
       "name": "Hunger",
       "colour": "#d9973a",
       "start": 75,
-      "perHour": -12.5,
+      "perHour": -4.2,
       "lowAt": 30,
       "lowLabel": "Hungry",
       "atZero": {
-        "health": -0.2
+        "health": -0.5
       },
       "fullLabel": "Not hungry"
     },
@@ -67,11 +67,11 @@
       "name": "Thirst",
       "colour": "#3f9db0",
       "start": 65,
-      "perHour": -20,
+      "perHour": -6.25,
       "lowAt": 30,
       "lowLabel": "Thirsty",
       "atZero": {
-        "health": -1.4
+        "health": -2
       },
       "fullLabel": "Not thirsty"
     }
@@ -114,7 +114,7 @@
       },
       "startInWorld": 0,
       "eat": {
-        "hunger": 2
+        "hunger": 10
       }
     }
   },
@@ -126,9 +126,10 @@
       "verb": "Drinking",
       "seconds": 2,
       "gives": {
-        "thirst": 10
+        "thirst": 15
       },
-      "pose": "kneel"
+      "pose": "kneel",
+      "water": true
     },
     "berryBush": {
       "name": "Berry bush",
@@ -142,6 +143,20 @@
       "regrowHours": 4,
       "pose": "pick"
     }
+  },
+  "away": {
+    "wanderMin": 25,
+    "wanderMax": 50,
+    "strollSpeed": 1.2,
+    "eatBelow": 60,
+    "drinkBelow": 55,
+    "sleepAfterHours": 24,
+    "goneAfterDays": 7,
+    "graveHours": 24
+  },
+  "berryBushes": {
+    "extra": 26,
+    "seed": 7331
   },
   "daylight": [
     {
@@ -426,13 +441,16 @@
     "items": "To add an item, copy one of the items above, give it a new id (lower case, no spaces) and set its name, plural, weight and look. eat is what eating one gives (a berry gives hunger 2), which adds an Eat button in the inventory. Shapes: rod (length, thickness, colour, twig), rock (size, colour), ball (size, colour), box (width, height, depth, colour). startInWorld is how many lie around when the world starts (0 for things you can only make), and startNear is how many of those start close to where you appear; the rest are spread over the whole world.",
     "recipes": "To add a recipe, put it in the recipes list like this: {\"id\": \"stone-axe\", \"name\": \"Stone axe\", \"needs\": {\"stick\": 1, \"stone\": 1}, \"makes\": {\"stone-axe\": 1}}. Every item in needs and makes must exist in items. Recipes show up in your bag automatically.",
     "looks": "Each list here is a set of choices on the Make your person screen. Add an entry to add a choice.",
-    "stats": "Stats run in real time. Every stat goes from 0 to 100. perHour is how much it changes each real hour (hunger empties in about 8 hours and thirst in about 5). lowAt shows the warning. atZero is what happens to other stats each hour while this one is empty (no food: health drops over about 3 weeks; no water: over about 3 days). Health slowly heals when nothing is empty, and the person dies when health reaches 0. fullLabel is shown when you try to eat or drink but don't need to.",
+    "stats": "Stats run in real time. Every stat goes from 0 to 100. perHour is how much it changes each real hour (hunger empties in about 8 hours and thirst in about 5). lowAt shows the warning. atZero is what happens to other stats each hour while this one is empty (no food: health drops over about 3 weeks; no water: over about 3 days). Health slowly heals when nothing is empty, and the person dies when health reaches 0. fullLabel is shown when you try to eat or drink but don't need to. Realistic since 0.0.7: hunger lasts about a day (a berry fills 10), thirst about 16 hours awake (a drink fills 15). With no water you die in about 3 days, with no food in about a week. The server uses the same numbers (copied by tools/worlds.py).",
     "sources": "Things in the world you can use, matched by name (\"Pond\", \"Berry bush\"). action is the button in the tap menu, like \"Drink\". gives adds to stats each time, for example one drink at the pond gives 10 thirst. harvest is what one pick puts in your inventory (1 berry), holds is how many a full bush has (up to 15, shown on the bush), and regrowHours is how long a picked-bare bush takes to grow them all back; picked berries grow back one at a time. seconds is how long it takes. pose is kneel, pick or bend.",
     "defaultLook": "How a new person starts on the Make your person screen.",
     "daylight": "Day and night follow the player's real local time. Each entry is how the world looks at that hour, and the game blends between them. sky is the haze colour, skyLight and groundLight light things from above and below, brightness is how strong that is, sun is the sun or moon colour, sunStrength how strong, sunHeight its angle in degrees.",
     "version": "version is the game version and build counts the test copies of that version (start build at 1 for each new version, count up for each test copy). Both only need changing here.",
     "server": "server is the address of the online world. The test link joins the test world and the release joins the live world. Leave it empty to play offline.",
-    "chatFilter": "Words kept out of speech bubbles (shown as stars) and names (pick another). anywhere: caught even inside a longer word. words: only caught as a whole word (so 'class' is fine), plus endings like s, ed, ing. phrases: caught as a run of words. Numbers and symbols standing in for letters (sh1t, @ss) are caught too. The server gets a copy: tools/worlds.py test-build copies it to server/words.json. names: extra words only kept out of names, so nobody can pretend to be the admin."
+    "chatFilter": "Words kept out of speech bubbles (shown as stars) and names (pick another). anywhere: caught even inside a longer word. words: only caught as a whole word (so 'class' is fine), plus endings like s, ed, ing. phrases: caught as a run of words. Numbers and symbols standing in for letters (sh1t, @ss) are caught too. The server gets a copy: tools/worlds.py test-build copies it to server/words.json. names: extra words only kept out of names, so nobody can pretend to be the admin.",
+    "away": "How a person looks after themselves while their player is away (the server does this). wanderMin and wanderMax: how far in metres they stroll from where you left them. strollSpeed in metres per second. They eat what they carry when hunger is under eatBelow, go for berries if they have none, and drink at the pond when thirst is under drinkBelow. After sleepAfterHours away they lie down asleep (needs pause); after goneAfterDays asleep they leave the world and their things stay where they slept. A grave marks where someone died for graveHours.",
+    "berryBushes": "extra: how many more berry bushes grow out in the wider world, besides the ones by the start. seed: their own random numbers, so they're in the same places on every phone (change it to move them all).",
+    "devlog": "What's new, shown in the Menu. Newest first: version, date and a short list of changes, written for players."
   },
   "chatFilter": {
     "anywhere": [
@@ -518,5 +536,49 @@
         "owner"
       ]
     }
-  }
+  },
+  "devlog": [
+    {
+      "version": "0.0.7",
+      "date": "2026-11-21",
+      "notes": [
+        "Your person now lives on the server and stays in the world while you're away.",
+        "While you're away (up to a day) your person looks after themselves: they stroll about, eat what they carry, pick berries and drink at the pond. They can still die if they can't find food or water.",
+        "After a day away they lie down asleep (needs pause). After 7 days asleep they leave the world, and their things are left where they slept.",
+        "Welcome back card: what your person did while you were away.",
+        "People who are away or asleep show it under their name. Graves mark where someone died, for a day.",
+        "Needs are now realistic: hunger lasts about a day, thirst about 16 hours. A berry fills 10 hunger (was 2), a drink fills 15 thirst (was 10). No water for about 3 days or no food for about a week and you die.",
+        "26 more berry bushes out in the wider world.",
+        "Tap the ground for Walk here. Double-tap still walks straight there.",
+        "Say bar at the bottom, between your needs and inventory.",
+        "This What's new list in the Menu.",
+        "Small rocks by boulders are bigger, so they don't look like stones you can pick up.",
+        "Reconnecting screen when the internet drops. Your person carries on while you're gone.",
+        "Removed: New person and Inventory from the Menu, and the word Prototype.",
+        "Fresh start: everyone makes a new person."
+      ]
+    },
+    {
+      "version": "0.0.6",
+      "date": "2026-11-21",
+      "notes": [
+        "Online: one world for everyone. See other people, their names and speech bubbles.",
+        "Sticks, stones and berries are shared, and sticks and stones slowly turn up again.",
+        "Online count and connection dot, Graphics setting (Low, Medium, High), Send feedback.",
+        "Chat filter, Mute and Report.",
+        "Double-tap to walk. Decorative pebbles removed.",
+        "Updates reach everyone by themselves, and the world can close for maintenance."
+      ]
+    },
+    {
+      "version": "0.0.5",
+      "date": "2026-11-20",
+      "notes": [
+        "Berry bushes: pick berries one at a time, they grow back.",
+        "Tap things for a small menu. Task list with Stop all.",
+        "Pause menu, camera keys on a computer, walking round rocks and trees.",
+        "Your game saves on your phone."
+      ]
+    }
+  ]
 }

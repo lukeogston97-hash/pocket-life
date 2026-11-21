@@ -1,0 +1,93 @@
+{
+  "needs": [
+    {
+      "id": "health",
+      "name": "Health",
+      "colour": "#c9584a",
+      "start": 100,
+      "perHour": 1,
+      "onlyWhenFine": true,
+      "deadAtZero": true,
+      "lowAt": 30,
+      "lowLabel": "Weak"
+    },
+    {
+      "id": "hunger",
+      "name": "Hunger",
+      "colour": "#d9973a",
+      "start": 75,
+      "perHour": -4.2,
+      "lowAt": 30,
+      "lowLabel": "Hungry",
+      "atZero": {
+        "health": -0.5
+      },
+      "fullLabel": "Not hungry"
+    },
+    {
+      "id": "thirst",
+      "name": "Thirst",
+      "colour": "#3f9db0",
+      "start": 65,
+      "perHour": -6.25,
+      "lowAt": 30,
+      "lowLabel": "Thirsty",
+      "atZero": {
+        "health": -2
+      },
+      "fullLabel": "Not thirsty"
+    }
+  ],
+  "items": {
+    "stick": {
+      "weight": 1,
+      "eat": null
+    },
+    "stone": {
+      "weight": 1,
+      "eat": null
+    },
+    "berry": {
+      "weight": 0.1,
+      "eat": {
+        "hunger": 10
+      }
+    }
+  },
+  "sources": {
+    "pond": {
+      "gives": {
+        "thirst": 15
+      },
+      "harvest": null,
+      "water": true
+    },
+    "berryBush": {
+      "gives": null,
+      "harvest": {
+        "berry": 1
+      },
+      "water": false
+    }
+  },
+  "berryKind": "berry",
+  "carryCapacity": 30,
+  "age": {
+    "min": 18,
+    "max": 90
+  },
+  "away": {
+    "wanderMin": 25,
+    "wanderMax": 50,
+    "strollSpeed": 1.2,
+    "eatBelow": 60,
+    "drinkBelow": 55,
+    "sleepAfterHours": 24,
+    "goneAfterDays": 7,
+    "graveHours": 24
+  },
+  "start": {
+    "x": 0.6,
+    "z": 1.9
+  }
+}

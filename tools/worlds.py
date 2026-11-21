@@ -13,6 +13,21 @@ if cmd == 'test-build':
     # the server's copy of the chat filter
     words = os.path.join(root, 'server', 'words.json')
     json.dump(data.get('chatFilter', {}), open(words, 'w'), indent=2); open(words, 'a').write('\n')
+    # the server's copy of the rules it needs to keep people alive: needs, items, sources, away
+    srcs = data.get('sources', {})
+    berry = next((k for s in srcs.values() for k in (s.get('harvest') or {})), 'berry')
+    game = {
+        'needs': data['stats'],
+        'items': {k: {'weight': v.get('weight', 1), 'eat': v.get('eat')} for k, v in data['items'].items()},
+        'sources': {k: {'gives': v.get('gives'), 'harvest': v.get('harvest'), 'water': bool(v.get('water'))} for k, v in srcs.items()},
+        'berryKind': berry,
+        'carryCapacity': data['settings']['carryCapacity'],
+        'age': {'min': data['looks']['age']['min'], 'max': data['looks']['age']['max']},
+        'away': data.get('away', {}),
+        'start': {'x': 0.6, 'z': 1.9},
+    }
+    path2 = os.path.join(root, 'server', 'game.json')
+    json.dump(game, open(path2, 'w'), indent=2); open(path2, 'a').write('\n')
 elif cmd == 'release':
     w['minVersion']['release'] = data['version']
 else:
