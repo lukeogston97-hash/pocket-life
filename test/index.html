@@ -474,7 +474,7 @@ try {
 // Browsers keep a page for a few minutes. If this page is older than the data it just loaded,
 // load the new page (once), so old code never runs with new data.
 const CODE_VERSION = '0.0.5'; // keep the same as "version" in game-data.json
-const CODE_BUILD = 5;         // and this the same as "build" (count up with each test copy)
+const CODE_BUILD = 6;         // and this the same as "build" (count up with each test copy)
 {
   const url = new URL(location.href);
   const dataStamp = `${DATA.version}.${DATA.build || 0}`;
@@ -1062,7 +1062,7 @@ function bush(x, z, s = 1, withBerries = true) {
       put(berries, x + b.ox + dx * b.r * 0.97, y + b.y + dy * b.r * 0.78, z + b.oz + dz * b.r * 0.97, 0, rand() * 6, 0, 1, 1, 1, tint('#c4483a', 0.01, 0.06, 0.05));
     }
   }
-  g.userData.label = withBerries ? 'Gooseberry bush' : 'Bush';
+  g.userData.label = withBerries ? 'Berry bush' : 'Bush';
   addSpot(x, z, s * 0.85);
   interactive.push(g);
   return g;
@@ -1435,7 +1435,7 @@ for (const [id, raw] of Object.entries(DATA.sources || {})) {
     gives, harvest, holds: Math.floor(Number(raw.holds) || 0), regrowHours: Math.max(0, Number(raw.regrowHours) || 0) };
 }
 const harvests = (src) => Object.keys(src.harvest).length > 0;
-// a thing in the world becomes usable when a source has its name, like "Pond" or "Gooseberry bush"
+// a thing in the world becomes usable when a source has its name, like "Pond" or "Berry bush"
 for (const obj of interactive) {
   const src = Object.values(SOURCES).find((s) => s.name === obj.userData.label);
   if (src) obj.userData.source = src.id;
