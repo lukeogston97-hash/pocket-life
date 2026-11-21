@@ -1,6 +1,6 @@
 {
-  "version": "0.1.3",
-  "build": 2,
+  "version": "0.1.4",
+  "build": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,
@@ -8,7 +8,8 @@
     "worldSize": 100,
     "needsSpeed": 1,
     "autoName": true,
-    "respawnMinutes": 10
+    "respawnMinutes": 10,
+    "maxPlaying": 20
   },
   "testNames": [
     "Alex",
@@ -254,7 +255,7 @@
     "eatBelow": 60,
     "drinkBelow": 55,
     "sleepAfterHours": 24,
-    "goneAfterDays": 7,
+    "goneAfterDays": 1,
     "graveHours": 24,
     "idleMinutes": 3,
     "near": "pond",
@@ -543,7 +544,7 @@
     }
   },
   "help": {
-    "settings": "carryCapacity is the most weight a person can carry. walkSpeed is in metres per second. worldSize is how wide the square world is in metres (100 makes it 100 m x 100 m, with the clearing in the middle); it can be 40 to 300, and the bigger it is the more your phone has to draw. needsSpeed is 1 for real time; set it higher to test, for example 60 makes an hour of hunger and thirst pass in a minute. autoName fills in a name from testNames on the Make your person screen (handy while testing; set it to false for the real game). respawnMinutes is how often (online) the world adds one stick and one stone, if there are fewer on the ground than startInWorld: sticks under trees, stones by boulders.",
+    "settings": "carryCapacity is the most weight a person can carry. walkSpeed is in metres per second. worldSize is how wide the square world is in metres (100 makes it 100 m x 100 m, with the clearing in the middle); it can be 40 to 300, and the bigger it is the more your phone has to draw. needsSpeed is 1 for real time; set it higher to test, for example 60 makes an hour of hunger and thirst pass in a minute. autoName fills in a name from testNames on the Make your person screen (handy while testing; set it to false for the real game). respawnMinutes is how often (online) the world adds one stick and one stone, if there are fewer on the ground than startInWorld: sticks under trees, stones by boulders. maxPlaying is how many people can play at once (20 for now, to stay inside Cloudflare's free plan); anyone else waits in line on the main menu and joins by themselves when a spot opens. Run tools/worlds.py test-build after changing it.",
     "items": "To add an item, copy one of the items above, give it a new id (lower case, no spaces) and set its name, plural, weight and look. It then shows up by itself in the Inventory, in Craft (if a recipe makes it) and in the admin's Add list, with a picture drawn from its look. Shapes and their looks: rod (length, thickness, colour, twig), rock (size, colour), ball (size, colour, leaf: a colour or false), axe (length, thickness, colour, head, lashing), log (length, radius, colour, end), box (width, height, depth, colour). An unknown shape is drawn as a rock. eat is what eating one gives (a berry gives hunger 10), which adds an Eat button in the inventory. tool: {\"uses\": 20} makes it a tool that wears out after that many uses (a wear bar in the inventory); a tool you carry shows in your hand. startInWorld is how many lie around when the world starts (0 for things you can only make), and startNear is how many of those start close to where you appear. After changing items, run python3 tools/worlds.py test-build so the server knows about them.",
     "recipes": "To add a recipe, put it in the recipes list like this: {\"id\": \"stone-axe\", \"name\": \"Stone axe\", \"needs\": {\"stick\": 2, \"stone\": 3}, \"makes\": {\"stone-axe\": 1}, \"about\": \"Chops trees\"}. Every item in needs and makes must exist in items. Recipes show up in the Craft sheet (the hammer button) automatically. about is a short line on the recipe card (optional). The server checks crafting too, so run python3 tools/worlds.py test-build after changing recipes.",
     "looks": "Each list here is a set of choices on the Make your person screen. Add an entry to add a choice.",
@@ -646,6 +647,18 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.1.4",
+      "date": "2026-11-21",
+      "notes": [
+        "Ready for more players: up to 20 can play at once. When the world is full you wait in line on the main menu and join by yourself when a spot opens.",
+        "Walking now sends far fewer messages to the server (where you're going, not every step), so the world stays inside Cloudflare's free plan.",
+        "The server saves less often while people just walk about (what you do is still saved straight away).",
+        "Your phone only draws the 30 people nearest you, so a busy world stays smooth.",
+        "Away for 48 hours and your person leaves the world (a day strolling, then a day asleep). Welcome back tells you how long you have.",
+        "Admin: the Admin panel shows today's server use against the free limit, and how many are playing and waiting."
+      ]
+    },
     {
       "version": "0.1.3",
       "date": "2026-11-21",

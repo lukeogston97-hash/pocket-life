@@ -1601,6 +1601,7 @@ function updateLabels() {
     const L = labels[i];
     const age = elapsed - L.born;
     if (age > L.ttl) { removeLabel(L); if (L === tagLabel) tagLabel = null; continue; }
+    if (L.off || (L.who && !L.who.shown)) { L.el.style.opacity = '0'; continue; } // someone who isn't drawn
     tmp.copy(L.anchor).add(L.offset);
     tmp.y += L.rise * age;
     tmp.project(camera);
@@ -2681,6 +2682,7 @@ function personNear(px, py, maxPx = 42) {
   const w = canvas.clientWidth, h = canvas.clientHeight;
   let best = null, bd = maxPx;
   for (const o of others.values()) {
+    if (!o.shown) continue; // not drawn (too many people about)
     tmp2.copy(o.mesh.position); tmp2.y += 0.9;
     tmp2.project(camera);
     if (tmp2.z > 1) continue;
@@ -3246,7 +3248,7 @@ function enterMenu() {
   app.classList.add('is-menu');
   $('creator').hidden = true;
   $('mainMenu').hidden = false;
-  $('playBtn').disabled = false;
+  menuJoining = false;
   controls.enabled = false;
   ring.visible = false; // the ring under your person
   if (previewPerson) { pscene.remove(previewPerson); disposeMaterials(previewPerson); previewPerson = null; }
@@ -3256,12 +3258,16 @@ function enterMenu() {
 }
 // what's under Play: who you'll carry on as, or that you'll make a new person
 function drawMenu() {
-  $('playSub').textContent = menuYours ? `as ${menuYours.name} · ${menuYours.age}` : menuYours === null ? 'Make your person' : '';
+  $('playText').textContent = menuLine ? 'World is full' : 'Play';
+  $('playSub').textContent = menuLine ? `You're ${ordinal(menuLine)} in line. You'll join by yourself.` : menuYours ? `as ${menuYours.name} · ${menuYours.age}` : menuYours === null ? 'Make your person' : '';
+  $('playBtn').disabled = menuJoining || menuLine > 0;
   const n = others.size;
   $('menuNet').dataset.state = $('netLine').dataset.state;
   $('menuNetText').textContent = $('netLine').dataset.state !== 'online' ? $('netText').textContent : n ? `${n} ${n === 1 ? 'person' : 'people'} in the world` : 'Nobody in the world yet';
 }
 let menuYours; // undefined until the server says; null when you have no person
+let menuLine = 0, menuJoining = false; // your place in line when the world is full; Play was tapped and the server hasn't answered
+const ordinal = (n) => `${n}${[11, 12, 13].includes(n % 100) ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th'}`;
 // the camera slowly circles the main pond (it holds still if the phone asks for less motion)
 function menuCamera(dt) {
   if (!reduceMotion) menuCam.angle += dt * 0.035; // about three minutes a lap
@@ -3277,22 +3283,27 @@ function sendHello() {
 function play() {
   if (ui.mode !== 'menu') return;
   net.mode = 'play';
-  $('playBtn').disabled = true; // until the server answers
+  menuJoining = true; // until the server answers
+  drawMenu();
   if (net.sock && net.sock.readyState === 1) sendHello();
   else { showJoining(true); goOnline(); }
 }
 // back to the main menu: from making a person, or Exit in the pause menu (your person goes away and looks after themselves)
 function toMenu() {
   net.mode = 'watch';
-  if (player) {
-    stopQueue();
-    action = null;
-    auto.on = false; $('autoChip').hidden = true;
-    removePlayer();
-    you.look = null; you.stats = null; you.dead = false; you.sleeping = false;
-  }
+  menuLine = 0;
+  dropPlayer();
   enterMenu();
   if (net.sock && net.sock.readyState === 1) sendHello();
+}
+// your person is no longer shown here (the server looks after them now)
+function dropPlayer() {
+  if (!player) return;
+  stopQueue();
+  action = null;
+  auto.on = false; $('autoChip').hidden = true;
+  removePlayer();
+  you.look = null; you.stats = null; you.dead = false; you.sleeping = false;
 }
 $('playBtn').addEventListener('click', play);
 $('creatorBack').addEventListener('click', toMenu);
@@ -3322,7 +3333,8 @@ function showWelcomeBack(a) {
   if (a.drank) bits.push(`drank ${a.drank} time${a.drank === 1 ? '' : 's'}`);
   if (a.slept) bits.push('slept');
   if (a.ms < 5 * 60000 && !bits.length) return; // only gone a moment
-  $('backText').textContent = `You were away ${long}.${bits.length ? ` ${you.look.name} ${bits.join(', ').replace(/, ([^,]*)$/, ' and $1')}.` : ` ${you.look.name} rested.`}`;
+  const days = Math.round(((AWAY.sleepAfterHours || 24) + (AWAY.goneAfterDays || 1) * 24) / 24); // away this long and they leave the world
+  $('backText').textContent = `You were away ${long}.${bits.length ? ` ${you.look.name} ${bits.join(', ').replace(/, ([^,]*)$/, ' and $1')}.` : ` ${you.look.name} rested.`} Come back within ${days} days or they'll leave the world.`;
   $('back').hidden = false;
 }
 $('backBtn').addEventListener('click', () => { $('back').hidden = true; });
@@ -3452,9 +3464,11 @@ function goOnline() {
     else if (m.t === 'maintenance') showMaintenance(m.text);
     else if (m.t === 'thanks') showTag('Thanks for the feedback!', headTop(), 2.5);
     else if (m.t.startsWith('admin') || ['announce', 'kicked', 'banned', 'badge', 'reset'].includes(m.t)) adminMessage(m);
-    else if (m.t === 'slow') { $('playBtn').disabled = false; showTag('Slow down a little', headTop(), 2); }
+    else if (m.t === 'slow') { menuJoining = false; if (ui.mode === 'menu') drawMenu(); showTag('Slow down a little', headTop(), 2); }
     else if (m.t === 'reported') showTag(m.ok ? 'Thanks, your report was sent' : "They've left, so it couldn't be sent", headTop(), 2.5);
     else if (m.t === 'welcome') welcome(m);
+    else if (m.t === 'line') { menuLine = m.place || 0; if (m.missed) { net.mode = 'watch'; menuJoining = false; } if (ui.mode === 'menu') drawMenu(); }
+    else if (m.t === 'turn') { if (net.mode === 'play' && ui.mode === 'menu') { menuLine = 0; menuJoining = true; drawMenu(); sendHello(); } } // a spot opened: in we go
     else if (m.t === 'me') { const fresh = !player; applyMe(m); if (fresh) enterWorld(); }
     else if (m.t === 'died') die(m);
     else if (m.t === 'badName') { $('nameErr').textContent = 'Pick a different name.'; $('nameErr').hidden = false; creating = false; }
@@ -3478,7 +3492,7 @@ function goOnline() {
     }
     else if (m.t === 'join') addOther(m.person);
     else if (m.t === 'leave') removeOther(m.id);
-    else if (m.t === 'move') { const o = others.get(m.id); if (o) Object.assign(o, { tx: m.x, tz: m.z, tr: m.ry, speed: null }); }
+    else if (m.t === 'move') { const o = others.get(m.id); if (o) heardMove(o, m); }
     else if (m.t === 'say') {
       if (m.id === net.myId) { if (player) { bubble(null, m.text); addChat(you.look.name, m.text, true); } }
       else if (others.has(m.id) && !muted.has(others.get(m.id).who)) { const o = others.get(m.id); const t = starText(m.text, FILTER); bubble(o, t); addChat(o.title, t, false); }
@@ -3489,7 +3503,8 @@ function goOnline() {
     net.myId = null;
     setNet(net.wanted ? 'connecting' : 'offline');
     if (!maint.on && !net.stopped && ui.mode !== 'menu') showJoining(true, !!player);
-    $('playBtn').disabled = false;
+    menuJoining = false; menuLine = 0;
+    if (ui.mode === 'menu') drawMenu();
     shared.on = false;
     for (const id of [...others.keys()]) removeOther(id);
     if (net.wanted && !net.stopped) { setTimeout(goOnline, maint.on ? 20000 : net.retry); net.retry = Math.min(30000, net.retry * 2); }
@@ -3524,13 +3539,17 @@ function welcome(m) {
   setSpeed(m.speed);
   for (const id of [...others.keys()]) removeOther(id);
   for (const p of m.people || []) addOther(p);
-  if (m.watch) { // watching from the main menu
+  if (m.watch) { // watching from the main menu (or waiting in line because the world is full)
     if (m.world) useSharedWorld(m.world);
     menuYours = m.yours || null;
-    if (ui.mode !== 'menu') toMenu();
+    menuLine = m.line || 0;
+    if (ui.mode !== 'menu') { dropPlayer(); enterMenu(); }
+    menuJoining = false;
+    if (menuLine) net.mode = 'play'; // still wanting to play: the server calls us in when there's a spot
     drawMenu();
     return;
   }
+  menuLine = 0;
   if (m.world) { useSharedWorld(m.world); if (m.needLayout) sendLayout(); }
   else if (m.needSeed) seedWorld();
   if (m.me) {
@@ -3793,6 +3812,7 @@ function adminMessage(m) {
   if (m.t === 'admin' || m.t === 'adminDone') {
     const was = admin.on;
     Object.assign(admin, { on: true, tag: m.tag, maintenance: m.maintenance, message: m.message || '' });
+    if (m.usage) admin.usage = m.usage;
     if ('speed' in m) timeSpeed = m.speed && m.speed.until > Date.now() ? m.speed : null;
     try { localStorage.setItem(ADMIN_KEY, admin.code); } catch (err) { /* full */ }
     drawAdmin();
@@ -3852,11 +3872,18 @@ function drawAdmin() {
   $('adminMaintBtn').textContent = admin.maintenance ? 'Turn off' : 'Turn on';
   $('adminMaintText').value = admin.message || '';
   $('adminTagBtn').textContent = admin.tag ? 'Admin tag: on' : 'Admin tag: off';
+  // today's use of Cloudflare's free plan (it resets at 9:30 am Darwin time); past 80% shows red
+  const u = admin.usage;
+  if (u) {
+    const pct = Math.max(u.requests, u.writes);
+    $('adminUsage').textContent = `Server today: ${pct}% of the free limit · ${u.playing}/${u.max} playing${u.waiting ? ` · ${u.waiting} waiting` : ''}`;
+    $('adminUsage').classList.toggle('warn', pct >= 80);
+  }
   const fast = timeSpeed && timeSpeed.until > Date.now();
   $('adminSpeedBtn').textContent = fast ? `Time ${timeSpeed.x}x: stop` : 'Speed up time';
   if (!admin.on) { $('adminPanel').hidden = true; $('adminList').hidden = true; }
 }
-function openAdminPanel() { closePause(); paused = true; drawAdmin(); $('adminPanel').hidden = false; }
+function openAdminPanel() { closePause(); paused = true; adminSend({ t: 'a.state' }); drawAdmin(); $('adminPanel').hidden = false; }
 function closeAdminPanel() { $('adminPanel').hidden = true; paused = false; resetArm(); }
 $('pauseAdminBtn').addEventListener('click', openAdminPanel);
 $('adminClose').addEventListener('click', closeAdminPanel);
@@ -3962,7 +3989,8 @@ function addOther(p) {
   scene.add(mesh);
   const name = addLabel({ cls: 'name-tag', text: '', anchor: mesh.position, offset: V(0, 2.0, 0), gap: 0 });
   const o = { id: p.id, who: p.who || p.id, title: p.name || 'Someone', badge: !!p.badge, state: p.state || 'online', mesh, tx: x, tz: z, tr: mesh.rotation.y, phase: 0, name, bubble: null,
-    speed: p.speed || null };
+    speed: p.speed || null, shown: true };
+  shownAt = -1; // work out again who's drawn
   if (p.tx != null) Object.assign(o, { tx: p.tx, tz: p.tz });
   others.set(p.id, o);
   drawTag(o);
@@ -4015,12 +4043,27 @@ function removeOther(id) {
   others.delete(id);
 }
 // other people glide to where the server says they are, legs moving while they walk
+// Only the people nearest the middle of the view are drawn (and can be tapped), so a busy world stays smooth on a phone.
+const SHOW_PEOPLE = 30;
+let shownAt = -1;
+function pickShown() {
+  const c = controls.target, d2 = (o) => (o.mesh.position.x - c.x) ** 2 + (o.mesh.position.z - c.z) ** 2;
+  [...others.values()].sort((a, b) => d2(a) - d2(b)).forEach((o, i) => {
+    const on = i < SHOW_PEOPLE;
+    if (o.shown === on) return;
+    o.shown = on;
+    o.mesh.visible = on;
+    for (const L of [o.name, o.bubble]) if (L) { L.off = !on; L.el.style.display = on ? '' : 'none'; }
+  });
+}
 function updateOthers(dt) {
+  if (elapsed - shownAt > 0.5 || elapsed < shownAt) { shownAt = elapsed; pickShown(); }
   for (const o of others.values()) {
     const m = o.mesh;
-    // someone strolling while away follows a route round things, like you do
+    if (!o.shown) { m.position.set(o.tx, groundY(o.tx, o.tz), o.tz); continue; } // not drawn: just keep them where they're heading
+    // someone walking (a player, or someone strolling while away) follows a route round things, like you do
     let gx = o.tx, gz = o.tz;
-    if (o.speed && o.state === 'away') {
+    if (o.speed) {
       const key = `${o.tx},${o.tz}`;
       if (o.pathKey !== key) { o.pathKey = key; o.path = findPath(m.position.x, m.position.z, o.tx, o.tz); }
       while (o.path && o.path.length > 1 && Math.hypot(o.path[0][0] - m.position.x, o.path[0][1] - m.position.z) < 0.25) o.path.shift();
@@ -4060,22 +4103,38 @@ function updateOthers(dt) {
     if (o.act && P && !(d > 0.02 && o.speed)) { if (!animateAct(m, P, ground, o.act, dt)) o.act = null; }
   }
 }
-// tell the server where you are, a few times a second while you move
+// Tell the server where you're going: once when a walk starts (with where it ends, tx and tz), every couple of
+// seconds while walking, and when you stop or turn. Everyone else's game walks you along the route itself.
+// This sends about a tenth of the messages of sending every step, which keeps the server inside Cloudflare's free plan.
 function sendMove() {
-  if (!online() || !player || elapsed - net.sentAt < 0.2) return;
+  if (!online() || !player) return;
   const x = player.position.x, z = player.position.z, ry = player.rotation.y;
+  const goal = walk.target ? [Math.round(walk.target.x * 100) / 100, Math.round(walk.target.z * 100) / 100] : null;
   const l = net.last;
-  if (l && Math.hypot(x - l.x, z - l.z) < 0.03 && Math.abs(ry - l.ry) < 0.05) return;
+  const newGoal = goal && (!l || !l.goal || l.goal[0] !== goal[0] || l.goal[1] !== goal[1]);
+  const stopped = !goal && l && l.goal;
+  if (!newGoal && !stopped) {
+    if (goal) { if (elapsed - net.sentAt < 2.5) return; } // walking: now and then, where you've got to
+    else if (elapsed - net.sentAt < 0.5 || (l && Math.hypot(x - l.x, z - l.z) < 0.05 && Math.abs(ry - l.ry) < 0.15)) return; // standing: only when moved or turned
+  }
   net.sentAt = elapsed;
-  net.last = { x, z, ry };
-  net.sock.send(JSON.stringify({ t: 'move', x, z, ry, doing: tasks.current ? taskName(tasks.current, true) : '' }));
+  net.last = { x, z, ry, goal };
+  net.sock.send(JSON.stringify({ t: 'move', x, z, ry, ...(goal ? { tx: goal[0], tz: goal[1] } : {}) }));
+}
+// Someone else moved. A walk comes with where they're going (tx, tz) and their game walks them there along the
+// same kind of route; if they've drifted far from where they really are, they jump there.
+function heardMove(o, m) {
+  const p = o.mesh.position;
+  if (Math.hypot(p.x - m.x, p.z - m.z) > 3) { p.x = m.x; p.z = m.z; o.pathKey = null; }
+  if (m.tx != null) Object.assign(o, { tx: m.tx, tz: m.tz, speed: SETTINGS.walkSpeed, then: null, act: null });
+  else Object.assign(o, { tx: m.x, tz: m.z, tr: m.ry, speed: null });
 }
 // speech bubbles: what you say shows over your head for everyone nearby
 function bubble(o, text) {
   const anchor = o ? o.mesh.position : player.position;
   if (o && o.bubble) removeLabel(o.bubble);
   if (!o && net.myBubble) removeLabel(net.myBubble);
-  const L = addLabel({ cls: 'bubble', text, anchor, offset: V(0, o ? 2.35 : 2.0, 0), ttl: 7, gap: 4 });
+  const L = addLabel({ cls: 'bubble', text, anchor, offset: V(0, o ? 2.35 : 2.0, 0), ttl: 7, gap: 4, who: o || null });
   if (o) o.bubble = L; else net.myBubble = L;
 }
 // Chat: the Say button opens a chat bar along the bottom (just above the keyboard), with the last few things
@@ -4142,4 +4201,4 @@ enterMenu();
 goOnline();
 requestAnimationFrame(frame);
 // for automated checks only: open the page with ?debug to reach the game's state from the browser console
-if (location.search.includes('debug')) window.__pl = { walk, tasks, trees, you, get player() { return player; }, findPath, freeAt, die, showWelcomeBack, showGoneCard, showMaintenance, hideMaintenance };
+if (location.search.includes('debug')) window.__pl = { walk, tasks, trees, you, others, get player() { return player; }, findPath, freeAt, die, showWelcomeBack, showGoneCard, showMaintenance, hideMaintenance };
