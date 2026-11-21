@@ -299,7 +299,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--moss); outl
 .admin-row { display: flex; justify-content: space-between; align-items: center; }
 .admin-state { font-size: 13px; opacity: 0.7; }
 .admin-input { width: 100%; padding: 9px 11px; border: 1.5px solid rgba(44, 43, 33, 0.18); border-radius: 10px; font: 600 15px/1.3 var(--font-ui); color: var(--ink); }
-.admin-grid { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.admin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.admin-grid .small-btn { min-height: 42px; font-size: 13px; padding: 6px 8px; }
 .admin-danger { color: #a2412f; }
 .admin-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-bottom: 10px; }
 .admin-tabs .seg-btn { font-size: 12px; padding: 6px 2px; min-height: 36px; }
@@ -332,3 +333,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--moss); outl
 .news-list li { margin: 2px 0; }
 .name-tag .tag-sub { display: block; font-size: 10px; font-weight: 700; opacity: 0.75; text-align: center; }
 .act-title:empty { display: none; }
+.admin-inline { display: flex; gap: 6px; }
+.admin-inline .admin-input { flex: 1; min-width: 0; }
+.admin-inline .small-btn { flex: none; }
+.admin-wide { width: 100%; margin: 0 0 14px; }
+.admin-card h2 { margin-bottom: 10px; }
+.news-entry summary { cursor: pointer; list-style: none; }
+.news-entry summary::-webkit-details-marker { display: none; }
+.news-entry summary::before { content: "▸ "; }
+.news-entry[open] summary::before { content: "▾ "; }
+.act-more::after { content: " ›"; opacity: 0.6; }
+.act-back { opacity: 0.7; }

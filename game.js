@@ -1780,7 +1780,37 @@ function resetPose() {
   P.body.rotation.x = P.body.userData.stoop;
   setLegs(P, 0);
 }
-function startAction(a) { walk.target = null; action = { t0: elapsed, done: false, seconds: 0.5, pose: 'bend', ...a }; }
+function startAction(a) {
+  walk.target = null;
+  action = { t0: elapsed, done: false, seconds: 0.5, pose: 'bend', ...a };
+  if (online()) net.sock.send(JSON.stringify({ t: 'act', pose: action.pose, seconds: action.seconds }));
+}
+// other people's actions, shown the same way as yours: a bend to pick something up, picking berries, kneeling to drink
+function animateAct(m, P, ground, act, dt) {
+  const t = elapsed - act.t0, dur = act.seconds, k = clamp01(t / dur), stoop = P.body.userData.stoop;
+  setLegs(P, 0);
+  if (act.pose === 'kneel' || act.pose === 'pick') {
+    const env = clamp01(Math.min(t, dur - t) / 0.3), wave = Math.sin(t * 7);
+    if (act.pose === 'kneel') {
+      P.body.rotation.x = stoop + 1.05 * env;
+      m.position.y = ground - 0.12 * env;
+      setArm(P.armR, (-0.6 + wave * 0.3) * env);
+      setArm(P.armL, (-0.6 + wave * 0.3) * env);
+    } else {
+      P.body.rotation.x = stoop + 0.15 * env;
+      setArm(P.armR, (-1.25 + wave * 0.25) * env);
+      setArm(P.armL, (-1.0 - wave * 0.25) * env);
+    }
+  } else {
+    const s = Math.sin(k * Math.PI);
+    P.body.rotation.x = stoop + 1.0 * s;
+    m.position.y = ground - 0.14 * s;
+    setArm(P.armR, -0.55 * s);
+    setArm(P.armL, -0.35 * s);
+  }
+  if (k >= 1) { P.body.rotation.x = stoop; setArm(P.armR, 0); setArm(P.armL, 0); m.position.y = ground; return false; }
+  return true;
+}
 
 /* ---------- your queue: tap several things and your person does them in turn ---------- */
 const tasks = { current: null, list: [] }; // { type: 'pickup', id } | { type: 'use', source, ... } | { type: 'drop', kind, n }
@@ -2255,10 +2285,10 @@ function menuActions(t) {
         showTag(isMuted ? `${o.title} unmuted` : `${o.title} muted`, headTop(), 2);
       } },
       { label: 'Report', run: () => openReport(o) },
-      { label: 'Walk here', run: () => walkFirst(V(o.mesh.position.x, 0, o.mesh.position.z)) }, ...adminPersonActions(o)];
+      { label: 'Walk here', run: () => walkFirst(V(o.mesh.position.x, 0, o.mesh.position.z)) }, ...adminMore(adminPersonActions(o))];
   }
   if (t.kind === 'ground' || t.kind === 'thing' || t.kind === 'shore') {
-    return [{ label: 'Walk here', run: () => walkToTarget(t) }, ...adminGroundActions(t.point || (t.hit && t.hit.point))];
+    return [{ label: 'Walk here', run: () => walkToTarget(t) }, ...adminMore(adminGroundActions(t.point || (t.hit && t.hit.point)))];
   }
   if (t.kind === 'self') return admin.on ? [{ label: 'Fill my needs', run: () => adminSend({ t: 'a.fill', id: net.myId }) }] : [];
   if (t.kind === 'grave') return [{ label: 'Walk here', run: () => walkFirst(V(t.x + 0.8, 0, t.z)) }];
@@ -2292,7 +2322,17 @@ function openMenuAt(px, py, known) {
   if (!acts.length) { closeMenu(); return false; }
   const menu = $('actMenu');
   $('actTitle').textContent = t.name;
-  $('actList').replaceChildren(...acts.map((a) => {
+  showActs(acts);
+  menu.hidden = false;
+  const w = menu.offsetWidth, h = menu.offsetHeight;
+  menu.style.left = `${Math.round(Math.min(Math.max(8, px + 8), app.clientWidth - w - 8))}px`;
+  menu.style.top = `${Math.round(Math.min(Math.max(8, py + 8), app.clientHeight - h - 8))}px`;
+  return true;
+}
+// a list of buttons in the small menu; an item with a "sub" list opens it in place, with Back
+function showActs(acts, back) {
+  const list = back ? [{ label: '‹ Back', back: true, run: back }, ...acts] : acts;
+  $('actList').replaceChildren(...list.map((a) => {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'act-btn';
@@ -2300,14 +2340,15 @@ function openMenuAt(px, py, known) {
     b.textContent = a.label;
     if (a.note) { const small = document.createElement('small'); small.textContent = a.note; b.appendChild(small); }
     b.disabled = !!a.disabled;
-    b.addEventListener('click', () => { closeMenu(); a.run(); });
+    if (a.sub) b.classList.add('act-more');
+    if (a.back) b.classList.add('act-back');
+    b.addEventListener('click', () => {
+      if (a.sub) { showActs(a.sub, () => showActs(acts, back)); return; }
+      if (a.back) { a.run(); return; }
+      closeMenu(); a.run();
+    });
     return b;
   }));
-  menu.hidden = false;
-  const w = menu.offsetWidth, h = menu.offsetHeight;
-  menu.style.left = `${Math.round(Math.min(Math.max(8, px + 8), app.clientWidth - w - 8))}px`;
-  menu.style.top = `${Math.round(Math.min(Math.max(8, py + 8), app.clientHeight - h - 8))}px`;
-  return true;
 }
 function closeMenu() { $('actMenu').hidden = true; }
 // pressing anywhere else closes the menu (and that press doesn't also walk)
@@ -2744,7 +2785,7 @@ function setMuted(who, on) {
 }
 function goOnline() {
   net.wanted = true;
-  if (!SERVER || net.sock || net.stopped) return;
+  if (!SERVER || net.sock || net.stopped || net.hidden) return;
   let sock;
   try { sock = new WebSocket(`${SERVER}?world=live`); } catch (err) { return; }
   net.sock = sock;
@@ -2770,7 +2811,8 @@ function goOnline() {
     else if (m.t === 'badName') { $('nameErr').textContent = 'Pick a different name.'; $('nameErr').hidden = false; creating = false; }
     else if (m.t === 'elsewhere') { net.stopped = true; showMaintenance('Pocket Life was opened somewhere else on this phone. Reload this page to play here instead.', 'Playing somewhere else', ''); }
     else if (m.t === 'state') setOtherState(m);
-    else if (m.t === 'stroll') { const o = others.get(m.id); if (o) Object.assign(o, { tx: m.x, tz: m.z, speed: m.speed || null }); }
+    else if (m.t === 'stroll') { const o = others.get(m.id); if (o) Object.assign(o, { tx: m.x, tz: m.z, speed: m.speed || null, then: m.then || null, act: null }); }
+    else if (m.t === 'act') { const o = others.get(m.id); if (o && ['bend', 'kneel', 'pick'].includes(m.pose)) o.act = { pose: m.pose, seconds: Math.min(5, Number(m.seconds) || 0.5), t0: elapsed }; }
     else if (m.t === 'graves') drawGraves(m.graves);
     else if (m.t === 'speed') setSpeed(m.speed);
     else if (m.t === 'world') useSharedWorld(m.world);
@@ -2833,7 +2875,15 @@ function welcome(m) {
   else if (m.needSeed) seedWorld();
   if (m.me) {
     if (!player) { applyMe(m.me, true); enterWorld(); }
-    else applyMe(m.me);
+    else {
+      applyMe(m.me);
+      if (m.away && Number.isFinite(m.me.x)) { // they may have strolled off while you were gone
+        stopQueue();
+        playerGround = groundY(m.me.x, m.me.z);
+        player.position.set(inWorld(m.me.x), playerGround, inWorld(m.me.z));
+        net.last = null;
+      }
+    }
     if (m.away) showWelcomeBack(m.away);
   } else if (player && !you.dead) {
     // the server has no person for us (a reset world, say): start again
@@ -3005,12 +3055,14 @@ $('pauseFeedbackBtn').addEventListener('click', openFeedback);
 function openNews() {
   closePause();
   paused = true;
-  const rows = (DATA.devlog || []).map((v) => {
-    const el = document.createElement('div');
-    el.className = 'admin-entry';
-    const h = document.createElement('div');
+  const rows = (DATA.devlog || []).map((v, i) => {
+    const el = document.createElement('details');
+    el.className = 'admin-entry news-entry';
+    el.open = i === 0;
+    const h = document.createElement('summary');
     h.className = 'admin-head';
-    h.textContent = `v${v.version}${v.date ? ` · ${new Date(`${v.date}T12:00:00`).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}`;
+    const date = v.date ? new Date(`${v.date}T12:00:00`).toLocaleDateString([], { day: 'numeric', month: 'short' }) : '';
+    h.textContent = `v${v.version}${date ? ` · ${date}` : ''}${i ? ` · ${(v.notes || []).length} changes` : ''}`;
     const ul = document.createElement('ul');
     for (const n of v.notes || []) { const li = document.createElement('li'); li.textContent = n; ul.appendChild(li); }
     el.append(h, ul);
@@ -3109,10 +3161,10 @@ function teleportTo(x, z) {
   player.position.set(x, groundY(x, z), z);
   net.last = null;
 }
+const adminMore = (acts) => (acts.length ? [{ label: 'Admin', sub: acts }] : []);
 function adminPersonActions(o) {
   if (!admin.on) return [];
-  return [{ label: 'Mute for everyone', run: () => adminSend({ t: 'a.mute', id: o.id, on: true }) },
-    { label: 'Unmute for everyone', run: () => adminSend({ t: 'a.mute', id: o.id, on: false }) },
+  return [{ label: 'Mute for everyone', note: 'Unmute in the Online list', run: () => adminSend({ t: 'a.mute', id: o.id, on: true }) },
     { label: 'Kick', run: () => adminSend({ t: 'a.kick', id: o.id }) },
     { label: 'Ban', note: 'Keeps this phone out', run: () => adminSend({ t: 'a.ban', id: o.id }) },
     { label: 'Teleport to them', run: () => teleportTo(o.mesh.position.x + 1, o.mesh.position.z) },
@@ -3134,7 +3186,7 @@ function drawAdmin() {
   $('adminMaintText').value = admin.message || '';
   $('adminTagBtn').textContent = admin.tag ? 'Admin tag: on' : 'Admin tag: off';
   const fast = timeSpeed && timeSpeed.until > Date.now();
-  $('adminSpeedBtn').textContent = fast ? `Time ${timeSpeed.x}x fast: tap to stop` : 'Speed up time (60x for 10 min)';
+  $('adminSpeedBtn').textContent = fast ? `Time ${timeSpeed.x}x: stop` : 'Speed up time';
   if (!admin.on) { $('adminPanel').hidden = true; $('adminList').hidden = true; }
 }
 function openAdminPanel() { closePause(); paused = true; drawAdmin(); $('adminPanel').hidden = false; }
@@ -3205,6 +3257,7 @@ function drawAdminList(m) {
     if (p.id === net.myId) { row(`${p.name} (you) · v${p.v} · ${p.link} link`); continue; }
     row(`${p.name}${p.muted ? ' · muted' : ''} · v${p.v} · ${p.link} link`, '', [
       ['Teleport to', () => { $('adminList').hidden = true; closeAdminPanel(); teleportTo(p.x + 1, p.z); }],
+      ...(p.muted ? [['Unmute', () => { adminSend({ t: 'a.mute', id: p.id, on: false }); p.muted = false; drawAdminList(); }]] : []),
       ['Kick', () => adminSend({ t: 'a.kick', id: p.id })],
       ['Ban', () => adminSend({ t: 'a.ban', id: p.id })]]);
   }
@@ -3214,6 +3267,21 @@ function drawAdminList(m) {
   $('adminListBody').replaceChildren(...rows);
 }
 drawAdmin();
+// While the game is hidden (another app, the phone locked) it says goodbye, so your person goes "away"
+// and starts looking after themselves straight away; coming back reconnects. A ping every 25 seconds
+// tells the server the game is still here.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    net.hidden = true;
+    if (net.sock && net.sock.readyState === 1) { try { net.sock.send(JSON.stringify({ t: 'bye' })); } catch (err) { /* closing */ } }
+    if (net.sock) { try { net.sock.close(); } catch (err) { /* closed */ } }
+  } else {
+    net.hidden = false;
+    net.retry = 1000;
+    goOnline();
+  }
+});
+setInterval(() => { if (online() && !document.hidden) net.sock.send(JSON.stringify({ t: 'ping' })); }, 25000);
 function goOffline() {
   net.wanted = false;
   if (net.sock) { try { net.sock.close(); } catch (err) { /* already closed */ } }
@@ -3299,10 +3367,14 @@ function updateOthers(dt) {
       o.phase += dt * (o.speed ? 6 : 9);
       if (P) setLegs(P, Math.sin(o.phase));
     } else {
-      m.rotation.y = lerpAngle(m.rotation.y, o.tr, Math.min(1, dt * 6));
-      if (P) setLegs(P, 0);
+      // arrived: someone away who walked to the pond or a bush drinks or picks for a moment
+      if (o.then) { o.act = { pose: o.then === 'drink' ? 'kneel' : 'pick', seconds: 4, t0: elapsed }; o.then = null; }
+      if (!o.act) m.rotation.y = lerpAngle(m.rotation.y, o.tr, Math.min(1, dt * 6));
+      if (P && !o.act) setLegs(P, 0);
     }
-    m.position.y = groundY(m.position.x, m.position.z);
+    const ground = groundY(m.position.x, m.position.z);
+    m.position.y = ground;
+    if (o.act && P && !(d > 0.02 && o.speed)) { if (!animateAct(m, P, ground, o.act, dt)) o.act = null; }
   }
 }
 // tell the server where you are, a few times a second while you move

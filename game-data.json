@@ -1,6 +1,6 @@
 {
-  "version": "0.0.7",
-  "build": 2,
+  "version": "0.0.8",
+  "build": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,
@@ -539,23 +539,24 @@
   },
   "devlog": [
     {
+      "version": "0.0.8",
+      "date": "2026-11-21",
+      "notes": [
+        "Close or switch away from the game and your person goes 'away' straight away and starts strolling about.",
+        "You can see what others are doing: bending to pick things up, picking berries, kneeling to drink (people who are away too).",
+        "Shorter menus: admin options sit behind one Admin item, a smaller Admin panel, and this list folds older updates.",
+        "Bug fixes: coming back puts you where your person strolled to."
+      ]
+    },
+    {
       "version": "0.0.7",
       "date": "2026-11-21",
       "notes": [
-        "Your person now lives on the server and stays in the world while you're away.",
-        "While you're away (up to a day) your person looks after themselves: they stroll about, eat what they carry, pick berries and drink at the pond. They can still die if they can't find food or water.",
-        "After a day away they lie down asleep (needs pause). After 7 days asleep they leave the world, and their things are left where they slept.",
-        "Welcome back card: what your person did while you were away.",
-        "People who are away or asleep show it under their name. Graves mark where someone died, for a day.",
-        "People strolling about while away walk round rocks, bushes and trees.",
-        "Needs are now realistic: hunger lasts about a day, thirst about 16 hours. A berry fills 10 hunger (was 2), a drink fills 15 thirst (was 10). No water for about 3 days or no food for about a week and you die.",
-        "26 more berry bushes out in the wider world.",
-        "Tap the ground for Walk here. Double-tap still walks straight there.",
-        "Say bar at the bottom, between your needs and inventory.",
-        "This What's new list in the Menu.",
-        "Small rocks by boulders are bigger, so they don't look like stones you can pick up.",
-        "Reconnecting screen when the internet drops. Your person carries on while you're gone.",
-        "Removed: New person and Inventory from the Menu, and the word Prototype.",
+        "Your person lives on the server and stays in the world while you're away.",
+        "Away: they stroll about, eat, pick berries and drink. After a day they sleep; after 7 days asleep they leave.",
+        "Welcome back card, 'away' and 'asleep' name tags, graves.",
+        "Realistic needs: hunger lasts a day, thirst about 16 hours. Berries fill 10, drinks fill 15.",
+        "26 more berry bushes. Tap the ground for Walk here. Say button at the bottom. What's new in the Menu.",
         "Fresh start: everyone makes a new person."
       ]
     },
@@ -563,22 +564,18 @@
       "version": "0.0.6",
       "date": "2026-11-21",
       "notes": [
-        "Online: one world for everyone. See other people, their names and speech bubbles.",
-        "Sticks, stones and berries are shared, and sticks and stones slowly turn up again.",
-        "Online count and connection dot, Graphics setting (Low, Medium, High), Send feedback.",
+        "Online: one shared world, other people, speech bubbles.",
+        "Online count, Graphics setting, Send feedback.",
         "Chat filter, Mute and Report.",
-        "Double-tap to walk. Decorative pebbles removed.",
-        "Updates reach everyone by themselves, and the world can close for maintenance."
+        "Double-tap to walk."
       ]
     },
     {
       "version": "0.0.5",
       "date": "2026-11-20",
       "notes": [
-        "Berry bushes: pick berries one at a time, they grow back.",
-        "Tap things for a small menu. Task list with Stop all.",
-        "Pause menu, camera keys on a computer, walking round rocks and trees.",
-        "Your game saves on your phone."
+        "Berry bushes, tap menus, task list, pause menu.",
+        "Walking round rocks and trees. Saving."
       ]
     }
   ]

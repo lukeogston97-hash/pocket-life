@@ -29,9 +29,12 @@ function tooOld(v, b, min) {
 }
 const FEEDBACK_KEEP = 300, REPORTS_KEEP = 300;
 // Spam limits: each kind of message refills at so many a second, up to a small burst. The admin is never limited.
-const LIMITS = { say: [1, 3], take: [5, 10], pick: [5, 10], drop: [2, 6], move: [12, 20], eat: [3, 6], drink: [1, 3], create: [1 / 5, 3],
+const LIMITS = { act: [3, 6], say: [1, 3], take: [5, 10], pick: [5, 10], drop: [2, 6], move: [12, 20], eat: [3, 6], drink: [1, 3], create: [1 / 5, 3],
   feedback: [1 / 30, 3], report: [1 / 30, 3], adminLogin: [1 / 5, 3] };
 const buckets = new WeakMap(); // per connection, kept in memory only
+const lastHeard = new WeakMap(); // per connection: when it last sent anything (the game pings every 25 seconds)
+const QUIET_MS = 90000; // nothing heard for this long: the phone is asleep or gone, so the person goes away
+const TICK_MS = 20000; // how often the world moves on (needs, people away, sticks and stones)
 function allowed(ws, me, t) {
   const lim = LIMITS[t];
   if (!lim || me.admin) return true;
@@ -77,7 +80,7 @@ export class World extends DurableObject {
       Object.assign(this.admin, (await ctx.storage.get('admin')) || {});
       this.speed = (await ctx.storage.get('speed')) || null;
       for (const [k, p] of await ctx.storage.list({ prefix: 'p:' })) this.persons.set(k.slice(2), p);
-      if (!(await ctx.storage.getAlarm())) await ctx.storage.setAlarm(Date.now() + MINUTE);
+      if (!(await ctx.storage.getAlarm())) await ctx.storage.setAlarm(Date.now() + TICK_MS);
     });
   }
 
@@ -221,7 +224,7 @@ export class World extends DurableObject {
     const walk = (to, extra) => {
       const ms = (dist(at, to) / AWAY.strollSpeed) * 1000 + 500;
       p.plan = { kind: 'walk', from: at, to: [num(to[0]), num(to[1])], start: t, arrive: t + ms, ...extra };
-      if (p.plan.arrive > now) this.send({ t: 'stroll', id: p.who, x: p.plan.to[0], z: p.plan.to[1], speed: AWAY.strollSpeed }, null);
+      if (p.plan.arrive > now) this.send({ t: 'stroll', id: p.who, x: p.plan.to[0], z: p.plan.to[1], speed: AWAY.strollSpeed, then: extra && extra.then }, null);
     };
     const idle = (ms) => { p.plan = { kind: 'idle', start: t, arrive: t + ms }; };
     if (!L) { idle(10 * MINUTE); return; }
@@ -241,7 +244,7 @@ export class World extends DurableObject {
       return;
     }
     // potter about: rest a little, then stroll somewhere within reach of where you left them
-    if (!p.wanderNext) { p.wanderNext = true; idle((1 + Math.random() * 3) * MINUTE); return; }
+    if (!p.wanderNext) { p.wanderNext = true; idle((15 + Math.random() * 45) * 1000); return; }
     p.wanderNext = false;
     const home = p.home || at;
     const spots = (L.open || []).filter((o) => dist(o, home) <= AWAY.wanderMax && dist(o, at) > 3);
@@ -304,9 +307,12 @@ export class World extends DurableObject {
     let m;
     try { m = JSON.parse(raw); } catch (err) { return; }
     if (!m || typeof m.t !== 'string') return;
+    lastHeard.set(ws, Date.now());
+    if (m.t === 'ping') return;
     const me = ws.deserializeAttachment() || {};
     const reply = (msg) => { try { ws.send(JSON.stringify(msg)); } catch (err) { /* gone */ } };
     if (m.t === 'hello') { await this.hello(ws, me, m, reply); return; }
+    if (m.t === 'bye') { try { ws.close(1000, 'bye'); } catch (err) { /* gone */ } this.webSocketClose(ws); return; }
     if (!me.id) return;
     if (!allowed(ws, me, m.t)) {
       if (m.t === 'take') reply({ t: 'took', id: m.id, ok: false });
@@ -370,7 +376,10 @@ export class World extends DurableObject {
     if (!this.alive(p)) return;
     this.catchUp(p);
     if (!this.alive(p)) return;
-    if (m.t === 'move') {
+    if (m.t === 'act') { // bending, picking, drinking: shown to everyone else
+      const pose = ['bend', 'kneel', 'pick'].includes(m.pose) ? m.pose : 'bend';
+      this.send({ t: 'act', id: me.id, pose, seconds: Math.max(0.3, Math.min(5, Number(m.seconds) || 0.5)) }, me.id);
+    } else if (m.t === 'move') {
       p.x = num(m.x); p.z = num(m.z); p.ry = num(m.ry);
       this.touch(p);
       this.send({ t: 'move', id: me.id, x: p.x, z: p.z, ry: p.ry, doing: clean(m.doing, 24) }, me.id);
@@ -482,6 +491,11 @@ export class World extends DurableObject {
   async alarm() {
     const now = Date.now();
     try {
+      // connections that have gone quiet (a phone locked, or the page closed without saying) are closed
+      for (const { ws, p } of this.sockets()) {
+        if (!lastHeard.has(ws)) { lastHeard.set(ws, now); continue; }
+        if (now - lastHeard.get(ws) > QUIET_MS) { try { ws.close(1000, 'quiet'); } catch (err) { /* gone */ } this.webSocketClose(ws); }
+      }
       for (const p of [...this.persons.values()]) {
         if (!this.alive(p)) {
           if (p.diedAt && now - p.diedAt > 30 * 24 * HOUR) { this.persons.delete(p.who); await this.ctx.storage.delete(`p:${p.who}`); }
@@ -512,7 +526,7 @@ export class World extends DurableObject {
       }
       if (this.speed && now > this.speed.until) { this.speed = null; await this.ctx.storage.delete('speed'); this.send({ t: 'speed', speed: null }, null); }
     } finally {
-      await this.ctx.storage.setAlarm(Date.now() + MINUTE);
+      await this.ctx.storage.setAlarm(Date.now() + TICK_MS);
     }
   }
   // nature tops up: one of each kind that's below its normal amount, at a spot near a tree or boulder
@@ -535,13 +549,13 @@ export class World extends DurableObject {
 
   webSocketClose(ws) {
     const me = ws.deserializeAttachment();
-    if (!me || !me.who) return;
+    if (!me || !me.who || !me.id) return; // not joined, or already handled
     me.id = null; // this connection is finished
     ws.serializeAttachment(me);
     const p = this.persons.get(me.who);
     if (me.alive && this.alive(p) && !this.socketOf(me.who)) { // away now: they start looking after themselves
       p.leftAt = Date.now(); p.simAt = p.leftAt; p.statsAt = Math.min(p.statsAt, p.leftAt);
-      p.home = [p.x, p.z]; p.plan = null; p.asleep = false; p.wanderNext = false; p.log = { ate: 0, drank: 0, picked: 0 };
+      p.home = [p.x, p.z]; p.plan = null; p.asleep = false; p.wanderNext = true; p.log = { ate: 0, drank: 0, picked: 0 }; // off for a stroll straight away
       this.touch(p);
       this.flush();
       this.send({ t: 'state', id: p.who, state: 'away', x: num(p.x), z: num(p.z) }, null);

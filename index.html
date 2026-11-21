@@ -33,7 +33,7 @@
     <button type="submit" class="small-btn go">Say</button>
   </form>
 
-  <p id="hint" class="hint" hidden>Double-tap the ground to walk, or tap it for Walk here. Tap a stick, stone, berry bush or the pond to see what you can do (do a few to queue them). Say is at the bottom, Menu at the top right.</p>
+  <p id="hint" class="hint" hidden>Double-tap the ground to walk. Tap anything to see what you can do.</p>
 
   <div id="queue" class="queue" hidden aria-live="polite">
     <div id="queueNowRow" class="q-now"><small>Now</small><span id="queueNow">Waiting for something to do</span></div>
@@ -148,24 +148,21 @@
   <div id="adminPanel" class="modal" hidden>
     <div class="modal-card admin-card" role="dialog" aria-modal="true" aria-labelledby="adminTitle">
       <h2 id="adminTitle">Admin</h2>
+      <button id="adminListBtn" type="button" class="action-btn admin-wide">Feedback, reports, players</button>
       <div class="admin-sec">
         <div class="admin-row"><span class="lbl">Maintenance</span><span id="adminMaintState" class="admin-state">Off</span></div>
-        <input id="adminMaintText" class="admin-input" maxlength="200" placeholder="Message for players (optional)">
-        <button id="adminMaintBtn" type="button" class="small-btn">Turn on</button>
+        <div class="admin-inline"><input id="adminMaintText" class="admin-input" maxlength="200" placeholder="Message (optional)"><button id="adminMaintBtn" type="button" class="small-btn">Turn on</button></div>
       </div>
       <form id="adminAnnounceForm" class="admin-sec">
         <span class="lbl">Message everyone</span>
-        <input id="adminAnnounceText" class="admin-input" maxlength="140" placeholder="Shows across everyone's screen">
-        <button type="submit" class="small-btn">Send</button>
+        <div class="admin-inline"><input id="adminAnnounceText" class="admin-input" maxlength="140" placeholder="Shows on everyone's screen"><button type="submit" class="small-btn">Send</button></div>
       </form>
-      <div class="admin-sec admin-grid">
-        <button id="adminListBtn" type="button" class="small-btn">Feedback, reports, players</button>
+      <div class="admin-grid">
+        <button id="adminSpeedBtn" type="button" class="small-btn">Speed up time</button>
         <button id="adminTagBtn" type="button" class="small-btn">Admin tag: on</button>
-        <button id="adminSpeedBtn" type="button" class="small-btn">Speed up time (60x for 10 min)</button>
         <button id="adminResetBtn" type="button" class="small-btn admin-danger">Reset the world</button>
+        <button id="adminClose" type="button" class="small-btn">Done</button>
       </div>
-      <p class="maint-note">Tap the ground for Add and Teleport. Tap a person for Mute, Kick, Ban, Fill needs, Wake and Remove. Tap yourself to fill your own needs.</p>
-      <div class="modal-actions"><button id="adminClose" type="button" class="action-btn">Done</button></div>
     </div>
   </div>
 
