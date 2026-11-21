@@ -48,15 +48,31 @@ async function tagOf(pid) {
   return [...bytes.slice(0, 6)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 // what others are told about a person (not what they've said lately)
-const pub = (p) => { const { said, world, ...rest } = p; return rest; };
+const pub = (p) => { const { said, world, admin, tag, tries, ...rest } = p; return { ...rest, badge: !!(admin && tag) }; };
 
 export class World extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
     this.world = null;
-    ctx.blockConcurrencyWhile(async () => { this.world = (await ctx.storage.get('world')) || null; });
+    this.admin = { maintenance: false, message: '', banned: [], muted: [] }; // set by the admin player in the game
+    ctx.blockConcurrencyWhile(async () => {
+      this.world = (await ctx.storage.get('world')) || null;
+      Object.assign(this.admin, (await ctx.storage.get('admin')) || {});
+    });
   }
   save() { return this.ctx.storage.put('world', this.world); }
+  saveAdmin() { return this.ctx.storage.put('admin', this.admin); }
+  // the admin code is a Cloudflare secret (ADMIN_CODE) that only Luke knows
+  codeOk(code) {
+    const want = String(this.env.ADMIN_CODE || ''), have = String(code || '');
+    if (!want || have.length !== want.length) return false;
+    let diff = 0;
+    for (let i = 0; i < want.length; i++) diff |= want.charCodeAt(i) ^ have.charCodeAt(i);
+    return diff === 0;
+  }
+  sockets() { return this.ctx.getWebSockets().map((ws) => ({ ws, p: ws.deserializeAttachment() })).filter(({ p }) => p && p.id); }
+  // send someone a last message and close their connection
+  boot(ws, msg) { try { ws.send(JSON.stringify(msg)); ws.close(1000, msg.t); } catch (err) { /* gone */ } }
   async fetch(request) {
     const url = new URL(request.url);
     const worldName = url.searchParams.get('world') === 'live' ? 'live' : 'test';
@@ -113,13 +129,17 @@ export class World extends DurableObject {
     if (m.t === 'hello') {
       // one world for everyone; the test link gets in during maintenance so a new build can be tried first
       const link = m.link === 'test' ? 'test' : 'release';
-      const rules = WORLDS;
-      const min = (rules.minVersion || {})[link];
-      if (rules.maintenance && link !== 'test') { reply({ t: 'maintenance', text: clean(rules.message, 200) }); ws.close(1000, 'maintenance'); return; }
-      if (min && tooOld(m.v, m.b, min)) { reply({ t: 'update', min }); ws.close(1000, 'update'); return; }
+      const min = (WORLDS.minVersion || {})[link];
+      const isAdmin = this.codeOk(m.adminCode);
+      const who = await tagOf(m.pid || crypto.randomUUID());
+      if (!isAdmin && this.admin.banned.includes(who)) { this.boot(ws, { t: 'banned' }); return; }
+      if (!isAdmin && this.admin.maintenance && link !== 'test') { this.boot(ws, { t: 'maintenance', text: this.admin.message }); return; }
+      if (min && tooOld(m.v, m.b, min)) { this.boot(ws, { t: 'update', min }); return; }
+      if (m.adminCode && !isAdmin) reply({ t: 'adminNo' });
       const name = clean(m.name, 20).trim();
-      Object.assign(me, { id: me.id || crypto.randomUUID().slice(0, 8), who: await tagOf(m.pid || crypto.randomUUID()), name: !name || badName(name, FILTER) ? 'Someone' : name, said: me.said || [], look: m.look && typeof m.look === 'object' ? m.look : {}, x: num(m.x), z: num(m.z), ry: num(m.ry), v: clean(m.v, 20), link });
+      Object.assign(me, { id: me.id || crypto.randomUUID().slice(0, 8), who, admin: isAdmin, tag: m.adminTag !== false, name: !name || badName(name, FILTER) ? 'Someone' : name, said: me.said || [], look: m.look && typeof m.look === 'object' ? m.look : {}, x: num(m.x), z: num(m.z), ry: num(m.ry), v: clean(m.v, 20), link });
       ws.serializeAttachment(me);
+      if (isAdmin) reply(this.adminState(me));
       reply({ t: 'welcome', id: me.id, people: this.people(me.id), world: this.view(), needSeed: !this.world, count: this.people().length });
       this.send({ t: 'join', person: pub(me) }, me.id);
       this.sendCount();
@@ -127,6 +147,16 @@ export class World extends DurableObject {
     }
     if (!me.id) return;
     if (m.t === 'feedback') { await this.addFeedback(m, me.world); reply({ t: 'thanks' }); return; }
+    if (m.t === 'adminLogin') {
+      me.tries = (me.tries || 0) + 1;
+      if (me.tries > 5 || !this.codeOk(m.code)) { ws.serializeAttachment(me); reply({ t: 'adminNo' }); return; }
+      me.admin = true;
+      ws.serializeAttachment(me);
+      reply(this.adminState(me));
+      this.send({ t: 'badge', id: me.id, on: !!me.tag }, me.id);
+      return;
+    }
+    if (typeof m.t === 'string' && m.t.startsWith('a.')) { if (me.admin) await this.adminDo(ws, me, m); return; }
     if (m.t === 'report') {
       const them = this.ctx.getWebSockets().map((s) => s.deserializeAttachment()).find((p) => p && p.id === m.id);
       if (!them) { reply({ t: 'reported', ok: false }); return; }
@@ -147,7 +177,8 @@ export class World extends DurableObject {
       if (!text) return;
       me.said = [...(me.said || []), [Date.now(), text]].slice(-8); // kept for reports
       ws.serializeAttachment(me);
-      this.send({ t: 'say', id: me.id, text }, null);
+      if (this.admin.muted.includes(me.who)) reply({ t: 'say', id: me.id, text }); // muted by the admin: only they see it
+      else this.send({ t: 'say', id: me.id, text }, null);
     } else if (m.t === 'seed' && !w) {
       // the first player into a new world lays it out (everyone's game builds the same starting world)
       const items = (Array.isArray(m.items) ? m.items : []).slice(0, 3000).filter((it) => it && kindOk(it.kind));
@@ -201,6 +232,82 @@ export class World extends DurableObject {
       await this.save();
       reply({ t: 'picked', bush: i, ok: true });
       this.send({ t: 'bush', bush: i, count: count - 1, growFrom: from }, null);
+    }
+  }
+  adminState(me) {
+    return { t: 'admin', on: true, tag: !!me.tag, maintenance: this.admin.maintenance, message: this.admin.message };
+  }
+  // What the admin player can do. Each message starts with 'a.' and only works for the admin.
+  async adminDo(ws, me, m) {
+    const reply = (msg) => { try { ws.send(JSON.stringify(msg)); } catch (err) { /* gone */ } };
+    const find = (id) => this.sockets().find(({ p }) => p.id === id);
+    const done = (text) => reply({ t: 'adminDone', text, ...this.adminState(me) });
+    const w = this.world;
+    switch (m.t) {
+      case 'a.tag':
+        me.tag = !!m.on; ws.serializeAttachment(me);
+        this.send({ t: 'badge', id: me.id, on: me.tag }, me.id);
+        return done(me.tag ? 'Admin tag on' : 'Admin tag off');
+      case 'a.maintenance':
+        this.admin.maintenance = !!m.on;
+        this.admin.message = clean(m.text, 200).trim();
+        await this.saveAdmin();
+        if (this.admin.maintenance) {
+          for (const { ws: s, p } of this.sockets()) if (!p.admin && p.link !== 'test') this.boot(s, { t: 'maintenance', text: this.admin.message });
+        }
+        return done(this.admin.maintenance ? 'Maintenance on' : 'Maintenance off');
+      case 'a.list': {
+        const feedback = ((await this.ctx.storage.get('feedback')) || []).slice(-100).reverse();
+        const reports = ((await this.ctx.storage.get('reports')) || []).slice(-100).reverse();
+        const online = this.sockets().map(({ p }) => ({ id: p.id, name: p.name, who: p.who, v: p.v, link: p.link, x: p.x, z: p.z, muted: this.admin.muted.includes(p.who) }));
+        return reply({ t: 'adminList', feedback, reports, online, banned: this.admin.banned });
+      }
+      case 'a.announce': {
+        const text = starText(clean(m.text, 140).trim(), FILTER);
+        if (text) this.send({ t: 'announce', text }, null);
+        return done('Message sent');
+      }
+      case 'a.kick': case 'a.ban': {
+        const them = find(m.id);
+        if (!them || them.p.admin) return done("They've left");
+        if (m.t === 'a.ban' && !this.admin.banned.includes(them.p.who)) { this.admin.banned.push(them.p.who); await this.saveAdmin(); }
+        this.boot(them.ws, { t: m.t === 'a.ban' ? 'banned' : 'kicked' });
+        return done(`${them.p.name} ${m.t === 'a.ban' ? 'banned' : 'kicked'}`);
+      }
+      case 'a.unban':
+        this.admin.banned = this.admin.banned.filter((x) => x !== m.who); await this.saveAdmin();
+        return done('Unbanned');
+      case 'a.mute': {
+        const who = m.who || (find(m.id) || { p: {} }).p.who;
+        if (!who) return done("They've left");
+        this.admin.muted = this.admin.muted.filter((x) => x !== who);
+        if (m.on) this.admin.muted.push(who);
+        await this.saveAdmin();
+        return done(m.on ? 'Muted for everyone' : 'Unmuted for everyone');
+      }
+      case 'a.reset':
+        this.world = null;
+        await this.ctx.storage.delete('world');
+        await this.ctx.storage.deleteAlarm();
+        for (const { ws: s } of this.sockets()) this.boot(s, { t: 'reset' }); // everyone rejoins and the first one lays it out fresh
+        return;
+      case 'a.add': {
+        if (!w || !kindOk(m.kind)) return;
+        const item = { id: w.nextId++, kind: m.kind, x: num(m.x), z: num(m.z), rot: num(Math.random() * Math.PI) };
+        w.items.push(item);
+        await this.save();
+        this.send({ t: 'added', items: [item] }, null);
+        return;
+      }
+      case 'a.remove': {
+        if (!w) return;
+        const i = w.items.findIndex((it) => it.id === m.id);
+        if (i < 0) return;
+        w.items.splice(i, 1);
+        await this.save();
+        this.send({ t: 'gone', id: m.id }, null);
+        return;
+      }
     }
   }
   // nature tops up: one of each kind that's below its normal amount, at a spot near a tree or boulder

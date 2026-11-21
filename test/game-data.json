@@ -1,6 +1,6 @@
 {
   "version": "0.0.6",
-  "build": 7,
+  "build": 8,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,

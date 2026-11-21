@@ -1,6 +1,6 @@
 #!/bin/sh
 # Release the tested version: copies test/ to the main link, keeps a copy in releases/<version>/,
-# and tells the live world to move everyone onto it (and ends maintenance).
+# and tells the world to move release-link games onto it.
 # Run from the repo root: sh tools/release.sh   (then commit and push)
 set -e
 cd "$(dirname "$0")/.."

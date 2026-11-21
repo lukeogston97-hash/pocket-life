@@ -1,9 +1,7 @@
 {
-  "help": "One world for everyone. maintenance true shows the release link 'Back soon' with the message until it's false again (the test link still gets in, to try a new build first). minVersion sends older games on each link to the newest version (a 4th number is the test build, like 0.0.6.6). tools/worlds.py and tools/release.sh edit this for you.",
-  "maintenance": false,
-  "message": "",
+  "help": "minVersion sends older games on each link to the newest version (a 4th number is the test build, like 0.0.6.8). Maintenance is switched on and off by the admin player in the game. tools/worlds.py and tools/release.sh edit this for you.",
   "minVersion": {
     "release": "0.0.6",
-    "test": "0.0.6.7"
+    "test": "0.0.6.8"
   }
 }

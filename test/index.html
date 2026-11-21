@@ -113,6 +113,7 @@
         <button id="pauseBagBtn" type="button" class="small-btn">Inventory</button>
         <button id="pauseNewBtn" type="button" class="small-btn">New person</button>
         <button id="pauseFeedbackBtn" type="button" class="small-btn">Send feedback</button>
+        <button id="pauseAdminBtn" type="button" class="small-btn" hidden>Admin</button>
       </div>
       <div class="gfx-row"><span class="lbl">Graphics</span>
         <div class="seg" role="group" aria-label="Graphics">
@@ -156,11 +157,49 @@
     </form>
   </div>
 
+  <div id="adminPanel" class="modal" hidden>
+    <div class="modal-card admin-card" role="dialog" aria-modal="true" aria-labelledby="adminTitle">
+      <h2 id="adminTitle">Admin</h2>
+      <div class="admin-sec">
+        <div class="admin-row"><span class="lbl">Maintenance</span><span id="adminMaintState" class="admin-state">Off</span></div>
+        <input id="adminMaintText" class="admin-input" maxlength="200" placeholder="Message for players (optional)">
+        <button id="adminMaintBtn" type="button" class="small-btn">Turn on</button>
+      </div>
+      <form id="adminAnnounceForm" class="admin-sec">
+        <span class="lbl">Message everyone</span>
+        <input id="adminAnnounceText" class="admin-input" maxlength="140" placeholder="Shows across everyone's screen">
+        <button type="submit" class="small-btn">Send</button>
+      </form>
+      <div class="admin-sec admin-grid">
+        <button id="adminListBtn" type="button" class="small-btn">Feedback, reports, players</button>
+        <button id="adminTagBtn" type="button" class="small-btn">Admin tag: on</button>
+        <button id="adminResetBtn" type="button" class="small-btn admin-danger">Reset the world</button>
+      </div>
+      <p class="maint-note">Hold a finger on the ground for Add and Teleport. Tap a person for Mute, Kick and Ban.</p>
+      <div class="modal-actions"><button id="adminClose" type="button" class="action-btn">Done</button></div>
+    </div>
+  </div>
+
+  <div id="adminList" class="modal" hidden>
+    <div class="modal-card admin-card" role="dialog" aria-modal="true" aria-label="Feedback, reports, players">
+      <div class="seg admin-tabs" role="group">
+        <button type="button" class="seg-btn" data-admin-tab="feedback" data-label="Feedback">Feedback</button>
+        <button type="button" class="seg-btn" data-admin-tab="reports" data-label="Reports">Reports</button>
+        <button type="button" class="seg-btn" data-admin-tab="online" data-label="Online">Online</button>
+        <button type="button" class="seg-btn" data-admin-tab="banned" data-label="Banned">Banned</button>
+      </div>
+      <div id="adminListBody" class="admin-list"></div>
+      <div class="modal-actions"><button id="adminListClose" type="button" class="action-btn">Close</button></div>
+    </div>
+  </div>
+
+  <div id="announce" class="announce" hidden><span id="announceText"></span></div>
+
   <div id="maint" class="modal" hidden>
     <div class="modal-card" role="alertdialog" aria-modal="true" aria-labelledby="maintTitle">
       <h2 id="maintTitle">Back soon</h2>
       <p id="maintText">Pocket Life is being updated. It will be back in a few minutes.</p>
-      <p class="maint-note">Your person is safe. This page checks again by itself.</p>
+      <p id="maintNote" class="maint-note">Your person is safe. This page checks again by itself.</p>
     </div>
   </div>
 
