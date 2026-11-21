@@ -1,6 +1,6 @@
 {
   "version": "0.0.5",
-  "build": 4,
+  "build": 5,
   "settings": {
     "carryCapacity": 30,
     "walkSpeed": 2.2,
@@ -101,6 +101,7 @@
   "sources": {
     "pond": {
       "name": "Pond",
+      "action": "Drink",
       "verb": "Drinking",
       "seconds": 2,
       "gives": {
@@ -110,6 +111,7 @@
     },
     "berryBush": {
       "name": "Gooseberry bush",
+      "action": "Harvest Berries",
       "verb": "Picking a berry",
       "seconds": 2,
       "harvest": {
@@ -404,7 +406,7 @@
     "recipes": "To add a recipe, put it in the recipes list like this: {\"id\": \"stone-axe\", \"name\": \"Stone axe\", \"needs\": {\"stick\": 1, \"stone\": 1}, \"makes\": {\"stone-axe\": 1}}. Every item in needs and makes must exist in items. Recipes show up in your bag automatically.",
     "looks": "Each list here is a set of choices on the Make your person screen. Add an entry to add a choice.",
     "stats": "Stats run in real time. Every stat goes from 0 to 100. perHour is how much it changes each real hour (hunger empties in about 8 hours and thirst in about 5). lowAt shows the warning. atZero is what happens to other stats each hour while this one is empty (no food: health drops over about 3 weeks; no water: over about 3 days). Health slowly heals when nothing is empty, and the person dies when health reaches 0. fullLabel is shown when you try to eat or drink but don't need to.",
-    "sources": "Things in the world you can use, matched by name (\"Pond\", \"Gooseberry bush\"). gives adds to stats each time, for example one drink at the pond gives 10 thirst. harvest is what one pick puts in your inventory (1 berry), holds is how many a full bush has (up to 15, shown on the bush), and regrowHours is how long a picked-bare bush takes to grow them all back; picked berries grow back one at a time. seconds is how long it takes. pose is kneel, pick or bend.",
+    "sources": "Things in the world you can use, matched by name (\"Pond\", \"Gooseberry bush\"). action is the button in the tap menu, like \"Drink\". gives adds to stats each time, for example one drink at the pond gives 10 thirst. harvest is what one pick puts in your inventory (1 berry), holds is how many a full bush has (up to 15, shown on the bush), and regrowHours is how long a picked-bare bush takes to grow them all back; picked berries grow back one at a time. seconds is how long it takes. pose is kneel, pick or bend.",
     "defaultLook": "How a new person starts on the Make your person screen.",
     "daylight": "Day and night follow the player's real local time. Each entry is how the world looks at that hour, and the game blends between them. sky is the haze colour, skyLight and groundLight light things from above and below, brightness is how strong that is, sun is the sun or moon colour, sunStrength how strong, sunHeight its angle in degrees.",
     "version": "version is the game version. build counts the test copies of that version; keep both the same as CODE_VERSION and CODE_BUILD at the top of the script in index.html."

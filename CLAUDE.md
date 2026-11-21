@@ -12,7 +12,7 @@ Luke's mobile "life in your pocket" game: SEED meets One Hour One Life. Built st
 - Start-from-nothing world. Every item has a weight (stick 1, stone 1). Carry capacity 30.
 - Berries are picked one at a time from gooseberry bushes into your inventory, and eaten from there one at a time (2 hunger each). A full bush holds 5, and picked berries grow back one by one (a bare bush is full again after regrowHours, 4). One drink at the pond gives 10 thirst. These are playtest amounts; proper eating, drinking and resting tasks come later.
 - Your person walks round rocks, bushes, logs, stumps and tree trunks.
-- Controls: tap or left-click to walk, or to pick up or use what you tapped. Walking doesn't cancel the task queue. Right-click (or hold a finger down on a phone) opens a small action menu. Escape, or the Menu button at the top right, opens the pause menu (Resume, Inventory, New person). On a computer, W A S D move the camera, Q and E turn it round your person, and R and F tilt it.
+- Controls (same on phone and computer): tap or left-click the ground to walk. Tap or click a stick, stone, berry bush or the pond to open a small menu (Pick up Stick, Harvest Berries, Drink, Walk here); right-click or holding a finger down opens it too. Walking doesn't cancel the task queue. Escape, or the Menu button at the top right, opens the pause menu (Resume, Inventory, New person). On a computer, W A S D move the camera, Q and E turn it round your person, and R and F tilt it.
 - Later: shared persistent world (needs a server and database), day planner, skills, more stats, regions and time zones, app store wrapper.
 
 ## How the code is laid out

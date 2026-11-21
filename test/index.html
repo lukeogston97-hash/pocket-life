@@ -285,7 +285,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--moss); outl
     <button id="menuBtn" class="pill-btn" type="button" aria-controls="pause">Menu</button>
   </header>
 
-  <p id="hint" class="hint" hidden>Tap to walk. Tap sticks, stones, berry bushes or the pond to use them (tap a few to queue them). Hold on something (or right-click) for more. Menu is at the top right.</p>
+  <p id="hint" class="hint" hidden>Tap the ground to walk. Tap a stick, stone, berry bush or the pond to see what you can do (do a few to queue them). Menu is at the top right.</p>
 
   <div id="queue" class="queue" hidden><span id="queueText">2 in queue</span><button id="queueStop" class="small-btn" type="button">Stop</button></div>
 
@@ -474,7 +474,7 @@ try {
 // Browsers keep a page for a few minutes. If this page is older than the data it just loaded,
 // load the new page (once), so old code never runs with new data.
 const CODE_VERSION = '0.0.5'; // keep the same as "version" in game-data.json
-const CODE_BUILD = 4;         // and this the same as "build" (count up with each test copy)
+const CODE_BUILD = 5;         // and this the same as "build" (count up with each test copy)
 {
   const url = new URL(location.href);
   const dataStamp = `${DATA.version}.${DATA.build || 0}`;
@@ -1431,7 +1431,7 @@ for (const [id, raw] of Object.entries(DATA.sources || {})) {
   const gives = Object.fromEntries(Object.entries(raw.gives || {}).filter(([k, v]) => STAT[k] && Number.isFinite(v)));
   // harvest: what picking it puts in your inventory; regrowHours: how long until it can be picked again
   const harvest = Object.fromEntries(Object.entries(raw.harvest || {}).filter(([k, v]) => ITEMS[k] && v >= 1).map(([k, v]) => [k, Math.floor(v)]));
-  SOURCES[id] = { id, name: raw.name || id, verb: raw.verb || 'Using', seconds: Math.max(0.3, Number(raw.seconds) || 1), pose: raw.pose || 'pick',
+  SOURCES[id] = { id, name: raw.name || id, action: raw.action || '', verb: raw.verb || 'Using', seconds: Math.max(0.3, Number(raw.seconds) || 1), pose: raw.pose || 'pick',
     gives, harvest, holds: Math.floor(Number(raw.holds) || 0), regrowHours: Math.max(0, Number(raw.regrowHours) || 0) };
 }
 const harvests = (src) => Object.keys(src.harvest).length > 0;
@@ -2474,8 +2474,8 @@ function handleTap(px, py) {
   const t = pickTarget(px, py);
   if (!t) return;
   if (t.kind === 'you') { showTag('You', headTop(), 2); return; }
-  if (t.kind === 'item') { queueTask({ type: 'pickup', id: t.item.id }); return; }
-  if (t.kind === 'use') { queueTask(t.task); return; }
+  // a stick, stone, berry bush or the pond: open the menu of what you can do with it
+  if (t.kind === 'item' || t.kind === 'use') { openMenuAt(px, py, t); return; }
   // anything else: walk there first, then carry on with anything queued
   if (t.kind === 'shore') { walkFirst(shorePointToward(player.position)); return; }
   if (t.kind === 'thing') {
@@ -2498,18 +2498,31 @@ function handleTap(px, py) {
 // the small menu: Gather Sticks, Gather Stones, Harvest Berries
 function menuActions(t) {
   if (!t) return [];
-  if (t.kind === 'item') return [{ label: `Gather ${ITEMS[t.item.kind].plural}`, run: () => queueTask({ type: 'pickup', id: t.item.id }) }];
-  if (t.kind === 'use' && harvests(SOURCES[t.task.source])) {
-    const src = SOURCES[t.task.source], b = berryBushes[t.task.bush];
-    const ready = !b || ripe(b);
-    return [{ label: `Harvest ${ITEMS[Object.keys(src.harvest)[0]].plural}`, note: ready ? (b ? `${berriesOn(b)} left` : '') : `Next in ${readyIn(b)}`,
-      disabled: !ready, run: () => queueTask(t.task) }];
+  if (t.kind === 'item') {
+    const it = t.item;
+    return [{ label: `Pick up ${ITEMS[it.kind].name}`, run: () => queueTask({ type: 'pickup', id: it.id }) },
+      { label: 'Walk here', run: () => walkFirst(V(it.x, 0, it.z)) }];
+  }
+  if (t.kind === 'use') {
+    const src = SOURCES[t.task.source], task = t.task;
+    const walkHere = { label: 'Walk here', run: () => {
+      if (task.water) { walkFirst(shorePointToward(player.position)); return; }
+      const dx = task.x - player.position.x, dz = task.z - player.position.z, d = Math.hypot(dx, dz) || 1;
+      walkFirst(V(task.x - (dx / d) * task.stop, 0, task.z - (dz / d) * task.stop));
+    } };
+    if (harvests(src)) {
+      const b = berryBushes[task.bush];
+      const ready = !b || ripe(b);
+      return [{ label: `Harvest ${ITEMS[Object.keys(src.harvest)[0]].plural}`, note: ready ? (b ? `${berriesOn(b)} left` : '') : `Next in ${readyIn(b)}`,
+        disabled: !ready, run: () => queueTask(task) }, walkHere];
+    }
+    return [{ label: src.action || `Use ${src.name.toLowerCase()}`, run: () => queueTask(task) }, walkHere];
   }
   return [];
 }
-function openMenuAt(px, py) {
+function openMenuAt(px, py, known) {
   if (ui.mode !== 'world' || !player || you.dead || paused) return false;
-  const t = pickTarget(px, py);
+  const t = known || pickTarget(px, py);
   const acts = menuActions(t);
   if (!acts.length) { closeMenu(); return false; }
   const menu = $('actMenu');
