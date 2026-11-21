@@ -17,7 +17,8 @@ Luke's mobile "life in your pocket" game: SEED meets One Hour One Life. Built st
 - Later: shared persistent world (needs a server and database), day planner, skills, more stats, regions and time zones, app store wrapper.
 
 ## How the code is laid out
-- index.html: the whole game (the root copy is the release, test/index.html is the copy being tested) (three.js r170 from jsDelivr through an import map). No build step.
+- Files (the same set in test/, the root and releases/<version>/): index.html is the page and a small loader; style.css is the look of the menus and buttons; game.js is the game code (three.js r170 from jsDelivr through an import map); game-data.json is all the content. No build step.
+- The loader fetches game-data.json fresh, then loads style.css and game.js with its version and build added to their addresses, so phones never mix old and new files.
 - game-data.json: all content. Items, recipes, needs (stats), things to use (sources), day and night colours, character looks, body shapes, settings. It has a "help" section explaining each part.
 - Adding content should almost always be a small edit to game-data.json, not code.
 - The world is settings.worldSize metres square (100 for now), with thick forest past the edge. The clearing round the start is laid out from its own random numbers and the rest of the world from a second set, so changing the world never reshuffles the clearing.
@@ -27,11 +28,10 @@ Luke's mobile "life in your pocket" game: SEED meets One Hour One Life. Built st
 
 ## Working on it
 - Build in small steps. After each change, tell Luke in a few short lines what changed and what to try on his phone.
-- Bump the version with every update (0.0.5, then 0.0.6 and so on), in game-data.json and CODE_VERSION in index.html. The page shows it in the title and on the Make your person screen.
+- Bump the version with every update (0.0.6, then 0.0.7 and so on). It's only in game-data.json: "version", plus "build" which starts at 1 for each new version and counts up with each test copy. The page shows it, like "v0.0.6 (test 2)".
 - To test needs quickly, raise settings.needsSpeed (60 makes an hour pass in a minute). Put it back to 1 before pushing.
 - game-data.json is loaded with fetch, so opening index.html straight from the disk won't work. Test with a local server (python3 -m http.server) or the test link.
-- Test first, then release. Make every change in the test/ folder (test/index.html and test/game-data.json), push it to main, and tell Luke to try it on the test link: https://lukeogston97-hash.github.io/pocket-life/test/ (the page shows "(test)" by the version).
-- Only when Luke says to release it, copy test/index.html and test/game-data.json over index.html and game-data.json in the root, and push. That updates the release link: https://lukeogston97-hash.github.io/pocket-life/
+- Test first, then release. Make every change in the test/ folder, push it to main, and tell Luke to try it on the test link: https://lukeogston97-hash.github.io/pocket-life/test/
+- Only when Luke says to release it, run sh tools/release.sh, then commit and push. It copies test/ to the root (the release link: https://lukeogston97-hash.github.io/pocket-life/) and keeps a copy in releases/<version>/ so we can roll back.
 - Push to main, not only to a separate branch, or neither link updates. GitHub Pages updates about a minute or two after each push.
-- When you bump the version, change it in both places: "version" in game-data.json and CODE_VERSION near the top of the script in index.html. Each new test copy of the same version also counts "build" (game-data.json) and CODE_BUILD (index.html) up by one; the test page shows it, like "v0.0.5 (test 2)". If a phone has kept an older copy of the page, the page sees the mismatch and reloads itself.
 - No em-dashes in anything Luke reads.
