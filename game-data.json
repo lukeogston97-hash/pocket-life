@@ -1,6 +1,6 @@
 {
-  "version": "0.1.1",
-  "build": 2,
+  "version": "0.1.2",
+  "build": 3,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,
@@ -113,6 +113,29 @@
     "chop": 6,
     "walkPerMetre": 0.04
   },
+  "chopping": {
+    "tool": "stone-axe",
+    "tree": {
+      "seconds": 10,
+      "gives": {
+        "log": 1,
+        "stick": 2
+      }
+    },
+    "stump": {
+      "seconds": 10,
+      "gives": {
+        "log": 1
+      }
+    },
+    "log": {
+      "seconds": 8,
+      "gives": {
+        "stick": 4
+      }
+    },
+    "regrowDays": 3
+  },
   "items": {
     "stick": {
       "name": "Stick",
@@ -170,6 +193,19 @@
         "uses": 20
       },
       "startInWorld": 0
+    },
+    "log": {
+      "name": "Log",
+      "plural": "Logs",
+      "weight": 10,
+      "look": {
+        "shape": "log",
+        "length": 0.9,
+        "radius": 0.12,
+        "colour": "#7a5c40",
+        "end": "#cdb085"
+      },
+      "startInWorld": 0
     }
   },
   "recipes": [
@@ -183,7 +219,7 @@
       "makes": {
         "stone-axe": 1
       },
-      "about": "Chops trees (coming next)"
+      "about": "Chops trees, stumps and logs"
     }
   ],
   "sources": {
@@ -521,7 +557,8 @@
     "away": "How a person looks after themselves while their player is away (the server does this). near: 'pond' keeps them strolling round the main pond (anything else: round where you left them). wanderMin and wanderMax: how far in metres from there they stroll. strollSpeed in metres per second. They eat what they carry when hunger is under eatBelow, go for berries if they have none, and drink at the pond when thirst is under drinkBelow. After sleepAfterHours away they lie down asleep (needs pause); after goneAfterDays asleep they leave the world and their things stay where they slept. A grave marks where someone died for graveHours. idleMinutes: if you're in the game but don't touch anything for this long, your person goes on autopilot and does the same, until you tap. sleepBelow: someone on autopilot or away lies down to sleep when Rest is under this, and gets up when it's full.",
     "berryBushes": "extra: how many more berry bushes grow out in the wider world, besides the ones by the start. seed: their own random numbers, so they're in the same places on every phone (change it to move them all).",
     "devlog": "What's new, shown in the Menu. Newest first: version, date and a short list of changes, written for players.",
-    "energyCosts": "Energy (the yellow ring): every task takes a little (these amounts), walking takes walkPerMetre for each metre. It comes back by itself (perHour in its need, 30 an hour) and twice as fast asleep (whileAsleep). With too little energy for a task your person says they need a rest. The server uses the same numbers."
+    "energyCosts": "Energy (the yellow ring): every task takes a little (these amounts), walking takes walkPerMetre for each metre. It comes back by itself (perHour in its need, 30 an hour) and twice as fast asleep (whileAsleep). With too little energy for a task your person says they need a rest. The server uses the same numbers.",
+    "chopping": "Chopping with a tool (tool: the item you need). tree: chopping a standing tree (seconds, and what falls: gives); it leaves a stump that grows back into a tree after regrowDays real days. stump: digging out a stump (then the tree is gone for good). log: chopping a log (an item) into sticks. Each chop wears the tool by one use, and takes energyCosts.chop energy. The server uses the same rules."
   },
   "chatFilter": {
     "anywhere": [
@@ -609,6 +646,17 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.1.2",
+      "date": "2026-11-21",
+      "notes": [
+        "Chopping: with a stone axe, tap a tree and Chop tree (about 10 s). You get a log and 2 sticks, and a stump is left.",
+        "Stumps grow back into trees after 3 days, unless you Remove stump (about 10 s, 1 more log): then the tree is gone for good. The old stumps already in the world can be dug out the same way.",
+        "Tap a log on the ground and Chop into sticks (about 8 s, 4 sticks). Logs weigh 10.",
+        "Each chop wears your axe (20 uses), and it breaks when worn out. Chopping takes a fair bit of energy.",
+        "A need under 10% flashes so you can't miss it."
+      ]
+    },
     {
       "version": "0.1.1",
       "date": "2026-11-21",

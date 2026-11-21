@@ -243,6 +243,9 @@ animateWater(0);
 // - a detail set (grass, flowers, pebbles) only draws the copies near you, refilled as you walk
 const dummy = new THREE.Object3D();
 let DRY = false; // while true, put() works a copy out but doesn't keep it (so the clearing's layout never changes)
+let recording = null; // while a tree is being placed: [set, chunk, index] of every copy it's made of (so it can be chopped down)
+const trees = []; // every tree you can walk up to: { x, z, s, parts, state }
+const oldStumps = []; // the old stumps already in the world when it was made: { x, z, parts, proxy, gone }
 function IM(geo, material, n, shadow = true) {
   const m = new THREE.InstancedMesh(geo, material, n);
   m.count = 0;
@@ -283,6 +286,7 @@ function put(m, x, y, z, rx, ry, rz, sx, sy, sz, color) {
   }
   g.ms.push(...dummy.matrix.elements);
   g.cs.push(color.r, color.g, color.b);
+  if (recording && m.isSet) recording.push([m, m.chunk ? m.chunk(x, z) : 0, g.cs.length / 3 - 1]);
 }
 const lodPairs = []; // { x, z, full, simple }: the detailed and simple copies of one chunk
 function buildSet(m) {
@@ -300,12 +304,14 @@ function buildSet(m) {
     };
     const mesh = make(m.geo, m.shadow);
     m.meshes.push(mesh);
+    let simple = null;
     if (m.lod) {
-      const simple = make(m.lod, false);
+      simple = make(m.lod, false);
       simple.visible = false;
       const [x, z] = chunkCentre(key);
       lodPairs.push({ x, z, full: mesh, simple });
     }
+    (m.byKey || (m.byKey = new Map())).set(key, { full: mesh, simple });
   }
   m.groups.clear();
   return m.meshes;
@@ -363,6 +369,12 @@ function refillDetail(d, px, pz) {
 // what's already placed where, so new things don't land on top of each other or under a tree
 const spots = new Map();
 const spotKey = (x, z) => Math.floor(x / 4) * 4096 + Math.floor(z / 4);
+// a tree that's been cleared away (stump and all) no longer blocks the way
+function removeSpotNear(x, z) {
+  const a = spots.get(spotKey(x, z));
+  if (!a) return;
+  for (let k = 0; k < a.length; k += 4) if (Math.abs(a[k] - x) < 0.01 && Math.abs(a[k + 1] - z) < 0.01) { a.splice(k, 4); return; }
+}
 function addSpot(x, z, r, tree = false) {
   const k = spotKey(x, z);
   if (!spots.has(k)) spots.set(k, []);
@@ -432,6 +444,14 @@ const PINE = ['#55724b', '#5d7b51', '#4e6a46', '#617f55'];
 const BARK = ['#7a5c40', '#6f543b', '#86664a', '#6a5a48'];
 
 function broadleaf(x, z, s, o = {}) {
+  if (!DRY && !o.far) recording = [];
+  try { broadleafParts(x, z, s, o); } finally { if (recording) { trees.push({ x, z, s, parts: recording, state: 'tree' }); recording = null; } }
+}
+function pine(x, z, s, o = {}) {
+  if (!DRY && !o.far) recording = [];
+  try { pineParts(x, z, s, o); } finally { if (recording) { trees.push({ x, z, s, parts: recording, state: 'tree', pine: true }); recording = null; } }
+}
+function broadleafParts(x, z, s, o = {}) {
   const set = o.far ? far : near;
   const y = heightAt(x, z) - 0.12;
   const tall = !!o.tall;
@@ -452,7 +472,7 @@ function broadleaf(x, z, s, o = {}) {
   }
   if (!DRY && !o.far) addSpot(x, z, s * 1.35, true);
 }
-function pine(x, z, s, o = {}) {
+function pineParts(x, z, s, o = {}) {
   const set = o.far ? far : near;
   const y = heightAt(x, z) - 0.12;
   put(set.trunk, x, y, z, 0, 0, 0, s * 0.75, 1.1 * s, s * 0.75, tint(pick(BARK)));
@@ -703,9 +723,13 @@ for (let i = 0; i < 90; i++) {
   top.position.y = 0.39;
   g.add(body, top);
   g.userData.label = 'Tree stump';
+  g.userData.oldStump = oldStumps.length;
   scene.add(g);
+  recording = [];
   drawAlong(wild.stump, body);
   drawAlong(wild.stumpTop, top);
+  oldStumps.push({ x, z, parts: recording, proxy: g });
+  recording = null;
   addSpot(x, z, 0.5);
   interactive.push(g);
 }
@@ -812,8 +836,10 @@ withWorldRand(() => {
     const at = findRoom(14, 0.55 * k + 0.3, 0.5);
     if (!at) continue;
     const [x, z] = at, y = groundY(x, z);
+    if (!DRY) recording = [];
     put(wild.stump, x, y + 0.17 * k, z, 0, rand() * 6, 0, k, k, k, tint('#7a5c40', 0.01, 0.04, 0.03));
     put(wild.stumpTop, x, y + 0.39 * k, z, 0, 0, 0, k, k, k, tint('#cfb48a', 0.005, 0.03, 0.03));
+    if (recording) { oldStumps.push({ x, z, parts: recording }); recording = null; }
     addSpot(x, z, 0.55 * k);
   }
   // fallen logs, on fairly flat ground
@@ -906,6 +932,72 @@ function drawBerries(b) {
 for (const set of [...Object.values(far), drawnTogether.bushes, ...drawnTogether.rocks]) buildSet(set);
 for (const set of [...Object.values(near), wild.bush, ...wild.boulders, wild.rock, wild.stump, wild.stumpTop, wild.log, wild.logEnd]) {
   interactive.push(...buildSet(set));
+}
+for (const t of [...trees, ...oldStumps]) t.parts = t.parts.map(([m, key, idx]) => ({ ...(m.byKey.get(key) || {}), idx }));
+// which tree or old stump a tapped copy belongs to (the drawn mesh and its copy number)
+const copyOwner = new Map();
+trees.forEach((t, i) => { for (const p of t.parts) for (const mesh of [p.full, p.simple]) if (mesh) copyOwner.set(`${mesh.uuid}:${p.idx}`, { kind: 'tree', i }); });
+oldStumps.forEach((t, i) => { for (const p of t.parts) if (p.full) copyOwner.set(`${p.full.uuid}:${p.idx}`, { kind: 'oldStump', i }); });
+// hide (or show again) the drawn copies a tree or stump is made of
+function showParts(t, show) {
+  for (const p of t.parts) for (const mesh of [p.full, p.simple]) {
+    if (!mesh) continue;
+    p.saved = p.saved || {};
+    if (!show) {
+      if (!p.saved[mesh.uuid]) { const m4 = new THREE.Matrix4(); mesh.getMatrixAt(p.idx, m4); p.saved[mesh.uuid] = m4; }
+      mesh.setMatrixAt(p.idx, NO_TREE);
+    } else if (p.saved[mesh.uuid]) mesh.setMatrixAt(p.idx, p.saved[mesh.uuid]);
+    mesh.instanceMatrix.needsUpdate = true;
+  }
+}
+// an old stump dug out: gone for good
+function removeOldStump(i) {
+  const t = oldStumps[i];
+  if (!t || t.gone) return;
+  t.gone = true;
+  showParts(t, false);
+  if (t.proxy) { scene.remove(t.proxy); const j = interactive.indexOf(t.proxy); if (j >= 0) interactive.splice(j, 1); }
+  removeSpotNear(t.x, t.z);
+  clearCellsNear(t.x, t.z, 2);
+}
+
+/* ---------- chopping trees down (0.1.2): a tree becomes a stump, then grows back, unless the stump is removed ---------- */
+const CHOP = DATA.chopping || {};
+const NO_TREE = new THREE.Matrix4().makeScale(0, 0, 0);
+const stumpMat = mat('#7a5c40'), stumpTopMat = mat('#cfb48a');
+function setTreeState(i, state) {
+  const t = trees[i];
+  if (!t || t.state === state) return;
+  const standing = state === 'tree';
+  showParts(t, standing);
+  if (t.stump) { scene.remove(t.stump); const j = interactive.indexOf(t.stump); if (j >= 0) interactive.splice(j, 1); t.stump = null; }
+  if (state === 'stump') { // a fresh stump where the tree was
+    const g = new THREE.Group();
+    const k = Math.max(0.6, Math.min(1.3, t.s));
+    const body = new THREE.Mesh(wild.stump.geo, stumpMat);
+    body.scale.set(0.55 * k, 0.8, 0.55 * k);
+    body.position.y = 0.16;
+    const top = new THREE.Mesh(wild.stumpTop.geo, stumpTopMat);
+    top.scale.set(0.55 * k, 1, 0.55 * k);
+    top.position.y = 0.335;
+    g.add(body, top);
+    g.position.set(t.x, groundY(t.x, t.z) - 0.05, t.z);
+    g.userData.label = 'Tree stump';
+    g.userData.stump = i;
+    shadowsOn(g);
+    scene.add(g);
+    interactive.push(g);
+    t.stump = g;
+  }
+  if (state === 'gone' || (t.state === 'gone' && standing)) clearCellsNear(t.x, t.z, 2.5);
+  if (state === 'gone') removeSpotNear(t.x, t.z);
+  t.state = state;
+}
+// the tree nearest a tap (on its trunk or crown)
+function treeNear(p, maxD = 3) {
+  let best = -1, bd = maxD;
+  trees.forEach((t, i) => { if (t.state !== 'tree') return; const d = Math.hypot(t.x - p.x, t.z - p.z); if (d < bd) { bd = d; best = i; } });
+  return best;
 }
 // pebbles and flowers are still laid out (so nothing else moves) but not drawn:
 // the pebbles looked like stones you could pick up, and the coloured flowers were distracting
@@ -1018,6 +1110,18 @@ const SHAPES = {
     lash.position.set(len / 2 - 0.055, 0, 0);
     g.add(lash);
     return { model: g, rest: 0.04, hold: 'axe', grip: len / 2 - 0.06, hit: [len + 0.3, 0.3, 0.42] };
+  },
+  // a log: a short length of trunk with pale cut ends
+  log(look) {
+    const len = look.length ?? 0.9, r = look.radius ?? 0.12;
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(new THREE.CylinderGeometry(r, r * 1.06, len, 8).rotateZ(Math.PI / 2), tinted(look.colour || '#7a5c40', 0.05)));
+    for (const sx of [-1, 1]) {
+      const end = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.92, r * 0.92, 0.012, 8).rotateZ(Math.PI / 2), matFor(look.end || '#cdb085'));
+      end.position.x = sx * len / 2;
+      g.add(end);
+    }
+    return { model: g, rest: r, hold: 'none', hit: [len + 0.3, r * 2 + 0.3, r * 2 + 0.3] };
   },
   rod(look) {
     const len = look.length ?? 0.6, t = look.thickness ?? 0.03;
@@ -1419,9 +1523,10 @@ function drawHeld() {
   const kind = player && heldKind();
   if (!kind) return;
   const { model, hold, grip } = buildItem(kind);
+  if (hold === 'none') return; // too big to hold in one hand (a log)
   const wrap = new THREE.Group();
   if (hold === 'axe') {
-    // Held at the end of the handle, the head up and in front, the blade facing forward. Worked out in the person's
+    // Held at the end of the handle. Worked out in the person's
     // own frame (forward, up), then turned into the hand's frame, so it looks right however the arm is built.
     const P = player.userData.parts;
     const saved = P.armR.rotation.clone();
@@ -1432,7 +1537,9 @@ function drawHeld() {
     P.armR.rotation.copy(saved);
     player.updateMatrixWorld(true);
     const handInMe = qMe.invert().multiply(qHand);
-    const along = V(0, 0.82, 0.57).normalize(), blade = V(0, -0.57, 0.82).normalize(), side = V().crossVectors(blade, along);
+    // the handle carries on down the line of the arm, head at the far end and the blade facing forward,
+    // so raising the arm lifts the axe overhead and swinging down brings the blade down onto the tree
+    const along = V(0, -1, 0.18).normalize(), blade = V(0, 0.18, 1).normalize(), side = V().crossVectors(blade, along);
     const want = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(along, side, blade));
     wrap.quaternion.copy(handInMe.invert().multiply(want));
     model.position.x = grip || 0.2;
@@ -1573,7 +1680,7 @@ function spendEnergy(what, amount = 1) {
   const c = (COSTS[what] || 0) * amount;
   if (c && you.stats && you.stats.energy != null) { you.stats.energy = Math.max(0, you.stats.energy - c); }
 }
-const costOf = (t) => (t.type === 'pickup' ? COSTS.pickup : t.type === 'use' ? (t.water ? COSTS.drink : COSTS.harvest) : 0) || 0;
+const costOf = (t) => (t.type === 'pickup' ? COSTS.pickup : t.type === 'use' ? (t.water ? COSTS.drink : COSTS.harvest) : t.type === 'chop' ? COSTS.chop : 0) || 0;
 const tooTired = (cost) => you.stats && you.stats.energy != null && cost > 0 && you.stats.energy < cost;
 function buildNeeds() {
   $('needs').replaceChildren(...STATS.map((s) => {
@@ -1602,7 +1709,8 @@ function drawNeeds() {
     s.view.fill.style.setProperty('--v', (v / 100).toFixed(3));
     s.view.label.textContent = `${s.name} ${Math.round(v)}`;
     s.view.warn.hidden = !(s.lowAt != null && v <= s.lowAt);
-    s.view.row.classList.toggle('low', !s.view.warn.hidden); // shown as a coloured label in the bottom tray
+    s.view.row.classList.toggle('low', !s.view.warn.hidden); // a low need pulses red
+    s.view.row.classList.toggle('critical', v <= 10); // under 10%: it flashes
     s.view.row.setAttribute('aria-label', `${s.name} ${Math.round(v)} out of 100`);
   }
 }
@@ -1984,6 +2092,14 @@ function freeCell(ix, iz) {
   return cellFree[k] === 1;
 }
 const freeAt = (x, z) => freeCell(toCell(x), toCell(z));
+// check these cells again (something that blocked the way has gone)
+function clearCellsNear(x, z, r) {
+  const n = Math.ceil(r / PATH_CELL) + 1, cx = toCell(x), cz = toCell(z);
+  for (let i = -n; i <= n; i++) for (let j = -n; j <= n; j++) {
+    const ix = cx + i, iz = cz + j;
+    if (ix >= 0 && iz >= 0 && ix < GRID_N && iz < GRID_N) cellFree[iz * GRID_N + ix] = 0;
+  }
+}
 // is the straight line from a to b clear? (checked every quarter metre)
 function clearLine(ax, az, bx, bz) {
   const d = Math.hypot(bx - ax, bz - az), n = Math.ceil(d / 0.25);
@@ -2081,7 +2197,12 @@ function startAction(a) {
 function animateAct(m, P, ground, act, dt) {
   const t = elapsed - act.t0, dur = act.seconds, k = clamp01(t / dur), stoop = P.body.userData.stoop;
   setLegs(P, 0);
-  if (act.pose === 'kneel' || act.pose === 'pick') {
+  if (act.pose === 'chop') {
+    const sw = (Math.sin(t * 5.5) + 1) / 2, env = clamp01(Math.min(t, dur - t) / 0.3);
+    P.body.rotation.x = stoop + (0.08 + 0.22 * sw) * env;
+    setArm(P.armR, (-2.5 + sw * 2.0) * env);
+    setArm(P.armL, (-2.3 + sw * 1.9) * env);
+  } else if (act.pose === 'kneel' || act.pose === 'pick') {
     const env = clamp01(Math.min(t, dur - t) / 0.3), wave = Math.sin(t * 7);
     if (act.pose === 'kneel') {
       P.body.rotation.x = stoop + 1.05 * env;
@@ -2188,6 +2309,10 @@ function nextTask() {
       if (Math.hypot(shore.x - player.position.x, shore.z - player.position.z) < 0.35) doUse(t);
       else walkTo(shore, () => doUse(t), nextTask);
     } else approach(t.x, t.z, t.stop, t.stop + 0.3, () => doUse(t));
+  } else if (t.type === 'chop') {
+    if (!['tree', 'stump', 'oldStump'].includes(t.what) && !getItem(t.id)) { nextTask(); return; }
+    const stop = t.what === 'tree' ? 0.95 : t.what === 'log' ? 0.6 : 0.85;
+    approach(t.x, t.z, stop, stop + 0.35, () => doChop(t));
   } else if (t.type === 'drop') doDrop(t);
   else if (t.type === 'walk') walkTo(V(t.x, 0, t.z), nextTask, nextTask);
   else nextTask();
@@ -2361,6 +2486,20 @@ function eatOne(kind) {
   drawHeld();
   drawCarry();
 }
+// chopping: swing the axe for a while, then the server says what came of it
+function doChop(t) {
+  const rule = CHOP[t.what === 'oldStump' ? 'stump' : t.what] || {};
+  if (t.what === 'oldStump' && oldStumps[t.idx] && oldStumps[t.idx].gone) { nextTask(); return; }
+  if (CHOP.tool && !you.carry[CHOP.tool]) { showTag(`You need a ${ITEMS[CHOP.tool].name.toLowerCase()}`, headTop(), 2); nextTask(); return; }
+  if ((t.what === 'tree' && trees[t.idx] && trees[t.idx].state !== 'tree') || (t.what === 'stump' && trees[t.idx] && trees[t.idx].state !== 'stump')) { nextTask(); return; }
+  face(t.x, t.z);
+  showTag(t.what === 'tree' ? 'Chopping…' : t.what === 'stump' || t.what === 'oldStump' ? 'Digging out the stump…' : 'Chopping…', headTop(), 2, (rule.seconds || 10) + 0.3);
+  tagLabel.busy = true;
+  startAction({ pose: 'chop', seconds: rule.seconds || 10, end: () => {
+    spendEnergy('chop');
+    if (online()) net.sock.send(JSON.stringify({ t: 'chop', what: t.what, idx: t.idx, id: t.id, x: t.x, z: t.z }));
+  } });
+}
 // where dropped things land: one in front of you, more in a small pile around it
 function dropSpot(i) {
   const fx = Math.sin(player.rotation.y), fz = Math.cos(player.rotation.y);
@@ -2412,6 +2551,7 @@ function taskName(t, now) {
     return harvests(src) ? `Harvest ${ITEMS[Object.keys(src.harvest)[0]].name}` : src.action || `Use ${src.name.toLowerCase()}`;
   }
   if (t.type === 'drop') return now ? 'Putting down' : `Drop ${countLabel(t.kind, t.n)}`;
+  if (t.type === 'chop') return t.what === 'tree' ? (now ? 'Chopping a tree' : 'Chop tree') : t.what === 'stump' || t.what === 'oldStump' ? (now ? 'Removing a stump' : 'Remove stump') : (now ? 'Chopping a log' : 'Chop log');
   if (t.type === 'walk') return now ? 'Walking' : 'Walk there';
   return '';
 }
@@ -2604,6 +2744,15 @@ function pickTarget(px, py) {
   }
   if (isWater) return { kind: 'shore', name: 'Pond' };
   if (owner && owner.userData.grave) return { kind: 'grave', name: owner.userData.label, x: owner.position.x, z: owner.position.z };
+  if (owner && owner.userData.stump != null) return { kind: 'stump', idx: owner.userData.stump, name: 'Tree stump', x: owner.position.x, z: owner.position.z };
+  if (owner && owner.userData.oldStump != null) { const o = oldStumps[owner.userData.oldStump]; return { kind: 'oldStump', idx: owner.userData.oldStump, name: 'Tree stump', x: o.x, z: o.z }; }
+  const copy = hit && hit.object && hit.object.isInstancedMesh && hit.instanceId != null ? copyOwner.get(`${hit.object.uuid}:${hit.instanceId}`) : null;
+  if (copy && copy.kind === 'oldStump' && !oldStumps[copy.i].gone) { const o = oldStumps[copy.i]; return { kind: 'oldStump', idx: copy.i, name: 'Tree stump', x: o.x, z: o.z }; }
+  if (copy && copy.kind === 'tree' && trees[copy.i].state === 'tree') { const tr = trees[copy.i]; return { kind: 'tree', idx: copy.i, name: tr.pine ? 'Pine tree' : 'Tree', x: tr.x, z: tr.z, hit }; }
+  if (owner && (owner.userData.label === 'Tree' || owner.userData.label === 'Pine tree')) {
+    const i = treeNear(hit.point);
+    if (i >= 0) return { kind: 'tree', idx: i, name: owner.userData.label, x: trees[i].x, z: trees[i].z, hit };
+  }
   if (owner) return { kind: 'thing', owner, hit, name: owner.userData.label || '' };
   if (gp) return { kind: 'ground', point: gp, name: '' };
   return null;
@@ -2636,7 +2785,7 @@ function handleTap(px, py) {
   if (!t) return;
   if (t.kind === 'you') { firstTap = null; openMenuAt(px, py, { kind: 'self', name: 'You' }); return; }
   // a stick, stone, berry bush or the pond: open the menu of what you can do with it
-  if (t.kind === 'item' || t.kind === 'use' || t.kind === 'person' || t.kind === 'grave') { firstTap = null; openMenuAt(px, py, t); return; }
+  if (['item', 'use', 'person', 'grave', 'tree', 'stump', 'oldStump'].includes(t.kind)) { firstTap = null; openMenuAt(px, py, t); return; }
   // the ground (or a rock, tree or log): one tap opens Walk here, a quick double-tap walks straight there
   const now = performance.now();
   if (!firstTap || now - firstTap.t > DOUBLE_MS || Math.hypot(px - firstTap.px, py - firstTap.py) > DOUBLE_PX) {
@@ -2680,6 +2829,14 @@ function menuActions(t) {
   if (t.kind === 'ground' || t.kind === 'thing' || t.kind === 'shore') {
     return [{ label: 'Walk here', run: () => walkToTarget(t) }, ...adminMore(adminGroundActions(t.point || (t.hit && t.hit.point)))];
   }
+  if (t.kind === 'tree' || t.kind === 'stump' || t.kind === 'oldStump') {
+    const what = t.kind;
+    const rule = CHOP[what === 'oldStump' ? 'stump' : what] || {}, tool = CHOP.tool && ITEMS[CHOP.tool];
+    const has = !tool || you.carry[CHOP.tool];
+    return [{ label: what === 'tree' ? 'Chop tree' : 'Remove stump', note: has ? `${rule.seconds || 15} s` : `Needs a ${tool.name.toLowerCase()}`, disabled: !has,
+      run: () => queueTask({ type: 'chop', what, idx: t.idx, x: t.x, z: t.z }) },
+      { label: 'Walk here', run: () => walkFirst(V(t.x + 1.2, 0, t.z)) }];
+  }
   if (t.kind === 'self') {
     const rest = you.stats && you.stats.rest != null ? Math.round(you.stats.rest) : null;
     return [you.sleeping ? { label: 'Wake up', run: () => setSleeping(false) } : { label: 'Sleep', note: rest != null ? `Rest ${rest}` : '', run: () => setSleeping(true) },
@@ -2688,7 +2845,10 @@ function menuActions(t) {
   if (t.kind === 'grave') return [{ label: 'Walk here', run: () => walkFirst(V(t.x + 0.8, 0, t.z)) }];
   if (t.kind === 'item') {
     const it = t.item;
+    const chopIt = CHOP[it.kind] && CHOP.tool;
     return [{ label: `Pick up ${ITEMS[it.kind].name}`, run: () => queueTask({ type: 'pickup', id: it.id }) },
+      ...(chopIt ? [{ label: 'Chop into sticks', note: you.carry[CHOP.tool] ? `${CHOP[it.kind].seconds || 8} s` : `Needs a ${ITEMS[CHOP.tool].name.toLowerCase()}`, disabled: !you.carry[CHOP.tool],
+        run: () => queueTask({ type: 'chop', what: it.kind, id: it.id, x: it.x, z: it.z }) }] : []),
       { label: 'Walk here', run: () => walkFirst(V(it.x, 0, it.z)) },
       ...adminMore(admin.on ? [{ label: 'Remove', run: () => adminSend({ t: 'a.remove', id: it.id }) }] : [])];
   }
@@ -2856,7 +3016,12 @@ function updatePlayer(dt) {
   if (action) {
     const t = elapsed - action.t0, dur = action.seconds, k = clamp01(t / dur);
     setLegs(P, 0);
-    if (action.pose === 'kneel' || action.pose === 'pick') {
+    if (action.pose === 'chop') {
+      const sw = (Math.sin(t * 5.5) + 1) / 2, env = clamp01(Math.min(t, dur - t) / 0.3);
+      P.body.rotation.x = stoop + (0.08 + 0.22 * sw) * env;
+      setArm(P.armR, (-2.5 + sw * 2.0) * env);
+      setArm(P.armL, (-2.3 + sw * 1.9) * env);
+    } else if (action.pose === 'kneel' || action.pose === 'pick') {
       // ease in, keep going, ease out
       const env = clamp01(Math.min(t, dur - t) / 0.3), wave = Math.sin(t * 7);
       if (action.pose === 'kneel') {
@@ -3228,7 +3393,10 @@ function goOnline() {
     else if (m.t === 'elsewhere') { net.stopped = true; showMaintenance('Pocket Life was opened somewhere else on this phone. Reload this page to play here instead.', 'Playing somewhere else', ''); }
     else if (m.t === 'state') setOtherState(m);
     else if (m.t === 'stroll') { const o = others.get(m.id); if (o) Object.assign(o, { tx: m.x, tz: m.z, speed: m.speed || null, then: m.then || null, act: null }); }
-    else if (m.t === 'act') { const o = others.get(m.id); if (o && ['bend', 'kneel', 'pick'].includes(m.pose)) o.act = { pose: m.pose, seconds: Math.min(5, Number(m.seconds) || 0.5), t0: elapsed }; }
+    else if (m.t === 'act') { const o = others.get(m.id); if (o && ['bend', 'kneel', 'pick', 'chop'].includes(m.pose)) o.act = { pose: m.pose, seconds: Math.min(25, Number(m.seconds) || 0.5), t0: elapsed }; }
+    else if (m.t === 'tree') setTreeState(m.idx, m.state || 'tree');
+    else if (m.t === 'oldStump') removeOldStump(m.idx);
+    else if (m.t === 'broke') { showTag(`Your ${(ITEMS[m.kind] || { name: 'tool' }).name.toLowerCase()} broke`, headTop(), 3); drawHeld(); }
     else if (m.t === 'graves') drawGraves(m.graves);
     else if (m.t === 'speed') setSpeed(m.speed);
     else if (m.t === 'world') useSharedWorld(m.world);
@@ -3365,6 +3533,9 @@ function useSharedWorld(w) {
   for (const it of [...world.items]) removeWorldItem(it.id);
   for (const it of w.items || []) if (ITEMS[it.kind]) addWorldItem(it.kind, it.x, it.z, it.rot, it.id);
   drawGraves(w.graves || []);
+  const ts = w.trees || {};
+  trees.forEach((t, i) => setTreeState(i, ts[i] ? ts[i][0] : 'tree'));
+  for (const i of Object.keys(w.oldStumps || {})) removeOldStump(Number(i));
   berryBushes.forEach((b, i) => {
     const s = (w.bushes || [])[i];
     b.userData.count = s && s[0] != null ? s[0] : null;
@@ -3899,3 +4070,5 @@ enterCreator();
 showJoining(true);
 goOnline();
 requestAnimationFrame(frame);
+// for automated checks only: open the page with ?debug to reach the game's state from the browser console
+if (location.search.includes('debug')) window.__pl = { walk, tasks, trees, you, get player() { return player; }, findPath, freeAt };

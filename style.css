@@ -85,6 +85,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .need.low .ring { animation: lowPulse 1.4s ease-in-out infinite; }
 .need.low .ring svg { color: var(--warn); }
 @keyframes lowPulse { 50% { box-shadow: 0 0 0 4px rgba(240, 138, 122, 0.35); } }
+.need.critical .ring { animation: critFlash 0.8s steps(2, jump-none) infinite; }
+.need.critical .ring svg { color: var(--warn); }
+@keyframes critFlash { 0% { opacity: 1; box-shadow: 0 0 0 4px rgba(240, 138, 122, 0.6); } 100% { opacity: 0.25; box-shadow: none; } }
 .need-label { display: none; font-size: 12px; font-weight: 700; white-space: nowrap; padding-right: 6px; font-variant-numeric: tabular-nums; }
 .needs.open .need-label { display: inline; }
 .need.low .need-label { color: var(--warn); }
