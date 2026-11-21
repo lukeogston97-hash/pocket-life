@@ -1,6 +1,6 @@
 # Pocket Life
 
-A "life in your pocket" mobile game. Make your own person, then live a real-time life in a soft low-poly world that starts from nothing. Early prototype, v0.0.4.
+A "life in your pocket" mobile game. Make your own person, then live a real-time life in a soft low-poly world that starts from nothing. Early prototype.
 
 **Play the test build:** https://lukeogston97-hash.github.io/pocket-life/
 

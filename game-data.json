@@ -1,9 +1,9 @@
 {
-  "version": "0.0.4",
+  "version": "0.0.5",
   "settings": {
     "carryCapacity": 30,
     "walkSpeed": 2.2,
-    "worldRadius": 24,
+    "worldSize": 100,
     "needsSpeed": 1
   },
   "defaultLook": {
@@ -66,7 +66,8 @@
         "colour": "#8a6847",
         "twig": true
       },
-      "startInWorld": 16
+      "startInWorld": 60,
+      "startNear": 8
     },
     "stone": {
       "name": "Stone",
@@ -77,7 +78,22 @@
         "size": 0.13,
         "colour": "#9d978b"
       },
-      "startInWorld": 12
+      "startInWorld": 45,
+      "startNear": 6
+    },
+    "berry": {
+      "name": "Berry",
+      "plural": "Berries",
+      "weight": 0.1,
+      "look": {
+        "shape": "ball",
+        "size": 0.035,
+        "colour": "#c4483a"
+      },
+      "startInWorld": 0,
+      "eat": {
+        "hunger": 5
+      }
     }
   },
   "recipes": [],
@@ -93,11 +109,12 @@
     },
     "berryBush": {
       "name": "Gooseberry bush",
-      "verb": "Eating berries",
+      "verb": "Picking berries",
       "seconds": 2,
-      "gives": {
-        "hunger": 10
+      "harvest": {
+        "berry": 15
       },
+      "regrowHours": 4,
       "pose": "pick"
     }
   },
@@ -380,12 +397,12 @@
     }
   },
   "help": {
-    "settings": "carryCapacity is the most weight a person can carry. walkSpeed is in metres per second. worldRadius is how far from the clearing you can walk. needsSpeed is 1 for real time; set it higher to test, for example 60 makes an hour of hunger and thirst pass in a minute.",
-    "items": "To add an item, copy one of the items above, give it a new id (lower case, no spaces) and set its name, plural, weight and look. Shapes: rod (length, thickness, colour, twig), rock (size, colour), ball (size, colour), box (width, height, depth, colour). startInWorld is how many lie around when the world starts (0 for things you can only make).",
+    "settings": "carryCapacity is the most weight a person can carry. walkSpeed is in metres per second. worldSize is how wide the square world is in metres (100 makes it 100 m x 100 m, with the clearing in the middle); it can be 40 to 300, and the bigger it is the more your phone has to draw. needsSpeed is 1 for real time; set it higher to test, for example 60 makes an hour of hunger and thirst pass in a minute.",
+    "items": "To add an item, copy one of the items above, give it a new id (lower case, no spaces) and set its name, plural, weight and look. eat is what eating one gives (berries give hunger 5), which adds an Eat button in the inventory. Shapes: rod (length, thickness, colour, twig), rock (size, colour), ball (size, colour), box (width, height, depth, colour). startInWorld is how many lie around when the world starts (0 for things you can only make), and startNear is how many of those start close to where you appear; the rest are spread over the whole world.",
     "recipes": "To add a recipe, put it in the recipes list like this: {\"id\": \"stone-axe\", \"name\": \"Stone axe\", \"needs\": {\"stick\": 1, \"stone\": 1}, \"makes\": {\"stone-axe\": 1}}. Every item in needs and makes must exist in items. Recipes show up in your bag automatically.",
     "looks": "Each list here is a set of choices on the Make your person screen. Add an entry to add a choice.",
     "stats": "Stats run in real time. Every stat goes from 0 to 100. perHour is how much it changes each real hour (hunger empties in about 8 hours and thirst in about 5). lowAt shows the warning. atZero is what happens to other stats each hour while this one is empty (no food: health drops over about 3 weeks; no water: over about 3 days). Health slowly heals when nothing is empty, and the person dies when health reaches 0. fullLabel is shown when you try to eat or drink but don't need to.",
-    "sources": "Things in the world you can use, matched by name (\"Pond\", \"Gooseberry bush\"). gives adds to stats, for example drinking at the pond fills thirst. seconds is how long it takes. pose is kneel, pick or bend.",
+    "sources": "Things in the world you can use, matched by name (\"Pond\", \"Gooseberry bush\"). gives adds to stats, for example drinking at the pond fills thirst. harvest is what picking it puts in your inventory (a gooseberry bush gives 15 berries), and regrowHours is how long it then takes to grow back; the berries come back one by one, and it can be picked again once they're all back. seconds is how long it takes. pose is kneel, pick or bend.",
     "defaultLook": "How a new person starts on the Make your person screen.",
     "daylight": "Day and night follow the player's real local time. Each entry is how the world looks at that hour, and the game blends between them. sky is the haze colour, skyLight and groundLight light things from above and below, brightness is how strong that is, sun is the sun or moon colour, sunStrength how strong, sunHeight its angle in degrees."
   }

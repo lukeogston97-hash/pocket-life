@@ -10,12 +10,16 @@ Luke's mobile "life in your pocket" game: SEED meets One Hour One Life. Built st
 - Players are 13+. Deaths: hunger, thirst, tiredness, old age, animals, accidents. No PvP.
 - Home storage can't be taken, but if a player is gone too long and upkeep lapses, it goes out to the world.
 - Start-from-nothing world. Every item has a weight (stick 1, stone 1). Carry capacity 30.
+- Berries are picked from gooseberry bushes into your inventory and eaten from there, one at a time. A picked bush grows its berries back over regrowHours.
+- Controls: tap or left-click to walk, or to pick up or use what you tapped. Walking doesn't cancel the task queue. Right-click (or hold a finger down on a phone) opens a small action menu. Escape opens the pause menu. On a computer, W A S D move the camera, Q and E turn it round your person, and R and F tilt it.
 - Later: shared persistent world (needs a server and database), day planner, skills, more stats, regions and time zones, app store wrapper.
 
 ## How the code is laid out
 - index.html: the whole game (three.js r170 from jsDelivr through an import map). No build step.
 - game-data.json: all content. Items, recipes, needs (stats), things to use (sources), day and night colours, character looks, body shapes, settings. It has a "help" section explaining each part.
 - Adding content should almost always be a small edit to game-data.json, not code.
+- The world is settings.worldSize metres square (100 for now), with thick forest past the edge. The clearing round the start is laid out from its own random numbers and the rest of the world from a second set, so changing the world never reshuffles the clearing.
+- Keep it light for phones. Lots of copies of a shape are drawn as one InstancedMesh, split into chunks of the map. Grass, flowers and pebbles are only drawn near the camera. Far-off trees use simpler shapes.
 - Nothing saves yet, so a reload starts a fresh life. The world and the player are kept as plain data (world.items and you), ready to be saved or sent to a server later.
 
 ## Working on it
