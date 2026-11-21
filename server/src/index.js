@@ -1,12 +1,21 @@
-// Pocket Life server (starter). Each world (test, live) is one Durable Object: it holds who's
-// connected and passes their moves and speech bubbles to everyone else in that world.
+// Pocket Life server. Each world (test, live) is one Durable Object. It holds the shared world
+// (things lying on the ground, berry bushes), passes everyone's moves and speech bubbles on,
+// and slowly tops up sticks and stones (a stick falls under a tree, a stone turns up by a boulder).
 import { DurableObject } from 'cloudflare:workers';
 
 const CORS = { 'Access-Control-Allow-Origin': '*' };
+const WORLD_FORMAT = 1; // bump if the saved world's shape changes, and add an upgrade step in load()
 const clean = (s, n) => String(s ?? '').replace(/[\u0000-\u001f]/g, '').slice(0, n);
 const num = (v) => (Number.isFinite(v) ? Math.round(v * 100) / 100 : 0);
+const kindOk = (k) => typeof k === 'string' && /^[a-z0-9-]{1,24}$/.test(k);
 
 export class World extends DurableObject {
+  constructor(ctx, env) {
+    super(ctx, env);
+    this.world = null;
+    ctx.blockConcurrencyWhile(async () => { this.world = (await ctx.storage.get('world')) || null; });
+  }
+  save() { return this.ctx.storage.put('world', this.world); }
   async fetch(request) {
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
@@ -23,25 +32,109 @@ export class World extends DurableObject {
       if (p && p.id && p.id !== except) { try { ws.send(text); } catch (err) { /* gone */ } }
     }
   }
-  webSocketMessage(ws, raw) {
+  // the shared world as players see it
+  view() {
+    const w = this.world;
+    return w ? { items: w.items, bushes: w.bushes } : null;
+  }
+  berriesOn(i) {
+    const w = this.world, b = w.bushes[i] || [null, null];
+    if (b[0] == null || !w.regrowMs) return w.holds;
+    const every = w.regrowMs / w.holds;
+    return Math.min(w.holds, b[0] + Math.floor((Date.now() - b[1]) / every));
+  }
+  async webSocketMessage(ws, raw) {
     let m;
     try { m = JSON.parse(raw); } catch (err) { return; }
     const me = ws.deserializeAttachment() || {};
+    const reply = (msg) => { try { ws.send(JSON.stringify(msg)); } catch (err) { /* gone */ } };
     if (m.t === 'hello') {
       Object.assign(me, { id: me.id || crypto.randomUUID().slice(0, 8), name: clean(m.name, 20), look: m.look && typeof m.look === 'object' ? m.look : {}, x: num(m.x), z: num(m.z), ry: num(m.ry), v: clean(m.v, 20) });
       ws.serializeAttachment(me);
-      ws.send(JSON.stringify({ t: 'welcome', id: me.id, people: this.people(me.id) }));
+      reply({ t: 'welcome', id: me.id, people: this.people(me.id), world: this.view(), needSeed: !this.world });
       this.send({ t: 'join', person: me }, me.id);
-    } else if (!me.id) {
       return;
-    } else if (m.t === 'move') {
+    }
+    if (!me.id) return;
+    const w = this.world;
+    if (m.t === 'move') {
       Object.assign(me, { x: num(m.x), z: num(m.z), ry: num(m.ry), doing: clean(m.doing, 24) });
       ws.serializeAttachment(me);
       this.send({ t: 'move', id: me.id, x: me.x, z: me.z, ry: me.ry, doing: me.doing }, me.id);
     } else if (m.t === 'say') {
       const text = clean(m.text, 80).trim();
       if (text) this.send({ t: 'say', id: me.id, text }, null);
+    } else if (m.t === 'seed' && !w) {
+      // the first player into a new world lays it out (everyone's game builds the same starting world)
+      const items = (Array.isArray(m.items) ? m.items : []).slice(0, 3000).filter((it) => it && kindOk(it.kind));
+      const spots = {};
+      for (const [k, list] of Object.entries(m.spots || {})) if (kindOk(k) && Array.isArray(list)) spots[k] = list.slice(0, 500).map(([x, z]) => [num(x), num(z)]);
+      const caps = {};
+      for (const [k, n] of Object.entries(m.caps || {})) if (kindOk(k) && Number.isFinite(n)) caps[k] = Math.max(0, Math.min(2000, Math.floor(n)));
+      this.world = {
+        format: WORLD_FORMAT, nextId: 1, items: [], bushes: [], spots, caps,
+        holds: Math.max(1, Math.min(15, Math.floor(m.holds) || 5)),
+        regrowMs: Math.max(0, Number(m.regrowMs) || 0),
+        respawnMs: Math.max(60000, Number(m.respawnMs) || 600000),
+      };
+      for (const it of items) this.world.items.push({ id: this.world.nextId++, kind: it.kind, x: num(it.x), z: num(it.z), rot: num(it.rot) });
+      await this.save();
+      await this.ctx.storage.setAlarm(Date.now() + this.world.respawnMs);
+      this.send({ t: 'world', world: this.view() }, null);
+    } else if (!w) {
+      return;
+    } else if (m.t === 'take') {
+      const i = w.items.findIndex((it) => it.id === m.id);
+      if (i < 0) { reply({ t: 'took', id: m.id, ok: false }); return; }
+      w.items.splice(i, 1);
+      await this.save();
+      reply({ t: 'took', id: m.id, ok: true });
+      this.send({ t: 'gone', id: m.id }, me.id);
+    } else if (m.t === 'drop') {
+      const added = [];
+      for (const it of (Array.isArray(m.items) ? m.items : []).slice(0, 60)) {
+        if (!it || !kindOk(it.kind)) continue;
+        const item = { id: w.nextId++, kind: it.kind, x: num(it.x), z: num(it.z), rot: num(it.rot) };
+        w.items.push(item);
+        added.push(item);
+      }
+      if (!added.length) return;
+      await this.save();
+      this.send({ t: 'added', items: added }, null);
+    } else if (m.t === 'pick') {
+      const i = Math.floor(m.bush);
+      if (!(i >= 0 && i < 200)) return;
+      if (this.berriesOn(i) < 1) { reply({ t: 'picked', bush: i, ok: false }); return; }
+      const b = w.bushes[i] || [null, null];
+      const every = w.regrowMs / w.holds;
+      let count = w.holds, from = Date.now();
+      if (b[0] != null && w.regrowMs) {
+        const grown = Math.floor((Date.now() - b[1]) / every);
+        count = Math.min(w.holds, b[0] + grown);
+        from = count >= w.holds ? Date.now() : b[1] + grown * every;
+      }
+      w.bushes[i] = [count - 1, from];
+      await this.save();
+      reply({ t: 'picked', bush: i, ok: true });
+      this.send({ t: 'bush', bush: i, count: count - 1, growFrom: from }, null);
     }
+  }
+  // nature tops up: one of each kind that's below its normal amount, at a spot near a tree or boulder
+  async alarm() {
+    const w = this.world;
+    if (!w) return;
+    const added = [];
+    for (const [kind, cap] of Object.entries(w.caps)) {
+      const have = w.items.filter((it) => it.kind === kind).length;
+      const spots = w.spots[kind] || [];
+      if (have >= cap || !spots.length) continue;
+      const [x, z] = spots[Math.floor(Math.random() * spots.length)];
+      const item = { id: w.nextId++, kind, x: num(x + (Math.random() - 0.5) * 0.8), z: num(z + (Math.random() - 0.5) * 0.8), rot: num(Math.random() * Math.PI) };
+      w.items.push(item);
+      added.push(item);
+    }
+    if (added.length) { await this.save(); this.send({ t: 'added', items: added }, null); }
+    await this.ctx.storage.setAlarm(Date.now() + w.respawnMs);
   }
   webSocketClose(ws) {
     const me = ws.deserializeAttachment();

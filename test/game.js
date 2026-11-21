@@ -1239,8 +1239,10 @@ let nextItemId = 1;
 // every thing on the ground has an invisible hit area round it, a bit bigger than it is, so it's easy to tap or click
 const HIT_MAT = new THREE.MeshBasicMaterial({ visible: false });
 const HIT_BOX = new THREE.BoxGeometry(1, 1, 1), HIT_BALL = new THREE.SphereGeometry(1, 8, 6);
-function addWorldItem(kind, x, z, rot) {
-  const item = { id: nextItemId++, kind, x, z, rot };
+function addWorldItem(kind, x, z, rot, id) {
+  if (id != null && itemViews.has(id)) return getItem(id); // already here
+  const item = { id: id ?? nextItemId++, kind, x, z, rot };
+  if (id != null) nextItemId = Math.max(nextItemId, id + 1);
   world.items.push(item);
   const { model, rest, hit, hitR } = buildItem(kind);
   const view = shadowsOn(model);
@@ -1840,6 +1842,7 @@ function doPickup(item) {
     if (!getItem(item.id)) return;
     removeWorldItem(item.id);
     addToCarry(item.kind);
+    shareTake(item); // online: tell the world (if someone beat you to it, it comes back out of your inventory)
     drawHeld();
     drawCarry();
     showGain(`+1 ${ITEMS[item.kind].name}`);
@@ -1874,7 +1877,7 @@ function harvestFrom(src, t) {
   const b = berryBushes[t.bush];
   if ((b && !ripe(b)) || carried() + weightOf(src.harvest) > SETTINGS.carryCapacity) return;
   for (const [k, n] of Object.entries(src.harvest)) addToCarry(k, n);
-  if (b) { pickBerry(b); drawBerries(b); }
+  if (b) { pickBerry(b); drawBerries(b); sharePick(t.bush); }
   drawHeld();
   drawCarry();
   showGain(Object.entries(src.harvest).map(([k, n]) => `+${countLabel(k, n)}`).join(', '));
@@ -1901,10 +1904,9 @@ function doDrop(t) {
   if (!you.carry[t.kind]) { nextTask(); return; }
   startAction({ pose: 'bend', mid: () => {
     const taken = takeFromCarry(t.kind, t.n);
-    for (let i = 0; i < taken; i++) {
-      const s = dropSpot(i);
-      addWorldItem(t.kind, s.x, s.z, rand() * Math.PI);
-    }
+    const out = [];
+    for (let i = 0; i < taken; i++) { const s = dropSpot(i); out.push({ kind: t.kind, x: s.x, z: s.z, rot: rand() * Math.PI }); }
+    placeItems(out);
     drawHeld();
     drawCarry();
   } });
@@ -2472,10 +2474,12 @@ $('sheet').addEventListener('submit', (e) => {
 function dropEverything() {
   if (!player) return;
   let i = 0;
+  const out = [];
   for (const [kind, n] of Object.entries(you.carry)) for (let k = 0; k < n; k++, i++) {
     const a = i * 2.39996, r = 0.3 + Math.sqrt(i) * 0.16;
-    addWorldItem(kind, player.position.x + Math.cos(a) * r, player.position.z + Math.sin(a) * r, rand() * Math.PI);
+    out.push({ kind, x: player.position.x + Math.cos(a) * r, z: player.position.z + Math.sin(a) * r, rot: rand() * Math.PI });
   }
+  placeItems(out);
   you.carry = {};
   you.lastKind = null;
   drawHeld();
@@ -2584,7 +2588,21 @@ function goOnline() {
   sock.onmessage = (e) => {
     let m;
     try { m = JSON.parse(e.data); } catch (err) { return; }
-    if (m.t === 'welcome') { net.myId = m.id; for (const p of m.people || []) addOther(p); }
+    if (m.t === 'welcome') {
+      net.myId = m.id;
+      for (const p of m.people || []) addOther(p);
+      if (m.world) useSharedWorld(m.world);
+      else if (m.needSeed) seedWorld();
+    }
+    else if (m.t === 'world') useSharedWorld(m.world);
+    else if (m.t === 'gone') removeWorldItem(m.id);
+    else if (m.t === 'added') for (const it of m.items || []) { if (ITEMS[it.kind]) addWorldItem(it.kind, it.x, it.z, it.rot, it.id); }
+    else if (m.t === 'took') tookBack(m);
+    else if (m.t === 'bush') { const b = berryBushes[m.bush]; if (b) { b.userData.count = m.count; b.userData.growFrom = m.growFrom; drawBerries(b); } }
+    else if (m.t === 'picked' && !m.ok) {
+      if (takeFromCarry('berry', 1)) { drawHeld(); drawCarry(); }
+      showTag('Someone picked it first', headTop(), 2);
+    }
     else if (m.t === 'join') addOther(m.person);
     else if (m.t === 'leave') removeOther(m.id);
     else if (m.t === 'move') { const o = others.get(m.id); if (o) Object.assign(o, { tx: m.x, tz: m.z, tr: m.ry }); }
@@ -2596,10 +2614,68 @@ function goOnline() {
   sock.onclose = () => {
     if (net.sock === sock) net.sock = null;
     net.myId = null;
+    shared.on = false;
     for (const id of [...others.keys()]) removeOther(id);
     if (net.wanted) { setTimeout(goOnline, net.retry); net.retry = Math.min(30000, net.retry * 2); }
   };
   sock.onerror = () => {};
+}
+// The shared world: what lies on the ground and how far each berry bush has grown back.
+const shared = { on: false, taking: new Map() }; // taking: item id -> kind, while the server confirms
+function useSharedWorld(w) {
+  shared.on = true;
+  for (const it of [...world.items]) removeWorldItem(it.id);
+  for (const it of w.items || []) if (ITEMS[it.kind]) addWorldItem(it.kind, it.x, it.z, it.rot, it.id);
+  berryBushes.forEach((b, i) => {
+    const s = (w.bushes || [])[i];
+    b.userData.count = s && s[0] != null ? s[0] : null;
+    b.userData.growFrom = s && s[1] != null ? s[1] : null;
+    drawBerries(b);
+  });
+  for (const t of allTasks()) if (t.type === 'pickup' && !getItem(t.id)) t.gone = true; // queued things that aren't there any more get skipped
+}
+// the first player into a brand new world lays it out: the starting sticks and stones, plus where new ones can turn up
+function seedWorld() {
+  const caps = {}, spotsFor = { stick: [], stone: [] };
+  for (const it of Object.values(ITEMS)) if (it.startInWorld) caps[it.id] = it.startInWorld;
+  let n = 0;
+  for (const a of spots.values()) {
+    for (let k = 0; k < a.length; k += 4, n++) {
+      const tree = a[k + 3], r = a[k + 2];
+      const kind = tree ? 'stick' : r > 0.45 ? 'stone' : null; // sticks fall under trees, stones turn up by boulders
+      if (!kind || !spotsFor[kind] || spotsFor[kind].length >= 400) continue;
+      const ang = hash(n, 77) * Math.PI * 2, d = tree ? r + 0.4 : r + 0.35;
+      const x = a[k] + Math.cos(ang) * d, z = a[k + 1] + Math.sin(ang) * d;
+      if (squareDist(x, z) > WALK_LIMIT - 1 || pondShape(x, z) < 1.3 || solidAt(x, z)) continue;
+      spotsFor[kind].push([x, z]);
+    }
+  }
+  const src = Object.values(SOURCES).find(harvests);
+  net.sock.send(JSON.stringify({
+    t: 'seed', items: world.items.map(({ kind, x, z, rot }) => ({ kind, x, z, rot })), spots: spotsFor, caps,
+    holds: src ? bushHolds(src) : 5, regrowMs: src ? src.regrowHours * 3600000 : 0, respawnMs: (SETTINGS.respawnMinutes || 10) * 60000,
+  }));
+}
+function shareTake(item) {
+  if (!online() || !shared.on) return;
+  shared.taking.set(item.id, item.kind);
+  net.sock.send(JSON.stringify({ t: 'take', id: item.id }));
+}
+function tookBack(m) {
+  const kind = shared.taking.get(m.id);
+  shared.taking.delete(m.id);
+  if (m.ok || !kind) return;
+  if (takeFromCarry(kind, 1)) { drawHeld(); drawCarry(); }
+  showTag('Someone got there first', headTop(), 2);
+}
+function sharePick(bush) {
+  if (online() && shared.on) net.sock.send(JSON.stringify({ t: 'pick', bush }));
+}
+// putting things on the ground: online, the world adds them (for everyone, you included)
+function placeItems(list) {
+  if (!list.length) return;
+  if (online() && shared.on) net.sock.send(JSON.stringify({ t: 'drop', items: list }));
+  else for (const it of list) addWorldItem(it.kind, it.x, it.z, it.rot);
 }
 function goOffline() {
   net.wanted = false;
