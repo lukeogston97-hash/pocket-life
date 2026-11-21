@@ -1410,6 +1410,20 @@ function showTag(text, pos, gap = 10, ttl = 2.2) {
 function showGain(text) { addLabel({ cls: 'gain', text, anchor: headTop(), ttl: 1.3, rise: 0.5, gap: 4 }); }
 const headTop = () => V(player.position.x, playerGround + player.userData.headTop + 0.1, player.position.z);
 const tmp = V();
+// The free space between the info at the top and the bars at the bottom, measured (big phone text makes the HUD taller).
+// Name tags fade out where they'd run into the HUD, and menus and pop-ups stay inside the free space.
+const hudZone = { top: 0, bottom: 1e9, menuBottom: 1e9 };
+function measureHud() {
+  const ar = app.getBoundingClientRect();
+  const who = document.querySelector('.hud-top .who'), menuBtn = $('menuBtn');
+  hudZone.top = Math.max(who ? who.getBoundingClientRect().bottom : 0, menuBtn.getBoundingClientRect().bottom) - ar.top;
+  const bars = [...document.querySelectorAll('.hud-bottom > *')].map((e) => e.getBoundingClientRect()).filter((r) => r.height > 0);
+  hudZone.bottom = (bars.length ? Math.min(...bars.map((r) => r.top)) : ar.bottom) - ar.top;
+  const q = $('queue');
+  hudZone.menuBottom = q.hidden ? hudZone.bottom : Math.min(hudZone.bottom, q.getBoundingClientRect().top - ar.top);
+  document.documentElement.style.setProperty('--below-hud', `${Math.round(hudZone.top + 8)}px`);
+}
+addEventListener('resize', () => setTimeout(measureHud, 50));
 function updateLabels() {
   const w = app.clientWidth, h = app.clientHeight;
   for (let i = labels.length - 1; i >= 0; i--) {
@@ -1422,8 +1436,10 @@ function updateLabels() {
     const sx = (tmp.x * 0.5 + 0.5) * w, sy = (-tmp.y * 0.5 + 0.5) * h;
     const bw = L.bw || (L.bw = L.el.offsetWidth), bh = L.bh || (L.bh = L.el.offsetHeight);
     const left = Math.max(8, Math.min(w - bw - 8, sx - bw / 2));
-    L.el.style.transform = `translate(${left.toFixed(1)}px, ${(sy - bh - L.gap).toFixed(1)}px)`;
-    const fade = Math.min(Math.min(1, age / 0.2), clamp01((L.ttl - age) / 0.4));
+    const top = sy - bh - L.gap;
+    L.el.style.transform = `translate(${left.toFixed(1)}px, ${top.toFixed(1)}px)`;
+    const clear = clamp01(Math.min(top - hudZone.top, hudZone.bottom - (top + bh)) / 16 + 1); // fade out under the HUD
+    const fade = clear * Math.min(Math.min(1, age / 0.2), clamp01((L.ttl - age) / 0.4));
     L.el.style.opacity = tmp.z < 1 ? fade.toFixed(2) : '0';
   }
 }
@@ -1439,6 +1455,7 @@ function drawHud() {
   $('hudAge').textContent = String(you.look.age);
   const now = new Date(); // the world runs on real time
   $('hudTime').textContent = `${formatDate(now)} · ${formatTime(now)}`;
+  measureHud();
 }
 function drawWeightBar(bar, w) {
   bar.style.width = `${Math.min(100, (w / SETTINGS.carryCapacity) * 100)}%`;
@@ -1917,7 +1934,7 @@ function autopilot() {
   if (!auto.on) {
     if (busy() || now - lastInput < AWAY.idleMinutes * 60000) return;
     auto.on = true;
-    auto.home = [player.position.x, player.position.z];
+    auto.home = AWAY.near === 'pond' ? [POND.x, POND.z] : [player.position.x, player.position.z];
     auto.nextAt = now;
     $('autoChip').hidden = false;
   }
@@ -1945,7 +1962,7 @@ function autopilot() {
   if (!auto.rested) { auto.rested = true; auto.nextAt = now + 15000 + Math.random() * 45000; return; }
   auto.rested = false;
   for (let t = 0; t < 40; t++) {
-    const a = Math.random() * Math.PI * 2, r = AWAY.wanderMin * 0.4 + Math.random() * (AWAY.wanderMax - AWAY.wanderMin * 0.4);
+    const a = Math.random() * Math.PI * 2, r = AWAY.wanderMin + Math.random() * (AWAY.wanderMax - AWAY.wanderMin);
     const x = auto.home[0] + Math.cos(a) * r, z = auto.home[1] + Math.sin(a) * r;
     if (Math.abs(x) > WALK_LIMIT - 1 || Math.abs(z) > WALK_LIMIT - 1 || pondShape(x, z) < 1.3 || !roomAt(x, z, 0.5, 0.5)) continue;
     walkFirst(V(x, 0, z));
@@ -2385,14 +2402,17 @@ function openMenuAt(px, py, known) {
   if (ui.mode !== 'world' || !player || you.dead || paused) return false;
   const t = known || pickTarget(px, py);
   const acts = menuActions(t);
+  hideHint(); // the tip has done its job once you've tapped something
   if (!acts.length) { closeMenu(); return false; }
   const menu = $('actMenu');
   $('actTitle').textContent = t.name;
   showActs(acts);
   menu.hidden = false;
   const w = menu.offsetWidth, h = menu.offsetHeight;
+  measureHud();
   menu.style.left = `${Math.round(Math.min(Math.max(8, px + 8), app.clientWidth - w - 8))}px`;
-  menu.style.top = `${Math.round(Math.min(Math.max(8, py + 8), app.clientHeight - h - 8))}px`;
+  const lo = hudZone.top + 6, hi = Math.min(app.clientHeight, hudZone.menuBottom) - h - 6;
+  menu.style.top = `${Math.round(Math.max(lo, Math.min(hi, py + 8)))}px`;
   return true;
 }
 // a list of buttons in the small menu; an item with a "sub" list opens it in place, with Back
@@ -3377,6 +3397,7 @@ function addOther(p) {
 // a name tag, with "away" or "asleep" under it when their player isn't here
 function drawTag(o) {
   const el = o.name.el;
+  o.name.bw = o.name.bh = 0;
   el.textContent = tagText(o.title, o.badge);
   if (o.state === 'away' || o.state === 'asleep') {
     const sub = document.createElement('small');
@@ -3477,6 +3498,7 @@ function bubble(o, text) {
 function openSay() {
   if (ui.mode !== 'world' || !player || you.dead) return;
   closeMenu();
+  measureHud();
   $('sayBox').hidden = false;
   $('sayInput').value = '';
   $('sayInput').focus();

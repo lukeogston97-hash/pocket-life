@@ -246,11 +246,11 @@ export class World extends DurableObject {
     // potter about: rest a little, then stroll somewhere within reach of where you left them
     if (!p.wanderNext) { p.wanderNext = true; idle((15 + Math.random() * 45) * 1000); return; }
     p.wanderNext = false;
-    const home = p.home || at;
+    const home = AWAY.near === 'pond' && G.pond ? [G.pond.x, G.pond.z] : p.home || at; // round the main pond, or where you left them
     const spots = (L.open || []).filter((o) => dist(o, home) <= AWAY.wanderMax && dist(o, at) > 3);
     const far = spots.filter((o) => dist(o, home) >= AWAY.wanderMin);
-    const to = pickRandom(far.length && Math.random() < 0.6 ? far : spots.length ? spots : [home]);
-    walk(to);
+    if (!spots.length) { idle(2 * MINUTE); return; } // nowhere to stroll to: rest a while
+    walk(pickRandom(far.length && Math.random() < 0.6 ? far : spots));
   }
 
   /* ---------- berry bushes ---------- */

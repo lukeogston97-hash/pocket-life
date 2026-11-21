@@ -25,6 +25,7 @@ if cmd == 'test-build':
         'age': {'min': data['looks']['age']['min'], 'max': data['looks']['age']['max']},
         'away': data.get('away', {}),
         'start': {'x': 0.6, 'z': 1.9},
+        'pond': {'x': -5.6, 'z': -0.9},  # the main pond's middle (POND in game.js)
     }
     path2 = os.path.join(root, 'server', 'game.json')
     json.dump(game, open(path2, 'w'), indent=2); open(path2, 'a').write('\n')

@@ -77,18 +77,23 @@
     "max": 90
   },
   "away": {
-    "wanderMin": 25,
-    "wanderMax": 50,
+    "wanderMin": 8,
+    "wanderMax": 25,
     "strollSpeed": 1.2,
     "eatBelow": 60,
     "drinkBelow": 55,
     "sleepAfterHours": 24,
     "goneAfterDays": 7,
     "graveHours": 24,
-    "idleMinutes": 3
+    "idleMinutes": 3,
+    "near": "pond"
   },
   "start": {
     "x": 0.6,
     "z": 1.9
+  },
+  "pond": {
+    "x": -5.6,
+    "z": -0.9
   }
 }
