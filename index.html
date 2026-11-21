@@ -101,12 +101,24 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--moss); outl
 .warn[hidden] { display: none; }
 .queue {
   position: absolute; left: 50%; bottom: 100px; transform: translateX(-50%);
-  display: flex; align-items: center; gap: 8px;
-  padding: 3px 3px 3px 15px; border-radius: 999px;
-  background: var(--paper-solid); box-shadow: 0 4px 14px rgba(40, 42, 24, 0.18);
-  font-size: 13.5px; font-weight: 800; white-space: nowrap; font-variant-numeric: tabular-nums;
+  width: max-content; min-width: 200px; max-width: calc(100% - 24px);
+  padding: 7px 8px 7px 12px; border-radius: 14px;
+  background: var(--paper); box-shadow: 0 4px 14px rgba(40, 42, 24, 0.16);
+  font-size: 13px; font-weight: 800; pointer-events: auto;
 }
 .queue[hidden] { display: none; }
+.q-now { display: flex; align-items: baseline; gap: 6px; min-height: 22px; align-items: center; }
+.q-now small { font-size: 10px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); }
+.q-now.idle span { color: var(--ink-soft); font-weight: 700; }
+.q-list { list-style: none; margin: 4px 0 0; padding: 4px 0 0; border-top: 1px solid rgba(44, 43, 33, 0.1); display: grid; gap: 2px; }
+.q-list[hidden] { display: none; }
+.q-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12.5px; font-weight: 700; }
+.q-list li.more { color: var(--ink-soft); padding: 4px 0; }
+.q-list .n { color: var(--ink-soft); margin-right: 5px; font-variant-numeric: tabular-nums; }
+.q-x { flex: none; width: 34px; height: 34px; border: 0; border-radius: 999px; background: none; color: var(--ink-soft); font: 800 17px/1 var(--font-ui); cursor: pointer; }
+.q-x:hover { background: rgba(44, 43, 33, 0.07); }
+.q-stop { width: 100%; min-height: 36px; margin-top: 5px; }
+.q-stop[hidden] { display: none; }
 .qnum { min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: var(--moss); color: var(--paper-solid); font: 800 12px/22px var(--font-ui); text-align: center; box-shadow: 0 2px 6px rgba(40, 42, 24, 0.25); }
 .carry svg { width: 24px; height: 24px; color: var(--ink-soft); flex: none; }
 .carry-text small { display: block; font-size: 9.5px; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-soft); }
@@ -282,12 +294,16 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--moss); outl
       <div class="meta"><span id="hudAge">25</span> years old</div>
       <div class="meta" id="hudTime">9:00 am</div>
     </div>
-    <button id="newPersonBtn" class="pill-btn" type="button">New person</button>
+    <button id="menuBtn" class="pill-btn" type="button" aria-controls="pause">Menu</button>
   </header>
 
-  <p id="hint" class="hint" hidden>Tap the ground to walk. Tap sticks and stones to pick them up (tap a few to queue them). Tap the pond to drink and a berry bush to pick its berries.</p>
+  <p id="hint" class="hint" hidden>Tap the ground to walk. Tap a stick, stone, berry bush or the pond to see what you can do (do a few to queue them). Menu is at the top right.</p>
 
-  <div id="queue" class="queue" hidden><span id="queueText">2 in queue</span><button id="queueStop" class="small-btn" type="button">Stop</button></div>
+  <div id="queue" class="queue" hidden aria-live="polite">
+    <div id="queueNowRow" class="q-now"><small>Now</small><span id="queueNow">Waiting for something to do</span></div>
+    <ol id="queueList" class="q-list" hidden></ol>
+    <button id="queueStop" class="small-btn q-stop" type="button" hidden>Stop all</button>
+  </div>
 
   <div id="actMenu" class="act-menu" role="menu" aria-labelledby="actTitle" hidden>
     <div id="actTitle" class="act-title"></div>
@@ -471,10 +487,25 @@ try {
   box.hidden = false;
   throw err;
 }
+// Browsers keep a page for a few minutes. If this page is older than the data it just loaded,
+// load the new page (once), so old code never runs with new data.
+const CODE_VERSION = '0.0.5'; // keep the same as "version" in game-data.json
+const CODE_BUILD = 8;         // and this the same as "build" (count up with each test copy)
+{
+  const url = new URL(location.href);
+  const dataStamp = `${DATA.version}.${DATA.build || 0}`;
+  if (dataStamp !== `${CODE_VERSION}.${CODE_BUILD}` && url.searchParams.get('v') !== dataStamp) {
+    url.searchParams.set('v', dataStamp);
+    location.replace(url.href);
+    await new Promise(() => {});
+  }
+}
 const SETTINGS = { carryCapacity: 30, walkSpeed: 2.2, worldSize: 100, needsSpeed: 1, ...(DATA.settings || {}) };
 const VERSION = String(DATA.version || '0.0.0');
-for (const el of document.querySelectorAll('.ver')) el.textContent = VERSION;
-document.title = `Game Prototype v${VERSION}`;
+const TEST_BUILD = location.pathname.includes('/test/'); // the test copy, before it's released
+const VERSION_LABEL = TEST_BUILD ? `${VERSION} (test ${DATA.build || 1})` : VERSION;
+for (const el of document.querySelectorAll('.ver')) el.textContent = VERSION_LABEL;
+document.title = `Game Prototype v${VERSION_LABEL}`;
 
 /* ---------- the land ---------- */
 // The world is a square, settings.worldSize metres across, with the clearing and pond in the middle.
@@ -596,7 +627,19 @@ function groundY(x, z) {
 /* water */
 const waterGeo = new THREE.PlaneGeometry(15, 12.5, 30, 25);
 waterGeo.rotateX(-Math.PI / 2);
-const water = new THREE.Mesh(waterGeo.toNonIndexed(), new THREE.MeshStandardMaterial({ color: '#86bdb7', roughness: 0.16, metalness: 0, transparent: true, opacity: 0.86, flatShading: true }));
+// keep only the water inside the pond's outline, so low bits of the bank never show water
+const waterTris = (() => {
+  const g = waterGeo.toNonIndexed(), a = g.attributes.position.array, keep = [];
+  for (let i = 0; i < a.length; i += 9) {
+    const inPond = [0, 3, 6].some((k) => pondShape(a[i + k] + POND.x, a[i + k + 2] + POND.z) < 0.98);
+    if (inPond) for (let k = 0; k < 9; k++) keep.push(a[i + k]);
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.Float32BufferAttribute(keep, 3));
+  out.computeVertexNormals();
+  return out;
+})();
+const water = new THREE.Mesh(waterTris, new THREE.MeshStandardMaterial({ color: '#86bdb7', roughness: 0.16, metalness: 0, transparent: true, opacity: 0.86, flatShading: true }));
 water.position.set(POND.x, WATER_Y, POND.z);
 water.receiveShadow = true;
 water.userData.label = 'Pond';
@@ -606,7 +649,7 @@ function animateWater(t) {
   const a = water.geometry.attributes.position.array;
   for (let i = 0; i < a.length; i += 3) {
     const x = waterBase[i], z = waterBase[i + 2];
-    a[i + 1] = Math.sin(x * 1.35 + t * 1.3) * 0.035 + Math.sin(z * 1.8 - t * 1.05 + x * 0.4) * 0.03;
+    a[i + 1] = Math.sin(x * 1.35 + t * 0.55) * 0.012 + Math.sin(z * 1.8 - t * 0.45 + x * 0.4) * 0.01; // a gentle ripple
   }
   water.geometry.attributes.position.needsUpdate = true;
   water.geometry.computeVertexNormals();
@@ -1035,7 +1078,8 @@ function bush(x, z, s = 1, withBerries = true) {
       put(berries, x + b.ox + dx * b.r * 0.97, y + b.y + dy * b.r * 0.78, z + b.oz + dz * b.r * 0.97, 0, rand() * 6, 0, 1, 1, 1, tint('#c4483a', 0.01, 0.06, 0.05));
     }
   }
-  g.userData.label = withBerries ? 'Gooseberry bush' : 'Bush';
+  g.userData.label = withBerries ? 'Berry bush' : 'Bush';
+  addSpot(x, z, s * 0.85);
   interactive.push(g);
   return g;
 }
@@ -1048,6 +1092,7 @@ function rock(x, z, s, label = 'Boulder', color) {
   m.userData.label = label;
   scene.add(m);
   drawAlong(drawnTogether.rocks[rockGeos.indexOf(m.geometry)], m);
+  addSpot(x, z, s * 1.1);
   interactive.push(m);
   return m;
 }
@@ -1087,6 +1132,7 @@ for (let i = 0; i < 90; i++) {
   scene.add(g);
   drawAlong(wild.stump, body);
   drawAlong(wild.stumpTop, top);
+  addSpot(x, z, 0.5);
   interactive.push(g);
 }
 {
@@ -1103,6 +1149,7 @@ for (let i = 0; i < 90; i++) {
   g.userData.label = 'Fallen log';
   scene.add(g);
   drawAlong(wild.log, log);
+  for (const k of [-1, 0, 1]) addSpot(x + Math.cos(0.5) * 1.2 * k, z - Math.sin(0.5) * 1.2 * k, 0.6);
   drawAlong(wild.logEnd, e1);
   drawAlong(wild.logEnd, e2);
   interactive.push(g);
@@ -1221,22 +1268,42 @@ for (const m of [reeds, cattails, pads, berries]) {
   m.instanceMatrix.needsUpdate = true;
   if (m.instanceColor) m.instanceColor.needsUpdate = true;
 }
-/* berry bushes: picking takes every berry, then they grow back one by one (hidden berries are shrunk to nothing) */
+/* berry bushes: you pick one berry at a time, and picked berries grow back one by one (hidden ones are shrunk to nothing) */
 const berryMatrices = berries.instanceMatrix.array.slice();
 const NO_BERRY = new THREE.Matrix4().makeScale(0, 0, 0);
-function berryGrowth(b) { // 0 just picked, 1 ripe again
+const bushHolds = (src) => Math.max(1, Math.min(15, src.holds || 5)); // how many berries a full bush has
+const growEvery = (src) => (src.regrowHours * 3600000) / bushHolds(src); // how long one berry takes to grow back
+// how many berries are on a bush right now (picked ones come back over time)
+function berriesOn(b) {
   const src = SOURCES[b.userData.source];
-  if (!b.userData.pickedAt || !src || !src.regrowHours) return 1;
-  return clamp01((Date.now() - b.userData.pickedAt) / (src.regrowHours * 3600000));
+  if (!src || !harvests(src)) return 0;
+  const holds = bushHolds(src);
+  if (b.userData.count == null) return holds;
+  if (!src.regrowHours) return holds;
+  const grown = Math.floor((Date.now() - b.userData.growFrom) / growEvery(src));
+  return Math.min(holds, b.userData.count + grown);
 }
-const ripe = (b) => berryGrowth(b) >= 1;
+function pickBerry(b) {
+  const src = SOURCES[b.userData.source];
+  const holds = bushHolds(src);
+  if (b.userData.count == null) { b.userData.count = holds; b.userData.growFrom = Date.now(); }
+  else if (src.regrowHours) {
+    const grown = Math.floor((Date.now() - b.userData.growFrom) / growEvery(src));
+    b.userData.count = Math.min(holds, b.userData.count + grown);
+    b.userData.growFrom = b.userData.count >= holds ? Date.now() : b.userData.growFrom + grown * growEvery(src);
+  }
+  b.userData.count -= 1;
+}
+const ripe = (b) => berriesOn(b) >= 1;
 function readyIn(b) {
-  const mins = Math.max(1, Math.ceil((1 - berryGrowth(b)) * SOURCES[b.userData.source].regrowHours * 60));
+  const src = SOURCES[b.userData.source];
+  const mins = Math.max(1, Math.ceil((b.userData.growFrom + growEvery(src) - Date.now()) / 60000));
   return mins >= 90 ? `${Math.round(mins / 60)} h` : `${mins} min`;
 }
 function drawBerries(b) {
   const { start, n } = b.userData.berries;
-  const shown = Math.min(n, Math.floor(n * berryGrowth(b)));
+  const src = SOURCES[b.userData.source];
+  const shown = Math.min(n, src && harvests(src) ? berriesOn(b) : n);
   if (b.userData.shown === shown) return;
   b.userData.shown = shown;
   const a = berries.instanceMatrix.array;
@@ -1380,15 +1447,16 @@ for (const [id, raw] of Object.entries(DATA.sources || {})) {
   const gives = Object.fromEntries(Object.entries(raw.gives || {}).filter(([k, v]) => STAT[k] && Number.isFinite(v)));
   // harvest: what picking it puts in your inventory; regrowHours: how long until it can be picked again
   const harvest = Object.fromEntries(Object.entries(raw.harvest || {}).filter(([k, v]) => ITEMS[k] && v >= 1).map(([k, v]) => [k, Math.floor(v)]));
-  SOURCES[id] = { id, name: raw.name || id, verb: raw.verb || 'Using', seconds: Math.max(0.3, Number(raw.seconds) || 1), pose: raw.pose || 'pick',
-    gives, harvest, regrowHours: Math.max(0, Number(raw.regrowHours) || 0) };
+  SOURCES[id] = { id, name: raw.name || id, action: raw.action || '', verb: raw.verb || 'Using', seconds: Math.max(0.3, Number(raw.seconds) || 1), pose: raw.pose || 'pick',
+    gives, harvest, holds: Math.floor(Number(raw.holds) || 0), regrowHours: Math.max(0, Number(raw.regrowHours) || 0) };
 }
 const harvests = (src) => Object.keys(src.harvest).length > 0;
-// a thing in the world becomes usable when a source has its name, like "Pond" or "Gooseberry bush"
+// a thing in the world becomes usable when a source has its name, like "Pond" or "Berry bush"
 for (const obj of interactive) {
   const src = Object.values(SOURCES).find((s) => s.name === obj.userData.label);
   if (src) obj.userData.source = src.id;
 }
+for (const b of berryBushes) drawBerries(b);
 
 /* ---------- people ---------- */
 const HIP_Y = 0.86, WAIST_Y = 1.08;
@@ -1999,6 +2067,23 @@ function followPlayer(dt) {
   camera.position.y += dy;
   camera.position.z += dz;
 }
+// If the phone is struggling, draw a little less sharp (a step at a time, never back up in one visit)
+const PIXEL_STEPS = [Math.min(window.devicePixelRatio || 1, 2), 1.5, 1.25, 1].filter((v, i, a) => i === 0 || v < a[0]);
+const speed = { step: 0, time: 0, frames: 0, warm: 0 };
+function watchSpeed(raw) {
+  if (document.hidden || raw > 0.5) return;
+  if (speed.warm < 3) { speed.warm += raw; return; } // let it settle after starting
+  speed.time += raw;
+  speed.frames++;
+  if (speed.time < 2) return;
+  const fps = speed.frames / speed.time;
+  speed.time = speed.frames = 0;
+  if (fps < 45 && speed.step < PIXEL_STEPS.length - 1) {
+    speed.step++;
+    renderer.setPixelRatio(PIXEL_STEPS[speed.step]);
+    resize();
+  }
+}
 function resize() {
   const w = app.clientWidth, h = app.clientHeight;
   renderer.setSize(w, h, false);
@@ -2022,8 +2107,38 @@ function shorePointToward(from) {
   return V(from.x, 0, from.z);
 }
 const inWorld = (v) => Math.max(-WALK_LIMIT, Math.min(WALK_LIMIT, v)); // the forest past the edge is too thick to walk into
+// Solid things your person walks round: rocks, bushes, logs, stumps and tree trunks.
+// Returns the thing you'd be standing in at x, z (or null), and how far into it.
+const BODY_R = 0.22;
+function solidAt(x, z) {
+  let best = null;
+  for (let i = -1; i <= 1; i++) {
+    for (let j = -1; j <= 1; j++) {
+      const a = spots.get(spotKey(x + i * 4, z + j * 4));
+      if (!a) continue;
+      for (let k = 0; k < a.length; k += 4) {
+        const r = (a[k + 3] ? 0.3 : a[k + 2] * 0.8) + BODY_R; // a tree's trunk, not its crown
+        const d = Math.hypot(a[k] - x, a[k + 1] - z);
+        if (d < r && (!best || r - d > best.depth)) best = { x: a[k], z: a[k + 1], r, depth: r - d };
+      }
+    }
+  }
+  return best;
+}
+// a spot you tapped inside something solid moves to just outside it
+function outsideSolid(x, z) {
+  for (let n = 0; n < 3; n++) {
+    const s = solidAt(x, z);
+    if (!s) break;
+    const dx = x - s.x, dz = z - s.z, d = Math.hypot(dx, dz) || 1;
+    x = s.x + (dx / d) * (s.r + 0.05);
+    z = s.z + (dz / d) * (s.r + 0.05);
+  }
+  return [x, z];
+}
 function walkTo(p, onArrive, onFail) {
-  const dest = V(inWorld(p.x), 0, inWorld(p.z));
+  const [ox, oz] = outsideSolid(inWorld(p.x), inWorld(p.z));
+  const dest = V(inWorld(ox), 0, inWorld(oz));
   walk.target = dest;
   walk.onArrive = onArrive || null;
   walk.onFail = onFail || null;
@@ -2048,7 +2163,7 @@ function startAction(a) { walk.target = null; action = { t0: elapsed, done: fals
 const tasks = { current: null, list: [] }; // { type: 'pickup', id } | { type: 'use', source, ... } | { type: 'drop', kind, n }
 const MAX_QUEUE = 30;
 const allTasks = () => (tasks.current ? [tasks.current, ...tasks.list] : [...tasks.list]);
-const shownTasks = () => allTasks().filter((t) => t.type !== 'drop' && t.type !== 'walk');
+const shownTasks = () => allTasks().filter((t) => t.type !== 'drop');
 // the weight you'll be carrying once everything queued is picked up or harvested
 const plannedWeight = () => carried() + allTasks().reduce((sum, t) => {
   if (t.type === 'pickup') { const it = getItem(t.id); return sum + (it ? ITEMS[it.kind].weight : 0); }
@@ -2063,7 +2178,9 @@ function cantUse(t, planning) {
   if (!src) return 'Nothing to do here';
   if (harvests(src)) {
     const b = berryBushes[t.bush];
-    if (b && !ripe(b)) return `${ITEMS[Object.keys(src.harvest)[0]].plural} ready in ${readyIn(b)}`;
+    // berries you've already queued to pick count as gone
+    const queued = planning && b ? allTasks().filter((q) => q.type === 'use' && q.bush === t.bush).length : 0;
+    if (b && berriesOn(b) - queued < 1) return queued ? 'No more berries' : `Next ${ITEMS[Object.keys(src.harvest)[0]].name.toLowerCase()} in ${readyIn(b)}`;
     if ((planning ? plannedWeight() : carried()) + weightOf(src.harvest) > SETTINGS.carryCapacity) return 'Inventory full';
     return null;
   }
@@ -2077,7 +2194,6 @@ function queueTask(t) {
     if (plannedWeight() + w > SETTINGS.carryCapacity) { showTag('Inventory full', headTop(), 2); return; }
   }
   if (t.type === 'use') {
-    if (t.bush != null && allTasks().some((q) => q.type === 'use' && q.bush === t.bush)) return;
     const why = cantUse(t, true);
     if (why) { showTag(why, headTop(), 2); return; }
   }
@@ -2125,17 +2241,22 @@ function nextTask() {
   else if (t.type === 'walk') walkTo(V(t.x, 0, t.z), nextTask, nextTask);
   else nextTask();
 }
-// walking somewhere doesn't cancel your queue: you go there first, then carry on
+// a walk joins the end of the queue, so it never interrupts anything
 function walkFirst(p) {
   const t = { type: 'walk', x: p.x, z: p.z };
-  if (tasks.list[0] && tasks.list[0].type === 'walk') tasks.list.shift(); // a new walk replaces one you hadn't started
-  if (action) { tasks.list.unshift(t); return; } // finish what you're doing, then go
-  if (tasks.current && tasks.current.type !== 'walk') tasks.list.unshift(tasks.current);
-  walk.target = null;
-  walk.onArrive = walk.onFail = null;
-  tasks.list.unshift(t);
-  tasks.current = null;
-  nextTask();
+  const last = tasks.list[tasks.list.length - 1];
+  if (last && last.type === 'walk') tasks.list.pop(); // a new walk replaces one still waiting at the end
+  else if (!tasks.list.length && tasks.current && tasks.current.type === 'walk' && !action) {
+    // only walking, nothing else queued: change course straight away
+    walk.target = null;
+    walk.onArrive = walk.onFail = null;
+    tasks.current = null;
+  }
+  if (allTasks().length >= MAX_QUEUE) { showTag('Your queue is full', headTop(), 2); return; }
+  hideHint();
+  tasks.list.push(t);
+  if (!tasks.current && !action) nextTask();
+  else drawQueue();
 }
 function doPickup(item) {
   if (!getItem(item.id)) { nextTask(); return; }
@@ -2173,12 +2294,12 @@ function applyGives(gives) {
   if (shown.length) showGain(shown.join(', '));
   drawNeeds();
 }
-// picking a berry bush: every berry goes into your inventory, and the bush starts growing them back
+// picking a berry bush: one berry into your inventory, and that berry starts growing back
 function harvestFrom(src, t) {
   const b = berryBushes[t.bush];
   if ((b && !ripe(b)) || carried() + weightOf(src.harvest) > SETTINGS.carryCapacity) return;
   for (const [k, n] of Object.entries(src.harvest)) addToCarry(k, n);
-  if (b) { b.userData.pickedAt = Date.now(); drawBerries(b); }
+  if (b) { pickBerry(b); drawBerries(b); }
   drawHeld();
   drawCarry();
   showGain(Object.entries(src.harvest).map(([k, n]) => `+${countLabel(k, n)}`).join(', '));
@@ -2231,16 +2352,56 @@ let badges = [];
 function taskSpot(t) {
   if (t.type === 'pickup') { const v = itemViews.get(t.id); return v ? V(v.position.x, v.position.y + 0.22, v.position.z) : null; }
   if (t.type === 'use') return t.water ? V(POND.x, WATER_Y + 0.5, POND.z) : V(t.x, t.top + 0.15, t.z);
+  if (t.type === 'walk') return V(t.x, groundY(t.x, t.z) + 0.3, t.z);
   return null;
 }
+// what a task is called in the queue list: "Pick up Stick" next, "Picking up Stick" now
+function taskName(t, now) {
+  if (t.type === 'pickup') { const it = getItem(t.id); const n = it ? ITEMS[it.kind].name : 'item'; return now ? `Picking up ${n}` : `Pick up ${n}`; }
+  if (t.type === 'use') {
+    const src = SOURCES[t.source];
+    if (!src) return 'Use';
+    if (now) return src.verb;
+    return harvests(src) ? `Harvest ${ITEMS[Object.keys(src.harvest)[0]].name}` : src.action || `Use ${src.name.toLowerCase()}`;
+  }
+  if (t.type === 'drop') return now ? 'Putting down' : `Drop ${countLabel(t.kind, t.n)}`;
+  if (t.type === 'walk') return now ? 'Walking' : 'Walk there';
+  return '';
+}
+// the list above the bottom bar: what your person is doing now, then what's next
 function drawQueue() {
   for (const b of badges) removeLabel(b);
   badges = [];
-  const list = shownTasks();
-  const show = list.length >= 2 && ui.mode === 'world';
+  const show = ui.mode === 'world' && !!player && !you.dead;
   $('queue').hidden = !show;
   if (!show) return;
-  $('queueText').textContent = `${list.length} in queue`;
+  const cur = tasks.current;
+  $('queueNow').textContent = cur ? taskName(cur, true) : 'Waiting for something to do';
+  $('queueNowRow').classList.toggle('idle', !cur);
+  const next = tasks.list.map((t, i) => ({ t, i })).filter(({ t }) => t.type !== 'drop');
+  const rows = next.slice(0, 5).map(({ t, i }, k) => {
+    const li = document.createElement('li');
+    const name = document.createElement('span');
+    const num = document.createElement('span');
+    num.className = 'n';
+    num.textContent = `${k + 1}.`;
+    name.append(num, taskName(t, false));
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.className = 'q-x';
+    x.textContent = '\u00d7';
+    x.setAttribute('aria-label', `Remove ${taskName(t, false)}`);
+    x.addEventListener('click', () => { const j = tasks.list.indexOf(t); if (j >= 0) tasks.list.splice(j, 1); drawQueue(); });
+    li.append(name, x);
+    return li;
+  });
+  if (next.length > 5) { const li = document.createElement('li'); li.className = 'more'; li.textContent = `+${next.length - 5} more`; rows.push(li); }
+  $('queueList').replaceChildren(...rows);
+  $('queueList').hidden = rows.length === 0;
+  $('queueStop').hidden = !cur && !next.length;
+  // numbers over the things you've queued
+  const list = shownTasks();
+  if (list.length < 2) return;
   const used = new Set();
   list.forEach((t, i) => {
     const p = taskSpot(t);
@@ -2321,6 +2482,14 @@ function itemNear(px, py, maxPx) {
   }
   return best;
 }
+function itemCloseTo(x, z, maxM) {
+  let best = null, bd = maxM;
+  for (const it of world.items) {
+    const d = Math.hypot(it.x - x, it.z - z);
+    if (d < bd) { bd = d; best = it; }
+  }
+  return best;
+}
 // What's under a tap or click. Something you can pick up or use wins over a tree or rock in front of it,
 // and a near miss only picks up a stick or stone when the tap didn't land on something else useful.
 function pickTarget(px, py) {
@@ -2330,15 +2499,19 @@ function pickTarget(px, py) {
   const hits = [];
   for (const h of ray.intersectObjects(interactive, true)) {
     if (h.distance > limit) break;
+    if (h.object === water && groundY(h.point.x, h.point.z) > WATER_Y + 0.02) continue; // that bit of the pond is under the grass
     const o = labelOf(h.object);
     if (o) hits.push({ h, o });
   }
   const useful = hits.find(({ o }) => o === player || o.userData.itemId || o.userData.source);
   const { h: hit = null, o: owner = null } = useful || hits[0] || {};
   if (owner === player) return { kind: 'you' };
-  const item = (owner && owner.userData.itemId && getItem(owner.userData.itemId)) || (useful ? null : itemNear(px, py, 34));
-  if (item) return { kind: 'item', item, name: ITEMS[item.kind].name };
   const gp = groundHit && groundHit.point;
+  // a near miss still counts: within a finger's width on screen, or within about a metre on the ground
+  const item = (owner && owner.userData.itemId && getItem(owner.userData.itemId))
+    || (useful ? null : itemNear(px, py, lastPointer === 'mouse' ? 34 : 46))
+    || (useful || !gp ? null : itemCloseTo(gp.x, gp.z, 0.9));
+  if (item) return { kind: 'item', item, name: ITEMS[item.kind].name };
   const isWater = owner === water || (!hit && gp && (pondShape(gp.x, gp.z) < 0.86 || gp.y < WATER_Y + 0.1));
   const srcId = isWater ? water.userData.source : owner && owner.userData.source;
   if (srcId && SOURCES[srcId]) {
@@ -2362,9 +2535,9 @@ function handleTap(px, py) {
   const t = pickTarget(px, py);
   if (!t) return;
   if (t.kind === 'you') { showTag('You', headTop(), 2); return; }
-  if (t.kind === 'item') { queueTask({ type: 'pickup', id: t.item.id }); return; }
-  if (t.kind === 'use') { queueTask(t.task); return; }
-  // anything else: walk there first, then carry on with anything queued
+  // a stick, stone, berry bush or the pond: open the menu of what you can do with it
+  if (t.kind === 'item' || t.kind === 'use') { openMenuAt(px, py, t); return; }
+  // anything else: walk there (after anything already queued)
   if (t.kind === 'shore') { walkFirst(shorePointToward(player.position)); return; }
   if (t.kind === 'thing') {
     const { owner, hit } = t;
@@ -2386,18 +2559,31 @@ function handleTap(px, py) {
 // the small menu: Gather Sticks, Gather Stones, Harvest Berries
 function menuActions(t) {
   if (!t) return [];
-  if (t.kind === 'item') return [{ label: `Gather ${ITEMS[t.item.kind].plural}`, run: () => queueTask({ type: 'pickup', id: t.item.id }) }];
-  if (t.kind === 'use' && harvests(SOURCES[t.task.source])) {
-    const src = SOURCES[t.task.source], b = berryBushes[t.task.bush];
-    const ready = !b || ripe(b);
-    return [{ label: `Harvest ${ITEMS[Object.keys(src.harvest)[0]].plural}`, note: ready ? '' : `Ready in ${readyIn(b)}`,
-      disabled: !ready, run: () => queueTask(t.task) }];
+  if (t.kind === 'item') {
+    const it = t.item;
+    return [{ label: `Pick up ${ITEMS[it.kind].name}`, run: () => queueTask({ type: 'pickup', id: it.id }) },
+      { label: 'Walk here', run: () => walkFirst(V(it.x, 0, it.z)) }];
+  }
+  if (t.kind === 'use') {
+    const src = SOURCES[t.task.source], task = t.task;
+    const walkHere = { label: 'Walk here', run: () => {
+      if (task.water) { walkFirst(shorePointToward(player.position)); return; }
+      const dx = task.x - player.position.x, dz = task.z - player.position.z, d = Math.hypot(dx, dz) || 1;
+      walkFirst(V(task.x - (dx / d) * task.stop, 0, task.z - (dz / d) * task.stop));
+    } };
+    if (harvests(src)) {
+      const b = berryBushes[task.bush];
+      const ready = !b || ripe(b);
+      return [{ label: `Harvest ${ITEMS[Object.keys(src.harvest)[0]].plural}`, note: ready ? (b ? `${berriesOn(b)} left` : '') : `Next in ${readyIn(b)}`,
+        disabled: !ready, run: () => queueTask(task) }, walkHere];
+    }
+    return [{ label: src.action || `Use ${src.name.toLowerCase()}`, run: () => queueTask(task) }, walkHere];
   }
   return [];
 }
-function openMenuAt(px, py) {
+function openMenuAt(px, py, known) {
   if (ui.mode !== 'world' || !player || you.dead || paused) return false;
-  const t = pickTarget(px, py);
+  const t = known || pickTarget(px, py);
   const acts = menuActions(t);
   if (!acts.length) { closeMenu(); return false; }
   const menu = $('actMenu');
@@ -2469,11 +2655,14 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('keyup', (e) => keysDown.delete(e.code));
 window.addEventListener('blur', () => keysDown.clear());
 const panVel = V();
+const camVel = { turn: 0, tilt: 0 }; // turning and tilting speed, eased so keys start and stop smoothly
 const keyAxis = (plus, minus) => (keysDown.has(plus) ? 1 : 0) - (keysDown.has(minus) ? 1 : 0);
 function keyCamera(dt) {
   const t = controls.target;
   // Q and E: turn round your person
-  const turn = keyAxis('KeyE', 'KeyQ') * 1.7 * dt;
+  camVel.turn += (keyAxis('KeyE', 'KeyQ') * 1.5 - camVel.turn) * Math.min(1, dt * 5);
+  if (Math.abs(camVel.turn) < 0.002 && !keysDown.has('KeyE') && !keysDown.has('KeyQ')) camVel.turn = 0;
+  const turn = camVel.turn * dt;
   if (turn && player) {
     const c = Math.cos(turn), s = Math.sin(turn), px = player.position.x, pz = player.position.z;
     for (const v of [camera.position, t]) {
@@ -2483,7 +2672,9 @@ function keyCamera(dt) {
     }
   }
   // R and F: R swings the camera up to look down from above, F brings it down toward the horizon
-  const tilt = keyAxis('KeyF', 'KeyR') * 0.9 * dt;
+  camVel.tilt += (keyAxis('KeyF', 'KeyR') * 0.8 - camVel.tilt) * Math.min(1, dt * 5);
+  if (Math.abs(camVel.tilt) < 0.002 && !keysDown.has('KeyF') && !keysDown.has('KeyR')) camVel.tilt = 0;
+  const tilt = camVel.tilt * dt;
   if (tilt) {
     const off = camera.position.clone().sub(t);
     const sph = new THREE.Spherical().setFromVector3(off);
@@ -2496,7 +2687,7 @@ function keyCamera(dt) {
   const fwd = V(t.x - camera.position.x, 0, t.z - camera.position.z).normalize();
   const right = V(-fwd.z, 0, fwd.x);
   const speed = camera.position.distanceTo(t) * 0.6;
-  panVel.lerp(fwd.multiplyScalar(f * speed).add(right.multiplyScalar(r * speed)), Math.min(1, dt * 8));
+  panVel.lerp(fwd.multiplyScalar(f * speed).add(right.multiplyScalar(r * speed)), Math.min(1, dt * 4));
   if (f || r) camFree = true;
   const lim = WORLD_HALF + 4;
   const dx = Math.max(-lim, Math.min(lim, t.x + panVel.x * dt)) - t.x, dz = Math.max(-lim, Math.min(lim, t.z + panVel.z * dt)) - t.z;
@@ -2561,12 +2752,14 @@ function updatePlayer(dt) {
       // head straight there, or curve round the pond if it's in the way
       const step = Math.min(d, SETTINGS.walkSpeed * dt);
       const base = Math.atan2(dx, dz);
-      const tries = walk.side < 0 ? [0, -0.5, -1, -1.5, 0.5, 1, 1.5] : [0, 0.5, 1, 1.5, -0.5, -1, -1.5];
+      const tries = walk.side < 0 ? [0, -0.5, -1, -1.5, -2, 0.5, 1, 1.5, 2] : [0, 0.5, 1, 1.5, 2, -0.5, -1, -1.5, -2];
       let nx = 0, nz = 0, heading = base, ok = false;
       for (const off of tries) {
         nx = inWorld(player.position.x + Math.sin(base + off) * step);
         nz = inWorld(player.position.z + Math.cos(base + off) * step);
-        if (pondShape(nx, nz) >= 0.86) { ok = true; heading = base + off; if (off && !walk.side) walk.side = Math.sign(off); break; }
+        const hitNow = solidAt(player.position.x, player.position.z), hitNext = solidAt(nx, nz);
+        const blocked = hitNext && (!hitNow || hitNext.depth > hitNow.depth - 1e-4); // you can always step out of something
+        if (pondShape(nx, nz) >= 0.86 && !blocked) { ok = true; heading = base + off; if (off && !walk.side) walk.side = Math.sign(off); break; }
       }
       if (!ok) stop("Can't get there");
       else {
@@ -2647,6 +2840,11 @@ function enterCreator() {
   removeLabel(tagLabel);
   tagLabel = null;
   draft = { ...DEFAULT_LOOK };
+  // while testing, a ready-made name so starting is one tap (settings.autoName; you can still change it)
+  if (SETTINGS.autoName) {
+    const names = DATA.testNames && DATA.testNames.length ? DATA.testNames : ['Alex', 'Sam', 'Jo'];
+    draft.name = names[Math.floor(Math.random() * names.length)];
+  }
   syncForm();
   refreshPreview();
 }
@@ -2677,6 +2875,7 @@ $('sheet').addEventListener('submit', (e) => {
   you.lastKind = null;
   spawnPlayer({ ...draft, name });
   enterWorld();
+  saveGame();
 });
 
 /* ---------- the end of a life: starting over, or dying ---------- */
@@ -2702,6 +2901,7 @@ function endLife() {
   you.stats = null;
   you.dead = false;
   enterCreator();
+  saveGame();
 }
 function die() {
   if (you.dead || !player) return;
@@ -2725,7 +2925,7 @@ function die() {
   $('death').hidden = false;
   $('deathBtn').focus();
 }
-$('newPersonBtn').addEventListener('click', () => { if (you.dead) return; closeBag(); $('confirm').hidden = false; $('keepBtn').focus(); });
+$('menuBtn').addEventListener('click', () => openPause());
 $('keepBtn').addEventListener('click', () => { $('confirm').hidden = true; });
 $('newBtn').addEventListener('click', () => { $('confirm').hidden = true; endLife(); });
 $('deathBtn').addEventListener('click', () => { $('death').hidden = true; endLife(); });
@@ -2756,6 +2956,7 @@ function frame() {
     renderer.setViewport(0, 0, w, h);
     renderer.setClearColor(sky, 1);
     renderer.render(scene, camera);
+    watchSpeed(raw);
     updateLabels();
     hudTimer += raw;
     if (hudTimer > 1) { hudTimer = 0; drawHud(); tickStats(); applyDaylight(); for (const b of berryBushes) drawBerries(b); }
@@ -2763,7 +2964,63 @@ function frame() {
   window.__frames = (window.__frames || 0) + 1;
   requestAnimationFrame(frame);
 }
-enterCreator();
+/* ---------- saving on this phone ---------- */
+// The test link and the release each keep their own save, so testing never touches your real game.
+// Everything saved is plain data, ready to move to a server when the world goes online.
+const SAVE_KEY = `pocket-life:${TEST_BUILD ? 'test' : 'release'}`;
+const SAVE_FORMAT = 1;
+function saveGame() {
+  try {
+    const alive = player && !you.dead;
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      format: SAVE_FORMAT, worldSize: WORLD_HALF * 2, savedAt: Date.now(),
+      items: world.items.map(({ kind, x, z, rot }) => [kind, +x.toFixed(2), +z.toFixed(2), +rot.toFixed(2)]),
+      bushes: berryBushes.map((b) => [b.userData.count ?? null, b.userData.growFrom ?? null]),
+      you: alive ? { look: you.look, carry: you.carry, lastKind: you.lastKind, lifeStart: you.lifeStart, stats: you.stats, statsAt: you.statsAt,
+        x: +player.position.x.toFixed(2), z: +player.position.z.toFixed(2), ry: +player.rotation.y.toFixed(2) } : null,
+    }));
+  } catch (err) { /* private browsing or storage full: the game still plays, it just won't remember */ }
+}
+function loadGame() {
+  let d = null;
+  try { d = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (err) { d = null; }
+  if (!d || d.format !== SAVE_FORMAT) return false;
+  // the world: where things lie, and how far each berry bush has grown back
+  if (d.worldSize === WORLD_HALF * 2 && Array.isArray(d.items)) {
+    for (const it of [...world.items]) removeWorldItem(it.id);
+    for (const [kind, x, z, rot] of d.items) if (ITEMS[kind] && Number.isFinite(x) && Number.isFinite(z)) addWorldItem(kind, x, z, rot || 0);
+  }
+  (d.bushes || []).forEach(([count, growFrom], i) => {
+    const b = berryBushes[i];
+    if (b && Number.isFinite(count) && Number.isFinite(growFrom)) { b.userData.count = count; b.userData.growFrom = growFrom; drawBerries(b); }
+  });
+  // your person, if they were alive when you left
+  const y = d.you;
+  if (!y || !y.look || !y.stats) return false;
+  const look = { ...DEFAULT_LOOK, ...y.look };
+  for (const k of ['sex', 'skin', 'build', 'hair', 'hairColour', 'tunic']) look[k] = pickId(LOOKS[k], look[k]);
+  look.age = Math.round(Math.min(LOOKS.age.max, Math.max(LOOKS.age.min, Number(look.age) || LOOKS.age.start)));
+  look.name = String(look.name || 'You').slice(0, 20);
+  you.lifeStart = y.lifeStart || Date.now();
+  you.stats = { ...freshStats(), ...y.stats };
+  you.statsAt = y.statsAt || Date.now();
+  you.dead = false;
+  you.carry = Object.fromEntries(Object.entries(y.carry || {}).filter(([k, n]) => ITEMS[k] && n > 0));
+  you.lastKind = ITEMS[y.lastKind] ? y.lastKind : Object.keys(you.carry)[0] || null;
+  spawnPlayer(look);
+  const px = inWorld(Number(y.x) || START.x), pz = inWorld(Number(y.z) || START.z);
+  playerGround = groundY(px, pz);
+  player.position.set(px, playerGround, pz);
+  player.rotation.y = Number(y.ry) || 0;
+  enterWorld();
+  tickStats(); // needs carry on while you're away
+  return true;
+}
+setInterval(() => { if (player || ui.mode === 'world') saveGame(); }, 5000);
+document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });
+window.addEventListener('pagehide', saveGame);
+
+if (!loadGame()) enterCreator();
 requestAnimationFrame(frame);
 </script>
 </body>
