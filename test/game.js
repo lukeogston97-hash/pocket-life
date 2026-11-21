@@ -2146,13 +2146,43 @@ function pickTarget(px, py) {
   if (gp) return { kind: 'ground', point: gp };
   return null;
 }
+// Walking needs a double tap (or double-click), so a stray tap doesn't send you off.
+// The first tap leaves a faint ring where you'd go; tap again near it, quickly, to walk.
+const DOUBLE_MS = 420, DOUBLE_PX = 45;
+let firstTap = null;
+const tapRing = new THREE.Mesh(new THREE.RingGeometry(0.22, 0.32, 28), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false }));
+tapRing.rotation.x = -Math.PI / 2;
+tapRing.visible = false;
+tapRing.renderOrder = 2;
+scene.add(tapRing);
+function showTapRing(p) {
+  tapRing.position.set(p.x, groundY(p.x, p.z) + 0.05, p.z);
+  tapRing.userData.age = 0;
+  tapRing.visible = true;
+}
+function fadeTapRing(dt) {
+  if (!tapRing.visible) return;
+  const age = (tapRing.userData.age += dt), life = DOUBLE_MS / 1000;
+  tapRing.material.opacity = 0.55 * Math.max(0, 1 - age / life);
+  tapRing.scale.setScalar(1 + age * 0.6);
+  if (age >= life) tapRing.visible = false;
+}
 function handleTap(px, py) {
   if (ui.mode !== 'world' || !player || you.dead || paused) return;
   const t = pickTarget(px, py);
   if (!t) return;
   if (t.kind === 'you') { showTag('You', headTop(), 2); return; }
   // a stick, stone, berry bush or the pond: open the menu of what you can do with it
-  if (t.kind === 'item' || t.kind === 'use') { openMenuAt(px, py, t); return; }
+  if (t.kind === 'item' || t.kind === 'use') { firstTap = null; openMenuAt(px, py, t); return; }
+  const now = performance.now();
+  if (!firstTap || now - firstTap.t > DOUBLE_MS || Math.hypot(px - firstTap.px, py - firstTap.py) > DOUBLE_PX) {
+    firstTap = { t: now, px, py };
+    const p = t.point || (t.hit && t.hit.point);
+    if (p) showTapRing(p);
+    return;
+  }
+  firstTap = null;
+  tapRing.visible = false;
   // anything else: walk there (after anything already queued)
   if (t.kind === 'shore') { walkFirst(shorePointToward(player.position)); return; }
   if (t.kind === 'thing') {
@@ -2568,6 +2598,7 @@ function frame() {
     if (!you.dead && !paused) updatePlayer(dt);
     if (!paused) keyCamera(dt);
     updateOthers(dt);
+    fadeTapRing(dt);
     sendMove();
     followPlayer(dt);
     controls.update();
@@ -2607,13 +2638,13 @@ function goOnline() {
   net.wanted = true;
   if (!SERVER || net.sock || !player) return;
   let sock;
-  try { sock = new WebSocket(`${SERVER}?world=${TEST_BUILD ? 'test' : 'live'}`); } catch (err) { return; }
+  try { sock = new WebSocket(`${SERVER}?world=live`); } catch (err) { return; }
   net.sock = sock;
   setNet('connecting');
   sock.onopen = () => {
     net.retry = 1000;
     net.last = null;
-    sock.send(JSON.stringify({ t: 'hello', name: you.look.name, look: you.look, x: player.position.x, z: player.position.z, ry: player.rotation.y, v: VERSION, b: DATA.build || 0 }));
+    sock.send(JSON.stringify({ t: 'hello', name: you.look.name, look: you.look, x: player.position.x, z: player.position.z, ry: player.rotation.y, v: VERSION, b: DATA.build || 0, link: TEST_BUILD ? 'test' : 'release' }));
   };
   sock.onmessage = (e) => {
     let m;
@@ -2762,7 +2793,7 @@ $('feedbackForm').addEventListener('submit', async (e) => {
     x: player ? Math.round(player.position.x) : null, z: player ? Math.round(player.position.z) : null, name: you.look ? you.look.name : '' };
   if (online()) { net.sock.send(JSON.stringify(note)); return; }
   try {
-    await fetch(`${HTTP_BASE}/feedback?world=${TEST_BUILD ? 'test' : 'live'}`, { method: 'POST', body: JSON.stringify(note), headers: { 'Content-Type': 'text/plain' } });
+    await fetch(`${HTTP_BASE}/feedback?world=live`, { method: 'POST', body: JSON.stringify(note), headers: { 'Content-Type': 'text/plain' } });
     showTag('Thanks for the feedback!', headTop(), 2.5);
   } catch (err) { showTag("Couldn't send it, try again later", headTop(), 2.5); }
 });

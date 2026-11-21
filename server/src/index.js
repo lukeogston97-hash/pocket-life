@@ -80,10 +80,13 @@ export class World extends DurableObject {
     const me = ws.deserializeAttachment() || {};
     const reply = (msg) => { try { ws.send(JSON.stringify(msg)); } catch (err) { /* gone */ } };
     if (m.t === 'hello') {
-      const rules = WORLDS[me.world || 'test'] || {};
-      if (rules.maintenance) { reply({ t: 'maintenance', text: clean(rules.message, 200) }); ws.close(1000, 'maintenance'); return; }
-      if (rules.minVersion && tooOld(m.v, m.b, rules.minVersion)) { reply({ t: 'update', min: rules.minVersion }); ws.close(1000, 'update'); return; }
-      Object.assign(me, { id: me.id || crypto.randomUUID().slice(0, 8), name: clean(m.name, 20), look: m.look && typeof m.look === 'object' ? m.look : {}, x: num(m.x), z: num(m.z), ry: num(m.ry), v: clean(m.v, 20) });
+      // one world for everyone; the test link gets in during maintenance so a new build can be tried first
+      const link = m.link === 'test' ? 'test' : 'release';
+      const rules = WORLDS;
+      const min = (rules.minVersion || {})[link];
+      if (rules.maintenance && link !== 'test') { reply({ t: 'maintenance', text: clean(rules.message, 200) }); ws.close(1000, 'maintenance'); return; }
+      if (min && tooOld(m.v, m.b, min)) { reply({ t: 'update', min }); ws.close(1000, 'update'); return; }
+      Object.assign(me, { id: me.id || crypto.randomUUID().slice(0, 8), name: clean(m.name, 20), look: m.look && typeof m.look === 'object' ? m.look : {}, x: num(m.x), z: num(m.z), ry: num(m.ry), v: clean(m.v, 20), link });
       ws.serializeAttachment(me);
       reply({ t: 'welcome', id: me.id, people: this.people(me.id), world: this.view(), needSeed: !this.world, count: this.people().length });
       this.send({ t: 'join', person: me }, me.id);
