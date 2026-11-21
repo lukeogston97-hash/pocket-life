@@ -1,6 +1,6 @@
 {
   "version": "0.0.9",
-  "build": 2,
+  "build": 3,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,
@@ -573,8 +573,9 @@
       "version": "0.0.9",
       "date": "2026-11-21",
       "notes": [
-        "Crafting: tap Craft at the top to see what you can make and what you still need. First up, a stone axe from 2 sticks and 3 stones.",
-        "Your stone axe shows in your hand, with a wear bar in your inventory (20 uses). Chopping comes next."
+        "Crafting: tap the hammer at the top to see what you can make and what you still need. First up, a stone axe from 2 sticks and 3 stones.",
+        "Your stone axe shows in your hand, with a wear bar in your inventory (20 uses). Chopping comes next.",
+        "A tidier screen: your info in a small card at the top, round Craft and Menu buttons, and one tray along the bottom for your needs, Say and Inventory."
       ]
     },
     {

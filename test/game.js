@@ -1517,6 +1517,7 @@ function drawNeeds() {
     const v = you.stats[s.id];
     s.view.fill.style.setProperty('--v', (v / 100).toFixed(3));
     s.view.warn.hidden = !(s.lowAt != null && v <= s.lowAt);
+    s.view.row.classList.toggle('low', !s.view.warn.hidden); // shown as a coloured label in the bottom tray
     s.view.row.setAttribute('aria-label', `${s.name} ${Math.round(v)} out of 100`);
   }
 }
