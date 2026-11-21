@@ -137,6 +137,25 @@
     </form>
   </div>
 
+  <div id="report" class="modal" hidden>
+    <form id="reportForm" class="modal-card" role="dialog" aria-modal="true" aria-labelledby="reportTitle">
+      <h2 id="reportTitle">Report</h2>
+      <p>What's the problem? What they said lately is sent with it.</p>
+      <div class="reason-list" role="group" aria-label="Reason">
+        <button type="button" class="seg-btn" data-reason="Bad language" aria-pressed="false">Bad language</button>
+        <button type="button" class="seg-btn" data-reason="Bullying" aria-pressed="false">Bullying</button>
+        <button type="button" class="seg-btn" data-reason="Cheating" aria-pressed="false">Cheating</button>
+        <button type="button" class="seg-btn" data-reason="Other" aria-pressed="false">Other</button>
+      </div>
+      <label for="reportNote" class="sr-only">Note</label>
+      <textarea id="reportNote" class="feedback-text" maxlength="500" rows="3" placeholder="Anything else? (optional)"></textarea>
+      <div class="modal-actions">
+        <button id="reportCancel" type="button" class="text-btn">Cancel</button>
+        <button id="reportSend" type="submit" class="action-btn" disabled>Send report</button>
+      </div>
+    </form>
+  </div>
+
   <div id="maint" class="modal" hidden>
     <div class="modal-card" role="alertdialog" aria-modal="true" aria-labelledby="maintTitle">
       <h2 id="maintTitle">Back soon</h2>

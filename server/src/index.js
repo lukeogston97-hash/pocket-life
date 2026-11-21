@@ -2,7 +2,8 @@
 // (things lying on the ground, berry bushes), passes everyone's moves and speech bubbles on,
 // and slowly tops up sticks and stones (a stick falls under a tree, a stone turns up by a boulder).
 import { DurableObject } from 'cloudflare:workers';
-import WORLDS from '../worlds.json'; // maintenance and minimum version for each world
+import WORLDS from '../worlds.json'; // maintenance and minimum version for each link
+import FILTER from '../words.json'; // the chat filter, copied from game-data.json by tools/worlds.py
 
 const CORS = { 'Access-Control-Allow-Origin': '*' };
 const WORLD_FORMAT = 1; // bump if the saved world's shape changes, and add an upgrade step in load()
@@ -17,7 +18,37 @@ function tooOld(v, b, min) {
   for (let i = 0; i < want.length; i++) { const a = have[i] || 0; if (a !== want[i]) return a < want[i]; }
   return false;
 }
-const FEEDBACK_KEEP = 300;
+const FEEDBACK_KEEP = 300, REPORTS_KEEP = 300;
+// Chat filter (the same code is in the game and on the server): bad words become stars, bad names are refused.
+const LEET = { 0: 'o', 1: 'i', 3: 'e', 4: 'a', 5: 's', 7: 't', 8: 'b', '@': 'a', $: 's', '!': 'i', '|': 'i', '+': 't' };
+const leet = (s) => s.toLowerCase().replace(/[0134578@$!|+]/g, (c) => LEET[c]);
+const ENDINGS = ['', 's', 'es', 'ed', 'ing', 'y', 'er', 'ers'];
+function badWord(token, F) {
+  const n = leet(token).replace(/[^a-z]/g, '');
+  if (!n) return false;
+  for (const f of new Set([n, n.replace(/(.)\1+/g, '$1')])) { // also with doubled letters squashed (fuuuck)
+    if ((F.anywhere || []).some((r) => f.includes(r))) return true;
+    if ((F.words || []).some((w) => ENDINGS.some((e) => f === w + e))) return true;
+  }
+  return false;
+}
+function starText(text, F) {
+  let out = String(text).replace(/\S+/g, (tok) => (badWord(tok, F) ? '*'.repeat(tok.length) : tok));
+  for (const p of F.phrases || []) {
+    const re = new RegExp(`\\b${p.split(/\s+/).map((w) => w.replace(/[^a-z]/gi, '')).join('[\\s\\W_]+')}\\b`, 'gi');
+    out = out.replace(re, (m) => m.replace(/\S/g, '*'));
+  }
+  return out;
+}
+const badName = (name, F) => String(name).split(/[\s._-]+/).some((t) => badWord(t, F))
+  || (F.anywhere || []).some((r) => leet(name).replace(/[^a-z]/g, '').includes(r)) || starText(name, F) !== String(name);
+// a short public tag for a phone, so mutes and reports stick to the same person across visits
+async function tagOf(pid) {
+  const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`pocket-life:${clean(pid, 40)}`)));
+  return [...bytes.slice(0, 6)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+// what others are told about a person (not what they've said lately)
+const pub = (p) => { const { said, world, ...rest } = p; return rest; };
 
 export class World extends DurableObject {
   constructor(ctx, env) {
@@ -54,7 +85,7 @@ export class World extends DurableObject {
     this.send({ t: 'count', n }, null);
   }
   people(except) {
-    return this.ctx.getWebSockets().map((ws) => ws.deserializeAttachment()).filter((p) => p && p.id && p.id !== except);
+    return this.ctx.getWebSockets().map((ws) => ws.deserializeAttachment()).filter((p) => p && p.id && p.id !== except).map(pub);
   }
   send(msg, except) {
     const text = JSON.stringify(msg);
@@ -86,23 +117,37 @@ export class World extends DurableObject {
       const min = (rules.minVersion || {})[link];
       if (rules.maintenance && link !== 'test') { reply({ t: 'maintenance', text: clean(rules.message, 200) }); ws.close(1000, 'maintenance'); return; }
       if (min && tooOld(m.v, m.b, min)) { reply({ t: 'update', min }); ws.close(1000, 'update'); return; }
-      Object.assign(me, { id: me.id || crypto.randomUUID().slice(0, 8), name: clean(m.name, 20), look: m.look && typeof m.look === 'object' ? m.look : {}, x: num(m.x), z: num(m.z), ry: num(m.ry), v: clean(m.v, 20), link });
+      const name = clean(m.name, 20).trim();
+      Object.assign(me, { id: me.id || crypto.randomUUID().slice(0, 8), who: await tagOf(m.pid || crypto.randomUUID()), name: !name || badName(name, FILTER) ? 'Someone' : name, said: me.said || [], look: m.look && typeof m.look === 'object' ? m.look : {}, x: num(m.x), z: num(m.z), ry: num(m.ry), v: clean(m.v, 20), link });
       ws.serializeAttachment(me);
       reply({ t: 'welcome', id: me.id, people: this.people(me.id), world: this.view(), needSeed: !this.world, count: this.people().length });
-      this.send({ t: 'join', person: me }, me.id);
+      this.send({ t: 'join', person: pub(me) }, me.id);
       this.sendCount();
       return;
     }
     if (!me.id) return;
     if (m.t === 'feedback') { await this.addFeedback(m, me.world); reply({ t: 'thanks' }); return; }
+    if (m.t === 'report') {
+      const them = this.ctx.getWebSockets().map((s) => s.deserializeAttachment()).find((p) => p && p.id === m.id);
+      if (!them) { reply({ t: 'reported', ok: false }); return; }
+      const list = (await this.ctx.storage.get('reports')) || [];
+      list.push({ at: new Date().toISOString(), by: { name: me.name, who: me.who }, about: { name: them.name, who: them.who, v: them.v },
+        reason: clean(m.reason, 30), note: clean(m.note, 500), said: them.said || [], x: num(them.x), z: num(them.z) });
+      await this.ctx.storage.put('reports', list.slice(-REPORTS_KEEP));
+      reply({ t: 'reported', ok: true });
+      return;
+    }
     const w = this.world;
     if (m.t === 'move') {
       Object.assign(me, { x: num(m.x), z: num(m.z), ry: num(m.ry), doing: clean(m.doing, 24) });
       ws.serializeAttachment(me);
       this.send({ t: 'move', id: me.id, x: me.x, z: me.z, ry: me.ry, doing: me.doing }, me.id);
     } else if (m.t === 'say') {
-      const text = clean(m.text, 80).trim();
-      if (text) this.send({ t: 'say', id: me.id, text }, null);
+      const text = starText(clean(m.text, 80).trim(), FILTER);
+      if (!text) return;
+      me.said = [...(me.said || []), [Date.now(), text]].slice(-8); // kept for reports
+      ws.serializeAttachment(me);
+      this.send({ t: 'say', id: me.id, text }, null);
     } else if (m.t === 'seed' && !w) {
       // the first player into a new world lays it out (everyone's game builds the same starting world)
       const items = (Array.isArray(m.items) ? m.items : []).slice(0, 3000).filter((it) => it && kindOk(it.kind));

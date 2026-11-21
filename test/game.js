@@ -673,17 +673,9 @@ function rock(x, z, s, label = 'Boulder', color) {
 bush(4.3, -1.9, 1.05); bush(5.9, 0.5, 0.9); bush(3.0, -4.2, 1.0); bush(-0.9, -4.9, 0.95); bush(6.6, -3.4, 0.85, false); bush(-3.2, 6.9, 0.8, false);
 rock(5.8, 4.7, 0.95); rock(6.7, 5.4, 0.55); rock(5.1, 5.6, 0.38, 'Rock');
 rock(-2.6, -3.9, 0.7); rock(-10.4, 2.1, 0.85); rock(-1.6, 6.6, 0.45, 'Rock'); rock(8.2, -1.2, 0.5, 'Rock');
-[[1.1, 4.0, 0.17], [1.42, 4.3, 0.13], [0.82, 4.42, 0.12]].forEach(([x, z, s]) => {
-  const m = new THREE.Mesh(flintGeo, mat(tint('#6b6a68', 0.02, 0.04, 0.03), { roughness: 0.55 }));
-  m.position.set(x, groundY(x, z) + s * 0.35, z);
-  m.scale.set(s, s * 0.75, s * 1.2);
-  m.rotation.set(rand(), rand() * 6, rand());
-  m.castShadow = m.receiveShadow = true;
-  m.userData.label = 'Flint';
-  scene.add(m);
-  drawAlong(drawnTogether.flint, m);
-  interactive.push(m);
-});
+// Three little flint stones used to sit here. They looked like stones you could pick up, so they're gone,
+// but their random numbers are still used up so the rest of the clearing stays exactly where it was.
+for (let i = 0; i < 3; i++) { tint('#6b6a68', 0.02, 0.04, 0.03); rand(); rand(); rand(); }
 const PEBBLE_COLOURS = ['#a9a397', '#9a948a', '#b5ae9f'];
 const pebbles = makeDetail(rockGeos[0], mat('#ffffff'), { cap: 500, near: 18, far: 28, shadow: true });
 for (let i = 0; i < 90; i++) {
@@ -888,11 +880,12 @@ function drawBerries(b) {
   }
   berries.instanceMatrix.needsUpdate = true;
 }
-for (const set of [...Object.values(far), drawnTogether.bushes, ...drawnTogether.rocks, drawnTogether.flint]) buildSet(set);
+for (const set of [...Object.values(far), drawnTogether.bushes, ...drawnTogether.rocks]) buildSet(set);
 for (const set of [...Object.values(near), wild.bush, ...wild.boulders, wild.rock, wild.stump, wild.stumpTop, wild.log, wild.logEnd]) {
   interactive.push(...buildSet(set));
 }
-const DETAILS = [tufts, flowers, pebbles];
+// pebbles are still laid out (so nothing else moves) but not drawn: they looked like stones you could pick up
+const DETAILS = [tufts, flowers];
 DETAILS.forEach(buildDetail);
 // grass, flowers and pebbles are drawn round where the camera looks, refilled once that has moved a few metres
 let detailAt = null;
@@ -2108,7 +2101,22 @@ function itemCloseTo(x, z, maxM) {
 }
 // What's under a tap or click. Something you can pick up or use wins over a tree or rock in front of it,
 // and a near miss only picks up a stick or stone when the tap didn't land on something else useful.
+// another person close to a tap on screen (their middle, about a metre up)
+function personNear(px, py, maxPx = 42) {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  let best = null, bd = maxPx;
+  for (const o of others.values()) {
+    tmp2.copy(o.mesh.position); tmp2.y += 0.9;
+    tmp2.project(camera);
+    if (tmp2.z > 1) continue;
+    const d = Math.hypot((tmp2.x * 0.5 + 0.5) * w - px, (-tmp2.y * 0.5 + 0.5) * h - py);
+    if (d < bd) { bd = d; best = o; }
+  }
+  return best;
+}
 function pickTarget(px, py) {
+  const someone = personNear(px, py);
+  if (someone) return { kind: 'person', person: someone, name: someone.title };
   ray.setFromCamera(ndc, camera);
   const groundHit = ray.intersectObject(terrain, false)[0];
   const limit = groundHit ? groundHit.distance + 0.6 : Infinity;
@@ -2173,7 +2181,7 @@ function handleTap(px, py) {
   if (!t) return;
   if (t.kind === 'you') { showTag('You', headTop(), 2); return; }
   // a stick, stone, berry bush or the pond: open the menu of what you can do with it
-  if (t.kind === 'item' || t.kind === 'use') { firstTap = null; openMenuAt(px, py, t); return; }
+  if (t.kind === 'item' || t.kind === 'use' || t.kind === 'person') { firstTap = null; openMenuAt(px, py, t); return; }
   const now = performance.now();
   if (!firstTap || now - firstTap.t > DOUBLE_MS || Math.hypot(px - firstTap.px, py - firstTap.py) > DOUBLE_PX) {
     firstTap = { t: now, px, py };
@@ -2205,6 +2213,16 @@ function handleTap(px, py) {
 // the small menu: Gather Sticks, Gather Stones, Harvest Berries
 function menuActions(t) {
   if (!t) return [];
+  if (t.kind === 'person') {
+    const o = t.person, isMuted = muted.has(o.who);
+    return [{ label: isMuted ? 'Unmute' : 'Mute', note: isMuted ? '' : 'Hide what they say', run: () => {
+        setMuted(o.who, !isMuted);
+        if (!isMuted && o.bubble) { removeLabel(o.bubble); o.bubble = null; }
+        showTag(isMuted ? `${o.title} unmuted` : `${o.title} muted`, headTop(), 2);
+      } },
+      { label: 'Report', run: () => openReport(o) },
+      { label: 'Walk here', run: () => walkFirst(V(o.mesh.position.x, 0, o.mesh.position.z)) }];
+  }
   if (t.kind === 'item') {
     const it = t.item;
     return [{ label: `Pick up ${ITEMS[it.kind].name}`, run: () => queueTask({ type: 'pickup', id: it.id }) },
@@ -2279,7 +2297,8 @@ document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape' || ui.mode !== 'world') return;
   e.preventDefault();
   if (maint.on) return;
-  if (!$('feedback').hidden) closeFeedback();
+  if (!$('report').hidden) closeReport();
+  else if (!$('feedback').hidden) closeFeedback();
   else if (!$('sayBox').hidden) closeSay();
   else if (!$('actMenu').hidden) closeMenu();
   else if (!$('confirm').hidden) $('confirm').hidden = true;
@@ -2515,7 +2534,10 @@ function enterWorld() {
 $('sheet').addEventListener('submit', (e) => {
   e.preventDefault();
   const name = (draft.name || '').trim().slice(0, 20);
-  if (!name) { $('nameErr').hidden = false; $('nameInput').focus(); return; }
+  if (!name || badName(name, FILTER)) {
+    $('nameErr').textContent = name ? 'Pick a different name.' : 'Give your person a name to start.';
+    $('nameErr').hidden = false; $('nameInput').focus(); return;
+  }
   $('nameInput').blur();
   you.lifeStart = Date.now();
   you.stats = freshStats();
@@ -2634,6 +2656,40 @@ function cleanLook(look) {
   l.name = String(l.name || 'Someone').slice(0, 20);
   return l;
 }
+// Chat filter (the same code is in the game and on the server): bad words become stars, bad names are refused.
+const LEET = { 0: 'o', 1: 'i', 3: 'e', 4: 'a', 5: 's', 7: 't', 8: 'b', '@': 'a', $: 's', '!': 'i', '|': 'i', '+': 't' };
+const leet = (s) => s.toLowerCase().replace(/[0134578@$!|+]/g, (c) => LEET[c]);
+const ENDINGS = ['', 's', 'es', 'ed', 'ing', 'y', 'er', 'ers'];
+function badWord(token, F) {
+  const n = leet(token).replace(/[^a-z]/g, '');
+  if (!n) return false;
+  for (const f of new Set([n, n.replace(/(.)\1+/g, '$1')])) { // also with doubled letters squashed (fuuuck)
+    if ((F.anywhere || []).some((r) => f.includes(r))) return true;
+    if ((F.words || []).some((w) => ENDINGS.some((e) => f === w + e))) return true;
+  }
+  return false;
+}
+function starText(text, F) {
+  let out = String(text).replace(/\S+/g, (tok) => (badWord(tok, F) ? '*'.repeat(tok.length) : tok));
+  for (const p of F.phrases || []) {
+    const re = new RegExp(`\\b${p.split(/\s+/).map((w) => w.replace(/[^a-z]/gi, '')).join('[\\s\\W_]+')}\\b`, 'gi');
+    out = out.replace(re, (m) => m.replace(/\S/g, '*'));
+  }
+  return out;
+}
+const badName = (name, F) => String(name).split(/[\s._-]+/).some((t) => badWord(t, F))
+  || (F.anywhere || []).some((r) => leet(name).replace(/[^a-z]/g, '').includes(r)) || starText(name, F) !== String(name);
+const FILTER = DATA.chatFilter || {};
+// a random id for this phone, so mutes and reports stick to the same person (others only see a scrambled tag)
+const PID_KEY = 'pocket-life:pid', MUTE_KEY = 'pocket-life:muted';
+let pid = '';
+try { pid = localStorage.getItem(PID_KEY) || ''; if (!pid) { pid = crypto.randomUUID(); localStorage.setItem(PID_KEY, pid); } } catch (err) { pid = crypto.randomUUID(); }
+let muted = new Set();
+try { muted = new Set(JSON.parse(localStorage.getItem(MUTE_KEY) || '[]')); } catch (err) { /* none */ }
+function setMuted(who, on) {
+  if (on) muted.add(who); else muted.delete(who);
+  try { localStorage.setItem(MUTE_KEY, JSON.stringify([...muted])); } catch (err) { /* full */ }
+}
 function goOnline() {
   net.wanted = true;
   if (!SERVER || net.sock || !player) return;
@@ -2644,7 +2700,7 @@ function goOnline() {
   sock.onopen = () => {
     net.retry = 1000;
     net.last = null;
-    sock.send(JSON.stringify({ t: 'hello', name: you.look.name, look: you.look, x: player.position.x, z: player.position.z, ry: player.rotation.y, v: VERSION, b: DATA.build || 0, link: TEST_BUILD ? 'test' : 'release' }));
+    sock.send(JSON.stringify({ t: 'hello', name: you.look.name, look: you.look, x: player.position.x, z: player.position.z, ry: player.rotation.y, v: VERSION, b: DATA.build || 0, link: TEST_BUILD ? 'test' : 'release', pid }));
   };
   sock.onmessage = (e) => {
     let m;
@@ -2653,6 +2709,7 @@ function goOnline() {
     else if (m.t === 'update') getUpdate(m.min);
     else if (m.t === 'maintenance') showMaintenance(m.text);
     else if (m.t === 'thanks') showTag('Thanks for the feedback!', headTop(), 2.5);
+    else if (m.t === 'reported') showTag(m.ok ? 'Thanks, your report was sent' : "They've left, so it couldn't be sent", headTop(), 2.5);
     else if (m.t === 'welcome') {
       net.myId = m.id;
       hideMaintenance();
@@ -2675,7 +2732,7 @@ function goOnline() {
     else if (m.t === 'move') { const o = others.get(m.id); if (o) Object.assign(o, { tx: m.x, tz: m.z, tr: m.ry }); }
     else if (m.t === 'say') {
       if (m.id === net.myId) { if (player) bubble(null, m.text); }
-      else if (others.has(m.id)) bubble(others.get(m.id), m.text);
+      else if (others.has(m.id) && !muted.has(others.get(m.id).who)) bubble(others.get(m.id), starText(m.text, FILTER));
     }
   };
   sock.onclose = () => {
@@ -2765,7 +2822,7 @@ function getUpdate(min) {
 }
 function showMaintenance(text) {
   maint.on = true;
-  closeFeedback(); closeSay(); closeMenu(); $('pause').hidden = true;
+  closeFeedback(); closeReport(); closeSay(); closeMenu(); $('pause').hidden = true;
   paused = true; // needs don't drain while the world is closed
   $('maintText').textContent = text || 'Pocket Life is being updated. It will be back in a few minutes.';
   $('maint').hidden = false;
@@ -2799,6 +2856,31 @@ $('feedbackForm').addEventListener('submit', async (e) => {
 });
 $('pauseFeedbackBtn').addEventListener('click', openFeedback);
 for (const b of document.querySelectorAll('[data-gfx]')) b.addEventListener('click', () => applyGraphics(b.dataset.gfx));
+// Report: pick a reason, add a note if you like. It goes to the server with what they said lately.
+let reporting = null;
+function openReport(o) {
+  reporting = o;
+  $('reportTitle').textContent = `Report ${o.title}`;
+  $('reportNote').value = '';
+  for (const b of document.querySelectorAll('[data-reason]')) b.setAttribute('aria-pressed', 'false');
+  $('reportSend').disabled = true;
+  $('report').hidden = false;
+}
+function closeReport() { $('report').hidden = true; reporting = null; $('reportNote').blur(); }
+for (const b of document.querySelectorAll('[data-reason]')) b.addEventListener('click', () => {
+  for (const x of document.querySelectorAll('[data-reason]')) x.setAttribute('aria-pressed', String(x === b));
+  $('reportSend').disabled = false;
+});
+$('reportCancel').addEventListener('click', closeReport);
+$('reportForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const pick = document.querySelector('[data-reason][aria-pressed="true"]');
+  const o = reporting;
+  closeReport();
+  if (!o || !pick) return;
+  if (!online()) { showTag("You're offline, so it couldn't be sent", headTop(), 2.5); return; }
+  net.sock.send(JSON.stringify({ t: 'report', id: o.id, reason: pick.dataset.reason, note: $('reportNote').value.trim().slice(0, 500) }));
+});
 function goOffline() {
   net.wanted = false;
   if (net.sock) { try { net.sock.close(); } catch (err) { /* already closed */ } }
@@ -2815,7 +2897,7 @@ function addOther(p) {
   mesh.userData.label = p.name || 'Someone';
   scene.add(mesh);
   const name = addLabel({ cls: 'name-tag', text: p.name || 'Someone', anchor: mesh.position, offset: V(0, 2.0, 0), gap: 0 });
-  others.set(p.id, { mesh, tx: x, tz: z, tr: mesh.rotation.y, phase: 0, name, bubble: null });
+  others.set(p.id, { id: p.id, who: p.who || p.id, title: p.name || 'Someone', mesh, tx: x, tz: z, tr: mesh.rotation.y, phase: 0, name, bubble: null });
 }
 function removeOther(id) {
   const o = others.get(id);
@@ -2879,7 +2961,7 @@ $('sayBox').addEventListener('submit', (e) => {
   closeSay();
   if (!text) return;
   if (online()) net.sock.send(JSON.stringify({ t: 'say', text }));
-  else bubble(null, text); // offline: you still see it yourself
+  else bubble(null, starText(text, FILTER)); // offline: you still see it yourself
 });
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && ui.mode === 'world' && !paused && !typing(e.target) && $('sayBox').hidden) { e.preventDefault(); openSay(); }

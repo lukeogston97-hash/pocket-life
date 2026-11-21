@@ -11,6 +11,9 @@ data = json.load(open(os.path.join(root, 'test', 'game-data.json')))
 cmd = sys.argv[1] if len(sys.argv) > 1 else ''
 if cmd == 'test-build':
     w['minVersion']['test'] = f"{data['version']}.{data.get('build', 0)}"
+    # the server's copy of the chat filter
+    words = os.path.join(root, 'server', 'words.json')
+    json.dump(data.get('chatFilter', {}), open(words, 'w'), indent=2); open(words, 'a').write('\n')
 elif cmd == 'release':
     w['minVersion']['release'] = data['version']
     w.update(maintenance=False, message='')
