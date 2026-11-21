@@ -1,0 +1,13 @@
+{
+  "help": "Edit this file and push to change the worlds. maintenance true closes that world (everyone sees 'Back soon' with the message) until it's false again. minVersion sends older games to the newest version (add a 4th number for the test build, like 0.0.6.5). tools/release.sh and tools/maintenance.sh edit it for you.",
+  "test": {
+    "minVersion": "0.0.6.5",
+    "maintenance": false,
+    "message": ""
+  },
+  "live": {
+    "minVersion": "0.0.6",
+    "maintenance": false,
+    "message": ""
+  }
+}

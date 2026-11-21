@@ -2,12 +2,22 @@
 // (things lying on the ground, berry bushes), passes everyone's moves and speech bubbles on,
 // and slowly tops up sticks and stones (a stick falls under a tree, a stone turns up by a boulder).
 import { DurableObject } from 'cloudflare:workers';
+import WORLDS from '../worlds.json'; // maintenance and minimum version for each world
 
 const CORS = { 'Access-Control-Allow-Origin': '*' };
 const WORLD_FORMAT = 1; // bump if the saved world's shape changes, and add an upgrade step in load()
 const clean = (s, n) => String(s ?? '').replace(/[\u0000-\u001f]/g, '').slice(0, n);
 const num = (v) => (Number.isFinite(v) ? Math.round(v * 100) / 100 : 0);
 const kindOk = (k) => typeof k === 'string' && /^[a-z0-9-]{1,24}$/.test(k);
+// '0.0.6' with build 5 is [0,0,6,5]; a minVersion of '0.0.6' only checks the first three
+const parts = (v) => String(v || '0').split('.').map((n) => parseInt(n, 10) || 0);
+function tooOld(v, b, min) {
+  const have = parts(v), want = parts(min);
+  have[3] = Number(b) || 0;
+  for (let i = 0; i < want.length; i++) { const a = have[i] || 0; if (a !== want[i]) return a < want[i]; }
+  return false;
+}
+const FEEDBACK_KEEP = 300;
 
 export class World extends DurableObject {
   constructor(ctx, env) {
@@ -17,10 +27,31 @@ export class World extends DurableObject {
   }
   save() { return this.ctx.storage.put('world', this.world); }
   async fetch(request) {
+    const url = new URL(request.url);
+    const worldName = url.searchParams.get('world') === 'live' ? 'live' : 'test';
+    if (url.pathname === '/feedback') { // feedback sent while offline
+      let note = {};
+      try { note = JSON.parse(await request.text()); } catch (err) { /* ignore */ }
+      await this.addFeedback(note, worldName);
+      return new Response('ok', { headers: CORS });
+    }
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
     this.ctx.acceptWebSocket(server);
+    server.serializeAttachment({ world: worldName });
     return new Response(null, { status: 101, webSocket: client });
+  }
+  async addFeedback(note, worldName) {
+    const text = clean(note.text, 1000).trim();
+    if (!text) return;
+    const list = (await this.ctx.storage.get('feedback')) || [];
+    list.push({ at: new Date().toISOString(), world: worldName, name: clean(note.name, 20), v: clean(note.v, 30), device: clean(note.device, 200), x: num(note.x), z: num(note.z), text });
+    await this.ctx.storage.put('feedback', list.slice(-FEEDBACK_KEEP));
+  }
+  // tell everyone how many are online
+  sendCount(leaving) {
+    const n = this.people(leaving).length;
+    this.send({ t: 'count', n }, null);
   }
   people(except) {
     return this.ctx.getWebSockets().map((ws) => ws.deserializeAttachment()).filter((p) => p && p.id && p.id !== except);
@@ -49,13 +80,18 @@ export class World extends DurableObject {
     const me = ws.deserializeAttachment() || {};
     const reply = (msg) => { try { ws.send(JSON.stringify(msg)); } catch (err) { /* gone */ } };
     if (m.t === 'hello') {
+      const rules = WORLDS[me.world || 'test'] || {};
+      if (rules.maintenance) { reply({ t: 'maintenance', text: clean(rules.message, 200) }); ws.close(1000, 'maintenance'); return; }
+      if (rules.minVersion && tooOld(m.v, m.b, rules.minVersion)) { reply({ t: 'update', min: rules.minVersion }); ws.close(1000, 'update'); return; }
       Object.assign(me, { id: me.id || crypto.randomUUID().slice(0, 8), name: clean(m.name, 20), look: m.look && typeof m.look === 'object' ? m.look : {}, x: num(m.x), z: num(m.z), ry: num(m.ry), v: clean(m.v, 20) });
       ws.serializeAttachment(me);
-      reply({ t: 'welcome', id: me.id, people: this.people(me.id), world: this.view(), needSeed: !this.world });
+      reply({ t: 'welcome', id: me.id, people: this.people(me.id), world: this.view(), needSeed: !this.world, count: this.people().length });
       this.send({ t: 'join', person: me }, me.id);
+      this.sendCount();
       return;
     }
     if (!me.id) return;
+    if (m.t === 'feedback') { await this.addFeedback(m, me.world); reply({ t: 'thanks' }); return; }
     const w = this.world;
     if (m.t === 'move') {
       Object.assign(me, { x: num(m.x), z: num(m.z), ry: num(m.ry), doing: clean(m.doing, 24) });
@@ -138,7 +174,7 @@ export class World extends DurableObject {
   }
   webSocketClose(ws) {
     const me = ws.deserializeAttachment();
-    if (me && me.id) this.send({ t: 'leave', id: me.id }, me.id);
+    if (me && me.id) { this.send({ t: 'leave', id: me.id }, me.id); this.sendCount(me.id); }
   }
   webSocketError(ws) { this.webSocketClose(ws); }
 }
@@ -146,6 +182,10 @@ export class World extends DurableObject {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === '/feedback' && request.method === 'POST') {
+      const world = url.searchParams.get('world') === 'live' ? 'live' : 'test';
+      return env.WORLD.get(env.WORLD.idFromName(world)).fetch(request);
+    }
     if (url.pathname === '/world') {
       if (request.headers.get('Upgrade') !== 'websocket') return new Response('Expected a WebSocket', { status: 426, headers: CORS });
       const world = url.searchParams.get('world') === 'live' ? 'live' : 'test';

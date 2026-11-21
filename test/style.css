@@ -280,3 +280,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--moss); outl
 .say-box[hidden] { display: none; }
 .say-box input { flex: 1; min-width: 0; height: 44px; padding: 0 14px; border: 0; border-radius: 999px; background: #fff; font: 600 16px var(--font-ui); color: var(--ink); }
 .is-creating .say-box { display: none; }
+
+/* online dot, graphics choice, feedback */
+.net-line { display: flex; align-items: center; gap: 5px; }
+.net-dot { width: 8px; height: 8px; border-radius: 50%; background: #9a9a8a; }
+.net-line[data-state="online"] .net-dot { background: #4f9a5a; }
+.net-line[data-state="connecting"] .net-dot { background: #d9973a; }
+.gfx-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 12px; }
+.gfx-row .seg-btn { min-height: 38px; }
+.feedback-text { width: 100%; margin: 0 0 12px; padding: 10px 12px; border: 1.5px solid rgba(44, 43, 33, 0.18); border-radius: 12px; font: 600 15px/1.35 var(--font-ui); color: var(--ink); resize: vertical; }
+.maint-note { opacity: 0.6; font-size: 13px; margin-top: 4px; }
+#maint { z-index: 60; }

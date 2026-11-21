@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Game Prototype</title>
+<title>Pocket Life</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&family=Patrick+Hand&display=swap" rel="stylesheet">
@@ -20,6 +20,7 @@
       <div class="name" id="hudName"></div>
       <div class="meta"><span id="hudAge">25</span> years old</div>
       <div class="meta" id="hudTime">9:00 am</div>
+      <div class="meta net-line" id="netLine" data-state="offline"><i class="net-dot" aria-hidden="true"></i><span id="netText">Offline</span></div>
     </div>
     <div class="top-btns">
       <button id="sayBtn" class="pill-btn" type="button" aria-controls="sayBox">Say</button>
@@ -111,7 +112,36 @@
         <button id="resumeBtn" type="button" class="action-btn">Resume</button>
         <button id="pauseBagBtn" type="button" class="small-btn">Inventory</button>
         <button id="pauseNewBtn" type="button" class="small-btn">New person</button>
+        <button id="pauseFeedbackBtn" type="button" class="small-btn">Send feedback</button>
       </div>
+      <div class="gfx-row"><span class="lbl">Graphics</span>
+        <div class="seg" role="group" aria-label="Graphics">
+          <button type="button" class="seg-btn" data-gfx="low">Low</button>
+          <button type="button" class="seg-btn" data-gfx="medium">Medium</button>
+          <button type="button" class="seg-btn" data-gfx="high">High</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="feedback" class="modal" hidden>
+    <form id="feedbackForm" class="modal-card" role="dialog" aria-modal="true" aria-labelledby="feedbackTitle">
+      <h2 id="feedbackTitle">Send feedback</h2>
+      <p>Found a bug or have an idea? Your version and device are sent with it.</p>
+      <label for="feedbackText" class="sr-only">Your feedback</label>
+      <textarea id="feedbackText" class="feedback-text" maxlength="1000" rows="5" placeholder="What happened, or what would make it better?"></textarea>
+      <div class="modal-actions">
+        <button id="feedbackCancel" type="button" class="text-btn">Cancel</button>
+        <button type="submit" class="action-btn">Send</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="maint" class="modal" hidden>
+    <div class="modal-card" role="alertdialog" aria-modal="true" aria-labelledby="maintTitle">
+      <h2 id="maintTitle">Back soon</h2>
+      <p id="maintText">Pocket Life is being updated. It will be back in a few minutes.</p>
+      <p class="maint-note">Your person is safe. This page checks again by itself.</p>
     </div>
   </div>
 

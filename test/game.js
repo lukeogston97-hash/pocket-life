@@ -79,7 +79,7 @@ const VERSION = String(DATA.version || '0.0.0');
 const TEST_BUILD = location.pathname.includes('/test/'); // the test copy, before it's released
 const VERSION_LABEL = TEST_BUILD ? `${VERSION} (test ${DATA.build || 1})` : VERSION;
 for (const el of document.querySelectorAll('.ver')) el.textContent = VERSION_LABEL;
-document.title = `Game Prototype v${VERSION_LABEL}`;
+document.title = `Pocket Life v${VERSION_LABEL}`;
 
 /* ---------- the land ---------- */
 // The world is a square, settings.worldSize metres across, with the clearing and pond in the middle.
@@ -340,7 +340,7 @@ function refillDetail(d, px, pz) {
   const { xs, zs, us, ms, cs, near, far, cap } = d;
   let n = 0;
   for (let i = 0; i < xs.length && n < cap; i++) {
-    const dx = xs[i] - px, dz = zs[i] - pz, r = near + (far - near) * us[i];
+    const dx = xs[i] - px, dz = zs[i] - pz, r = (near + (far - near) * us[i]) * detailScale;
     if (dx * dx + dz * dz > r * r) continue;
     for (let k = 0; k < 16; k++) M[n * 16 + k] = ms[i * 16 + k];
     C[n * 3] = cs[i * 3]; C[n * 3 + 1] = cs[i * 3 + 1]; C[n * 3 + 2] = cs[i * 3 + 2];
@@ -1644,8 +1644,35 @@ function followPlayer(dt) {
   camera.position.y += dy;
   camera.position.z += dz;
 }
-// If the phone is struggling, draw a little less sharp (a step at a time, never back up in one visit)
-const PIXEL_STEPS = [Math.min(window.devicePixelRatio || 1, 2), 1.5, 1.25, 1].filter((v, i, a) => i === 0 || v < a[0]);
+/* ---------- graphics: High, Medium or Low, chosen in the Menu and kept on this device ---------- */
+const GRAPHICS = {
+  high: { label: 'High', pixels: 2, shadows: 2048, detail: 1 },
+  medium: { label: 'Medium', pixels: 1.5, shadows: 1024, detail: 0.8 },
+  low: { label: 'Low', pixels: 1, shadows: 0, detail: 0.6 },
+};
+const GFX_KEY = 'pocket-life:graphics';
+let gfx = (() => { try { return localStorage.getItem(GFX_KEY); } catch (err) { return null; } })();
+if (!GRAPHICS[gfx]) gfx = matchMedia('(pointer: coarse)').matches ? 'medium' : 'high'; // phones start on Medium
+let detailScale = 1;
+function applyGraphics(level) {
+  gfx = level;
+  try { localStorage.setItem(GFX_KEY, level); } catch (err) { /* not kept */ }
+  const g = GRAPHICS[level];
+  PIXEL_STEPS = [Math.min(window.devicePixelRatio || 1, g.pixels), 1.5, 1.25, 1].filter((v, i, a) => i === 0 || v < a[0]);
+  speed.step = 0;
+  renderer.setPixelRatio(PIXEL_STEPS[0]);
+  sun.castShadow = g.shadows > 0;
+  if (g.shadows && sun.shadow.mapSize.x !== g.shadows) {
+    sun.shadow.mapSize.set(g.shadows, g.shadows);
+    if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
+  }
+  detailScale = g.detail;
+  detailAt = null; // redraw the grass at the new amount
+  resize();
+  for (const b of document.querySelectorAll('[data-gfx]')) b.setAttribute('aria-pressed', String(b.dataset.gfx === level));
+}
+// If the phone is still struggling, draw a little less sharp (a step at a time, never back up in one visit)
+let PIXEL_STEPS = [Math.min(window.devicePixelRatio || 1, 2), 1.5, 1.25, 1].filter((v, i, a) => i === 0 || v < a[0]);
 const speed = { step: 0, time: 0, frames: 0, warm: 0 };
 function watchSpeed(raw) {
   if (document.hidden || raw > 0.5) return;
@@ -2221,12 +2248,14 @@ $('pause').addEventListener('click', (e) => { if (e.target === $('pause')) close
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape' || ui.mode !== 'world') return;
   e.preventDefault();
-  if (!$('sayBox').hidden) closeSay();
+  if (maint.on) return;
+  if (!$('feedback').hidden) closeFeedback();
+  else if (!$('sayBox').hidden) closeSay();
   else if (!$('actMenu').hidden) closeMenu();
   else if (!$('confirm').hidden) $('confirm').hidden = true;
   else if (!$('death').hidden) return;
   else if (bagOpen()) closeBag();
-  else if (paused) closePause();
+  else if (paused && !$('pause').hidden) closePause();
   else openPause();
 });
 
@@ -2580,16 +2609,23 @@ function goOnline() {
   let sock;
   try { sock = new WebSocket(`${SERVER}?world=${TEST_BUILD ? 'test' : 'live'}`); } catch (err) { return; }
   net.sock = sock;
+  setNet('connecting');
   sock.onopen = () => {
     net.retry = 1000;
     net.last = null;
-    sock.send(JSON.stringify({ t: 'hello', name: you.look.name, look: you.look, x: player.position.x, z: player.position.z, ry: player.rotation.y, v: VERSION }));
+    sock.send(JSON.stringify({ t: 'hello', name: you.look.name, look: you.look, x: player.position.x, z: player.position.z, ry: player.rotation.y, v: VERSION, b: DATA.build || 0 }));
   };
   sock.onmessage = (e) => {
     let m;
     try { m = JSON.parse(e.data); } catch (err) { return; }
-    if (m.t === 'welcome') {
+    if (m.t === 'count') setNet('online', m.n);
+    else if (m.t === 'update') getUpdate(m.min);
+    else if (m.t === 'maintenance') showMaintenance(m.text);
+    else if (m.t === 'thanks') showTag('Thanks for the feedback!', headTop(), 2.5);
+    else if (m.t === 'welcome') {
       net.myId = m.id;
+      hideMaintenance();
+      setNet('online', m.count);
       for (const p of m.people || []) addOther(p);
       if (m.world) useSharedWorld(m.world);
       else if (m.needSeed) seedWorld();
@@ -2614,9 +2650,10 @@ function goOnline() {
   sock.onclose = () => {
     if (net.sock === sock) net.sock = null;
     net.myId = null;
+    setNet(net.wanted ? 'connecting' : 'offline');
     shared.on = false;
     for (const id of [...others.keys()]) removeOther(id);
-    if (net.wanted) { setTimeout(goOnline, net.retry); net.retry = Math.min(30000, net.retry * 2); }
+    if (net.wanted) { setTimeout(goOnline, maint.on ? 20000 : net.retry); net.retry = Math.min(30000, net.retry * 2); }
   };
   sock.onerror = () => {};
 }
@@ -2677,6 +2714,60 @@ function placeItems(list) {
   if (online() && shared.on) net.sock.send(JSON.stringify({ t: 'drop', items: list }));
   else for (const it of list) addWorldItem(it.kind, it.x, it.z, it.rot);
 }
+// The server can close the world for maintenance, and send out-of-date games to the newest version.
+// The new version can take a minute or two to reach the link, so if a reload still gets the old one,
+// wait 20 seconds and try again rather than reloading over and over.
+const UPDATE_KEY = 'pocket-life:updating';
+const maint = { on: false };
+function getUpdate(min) {
+  saveGame();
+  let last = 0;
+  try { last = Number(sessionStorage.getItem(UPDATE_KEY)) || 0; } catch (err) { /* private mode */ }
+  const wait = Date.now() - last < 90000 ? 20000 : 0; // reloaded a moment ago and still old: give the link time
+  try { sessionStorage.setItem(UPDATE_KEY, String(Date.now() + wait)); } catch (err) { /* private mode */ }
+  if (wait) showMaintenance(`Getting the newest version (${min})…`);
+  setTimeout(() => {
+    const url = new URL(location.href);
+    url.searchParams.set('v', `${min}.${Date.now() % 100000}`);
+    location.replace(url.href);
+  }, wait);
+}
+function showMaintenance(text) {
+  maint.on = true;
+  closeFeedback(); closeSay(); closeMenu(); $('pause').hidden = true;
+  paused = true; // needs don't drain while the world is closed
+  $('maintText').textContent = text || 'Pocket Life is being updated. It will be back in a few minutes.';
+  $('maint').hidden = false;
+}
+function hideMaintenance() {
+  if (!maint.on) return;
+  maint.on = false; paused = false; $('maint').hidden = true;
+}
+// the dot by the time: green online (with how many), orange connecting, grey offline
+function setNet(state, n) {
+  $('netLine').dataset.state = state;
+  $('netText').textContent = state === 'online' ? `${n || 1} online` : state === 'connecting' ? 'Connecting…' : 'Offline';
+}
+// feedback from the Menu: goes to the server (and on to the admin page), with the version and device
+const HTTP_BASE = SERVER.replace(/^ws/, 'http').replace(/\/world$/, '');
+function openFeedback() { closePause(); $('feedback').hidden = false; $('feedbackText').value = ''; $('feedbackText').focus(); }
+function closeFeedback() { $('feedback').hidden = true; $('feedbackText').blur(); }
+$('feedbackCancel').addEventListener('click', closeFeedback);
+$('feedbackForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const text = $('feedbackText').value.trim().slice(0, 1000);
+  closeFeedback();
+  if (!text) return;
+  const note = { t: 'feedback', text, v: `${VERSION}${TEST_BUILD ? ` test ${DATA.build}` : ''}`, device: navigator.userAgent.slice(0, 200),
+    x: player ? Math.round(player.position.x) : null, z: player ? Math.round(player.position.z) : null, name: you.look ? you.look.name : '' };
+  if (online()) { net.sock.send(JSON.stringify(note)); return; }
+  try {
+    await fetch(`${HTTP_BASE}/feedback?world=${TEST_BUILD ? 'test' : 'live'}`, { method: 'POST', body: JSON.stringify(note), headers: { 'Content-Type': 'text/plain' } });
+    showTag('Thanks for the feedback!', headTop(), 2.5);
+  } catch (err) { showTag("Couldn't send it, try again later", headTop(), 2.5); }
+});
+$('pauseFeedbackBtn').addEventListener('click', openFeedback);
+for (const b of document.querySelectorAll('[data-gfx]')) b.addEventListener('click', () => applyGraphics(b.dataset.gfx));
 function goOffline() {
   net.wanted = false;
   if (net.sock) { try { net.sock.close(); } catch (err) { /* already closed */ } }
@@ -2819,5 +2910,7 @@ setInterval(() => { if (player || ui.mode === 'world') saveGame(); }, 5000);
 document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });
 window.addEventListener('pagehide', saveGame);
 
+applyGraphics(gfx);
+setNet('offline');
 if (!loadGame()) enterCreator();
 requestAnimationFrame(frame);
