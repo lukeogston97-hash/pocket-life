@@ -1,6 +1,6 @@
 {
-  "version": "0.0.9",
-  "build": 4,
+  "version": "0.1.0",
+  "build": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,
@@ -570,12 +570,14 @@
   },
   "devlog": [
     {
-      "version": "0.0.9",
+      "version": "0.1.0",
       "date": "2026-11-21",
       "notes": [
+        "New look everywhere: dark glass panels, small round buttons, and your needs as rings (tap them for numbers).",
         "Crafting: tap the hammer at the bottom to see what you can make and what you still need. First up, a stone axe from 2 sticks and 3 stones.",
         "Your stone axe shows in your hand, with a wear bar in your inventory (20 uses). Chopping comes next.",
-        "New look everywhere: dark glass panels, small round buttons, and your needs as rings (tap them for numbers). Say, Craft and Inventory sit at the bottom right."
+        "Chat: Say opens a chat bar at the bottom with the last few messages. It stays open until you tap the world.",
+        "Walking finds a way round rocks, bushes, trees and the pond, for you and people who are away."
       ]
     },
     {

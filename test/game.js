@@ -2336,6 +2336,7 @@ canvas.addEventListener('pointerdown', (e) => {
   lastPointer = e.pointerType;
   if (bagOpen()) closeBag();
   if (craftOpen()) closeCraft();
+  if (!$('chat').hidden) closeSay(); // tapping the world puts the chat away
   cancelPress();
   if (!e.isPrimary) { multi = true; return; }
   multi = false;
@@ -2626,7 +2627,7 @@ document.addEventListener('keydown', (e) => {
   else if (!$('adminPanel').hidden) closeAdminPanel();
   else if (!$('report').hidden) closeReport();
   else if (!$('feedback').hidden) closeFeedback();
-  else if (!$('sayBox').hidden) closeSay();
+  else if (!$('chat').hidden) closeSay();
   else if (!$('actMenu').hidden) closeMenu();
   else if (!$('death').hidden) return;
   else if (craftOpen()) closeCraft();
@@ -3086,8 +3087,8 @@ function goOnline() {
     else if (m.t === 'leave') removeOther(m.id);
     else if (m.t === 'move') { const o = others.get(m.id); if (o) Object.assign(o, { tx: m.x, tz: m.z, tr: m.ry, speed: null }); }
     else if (m.t === 'say') {
-      if (m.id === net.myId) { if (player) bubble(null, m.text); }
-      else if (others.has(m.id) && !muted.has(others.get(m.id).who)) bubble(others.get(m.id), starText(m.text, FILTER));
+      if (m.id === net.myId) { if (player) { bubble(null, m.text); addChat(you.look.name, m.text, true); } }
+      else if (others.has(m.id) && !muted.has(others.get(m.id).who)) { const o = others.get(m.id); const t = starText(m.text, FILTER); bubble(o, t); addChat(o.title, t, false); }
     }
   };
   sock.onclose = () => {
@@ -3677,28 +3678,57 @@ function bubble(o, text) {
   const L = addLabel({ cls: 'bubble', text, anchor, offset: V(0, o ? 2.35 : 2.0, 0), ttl: 7, gap: 4 });
   if (o) o.bubble = L; else net.myBubble = L;
 }
+// Chat: the Say button opens a chat bar along the bottom (just above the keyboard), with the last few things
+// people said above it. Speech bubbles still show over everyone's heads.
+const chatLines = [];
+function addChat(name, text, mine) {
+  chatLines.push({ name, text, mine });
+  if (chatLines.length > 30) chatLines.shift();
+  if (!$('chat').hidden) drawChat();
+}
+function drawChat() {
+  $('chatLog').replaceChildren(...chatLines.slice(-6).map((l) => {
+    const li = document.createElement('li');
+    if (l.mine) li.className = 'mine';
+    const who = document.createElement('b');
+    who.textContent = l.name;
+    li.append(who, ` ${l.text}`);
+    return li;
+  }));
+}
+// keep the chat bar just above the phone's keyboard
+function placeChat() {
+  const vv = window.visualViewport;
+  const lift = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
+  $('chat').style.bottom = `calc(${Math.round(lift) + 10}px + env(safe-area-inset-bottom, 0px))`;
+}
+if (window.visualViewport) { visualViewport.addEventListener('resize', () => { if (!$('chat').hidden) placeChat(); }); visualViewport.addEventListener('scroll', () => { if (!$('chat').hidden) placeChat(); }); }
 function openSay() {
   if (ui.mode !== 'world' || !player || you.dead) return;
   closeMenu();
-  measureHud();
-  $('sayBox').hidden = false;
+  closeBag();
+  closeCraft();
+  drawChat();
+  $('chat').hidden = false;
+  app.classList.add('chatting');
+  placeChat();
   $('sayInput').value = '';
   $('sayInput').focus();
 }
-function closeSay() { $('sayBox').hidden = true; $('sayInput').blur(); }
-$('sayBtn').addEventListener('click', () => ($('sayBox').hidden ? openSay() : closeSay()));
+function closeSay() { $('chat').hidden = true; app.classList.remove('chatting'); $('sayInput').blur(); }
+$('sayBtn').addEventListener('click', () => ($('chat').hidden ? openSay() : closeSay()));
 $('sayBox').addEventListener('submit', (e) => {
   e.preventDefault();
   const raw = $('sayInput').value.trim();
-  closeSay();
-  if (/^\/admin\b/i.test(raw)) { adminCommand(raw.slice(6).trim()); return; } // never said out loud
+  $('sayInput').value = ''; // the chat stays open for the next line; tap the world or Escape to put it away
+  if (/^\/admin\b/i.test(raw)) { closeSay(); adminCommand(raw.slice(6).trim()); return; } // never said out loud
   const text = raw.slice(0, 80);
-  if (!text) return;
+  if (!text) { closeSay(); return; }
   if (online()) net.sock.send(JSON.stringify({ t: 'say', text }));
   else bubble(null, starText(text, FILTER)); // offline: you still see it yourself
 });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && ui.mode === 'world' && !paused && !typing(e.target) && $('sayBox').hidden) { e.preventDefault(); openSay(); }
+  if (e.key === 'Enter' && ui.mode === 'world' && !paused && !typing(e.target) && $('chat').hidden) { e.preventDefault(); openSay(); }
 });
 
 /* ---------- your person lives on the server now ----------

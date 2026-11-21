@@ -33,7 +33,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* the glass everything is made of */
-.glass, .tag3d, .name-tag, .bubble, .queue, .hint, .auto-chip, .joining, .announce, .act-menu, .say-box {
+.glass, .tag3d, .name-tag, .bubble, .queue, .hint, .auto-chip, .joining, .announce, .act-menu {
   background: var(--glass); color: var(--ink);
   border: 1px solid var(--line);
   -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
@@ -133,11 +133,21 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .act-more::after { content: "›"; color: var(--ink-faint); font-size: 17px; }
 .act-back { color: var(--ink-soft); }
 
-/* say box: just under the info at the top */
-.say-box { position: absolute; left: 10px; right: 10px; top: var(--below-hud, 90px); z-index: 30; max-width: 420px; margin: 0 auto; display: flex; gap: 6px; padding: 5px; border-radius: 999px; }
-.say-box[hidden] { display: none; }
-.say-box input { flex: 1; min-width: 0; height: 40px; padding: 0 14px; border: 0; border-radius: 999px; background: var(--hover); font: 600 16px var(--font-ui); color: var(--ink); }
+/* chat: a bar along the bottom (just above the keyboard) with the last few lines above it */
+.chat { position: absolute; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); z-index: 30; max-width: 520px; margin: 0 auto; display: grid; gap: 6px; }
+.chat[hidden] { display: none; }
+.chat-log { list-style: none; margin: 0; padding: 0 4px; display: grid; gap: 3px; justify-items: start; }
+.chat-log li { max-width: 100%; padding: 4px 10px; border-radius: 12px; background: var(--glass); color: var(--ink); font-size: 13px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere;
+  -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
+.chat-log li b { font-weight: 800; color: var(--accent); }
+.chat-log li.mine b { color: var(--ink-soft); }
+.say-box { display: flex; align-items: center; gap: 6px; padding: 4px 4px 4px 6px; border-radius: 22px; }
+.say-box input { flex: 1; min-width: 0; height: 38px; padding: 0 10px; border: 0; border-radius: 18px; background: none; font: 600 16px var(--font-ui); color: var(--ink); }
+.say-box input:focus, .say-box input:focus-visible { outline: none; }
 .say-box input::placeholder { color: var(--ink-faint); }
+.send-btn { flex: none; width: 36px; height: 36px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: var(--accent); color: var(--accent-ink); cursor: pointer; }
+.send-btn svg { width: 18px; height: 18px; }
+.chatting .hud-bottom, .chatting .queue, .chatting .hint { display: none; }
 
 /* sheets that slide up: inventory and craft */
 .bag { position: absolute; left: 0; right: 0; bottom: 0; z-index: 26; max-width: 520px; margin: 0 auto; max-height: 62%; overflow-y: auto;
@@ -270,4 +280,4 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 
 /* while making your person, nothing from playing shows */
 .is-creating .hud-top, .is-creating .hud-bottom, .is-creating #labels, .is-creating .mist-top, .is-creating .hint, .is-creating .bag,
-.is-creating .queue, .is-creating .act-menu, .is-creating .say-box, .is-creating .auto-chip { display: none; }
+.is-creating .queue, .is-creating .act-menu, .is-creating .chat, .is-creating .auto-chip { display: none; }

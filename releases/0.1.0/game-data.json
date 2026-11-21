@@ -1,0 +1,631 @@
+{
+  "version": "0.1.0",
+  "build": 1,
+  "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
+  "settings": {
+    "carryCapacity": 30,
+    "walkSpeed": 2.2,
+    "worldSize": 100,
+    "needsSpeed": 1,
+    "autoName": true,
+    "respawnMinutes": 10
+  },
+  "testNames": [
+    "Alex",
+    "Sam",
+    "Jordan",
+    "Riley",
+    "Casey",
+    "Jamie",
+    "Taylor",
+    "Morgan",
+    "Charlie",
+    "Quinn",
+    "Harper",
+    "Rowan",
+    "Ash",
+    "Billie",
+    "Kit",
+    "Robin"
+  ],
+  "defaultLook": {
+    "sex": "male",
+    "hair": "short",
+    "age": 25,
+    "skin": "tone3",
+    "build": "medium",
+    "hairColour": "darkbrown",
+    "tunic": "rust"
+  },
+  "stats": [
+    {
+      "id": "health",
+      "name": "Health",
+      "colour": "#c9584a",
+      "start": 100,
+      "perHour": 1,
+      "onlyWhenFine": true,
+      "deadAtZero": true,
+      "lowAt": 30,
+      "lowLabel": "Weak"
+    },
+    {
+      "id": "hunger",
+      "name": "Hunger",
+      "colour": "#d9973a",
+      "start": 75,
+      "perHour": -4.2,
+      "lowAt": 30,
+      "lowLabel": "Hungry",
+      "atZero": {
+        "health": -0.5
+      },
+      "fullLabel": "Not hungry"
+    },
+    {
+      "id": "thirst",
+      "name": "Thirst",
+      "colour": "#3f9db0",
+      "start": 65,
+      "perHour": -6.25,
+      "lowAt": 30,
+      "lowLabel": "Thirsty",
+      "atZero": {
+        "health": -2
+      },
+      "fullLabel": "Not thirsty"
+    }
+  ],
+  "items": {
+    "stick": {
+      "name": "Stick",
+      "plural": "Sticks",
+      "weight": 1,
+      "look": {
+        "shape": "rod",
+        "length": 0.62,
+        "thickness": 0.031,
+        "colour": "#8a6847",
+        "twig": true
+      },
+      "startInWorld": 60,
+      "startNear": 8
+    },
+    "stone": {
+      "name": "Stone",
+      "plural": "Stones",
+      "weight": 1,
+      "look": {
+        "shape": "rock",
+        "size": 0.13,
+        "colour": "#9d978b"
+      },
+      "startInWorld": 45,
+      "startNear": 6
+    },
+    "berry": {
+      "name": "Berry",
+      "plural": "Berries",
+      "weight": 0.1,
+      "look": {
+        "shape": "ball",
+        "size": 0.035,
+        "colour": "#c4483a"
+      },
+      "startInWorld": 0,
+      "eat": {
+        "hunger": 10
+      }
+    },
+    "stone-axe": {
+      "name": "Stone axe",
+      "plural": "Stone axes",
+      "weight": 2,
+      "look": {
+        "shape": "axe",
+        "length": 0.55,
+        "thickness": 0.025,
+        "colour": "#8a6847",
+        "head": "#8f8a80"
+      },
+      "tool": {
+        "uses": 20
+      },
+      "startInWorld": 0
+    }
+  },
+  "recipes": [
+    {
+      "id": "stone-axe",
+      "name": "Stone axe",
+      "needs": {
+        "stick": 2,
+        "stone": 3
+      },
+      "makes": {
+        "stone-axe": 1
+      },
+      "about": "Chops trees (coming next)"
+    }
+  ],
+  "sources": {
+    "pond": {
+      "name": "Pond",
+      "action": "Drink",
+      "verb": "Drinking",
+      "seconds": 2,
+      "gives": {
+        "thirst": 15
+      },
+      "pose": "kneel",
+      "water": true
+    },
+    "berryBush": {
+      "name": "Berry bush",
+      "action": "Harvest Berries",
+      "verb": "Picking a berry",
+      "seconds": 2,
+      "harvest": {
+        "berry": 1
+      },
+      "holds": 5,
+      "regrowHours": 4,
+      "pose": "pick"
+    }
+  },
+  "away": {
+    "wanderMin": 8,
+    "wanderMax": 25,
+    "strollSpeed": 1.2,
+    "eatBelow": 60,
+    "drinkBelow": 55,
+    "sleepAfterHours": 24,
+    "goneAfterDays": 7,
+    "graveHours": 24,
+    "idleMinutes": 3,
+    "near": "pond"
+  },
+  "berryBushes": {
+    "extra": 26,
+    "seed": 7331
+  },
+  "daylight": [
+    {
+      "hour": 0,
+      "sky": "#3f4a63",
+      "skyLight": "#8395be",
+      "groundLight": "#333f37",
+      "brightness": 1.15,
+      "sun": "#a9b8ea",
+      "sunStrength": 0.5,
+      "sunHeight": 55
+    },
+    {
+      "hour": 4.75,
+      "sky": "#3f4a63",
+      "skyLight": "#8395be",
+      "groundLight": "#333f37",
+      "brightness": 1.15,
+      "sun": "#a9b8ea",
+      "sunStrength": 0.5,
+      "sunHeight": 55
+    },
+    {
+      "hour": 6,
+      "sky": "#c9a99a",
+      "skyLight": "#d8c2b8",
+      "groundLight": "#5e6650",
+      "brightness": 1.45,
+      "sun": "#ffb98a",
+      "sunStrength": 1.1,
+      "sunHeight": 8
+    },
+    {
+      "hour": 7.25,
+      "sky": "#e6d6b6",
+      "skyLight": "#f4e8d0",
+      "groundLight": "#758453",
+      "brightness": 1.85,
+      "sun": "#ffe2b8",
+      "sunStrength": 2.0,
+      "sunHeight": 25
+    },
+    {
+      "hour": 9,
+      "sky": "#e3e0c8",
+      "skyLight": "#f4f2e1",
+      "groundLight": "#7b8857",
+      "brightness": 2.05,
+      "sun": "#fff0d4",
+      "sunStrength": 2.35,
+      "sunHeight": 52
+    },
+    {
+      "hour": 16.5,
+      "sky": "#e3e0c8",
+      "skyLight": "#f4f2e1",
+      "groundLight": "#7b8857",
+      "brightness": 2.05,
+      "sun": "#fff0d4",
+      "sunStrength": 2.35,
+      "sunHeight": 52
+    },
+    {
+      "hour": 18,
+      "sky": "#e6cfa8",
+      "skyLight": "#f2dcbc",
+      "groundLight": "#737c50",
+      "brightness": 1.8,
+      "sun": "#ffc98f",
+      "sunStrength": 1.9,
+      "sunHeight": 18
+    },
+    {
+      "hour": 19,
+      "sky": "#d8a58f",
+      "skyLight": "#e2b9a6",
+      "groundLight": "#5f6249",
+      "brightness": 1.45,
+      "sun": "#ff9e6e",
+      "sunStrength": 1.2,
+      "sunHeight": 6
+    },
+    {
+      "hour": 20.25,
+      "sky": "#4a5470",
+      "skyLight": "#8b9ac2",
+      "groundLight": "#36423a",
+      "brightness": 1.2,
+      "sun": "#aebcec",
+      "sunStrength": 0.55,
+      "sunHeight": 55
+    }
+  ],
+  "looks": {
+    "sex": [
+      {
+        "id": "male",
+        "label": "Male"
+      },
+      {
+        "id": "female",
+        "label": "Female"
+      }
+    ],
+    "skin": [
+      {
+        "id": "tone1",
+        "hex": "#f1d1b8",
+        "label": "Skin tone 1"
+      },
+      {
+        "id": "tone2",
+        "hex": "#e2b496",
+        "label": "Skin tone 2"
+      },
+      {
+        "id": "tone3",
+        "hex": "#c8957a",
+        "label": "Skin tone 3"
+      },
+      {
+        "id": "tone4",
+        "hex": "#a8714f",
+        "label": "Skin tone 4"
+      },
+      {
+        "id": "tone5",
+        "hex": "#7d4f33",
+        "label": "Skin tone 5"
+      },
+      {
+        "id": "tone6",
+        "hex": "#553525",
+        "label": "Skin tone 6"
+      }
+    ],
+    "build": [
+      {
+        "id": "slim",
+        "label": "Slim",
+        "w": 0.87
+      },
+      {
+        "id": "medium",
+        "label": "Medium",
+        "w": 1
+      },
+      {
+        "id": "broad",
+        "label": "Broad",
+        "w": 1.15
+      }
+    ],
+    "hair": [
+      {
+        "id": "short",
+        "label": "Short"
+      },
+      {
+        "id": "long",
+        "label": "Long"
+      },
+      {
+        "id": "tied",
+        "label": "Tied up"
+      },
+      {
+        "id": "shaved",
+        "label": "Shaved"
+      }
+    ],
+    "hairColour": [
+      {
+        "id": "black",
+        "hex": "#1f1813",
+        "label": "Black hair"
+      },
+      {
+        "id": "darkbrown",
+        "hex": "#3a2a20",
+        "label": "Dark brown hair"
+      },
+      {
+        "id": "brown",
+        "hex": "#6b4a2e",
+        "label": "Brown hair"
+      },
+      {
+        "id": "fair",
+        "hex": "#b48751",
+        "label": "Fair hair"
+      },
+      {
+        "id": "red",
+        "hex": "#a2482c",
+        "label": "Red hair"
+      },
+      {
+        "id": "grey",
+        "hex": "#9b9690",
+        "label": "Grey hair"
+      }
+    ],
+    "tunic": [
+      {
+        "id": "rust",
+        "hex": "#a9694b",
+        "cord": "#5e4330",
+        "label": "Rust tunic"
+      },
+      {
+        "id": "moss",
+        "hex": "#6f8f4f",
+        "cord": "#41562f",
+        "label": "Moss tunic"
+      },
+      {
+        "id": "sand",
+        "hex": "#c9b27a",
+        "cord": "#7a6744",
+        "label": "Sand tunic"
+      },
+      {
+        "id": "slate",
+        "hex": "#6f8fa6",
+        "cord": "#4d6274",
+        "label": "Slate tunic"
+      }
+    ],
+    "age": {
+      "min": 18,
+      "max": 90,
+      "start": 25
+    }
+  },
+  "bodyShapes": {
+    "female": {
+      "height": 0.95,
+      "shoulder": 0.232,
+      "chest": 0.21,
+      "waist": 0.165,
+      "hem": 0.33,
+      "tunicLength": 0.56,
+      "torsoLength": 0.46,
+      "hipGap": 0.085,
+      "leg": [
+        0.068,
+        0.052
+      ],
+      "arm": [
+        0.047,
+        0.04
+      ],
+      "neck": 0.05,
+      "head": 0.97,
+      "armSpread": 0.13
+    },
+    "male": {
+      "height": 1,
+      "shoulder": 0.29,
+      "chest": 0.25,
+      "waist": 0.212,
+      "hem": 0.27,
+      "tunicLength": 0.36,
+      "torsoLength": 0.48,
+      "hipGap": 0.1,
+      "leg": [
+        0.08,
+        0.061
+      ],
+      "arm": [
+        0.056,
+        0.047
+      ],
+      "neck": 0.064,
+      "head": 1,
+      "armSpread": 0.15
+    }
+  },
+  "help": {
+    "settings": "carryCapacity is the most weight a person can carry. walkSpeed is in metres per second. worldSize is how wide the square world is in metres (100 makes it 100 m x 100 m, with the clearing in the middle); it can be 40 to 300, and the bigger it is the more your phone has to draw. needsSpeed is 1 for real time; set it higher to test, for example 60 makes an hour of hunger and thirst pass in a minute. autoName fills in a name from testNames on the Make your person screen (handy while testing; set it to false for the real game). respawnMinutes is how often (online) the world adds one stick and one stone, if there are fewer on the ground than startInWorld: sticks under trees, stones by boulders.",
+    "items": "To add an item, copy one of the items above, give it a new id (lower case, no spaces) and set its name, plural, weight and look. eat is what eating one gives (a berry gives hunger 2), which adds an Eat button in the inventory. Shapes: rod (length, thickness, colour, twig), rock (size, colour), ball (size, colour), box (width, height, depth, colour). startInWorld is how many lie around when the world starts (0 for things you can only make), and startNear is how many of those start close to where you appear; the rest are spread over the whole world. tool: {\"uses\": 20} makes it a tool that wears out after that many uses (shown as a wear bar in your inventory); a tool you carry shows in your hand. Shapes: rod, rock, ball, axe.",
+    "recipes": "To add a recipe, put it in the recipes list like this: {\"id\": \"stone-axe\", \"name\": \"Stone axe\", \"needs\": {\"stick\": 2, \"stone\": 3}, \"makes\": {\"stone-axe\": 1}}. Every item in needs and makes must exist in items. Recipes show up in your bag automatically. Crafting is checked by the server too (tools/worlds.py copies recipes to it). about: a short line shown on the recipe card (optional).",
+    "looks": "Each list here is a set of choices on the Make your person screen. Add an entry to add a choice.",
+    "stats": "Stats run in real time. Every stat goes from 0 to 100. perHour is how much it changes each real hour (hunger empties in about 8 hours and thirst in about 5). lowAt shows the warning. atZero is what happens to other stats each hour while this one is empty (no food: health drops over about 3 weeks; no water: over about 3 days). Health slowly heals when nothing is empty, and the person dies when health reaches 0. fullLabel is shown when you try to eat or drink but don't need to. Realistic since 0.0.7: hunger lasts about a day (a berry fills 10), thirst about 16 hours awake (a drink fills 15). With no water you die in about 3 days, with no food in about a week. The server uses the same numbers (copied by tools/worlds.py).",
+    "sources": "Things in the world you can use, matched by name (\"Pond\", \"Berry bush\"). action is the button in the tap menu, like \"Drink\". gives adds to stats each time, for example one drink at the pond gives 10 thirst. harvest is what one pick puts in your inventory (1 berry), holds is how many a full bush has (up to 15, shown on the bush), and regrowHours is how long a picked-bare bush takes to grow them all back; picked berries grow back one at a time. seconds is how long it takes. pose is kneel, pick or bend.",
+    "defaultLook": "How a new person starts on the Make your person screen.",
+    "daylight": "Day and night follow the player's real local time. Each entry is how the world looks at that hour, and the game blends between them. sky is the haze colour, skyLight and groundLight light things from above and below, brightness is how strong that is, sun is the sun or moon colour, sunStrength how strong, sunHeight its angle in degrees.",
+    "version": "version is the game version and build counts the test copies of that version (start build at 1 for each new version, count up for each test copy). Both only need changing here.",
+    "server": "server is the address of the online world. The test link joins the test world and the release joins the live world. Leave it empty to play offline.",
+    "chatFilter": "Words kept out of speech bubbles (shown as stars) and names (pick another). anywhere: caught even inside a longer word. words: only caught as a whole word (so 'class' is fine), plus endings like s, ed, ing. phrases: caught as a run of words. Numbers and symbols standing in for letters (sh1t, @ss) are caught too. The server gets a copy: tools/worlds.py test-build copies it to server/words.json. names: extra words only kept out of names, so nobody can pretend to be the admin.",
+    "away": "How a person looks after themselves while their player is away (the server does this). near: 'pond' keeps them strolling round the main pond (anything else: round where you left them). wanderMin and wanderMax: how far in metres from there they stroll. strollSpeed in metres per second. They eat what they carry when hunger is under eatBelow, go for berries if they have none, and drink at the pond when thirst is under drinkBelow. After sleepAfterHours away they lie down asleep (needs pause); after goneAfterDays asleep they leave the world and their things stay where they slept. A grave marks where someone died for graveHours. idleMinutes: if you're in the game but don't touch anything for this long, your person goes on autopilot and does the same, until you tap.",
+    "berryBushes": "extra: how many more berry bushes grow out in the wider world, besides the ones by the start. seed: their own random numbers, so they're in the same places on every phone (change it to move them all).",
+    "devlog": "What's new, shown in the Menu. Newest first: version, date and a short list of changes, written for players."
+  },
+  "chatFilter": {
+    "anywhere": [
+      "fuck",
+      "fuk",
+      "shit",
+      "cunt",
+      "bitch",
+      "nigger",
+      "nigga",
+      "faggot",
+      "retard",
+      "whore",
+      "slut",
+      "wank",
+      "twat",
+      "bollock",
+      "dickhead",
+      "motherf",
+      "pussy",
+      "asshole",
+      "arsehole",
+      "bastard",
+      "boong",
+      "wetback",
+      "dildo",
+      "jizz",
+      "porn",
+      "hitler"
+    ],
+    "words": [
+      "ass",
+      "arse",
+      "dick",
+      "cock",
+      "cum",
+      "piss",
+      "fag",
+      "rape",
+      "raping",
+      "rapist",
+      "spic",
+      "chink",
+      "kike",
+      "gook",
+      "coon",
+      "paki",
+      "dyke",
+      "poof",
+      "homo",
+      "abo",
+      "tranny",
+      "nazi",
+      "heil",
+      "kkk",
+      "tits",
+      "boob",
+      "nude",
+      "horny",
+      "kys",
+      "sex",
+      "penis",
+      "vagina",
+      "prick"
+    ],
+    "phrases": [
+      "kill yourself",
+      "kill urself",
+      "kill your self",
+      "go die"
+    ],
+    "names": {
+      "anywhere": [
+        "admin",
+        "moderator",
+        "official"
+      ],
+      "words": [
+        "mod",
+        "mods",
+        "dev",
+        "staff",
+        "owner"
+      ]
+    }
+  },
+  "devlog": [
+    {
+      "version": "0.1.0",
+      "date": "2026-11-21",
+      "notes": [
+        "New look everywhere: dark glass panels, small round buttons, and your needs as rings (tap them for numbers).",
+        "Crafting: tap the hammer at the bottom to see what you can make and what you still need. First up, a stone axe from 2 sticks and 3 stones.",
+        "Your stone axe shows in your hand, with a wear bar in your inventory (20 uses). Chopping comes next.",
+        "Chat: Say opens a chat bar at the bottom with the last few messages. It stays open until you tap the world.",
+        "Walking finds a way round rocks, bushes, trees and the pond, for you and people who are away."
+      ]
+    },
+    {
+      "version": "0.0.8",
+      "date": "2026-11-21",
+      "notes": [
+        "Close or switch away from the game and your person goes 'away' straight away and starts strolling about.",
+        "You can see what others are doing: bending to pick things up, picking berries, kneeling to drink (people who are away too).",
+        "Shorter menus: admin options sit behind one Admin item, a smaller Admin panel, and this list folds older updates.",
+        "Bug fixes: coming back puts you where your person strolled to.",
+        "Patch: the coloured flower dots on the ground are gone.",
+        "Patch: leave the game open without touching it for 3 minutes and your person goes on autopilot (eats, drinks, picks berries, strolls). Tap to take over.",
+        "Patch: people strolling while away walk round the pond, not through it.",
+        "Patch 3: people away (and on autopilot) stay within about 25 m of the pond.",
+        "Patch 3: name tags fade out behind the top and bottom bars, tap menus stay clear of them, and the Say box opens just under the top info.",
+        "Patch 4: the task list only shows while your person is doing something. Inventory and pop-ups sit above the bottom bars again.",
+        "Patch 5: walking finds a way round rocks, bushes, trees and the pond, so people don't get stuck (you, and people strolling while away)."
+      ]
+    },
+    {
+      "version": "0.0.7",
+      "date": "2026-11-21",
+      "notes": [
+        "Your person lives on the server and stays in the world while you're away.",
+        "Away: they stroll about, eat, pick berries and drink. After a day they sleep; after 7 days asleep they leave.",
+        "Welcome back card, 'away' and 'asleep' name tags, graves.",
+        "Realistic needs: hunger lasts a day, thirst about 16 hours. Berries fill 10, drinks fill 15.",
+        "26 more berry bushes. Tap the ground for Walk here. Say button at the bottom. What's new in the Menu.",
+        "Fresh start: everyone makes a new person."
+      ]
+    },
+    {
+      "version": "0.0.6",
+      "date": "2026-11-21",
+      "notes": [
+        "Online: one shared world, other people, speech bubbles.",
+        "Online count, Graphics setting, Send feedback.",
+        "Chat filter, Mute and Report.",
+        "Double-tap to walk."
+      ]
+    },
+    {
+      "version": "0.0.5",
+      "date": "2026-11-20",
+      "notes": [
+        "Berry bushes, tap menus, task list, pause menu.",
+        "Walking round rocks and trees. Saving."
+      ]
+    }
+  ]
+}

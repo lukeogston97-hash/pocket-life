@@ -970,7 +970,18 @@ function rodGeo(len, t, twig) {
   }
   return rodGeos.get(key);
 }
+const axeHeadGeo = jitterGeo(new THREE.BoxGeometry(0.075, 0.07, 0.19), 0.12, 9);
 const SHAPES = {
+  // a handle with a stone head lashed across one end
+  axe(look) {
+    const len = look.length ?? 0.55, t = look.thickness ?? 0.025;
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(rodGeo(len, t, false), matFor(look.colour)));
+    const head = new THREE.Mesh(axeHeadGeo, matFor(look.head || '#8f8a80'));
+    head.position.set(len / 2 - 0.05, 0.005, 0.045);
+    g.add(head);
+    return { model: g, rest: 0.035, hold: 'rod', hit: [len + 0.3, 0.3, 0.4] };
+  },
   rod(look) {
     const len = look.length ?? 0.6, t = look.thickness ?? 0.03;
     const g = new THREE.Group();
@@ -1014,6 +1025,7 @@ for (const [id, raw] of Object.entries(DATA.items || {})) {
     look,
     startInWorld: Math.max(0, Math.floor(raw.startInWorld || 0)),
     startNear: Math.max(0, Math.floor(raw.startNear ?? 4)),
+    uses: raw.tool && Number.isFinite(raw.tool.uses) ? Math.max(1, Math.floor(raw.tool.uses)) : 0, // a tool wears out after this many uses
   };
   ITEMS[id].startNear = Math.min(ITEMS[id].startNear, ITEMS[id].startInWorld);
 }
@@ -1325,7 +1337,7 @@ const START_ITEMS = world.items.map(({ kind, x, z, rot }) => ({ kind, x, z, rot 
 
 /* ---------- you: plain data, plus your 3D person ---------- */
 const START = { x: 0.6, z: 1.9 };
-const you = { look: null, carry: {}, lastKind: null, lifeStart: 0, stats: null, statsAt: 0, dead: false }; // carry: item id -> how many; stats: need -> 0 to 100
+const you = { look: null, carry: {}, wear: {}, lastKind: null, lifeStart: 0, stats: null, statsAt: 0, dead: false }; // carry: item id -> how many; stats: need -> 0 to 100
 const ui = { mode: 'creator' };
 let player = null, playerGround = 0, heldView = null;
 const ring = new THREE.Mesh(new THREE.RingGeometry(0.44, 0.54, 40).rotateX(-Math.PI / 2),
@@ -1353,10 +1365,12 @@ function takeFromCarry(kind, n = 1) {
   return taken;
 }
 // the thing you picked up last is shown in your hand
+const heldKind = () => Object.keys(you.carry).find((k) => ITEMS[k] && ITEMS[k].uses) || (you.carry[you.lastKind] ? you.lastKind : null);
 function drawHeld() {
   if (heldView) { if (heldView.parent) heldView.parent.remove(heldView); heldView = null; }
-  if (!player || !you.lastKind || !you.carry[you.lastKind]) return;
-  const { model, hold } = buildItem(you.lastKind);
+  const kind = player && heldKind();
+  if (!kind) return;
+  const { model, hold } = buildItem(kind);
   const wrap = new THREE.Group();
   if (hold === 'rod') { model.rotation.y = -Math.PI / 2; wrap.rotation.x = 0.25; wrap.position.set(0, -0.02, 0.12); }
   else wrap.position.set(0, -0.07, 0.03);
@@ -1462,9 +1476,11 @@ function drawWeightBar(bar, w) {
   bar.parentElement.classList.toggle('full', w >= SETTINGS.carryCapacity);
 }
 function drawCarry() {
+  if (typeof craftOpen === 'function' && craftOpen()) drawCraft();
   const w = carried();
   $('carryWeight').textContent = fmt(w);
   $('carryMax').textContent = fmt(SETTINGS.carryCapacity);
+  $('bagBtn').classList.toggle('full', w >= SETTINGS.carryCapacity);
   if (bagOpen()) drawBag();
 }
 let hintTimer = 0;
@@ -1474,34 +1490,42 @@ function hideHint() { $('hint').hidden = true; }
 /* ---------- needs: they change with real time, even while you're away ---------- */
 const clampStat = (v) => Math.max(0, Math.min(100, v));
 const freshStats = () => Object.fromEntries(STATS.map((s) => [s.id, clampStat(s.start)]));
+// Needs are small rings (how full) with an icon; tap them to see the names and numbers.
+const NEED_ICONS = {
+  heart: '<path d="M19.5 12.6 12 20l-7.5-7.4A5 5 0 1 1 12 6a5 5 0 1 1 7.5 6.6z"/>',
+  food: '<path d="M12 7c1-2 3-3 5-3"/><path d="M12 8c-2.5-1.5-7-1-7 4.5C5 17 8 21 10 21c1 0 1.5-.5 2-.5s1 .5 2 .5c2 0 5-4 5-8.5C19 7 14.5 6.5 12 8z"/>',
+  drop: '<path d="M12 3.5 6.5 11a6.5 6.5 0 1 0 11 0z"/>',
+  moon: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
+};
+const iconFor = (s) => NEED_ICONS[s.icon] || NEED_ICONS[{ health: 'heart', hunger: 'food', thirst: 'drop', rest: 'moon' }[s.id]] || NEED_ICONS.heart;
 function buildNeeds() {
   $('needs').replaceChildren(...STATS.map((s) => {
     const row = document.createElement('div');
     row.className = 'need';
-    row.setAttribute('role', 'img');
-    const name = document.createElement('span');
-    name.textContent = s.name;
-    const bar = document.createElement('span');
-    bar.className = 'bar';
-    const fill = document.createElement('i');
-    fill.style.setProperty('--c', s.colour);
-    bar.appendChild(fill);
+    row.style.setProperty('--c', s.colour);
+    const ring = document.createElement('span');
+    ring.className = 'ring';
+    ring.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${iconFor(s)}</svg>`;
+    const label = document.createElement('span');
+    label.className = 'need-label';
     const warn = document.createElement('span');
     warn.className = 'warn';
-    warn.textContent = s.lowLabel || 'Low';
     warn.hidden = true;
-    row.append(name, bar, warn);
-    s.view = { row, fill, warn };
+    row.append(ring, label, warn);
+    s.view = { row, fill: row, warn, label };
     return row;
   }));
 }
+$('needs').addEventListener('click', () => { $('needs').classList.toggle('open'); drawNeeds(); setTimeout(measureHud, 50); });
 buildNeeds();
 function drawNeeds() {
   if (!you.stats) return;
   for (const s of STATS) {
     const v = you.stats[s.id];
     s.view.fill.style.setProperty('--v', (v / 100).toFixed(3));
+    s.view.label.textContent = `${s.name} ${Math.round(v)}`;
     s.view.warn.hidden = !(s.lowAt != null && v <= s.lowAt);
+    s.view.row.classList.toggle('low', !s.view.warn.hidden); // shown as a coloured label in the bottom tray
     s.view.row.setAttribute('aria-label', `${s.name} ${Math.round(v)} out of 100`);
   }
 }
@@ -1615,6 +1639,9 @@ function make(r) {
   if (!canMake(r)) return;
   for (const [k, n] of Object.entries(r.needs)) takeFromCarry(k, n);
   for (const [k, n] of Object.entries(r.makes)) addToCarry(k, n);
+  if (online()) net.sock.send(JSON.stringify({ t: 'craft', id: r.id }));
+  startAction({ pose: 'kneel', seconds: 1.6 });
+  if (bagOpen()) drawBag();
   drawHeld();
   drawCarry();
   showGain(`Made ${r.name || ITEMS[Object.keys(r.makes)[0]].name}`);
@@ -1631,18 +1658,60 @@ function drawBag() {
     if (Object.keys(ITEMS[kind].eat || {}).length) buttons.push(smallButton('Eat', () => eatOne(kind), true));
     buttons.push(smallButton(n > 1 ? 'Drop 1' : 'Drop', () => dropItems(kind, 1)));
     if (n > 1) buttons.push(smallButton('Drop all', () => dropItems(kind, n)));
-    return bagRow(ITEMS[kind].look.colour, countLabel(kind, n), `Weight ${fmt(ITEMS[kind].weight * n)}`, buttons);
-  }));
-  $('makeSection').hidden = RECIPES.length === 0;
-  $('makeList').replaceChildren(...RECIPES.map((r) => {
-    const makes = Object.keys(r.makes)[0];
-    const needs = Object.entries(r.needs).map(([k, n]) => countLabel(k, n)).join(' + ');
-    const b = smallButton('Make', () => make(r), true);
-    b.disabled = !canMake(r);
-    return bagRow(ITEMS[makes].look.colour, r.name || ITEMS[makes].name, `Needs ${needs}`, [b]);
+    const it = ITEMS[kind];
+    const left = it.uses ? (you.wear[kind] ?? it.uses) : 0;
+    const row = bagRow(it.look.head || it.look.colour, countLabel(kind, n), `Weight ${fmt(it.weight * n)}${it.uses ? ` · ${left} ${left === 1 ? 'use' : 'uses'} left` : ''}`, buttons);
+    if (it.uses) { // a small wear bar for tools
+      const bar = document.createElement('span');
+      bar.className = 'wear';
+      bar.style.setProperty('--w', (left / it.uses).toFixed(2));
+      row.querySelector('.what').appendChild(bar);
+    }
+    return row;
   }));
 }
-function openBag() { drawBag(); $('bag').classList.add('open'); $('bagBtn').setAttribute('aria-expanded', 'true'); hideHint(); }
+/* ---------- crafting: its own sheet (the Craft button at the top) ----------
+   Each recipe is a card: what it makes, what it needs (with how many you have), and Make. */
+const craftOpen = () => $('craft').classList.contains('open');
+function drawCraft() {
+  $('craftList').replaceChildren(...RECIPES.map((r) => {
+    const makes = Object.keys(r.makes)[0], it = ITEMS[makes];
+    const li = document.createElement('li');
+    li.className = 'craft-card';
+    const head = document.createElement('div');
+    head.className = 'craft-head';
+    const dot = document.createElement('span');
+    dot.className = 'dot';
+    dot.style.background = it.look.head || it.look.colour || '#9a948a';
+    const title = document.createElement('strong');
+    title.textContent = r.name || it.name;
+    const info = document.createElement('small');
+    info.textContent = [`Weight ${fmt(it.weight)}`, it.uses ? `${it.uses} uses` : '', r.about || ''].filter(Boolean).join(' · ');
+    const words = document.createElement('span');
+    words.className = 'craft-words';
+    words.append(title, info);
+    head.append(dot, words);
+    const needs = document.createElement('div');
+    needs.className = 'craft-needs';
+    for (const [k, n] of Object.entries(r.needs)) {
+      const have = you.carry[k] || 0;
+      const chip = document.createElement('span');
+      chip.className = 'need-chip' + (have >= n ? ' ok' : '');
+      chip.textContent = `${ITEMS[k].plural} ${Math.min(have, n)}/${n}`;
+      needs.appendChild(chip);
+    }
+    const ok = canMake(r);
+    const b = smallButton(ok ? 'Make' : 'Need more', () => { make(r); drawCraft(); }, ok);
+    b.disabled = !ok;
+    li.append(head, needs, b);
+    return li;
+  }));
+}
+function openCraft() { closeBag(); drawCraft(); $('craft').classList.add('open'); $('craftBtn').setAttribute('aria-expanded', 'true'); hideHint(); }
+function closeCraft() { $('craft').classList.remove('open'); $('craftBtn').setAttribute('aria-expanded', 'false'); }
+$('craftBtn').addEventListener('click', () => (craftOpen() ? closeCraft() : openCraft()));
+$('craftClose').addEventListener('click', closeCraft);
+function openBag() { closeCraft(); drawBag(); $('bag').classList.add('open'); $('bagBtn').setAttribute('aria-expanded', 'true'); hideHint(); }
 function closeBag() { $('bag').classList.remove('open'); $('bagBtn').setAttribute('aria-expanded', 'false'); }
 $('bagBtn').addEventListener('click', () => (bagOpen() ? closeBag() : openBag()));
 $('bagClose').addEventListener('click', closeBag);
@@ -2160,6 +2229,7 @@ function doDrop(t) {
 function dropItems(kind, n) {
   if (ui.mode !== 'world' || !player || you.dead || !you.carry[kind]) return;
   closeBag();
+  closeCraft();
   const t = { type: 'drop', kind, n };
   if (action) { tasks.list.unshift(t); return; }
   if (tasks.current) tasks.list.unshift(tasks.current);
@@ -2265,6 +2335,8 @@ const cancelPress = () => { clearTimeout(pressTimer); pressTimer = null; };
 canvas.addEventListener('pointerdown', (e) => {
   lastPointer = e.pointerType;
   if (bagOpen()) closeBag();
+  if (craftOpen()) closeCraft();
+  if (!$('chat').hidden) closeSay(); // tapping the world puts the chat away
   cancelPress();
   if (!e.isPrimary) { multi = true; return; }
   multi = false;
@@ -2536,6 +2608,7 @@ function openPause() {
   if (ui.mode !== 'world' || !player || you.dead) return;
   closeMenu();
   closeBag();
+  closeCraft();
   keysDown.clear();
   paused = true;
   $('pause').hidden = false;
@@ -2554,9 +2627,10 @@ document.addEventListener('keydown', (e) => {
   else if (!$('adminPanel').hidden) closeAdminPanel();
   else if (!$('report').hidden) closeReport();
   else if (!$('feedback').hidden) closeFeedback();
-  else if (!$('sayBox').hidden) closeSay();
+  else if (!$('chat').hidden) closeSay();
   else if (!$('actMenu').hidden) closeMenu();
   else if (!$('death').hidden) return;
+  else if (craftOpen()) closeCraft();
   else if (bagOpen()) closeBag();
   else if (paused && !$('pause').hidden) closePause();
   else openPause();
@@ -2772,6 +2846,7 @@ function enterCreator() {
   $('creator').hidden = false;
   controls.enabled = false;
   closeBag();
+  closeCraft();
   hideHint();
   removeLabel(tagLabel);
   tagLabel = null;
@@ -2824,6 +2899,7 @@ function die(m) {
   closePause();
   stopQueue();
   closeBag();
+  closeCraft();
   hideHint();
   you.carry = {};
   you.lastKind = null;
@@ -3011,8 +3087,8 @@ function goOnline() {
     else if (m.t === 'leave') removeOther(m.id);
     else if (m.t === 'move') { const o = others.get(m.id); if (o) Object.assign(o, { tx: m.x, tz: m.z, tr: m.ry, speed: null }); }
     else if (m.t === 'say') {
-      if (m.id === net.myId) { if (player) bubble(null, m.text); }
-      else if (others.has(m.id) && !muted.has(others.get(m.id).who)) bubble(others.get(m.id), starText(m.text, FILTER));
+      if (m.id === net.myId) { if (player) { bubble(null, m.text); addChat(you.look.name, m.text, true); } }
+      else if (others.has(m.id) && !muted.has(others.get(m.id).who)) { const o = others.get(m.id); const t = starText(m.text, FILTER); bubble(o, t); addChat(o.title, t, false); }
     }
   };
   sock.onclose = () => {
@@ -3100,6 +3176,7 @@ function applyMe(m, spawn = false) {
   const carry = Object.fromEntries(Object.entries(m.carry || {}).filter(([k, n]) => ITEMS[k] && n > 0));
   for (const kind of shared.taking.values()) carry[kind] = (carry[kind] || 0) + 1;
   you.carry = carry;
+  you.wear = m.wear || {};
   you.lastKind = carry[you.lastKind] ? you.lastKind : (ITEMS[m.lastKind] && carry[m.lastKind] ? m.lastKind : Object.keys(carry)[0] || null);
   tickStats();
   drawNeeds();
@@ -3601,28 +3678,57 @@ function bubble(o, text) {
   const L = addLabel({ cls: 'bubble', text, anchor, offset: V(0, o ? 2.35 : 2.0, 0), ttl: 7, gap: 4 });
   if (o) o.bubble = L; else net.myBubble = L;
 }
+// Chat: the Say button opens a chat bar along the bottom (just above the keyboard), with the last few things
+// people said above it. Speech bubbles still show over everyone's heads.
+const chatLines = [];
+function addChat(name, text, mine) {
+  chatLines.push({ name, text, mine });
+  if (chatLines.length > 30) chatLines.shift();
+  if (!$('chat').hidden) drawChat();
+}
+function drawChat() {
+  $('chatLog').replaceChildren(...chatLines.slice(-6).map((l) => {
+    const li = document.createElement('li');
+    if (l.mine) li.className = 'mine';
+    const who = document.createElement('b');
+    who.textContent = l.name;
+    li.append(who, ` ${l.text}`);
+    return li;
+  }));
+}
+// keep the chat bar just above the phone's keyboard
+function placeChat() {
+  const vv = window.visualViewport;
+  const lift = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
+  $('chat').style.bottom = `calc(${Math.round(lift) + 10}px + env(safe-area-inset-bottom, 0px))`;
+}
+if (window.visualViewport) { visualViewport.addEventListener('resize', () => { if (!$('chat').hidden) placeChat(); }); visualViewport.addEventListener('scroll', () => { if (!$('chat').hidden) placeChat(); }); }
 function openSay() {
   if (ui.mode !== 'world' || !player || you.dead) return;
   closeMenu();
-  measureHud();
-  $('sayBox').hidden = false;
+  closeBag();
+  closeCraft();
+  drawChat();
+  $('chat').hidden = false;
+  app.classList.add('chatting');
+  placeChat();
   $('sayInput').value = '';
   $('sayInput').focus();
 }
-function closeSay() { $('sayBox').hidden = true; $('sayInput').blur(); }
-$('sayBtn').addEventListener('click', () => ($('sayBox').hidden ? openSay() : closeSay()));
+function closeSay() { $('chat').hidden = true; app.classList.remove('chatting'); $('sayInput').blur(); }
+$('sayBtn').addEventListener('click', () => ($('chat').hidden ? openSay() : closeSay()));
 $('sayBox').addEventListener('submit', (e) => {
   e.preventDefault();
   const raw = $('sayInput').value.trim();
-  closeSay();
-  if (/^\/admin\b/i.test(raw)) { adminCommand(raw.slice(6).trim()); return; } // never said out loud
+  $('sayInput').value = ''; // the chat stays open for the next line; tap the world or Escape to put it away
+  if (/^\/admin\b/i.test(raw)) { closeSay(); adminCommand(raw.slice(6).trim()); return; } // never said out loud
   const text = raw.slice(0, 80);
-  if (!text) return;
+  if (!text) { closeSay(); return; }
   if (online()) net.sock.send(JSON.stringify({ t: 'say', text }));
   else bubble(null, starText(text, FILTER)); // offline: you still see it yourself
 });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && ui.mode === 'world' && !paused && !typing(e.target) && $('sayBox').hidden) { e.preventDefault(); openSay(); }
+  if (e.key === 'Enter' && ui.mode === 'world' && !paused && !typing(e.target) && $('chat').hidden) { e.preventDefault(); openSay(); }
 });
 
 /* ---------- your person lives on the server now ----------

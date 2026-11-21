@@ -1,6 +1,6 @@
 {
-  "version": "0.0.8",
-  "build": 5,
+  "version": "0.1.0",
+  "build": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,
@@ -116,9 +116,38 @@
       "eat": {
         "hunger": 10
       }
+    },
+    "stone-axe": {
+      "name": "Stone axe",
+      "plural": "Stone axes",
+      "weight": 2,
+      "look": {
+        "shape": "axe",
+        "length": 0.55,
+        "thickness": 0.025,
+        "colour": "#8a6847",
+        "head": "#8f8a80"
+      },
+      "tool": {
+        "uses": 20
+      },
+      "startInWorld": 0
     }
   },
-  "recipes": [],
+  "recipes": [
+    {
+      "id": "stone-axe",
+      "name": "Stone axe",
+      "needs": {
+        "stick": 2,
+        "stone": 3
+      },
+      "makes": {
+        "stone-axe": 1
+      },
+      "about": "Chops trees (coming next)"
+    }
+  ],
   "sources": {
     "pond": {
       "name": "Pond",
@@ -440,8 +469,8 @@
   },
   "help": {
     "settings": "carryCapacity is the most weight a person can carry. walkSpeed is in metres per second. worldSize is how wide the square world is in metres (100 makes it 100 m x 100 m, with the clearing in the middle); it can be 40 to 300, and the bigger it is the more your phone has to draw. needsSpeed is 1 for real time; set it higher to test, for example 60 makes an hour of hunger and thirst pass in a minute. autoName fills in a name from testNames on the Make your person screen (handy while testing; set it to false for the real game). respawnMinutes is how often (online) the world adds one stick and one stone, if there are fewer on the ground than startInWorld: sticks under trees, stones by boulders.",
-    "items": "To add an item, copy one of the items above, give it a new id (lower case, no spaces) and set its name, plural, weight and look. eat is what eating one gives (a berry gives hunger 2), which adds an Eat button in the inventory. Shapes: rod (length, thickness, colour, twig), rock (size, colour), ball (size, colour), box (width, height, depth, colour). startInWorld is how many lie around when the world starts (0 for things you can only make), and startNear is how many of those start close to where you appear; the rest are spread over the whole world.",
-    "recipes": "To add a recipe, put it in the recipes list like this: {\"id\": \"stone-axe\", \"name\": \"Stone axe\", \"needs\": {\"stick\": 1, \"stone\": 1}, \"makes\": {\"stone-axe\": 1}}. Every item in needs and makes must exist in items. Recipes show up in your bag automatically.",
+    "items": "To add an item, copy one of the items above, give it a new id (lower case, no spaces) and set its name, plural, weight and look. eat is what eating one gives (a berry gives hunger 2), which adds an Eat button in the inventory. Shapes: rod (length, thickness, colour, twig), rock (size, colour), ball (size, colour), box (width, height, depth, colour). startInWorld is how many lie around when the world starts (0 for things you can only make), and startNear is how many of those start close to where you appear; the rest are spread over the whole world. tool: {\"uses\": 20} makes it a tool that wears out after that many uses (shown as a wear bar in your inventory); a tool you carry shows in your hand. Shapes: rod, rock, ball, axe.",
+    "recipes": "To add a recipe, put it in the recipes list like this: {\"id\": \"stone-axe\", \"name\": \"Stone axe\", \"needs\": {\"stick\": 2, \"stone\": 3}, \"makes\": {\"stone-axe\": 1}}. Every item in needs and makes must exist in items. Recipes show up in your bag automatically. Crafting is checked by the server too (tools/worlds.py copies recipes to it). about: a short line shown on the recipe card (optional).",
     "looks": "Each list here is a set of choices on the Make your person screen. Add an entry to add a choice.",
     "stats": "Stats run in real time. Every stat goes from 0 to 100. perHour is how much it changes each real hour (hunger empties in about 8 hours and thirst in about 5). lowAt shows the warning. atZero is what happens to other stats each hour while this one is empty (no food: health drops over about 3 weeks; no water: over about 3 days). Health slowly heals when nothing is empty, and the person dies when health reaches 0. fullLabel is shown when you try to eat or drink but don't need to. Realistic since 0.0.7: hunger lasts about a day (a berry fills 10), thirst about 16 hours awake (a drink fills 15). With no water you die in about 3 days, with no food in about a week. The server uses the same numbers (copied by tools/worlds.py).",
     "sources": "Things in the world you can use, matched by name (\"Pond\", \"Berry bush\"). action is the button in the tap menu, like \"Drink\". gives adds to stats each time, for example one drink at the pond gives 10 thirst. harvest is what one pick puts in your inventory (1 berry), holds is how many a full bush has (up to 15, shown on the bush), and regrowHours is how long a picked-bare bush takes to grow them all back; picked berries grow back one at a time. seconds is how long it takes. pose is kneel, pick or bend.",
@@ -540,6 +569,17 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.1.0",
+      "date": "2026-11-21",
+      "notes": [
+        "New look everywhere: dark glass panels, small round buttons, and your needs as rings (tap them for numbers).",
+        "Crafting: tap the hammer at the bottom to see what you can make and what you still need. First up, a stone axe from 2 sticks and 3 stones.",
+        "Your stone axe shows in your hand, with a wear bar in your inventory (20 uses). Chopping comes next.",
+        "Chat: Say opens a chat bar at the bottom with the last few messages. It stays open until you tap the world.",
+        "Walking finds a way round rocks, bushes, trees and the pond, for you and people who are away."
+      ]
+    },
     {
       "version": "0.0.8",
       "date": "2026-11-21",
