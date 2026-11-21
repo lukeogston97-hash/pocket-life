@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en" style="visibility: hidden">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Pocket Life</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+<div id="app" class="is-menu">
+  <canvas id="world" aria-label="Your person in a forest clearing next to a pond, with sticks lying on the grass"></canvas>
+  <div class="vignette"></div>
+  <div class="mist-top"></div>
+  <div id="labels" aria-live="polite"></div>
+
+  <header class="hud-top">
+    <div class="who glass">
+      <div class="who-line"><span class="name" id="hudName"></span><span class="age-tag">&nbsp;·&nbsp;<span id="hudAge">25</span></span></div>
+      <div class="meta"><span id="hudTime">9:00 am</span><span class="net-line" id="netLine" data-state="offline"><i class="net-dot" aria-hidden="true"></i><span id="netText">Offline</span></span></div>
+    </div>
+    <div class="top-btns">
+      <button id="menuBtn" class="icon-btn glass" type="button" aria-controls="pause" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    </div>
+  </header>
+
+  <div id="chat" class="chat" hidden>
+    <ol id="chatLog" class="chat-log" aria-live="polite"></ol>
+    <form id="sayBox" class="say-box glass" autocomplete="off">
+      <label for="sayInput" class="sr-only">Say something</label>
+      <input id="sayInput" type="text" maxlength="80" placeholder="Say something…" enterkeyhint="send">
+      <button type="submit" class="send-btn" aria-label="Send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
+    </form>
+  </div>
+
+  <p id="hint" class="hint" hidden>Double-tap the ground to walk. Tap anything to see what you can do.</p>
+
+  <div id="autoChip" class="auto-chip" hidden>On autopilot · tap to take over</div>
+
+  <div id="queue" class="queue" hidden aria-live="polite">
+    <div id="queueNowRow" class="q-now"><small>Now</small><span id="queueNow">Waiting for something to do</span></div>
+    <ol id="queueList" class="q-list" hidden></ol>
+    <button id="queueStop" class="small-btn q-stop" type="button" hidden>Stop all</button>
+  </div>
+
+  <div id="actMenu" class="act-menu" role="menu" aria-labelledby="actTitle" hidden>
+    <div id="actTitle" class="act-title"></div>
+    <div id="actList"></div>
+  </div>
+
+  <footer class="hud-bottom">
+    <div id="needs" class="needs glass" role="button" tabindex="0" aria-label="Your needs (tap for numbers)"></div>
+    <div class="bottom-btns">
+      <button id="sayBtn" class="icon-btn glass" type="button" aria-controls="sayBox" aria-label="Say"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.8A8 8 0 1 1 21 12z"/></svg></button>
+      <button id="craftBtn" class="icon-btn glass" type="button" aria-controls="craft" aria-label="Craft"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.4 10l-7.4 7.4a2.1 2.1 0 0 0 3 3l7.4-7.4"/><path d="M18.1 15.3l2.6-2.6a1 1 0 0 0 0-1.4l-7.6-7.6a1 1 0 0 0-1.4 0l-2.6 2.6a1 1 0 0 0 0 1.4l7.6 7.6a1 1 0 0 0 1.4 0z"/></svg></button>
+      <button id="bagBtn" class="icon-btn glass carry" type="button" aria-controls="bag" aria-expanded="false" aria-label="Inventory"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8h12l-1.2 11.2a2 2 0 0 1-2 1.8H9.2a2 2 0 0 1-2-1.8z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/></svg><span class="badge"><span id="carryWeight">0</span>/<span id="carryMax">30</span></span></button>
+    </div>
+  </footer>
+
+  <section id="bag" class="bag" aria-labelledby="bagTitle">
+    <div class="grab" aria-hidden="true"></div>
+    <div class="bag-head">
+      <h2 id="bagTitle">Inventory</h2>
+      <button id="bagClose" class="text-btn" type="button">Close</button>
+    </div>
+    <div class="bag-weight"><span>Weight <strong id="bagWeight">0 / 30</strong></span><span class="carry-bar wide" aria-hidden="true"><i id="bagBar"></i></span></div>
+    <ul id="bagList" class="bag-list"></ul>
+    <p id="bagEmpty" class="bag-empty">Nothing in your inventory yet. Tap a stick or stone to pick it up.</p>
+  </section>
+
+  <section id="craft" class="bag" aria-labelledby="craftTitle">
+    <div class="grab" aria-hidden="true"></div>
+    <div class="bag-head">
+      <h2 id="craftTitle">Craft</h2>
+      <button id="craftClose" class="text-btn" type="button">Close</button>
+    </div>
+    <p class="craft-note">Things you can make from what you carry.</p>
+    <ul id="craftList" class="craft-list"></ul>
+  </section>
+
+  <section id="creator" class="creator" aria-labelledby="creatorTitle" hidden>
+    <div class="creator-head" id="creatorHead">
+      <div class="title-row"><h1 id="creatorTitle">Make your person</h1><button id="creatorBack" type="button" class="creator-back">Back</button></div>
+      <p>A version of you, living a real-time life in your pocket.</p>
+    </div>
+    <div class="preview-space" id="previewSpace"><span class="drag-hint" aria-hidden="true">Drag to turn</span></div>
+    <form class="sheet" id="sheet" novalidate>
+      <div class="name-row">
+        <label for="nameInput" class="sr-only">Name</label>
+        <input id="nameInput" class="name-input" type="text" maxlength="20" autocomplete="off" placeholder="Your name" enterkeyhint="done">
+        <div class="seg" id="sexOpts" role="group" aria-label="Sex"></div>
+      </div>
+      <p id="nameErr" class="err" hidden>Give your person a name to start.</p>
+      <div class="row"><label class="lbl" for="ageInput">Age</label><div class="age"><input id="ageInput" type="range" min="18" max="90" step="1" value="25"><output id="ageOut" for="ageInput">25</output></div></div>
+      <div class="row"><span class="lbl" id="buildLbl">Build</span><div class="chips" id="buildOpts" role="group" aria-labelledby="buildLbl"></div></div>
+      <div class="row"><span class="lbl" id="skinLbl">Skin</span><div class="swatches" id="skinOpts" role="group" aria-labelledby="skinLbl"></div></div>
+      <div class="row"><span class="lbl" id="hairLbl">Hair</span><div class="chips" id="hairOpts" role="group" aria-labelledby="hairLbl"></div></div>
+      <div class="row"><span class="lbl" id="hairColLbl">Hair colour</span><div class="swatches" id="hairColourOpts" role="group" aria-labelledby="hairColLbl"></div></div>
+      <div class="row"><span class="lbl" id="tunicLbl">Tunic</span><div class="swatches" id="tunicOpts" role="group" aria-labelledby="tunicLbl"></div></div>
+      <button type="submit" class="start-btn">Start my life</button>
+    </form>
+  </section>
+
+  <section id="mainMenu" class="main-menu" aria-labelledby="menuTitle">
+    <div class="menu-head">
+      <h1 id="menuTitle" class="menu-title">Pocket Life</h1>
+      <p class="menu-tag">A real-time life in your pocket</p>
+    </div>
+    <div class="menu-card glass">
+      <button id="playBtn" type="button" class="action-btn play-btn"><span>Play</span><small id="playSub"></small></button>
+      <div class="menu-row">
+        <button id="menuNewsBtn" type="button" class="menu-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.4 5.6 6.1.5-4.6 4 1.4 5.9L12 16l-5.3 3 1.4-5.9-4.6-4 6.1-.5z"/></svg>What's new</button>
+        <button id="menuSettingsBtn" type="button" class="menu-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Settings</button>
+        <button id="menuFeedbackBtn" type="button" class="menu-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/></svg>Feedback</button>
+      </div>
+      <div class="menu-foot"><span class="net-line" id="menuNet" data-state="connecting"><i class="net-dot" aria-hidden="true"></i><span id="menuNetText">Connecting…</span></span><span class="menu-ver">v<span class="ver"></span></span></div>
+    </div>
+  </section>
+
+  <div id="settings" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <h2 id="settingsTitle">Settings</h2>
+      <div class="gfx-row"><span class="lbl">Graphics</span>
+        <div class="seg" role="group" aria-label="Graphics">
+          <button type="button" class="seg-btn" data-gfx="low">Low</button>
+          <button type="button" class="seg-btn" data-gfx="medium">Medium</button>
+          <button type="button" class="seg-btn" data-gfx="high">High</button>
+        </div>
+      </div>
+      <div class="modal-actions"><button id="settingsClose" type="button" class="action-btn">Done</button></div>
+    </div>
+  </div>
+
+  <div id="pause" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="pauseTitle">
+      <h2 id="pauseTitle">Paused</h2>
+      <p>The world keeps going while this is open.</p>
+      <div class="pause-list">
+        <button id="resumeBtn" type="button" class="action-btn">Resume</button>
+        <button id="exitBtn" type="button" class="small-btn">Exit</button>
+        <button id="pauseAdminBtn" type="button" class="small-btn" hidden>Admin</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="feedback" class="modal" hidden>
+    <form id="feedbackForm" class="modal-card" role="dialog" aria-modal="true" aria-labelledby="feedbackTitle">
+      <h2 id="feedbackTitle">Send feedback</h2>
+      <p>Found a bug or have an idea? Your version and device are sent with it.</p>
+      <label for="feedbackText" class="sr-only">Your feedback</label>
+      <textarea id="feedbackText" class="feedback-text" maxlength="1000" rows="5" placeholder="What happened, or what would make it better?"></textarea>
+      <div class="modal-actions">
+        <button id="feedbackCancel" type="button" class="text-btn">Cancel</button>
+        <button type="submit" class="action-btn">Send</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="report" class="modal" hidden>
+    <form id="reportForm" class="modal-card" role="dialog" aria-modal="true" aria-labelledby="reportTitle">
+      <h2 id="reportTitle">Report</h2>
+      <p>What's the problem? What they said lately is sent with it.</p>
+      <div class="reason-list" role="group" aria-label="Reason">
+        <button type="button" class="seg-btn" data-reason="Bad language" aria-pressed="false">Bad language</button>
+        <button type="button" class="seg-btn" data-reason="Bullying" aria-pressed="false">Bullying</button>
+        <button type="button" class="seg-btn" data-reason="Cheating" aria-pressed="false">Cheating</button>
+        <button type="button" class="seg-btn" data-reason="Other" aria-pressed="false">Other</button>
+      </div>
+      <label for="reportNote" class="sr-only">Note</label>
+      <textarea id="reportNote" class="feedback-text" maxlength="500" rows="3" placeholder="Anything else? (optional)"></textarea>
+      <div class="modal-actions">
+        <button id="reportCancel" type="button" class="text-btn">Cancel</button>
+        <button id="reportSend" type="submit" class="action-btn" disabled>Send report</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="adminPanel" class="modal" hidden>
+    <div class="modal-card admin-card" role="dialog" aria-modal="true" aria-labelledby="adminTitle">
+      <h2 id="adminTitle">Admin</h2>
+      <button id="adminListBtn" type="button" class="action-btn admin-wide">Feedback, reports, players</button>
+      <div class="admin-sec">
+        <div class="admin-row"><span class="lbl">Maintenance</span><span id="adminMaintState" class="admin-state">Off</span></div>
+        <div class="admin-inline"><input id="adminMaintText" class="admin-input" maxlength="200" placeholder="Message (optional)"><button id="adminMaintBtn" type="button" class="small-btn">Turn on</button></div>
+      </div>
+      <form id="adminAnnounceForm" class="admin-sec">
+        <span class="lbl">Message everyone</span>
+        <div class="admin-inline"><input id="adminAnnounceText" class="admin-input" maxlength="140" placeholder="Shows on everyone's screen"><button type="submit" class="small-btn">Send</button></div>
+      </form>
+      <div class="admin-grid">
+        <button id="adminSpeedBtn" type="button" class="small-btn">Speed up time</button>
+        <button id="adminTagBtn" type="button" class="small-btn">Admin tag: on</button>
+        <button id="adminResetBtn" type="button" class="small-btn admin-danger">Reset the world</button>
+        <button id="adminClose" type="button" class="small-btn">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="adminList" class="modal" hidden>
+    <div class="modal-card admin-card" role="dialog" aria-modal="true" aria-label="Feedback, reports, players">
+      <div class="seg admin-tabs" role="group">
+        <button type="button" class="seg-btn" data-admin-tab="feedback" data-label="Feedback">Feedback</button>
+        <button type="button" class="seg-btn" data-admin-tab="reports" data-label="Reports">Reports</button>
+        <button type="button" class="seg-btn" data-admin-tab="online" data-label="Online">Online</button>
+        <button type="button" class="seg-btn" data-admin-tab="banned" data-label="Banned">Banned</button>
+      </div>
+      <div id="adminListBody" class="admin-list"></div>
+      <div class="modal-actions"><button id="adminListClose" type="button" class="action-btn">Close</button></div>
+    </div>
+  </div>
+
+  <div id="announce" class="announce" hidden><span id="announceText"></span></div>
+
+  <div id="maint" class="modal" hidden>
+    <div class="modal-card" role="alertdialog" aria-modal="true" aria-labelledby="maintTitle">
+      <h2 id="maintTitle">Back soon</h2>
+      <p id="maintText">Pocket Life is being updated. It will be back in a few minutes.</p>
+      <p id="maintNote" class="maint-note">Your person is safe. This page checks again by itself.</p>
+    </div>
+  </div>
+
+  <div id="back" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="backTitle">
+      <h2 id="backTitle">Welcome back</h2>
+      <p id="backText"></p>
+      <div class="modal-actions"><button id="backBtn" type="button" class="action-btn">Carry on</button></div>
+    </div>
+  </div>
+
+  <div id="news" class="modal" hidden>
+    <div class="modal-card admin-card" role="dialog" aria-modal="true" aria-labelledby="newsTitle">
+      <h2 id="newsTitle">What's new</h2>
+      <div id="newsBody" class="admin-list news-list"></div>
+      <div class="modal-actions"><button id="newsClose" type="button" class="action-btn">Close</button></div>
+    </div>
+  </div>
+
+  <div id="joining" class="joining" hidden><span class="joining-dot" aria-hidden="true"></span><span id="joiningText">Joining the world…</span></div>
+
+  <div id="death" class="modal" hidden>
+    <div class="modal-card" role="alertdialog" aria-modal="true" aria-labelledby="deathTitle" aria-describedby="deathText">
+      <h2 id="deathTitle">Your person has died</h2>
+      <p id="deathText"></p>
+      <div class="modal-actions">
+        <button id="deathBtn" type="button" class="action-btn">Start a new person</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="noGL" class="nogl" hidden>This browser couldn't start 3D, so the world can't be shown here.</div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+// Loads the newest copy of everything. game-data.json is always fetched fresh, and its version
+// and build are added to the style and code addresses, so a phone never mixes old and new files.
+const failed = (msg) => { const b = document.getElementById('noGL'); b.textContent = msg; b.hidden = false; document.documentElement.style.visibility = ''; };
+try {
+  const res = await fetch('game-data.json', { cache: 'no-store' });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  window.GAME_DATA = await res.json();
+} catch (err) {
+  failed("The game's data couldn't be loaded. Check your connection, then reload the page.");
+  throw err;
+}
+const v = `${window.GAME_DATA.version}.${window.GAME_DATA.build || 0}`;
+await new Promise((done) => {
+  const css = document.createElement('link');
+  css.rel = 'stylesheet';
+  css.href = `style.css?v=${v}`;
+  css.onload = css.onerror = done;
+  document.head.appendChild(css);
+});
+document.documentElement.style.visibility = '';
+await import(`./game.js?v=${v}`);
+</script>
+</body>
+</html>

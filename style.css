@@ -2,7 +2,7 @@
    Dark glass (0.0.9, Luke's pick, like SEED): small see-through dark panels with white text and thin light edges,
    round icon buttons, as little on screen as possible while you play.
    Layers, bottom to top: the world, name tags (1), HUD (2), task list and tip (3), autopilot chip (20),
-   tap menu (25), inventory and craft sheets (26), say box (30), pop-ups (40), banners (55, 58), maintenance (60). */
+   tap menu (25), inventory and craft sheets (26), say box and main menu (30), pop-ups (40), banners (55, 58), maintenance (60). */
 :root {
   --haze: #e3e0c8;
   --glass: rgba(18, 22, 20, 0.56);
@@ -201,7 +201,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .modal-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
 .pause-list { display: grid; gap: 8px; }
 .pause-list button { width: 100%; }
-.gfx-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 12px; }
+.gfx-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 12px 0 16px; }
 .lbl { font-size: 11.5px; font-weight: 700; color: var(--ink-soft); line-height: 1.1; }
 .feedback-text, .admin-input { width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 12px; background: var(--hover); font: 600 15px/1.35 var(--font-ui); color: var(--ink); }
 .feedback-text { margin: 0 0 12px; resize: vertical; }
@@ -252,10 +252,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 @supports (height: 1dvh) { .creator { --row: clamp(34px, 5.3dvh, 42px); } }
 .creator[hidden] { display: none; }
 .creator-head { padding: calc(12px + env(safe-area-inset-top, 0px)) 16px 0; color: #2c2b21; }
-.title-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.title-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.creator-back { pointer-events: auto; flex: none; min-height: 36px; padding: 0 15px; border: 1px solid var(--line); border-radius: 999px; background: var(--glass); color: var(--ink); font: 700 13px/1 var(--font-ui); cursor: pointer;
+  -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
 .creator-head h1 { margin: 0; font: 800 24px/1.1 var(--font-ui); }
 .creator-head p { margin: 2px 0 0; font-size: 12.5px; font-weight: 600; color: #5c594a; }
-.version { font-size: 11px; font-weight: 700; color: #5c594a; white-space: nowrap; }
 .preview-space { position: relative; flex: 1; min-height: 90px; pointer-events: auto; touch-action: none; cursor: grab; }
 .drag-hint { position: absolute; right: 12px; bottom: 26px; font-size: 11px; font-weight: 700; color: var(--ink); background: var(--glass); padding: 3px 9px; border-radius: 999px; }
 .sheet { pointer-events: auto; width: 100%; max-width: 520px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 7px;
@@ -280,6 +281,28 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 
 .nogl { position: absolute; inset: 0; z-index: 70; display: grid; place-items: center; padding: 32px; text-align: center; font-weight: 700; color: #2c2b21; background: var(--haze); }
 .nogl[hidden] { display: none; }
+
+/* ---------- the main menu: the live world slowly circles the pond behind it ---------- */
+.main-menu { position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column; justify-content: space-between; align-items: center; gap: 16px;
+  padding: calc(34px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px)); pointer-events: none; }
+.main-menu[hidden] { display: none; }
+.menu-head { text-align: center; color: #fff; text-shadow: 0 2px 16px rgba(10, 14, 12, 0.5), 0 1px 3px rgba(10, 14, 12, 0.4); }
+.menu-title { margin: 0; font: 800 40px/1 var(--font-ui); letter-spacing: -0.5px; }
+.menu-tag { margin: 7px 0 0; font: 700 14px/1.2 var(--font-ui); }
+.menu-card { pointer-events: auto; width: 100%; max-width: 360px; padding: 12px; border-radius: 22px; display: grid; gap: 10px; }
+.play-btn { width: 100%; min-height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 18px; }
+.play-btn small { font: 700 12px/1 var(--font-ui); opacity: 0.7; }
+.play-btn small:empty { display: none; }
+.play-btn:disabled { opacity: 0.6; cursor: default; }
+.menu-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.menu-tile { min-height: 64px; display: grid; justify-items: center; align-content: center; gap: 6px; padding: 6px 4px; border: 1px solid var(--line); border-radius: 16px;
+  background: var(--hover); color: var(--ink); font: 700 12px/1 var(--font-ui); cursor: pointer; }
+.menu-tile svg { width: 20px; height: 20px; }
+.menu-tile:active, .play-btn:active:not(:disabled) { transform: scale(0.97); }
+.menu-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 0 4px; font-size: 11.5px; font-weight: 700; color: var(--ink-soft); }
+.menu-ver { color: var(--ink-faint); white-space: nowrap; }
+/* on the main menu only the world and the name tags show */
+.is-menu .hud-top, .is-menu .hud-bottom, .is-menu .hint, .is-menu .bag, .is-menu .queue, .is-menu .act-menu, .is-menu .chat, .is-menu .auto-chip { display: none; }
 
 /* while making your person, nothing from playing shows */
 .is-creating .hud-top, .is-creating .hud-bottom, .is-creating #labels, .is-creating .mist-top, .is-creating .hint, .is-creating .bag,

@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
-<div id="app" class="is-creating">
+<div id="app" class="is-menu">
   <canvas id="world" aria-label="Your person in a forest clearing next to a pond, with sticks lying on the grass"></canvas>
   <div class="vignette"></div>
   <div class="mist-top"></div>
@@ -79,9 +79,9 @@
     <ul id="craftList" class="craft-list"></ul>
   </section>
 
-  <section id="creator" class="creator" aria-labelledby="creatorTitle">
+  <section id="creator" class="creator" aria-labelledby="creatorTitle" hidden>
     <div class="creator-head" id="creatorHead">
-      <div class="title-row"><h1 id="creatorTitle">Make your person</h1><span class="version">v<span class="ver"></span></span></div>
+      <div class="title-row"><h1 id="creatorTitle">Make your person</h1><button id="creatorBack" type="button" class="creator-back">Back</button></div>
       <p>A version of you, living a real-time life in your pocket.</p>
     </div>
     <div class="preview-space" id="previewSpace"><span class="drag-hint" aria-hidden="true">Drag to turn</span></div>
@@ -102,22 +102,44 @@
     </form>
   </section>
 
-  <div id="pause" class="modal" hidden>
-    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="pauseTitle">
-      <h2 id="pauseTitle">Paused</h2>
-      <p>The world keeps going while this is open.</p>
-      <div class="pause-list">
-        <button id="resumeBtn" type="button" class="action-btn">Resume</button>
-        <button id="pauseNewsBtn" type="button" class="small-btn">What's new</button>
-        <button id="pauseFeedbackBtn" type="button" class="small-btn">Send feedback</button>
-        <button id="pauseAdminBtn" type="button" class="small-btn" hidden>Admin</button>
+  <section id="mainMenu" class="main-menu" aria-labelledby="menuTitle">
+    <div class="menu-head">
+      <h1 id="menuTitle" class="menu-title">Pocket Life</h1>
+      <p class="menu-tag">A real-time life in your pocket</p>
+    </div>
+    <div class="menu-card glass">
+      <button id="playBtn" type="button" class="action-btn play-btn"><span>Play</span><small id="playSub"></small></button>
+      <div class="menu-row">
+        <button id="menuNewsBtn" type="button" class="menu-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.4 5.6 6.1.5-4.6 4 1.4 5.9L12 16l-5.3 3 1.4-5.9-4.6-4 6.1-.5z"/></svg>What's new</button>
+        <button id="menuSettingsBtn" type="button" class="menu-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Settings</button>
+        <button id="menuFeedbackBtn" type="button" class="menu-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/></svg>Feedback</button>
       </div>
+      <div class="menu-foot"><span class="net-line" id="menuNet" data-state="connecting"><i class="net-dot" aria-hidden="true"></i><span id="menuNetText">Connecting…</span></span><span class="menu-ver">v<span class="ver"></span></span></div>
+    </div>
+  </section>
+
+  <div id="settings" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <h2 id="settingsTitle">Settings</h2>
       <div class="gfx-row"><span class="lbl">Graphics</span>
         <div class="seg" role="group" aria-label="Graphics">
           <button type="button" class="seg-btn" data-gfx="low">Low</button>
           <button type="button" class="seg-btn" data-gfx="medium">Medium</button>
           <button type="button" class="seg-btn" data-gfx="high">High</button>
         </div>
+      </div>
+      <div class="modal-actions"><button id="settingsClose" type="button" class="action-btn">Done</button></div>
+    </div>
+  </div>
+
+  <div id="pause" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="pauseTitle">
+      <h2 id="pauseTitle">Paused</h2>
+      <p>The world keeps going while this is open.</p>
+      <div class="pause-list">
+        <button id="resumeBtn" type="button" class="action-btn">Resume</button>
+        <button id="exitBtn" type="button" class="small-btn">Exit</button>
+        <button id="pauseAdminBtn" type="button" class="small-btn" hidden>Admin</button>
       </div>
     </div>
   </div>
