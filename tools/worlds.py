@@ -29,7 +29,7 @@ if cmd == 'test-build':
     path2 = os.path.join(root, 'server', 'game.json')
     json.dump(game, open(path2, 'w'), indent=2); open(path2, 'a').write('\n')
 elif cmd == 'release':
-    w['minVersion']['release'] = data['version']
+    w['minVersion']['release'] = f"{data['version']}.{data.get('build', 0)}"  # a patch (new build) moves everyone on too
 else:
     sys.exit(__doc__ or 'see the top of tools/worlds.py')
 json.dump(w, open(path, 'w'), indent=2); open(path, 'a').write('\n')

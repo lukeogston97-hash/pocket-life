@@ -84,7 +84,8 @@
     "drinkBelow": 55,
     "sleepAfterHours": 24,
     "goneAfterDays": 7,
-    "graveHours": 24
+    "graveHours": 24,
+    "idleMinutes": 3
   },
   "start": {
     "x": 0.6,

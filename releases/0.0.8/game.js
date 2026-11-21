@@ -907,8 +907,9 @@ for (const set of [...Object.values(far), drawnTogether.bushes, ...drawnTogether
 for (const set of [...Object.values(near), wild.bush, ...wild.boulders, wild.rock, wild.stump, wild.stumpTop, wild.log, wild.logEnd]) {
   interactive.push(...buildSet(set));
 }
-// pebbles are still laid out (so nothing else moves) but not drawn: they looked like stones you could pick up
-const DETAILS = [tufts, flowers];
+// pebbles and flowers are still laid out (so nothing else moves) but not drawn:
+// the pebbles looked like stones you could pick up, and the coloured flowers were distracting
+const DETAILS = [tufts];
 DETAILS.forEach(buildDetail);
 // grass, flowers and pebbles are drawn round where the camera looks, refilled once that has moved a few metres
 let detailAt = null;
@@ -1894,6 +1895,71 @@ function nextTask() {
   else if (t.type === 'walk') walkTo(V(t.x, 0, t.z), nextTask, nextTask);
   else nextTask();
 }
+/* ---------- autopilot: here but idle ----------
+   After away.idleMinutes with no taps and nothing queued, your person carries on by themselves, the same way they
+   do while you're away: eat what they carry, pick berries, drink at the pond, and stroll about near where you left off.
+   Touch anything and you're back in charge. */
+const AWAY = { idleMinutes: 3, wanderMin: 25, wanderMax: 50, eatBelow: 60, drinkBelow: 55, ...(DATA.away || {}) };
+const auto = { on: false, home: null, nextAt: 0, drinking: false };
+let lastInput = performance.now();
+function tookInput() {
+  lastInput = performance.now();
+  if (!auto.on) return;
+  auto.on = false;
+  stopQueue();
+  $('autoChip').hidden = true;
+}
+for (const ev of ['pointerdown', 'keydown', 'wheel']) document.addEventListener(ev, tookInput, true);
+function busy() { return !!(tasks.current || tasks.list.length || action || walk.target); }
+function autopilot() {
+  const now = performance.now();
+  if (ui.mode !== 'world' || !player || you.dead || paused || !online() || !you.stats) return;
+  if (!auto.on) {
+    if (busy() || now - lastInput < AWAY.idleMinutes * 60000) return;
+    auto.on = true;
+    auto.home = [player.position.x, player.position.z];
+    auto.nextAt = now;
+    $('autoChip').hidden = false;
+  }
+  if (busy() || now < auto.nextAt) return;
+  const st = you.stats;
+  // eat what you carry when hungry
+  for (let n = 0; n < 6 && st.hunger < AWAY.eatBelow; n++) {
+    const food = Object.keys(you.carry).find((k) => ITEMS[k] && ITEMS[k].eat);
+    if (!food) break;
+    eatOne(food);
+  }
+  const water = Object.values(SOURCES).find((src) => !harvests(src) && src.gives.thirst);
+  if (water && (st.thirst < AWAY.drinkBelow || (auto.drinking && st.thirst < 90))) {
+    auto.drinking = true;
+    queueTask({ type: 'use', source: water.id, water: true });
+    return;
+  }
+  auto.drinking = false;
+  const hasFood = Object.keys(you.carry).some((k) => ITEMS[k] && ITEMS[k].eat);
+  if (!hasFood && st.hunger < AWAY.eatBelow + 20) { // getting peckish with nothing to eat: go and pick some
+    const near = berryBushes.filter((b) => ripe(b)).sort((a, b) => a.position.distanceTo(player.position) - b.position.distanceTo(player.position))[0];
+    if (near) { queueTask(bushTask(near)); return; }
+  }
+  // rest a little, then stroll somewhere near where you left off
+  if (!auto.rested) { auto.rested = true; auto.nextAt = now + 15000 + Math.random() * 45000; return; }
+  auto.rested = false;
+  for (let t = 0; t < 40; t++) {
+    const a = Math.random() * Math.PI * 2, r = AWAY.wanderMin * 0.4 + Math.random() * (AWAY.wanderMax - AWAY.wanderMin * 0.4);
+    const x = auto.home[0] + Math.cos(a) * r, z = auto.home[1] + Math.sin(a) * r;
+    if (Math.abs(x) > WALK_LIMIT - 1 || Math.abs(z) > WALK_LIMIT - 1 || pondShape(x, z) < 1.3 || !roomAt(x, z, 0.5, 0.5)) continue;
+    walkFirst(V(x, 0, z));
+    return;
+  }
+  auto.nextAt = now + 10000;
+}
+// the task for picking a berry from a bush (the same as tapping it)
+function bushTask(b) {
+  const box = new THREE.Box3().setFromObject(b);
+  return { type: 'use', source: b.userData.source, bush: b.userData.bushId, x: (box.min.x + box.max.x) / 2, z: (box.min.z + box.max.z) / 2, top: box.max.y,
+    stop: Math.max(box.max.x - box.min.x, box.max.z - box.min.z) / 2 + 0.3 };
+}
+setInterval(autopilot, 2000);
 // a walk joins the end of the queue, so it never interrupts anything
 function walkFirst(p) {
   const t = { type: 'walk', x: p.x, z: p.z };
@@ -2296,7 +2362,7 @@ function menuActions(t) {
     const it = t.item;
     return [{ label: `Pick up ${ITEMS[it.kind].name}`, run: () => queueTask({ type: 'pickup', id: it.id }) },
       { label: 'Walk here', run: () => walkFirst(V(it.x, 0, it.z)) },
-      ...(admin.on ? [{ label: 'Remove (admin)', run: () => adminSend({ t: 'a.remove', id: it.id }) }] : [])];
+      ...adminMore(admin.on ? [{ label: 'Remove', run: () => adminSend({ t: 'a.remove', id: it.id }) }] : [])];
   }
   if (t.kind === 'use') {
     const src = SOURCES[t.task.source], task = t.task;
@@ -2879,8 +2945,11 @@ function welcome(m) {
       applyMe(m.me);
       if (m.away && Number.isFinite(m.me.x)) { // they may have strolled off while you were gone
         stopQueue();
-        playerGround = groundY(m.me.x, m.me.z);
-        player.position.set(inWorld(m.me.x), playerGround, inWorld(m.me.z));
+        let bx = inWorld(m.me.x), bz = inWorld(m.me.z);
+        if (heightAt(bx, bz) < WATER_Y + 0.1) { const sp = shorePointToward(V(bx + (bx - POND.x), 0, bz + (bz - POND.z))); bx = sp.x; bz = sp.z; }
+        [bx, bz] = outsideSolid(bx, bz);
+        playerGround = groundY(bx, bz);
+        player.position.set(bx, playerGround, bz);
         net.last = null;
       }
     }
@@ -3316,6 +3385,15 @@ function drawTag(o) {
     el.appendChild(sub);
   }
 }
+// walking along the pond's edge instead of into the water: sideways round its middle, then out onto dry ground
+function roundThePond(x, z, ux, uz, step) {
+  const rx = x - POND.x, rz = z - POND.z, rd = Math.hypot(rx, rz) || 1;
+  let tx = -rz / rd, tz = rx / rd;
+  if (tx * ux + tz * uz < 0) { tx = -tx; tz = -tz; }
+  let nx = x + tx * step, nz = z + tz * step;
+  for (let k = 0; k < 30 && heightAt(nx, nz) < WATER_Y + 0.1; k++) { nx += (rx / rd) * 0.1; nz += (rz / rd) * 0.1; }
+  return [nx, nz];
+}
 // sleepers lie on the ground
 function poseOther(o) {
   const lying = o.state === 'asleep';
@@ -3361,6 +3439,7 @@ function updateOthers(dt) {
         if (tx * ux + tz * uz < 0) { tx = -tx; tz = -tz; }
         [nx, nz] = outsideSolid(m.position.x + tx * step, m.position.z + tz * step);
       }
+      if (o.speed && heightAt(nx, nz) < WATER_Y + 0.1) [nx, nz] = roundThePond(m.position.x, m.position.z, ux, uz, step);
       m.position.x = nx;
       m.position.z = nz;
       m.rotation.y = lerpAngle(m.rotation.y, Math.atan2(dx, dz), Math.min(1, dt * 10));
