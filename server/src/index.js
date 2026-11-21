@@ -297,7 +297,7 @@ export class World extends DurableObject {
   /* ---------- the shared world as players see it ---------- */
   view() {
     const w = this.world;
-    return w ? { items: w.items, bushes: w.bushes, graves: w.graves || [], trees: w.trees || {} } : null;
+    return w ? { items: w.items, bushes: w.bushes, graves: w.graves || [], trees: w.trees || {}, oldStumps: w.oldStumps || {} } : null;
   }
 
   async fetch(request) {
@@ -444,11 +444,18 @@ export class World extends DurableObject {
       await this.save();
       this.send({ t: 'added', items: added }, null);
     } else if (m.t === 'chop') { // chopping a tree, digging out a stump, or chopping a log into sticks
-      const C = G.chopping || {}, rule = C[m.what], tool = C.tool;
+      const C = G.chopping || {}, rule = C[m.what === 'oldStump' ? 'stump' : m.what], tool = C.tool;
       if (!rule || (tool && !p.carry[tool])) { reply(this.mine(p)); return; }
       w.trees = w.trees || {};
       let at = [num(m.x), num(m.z)];
-      if (m.what === 'tree' || m.what === 'stump') {
+      if (m.what === 'oldStump') { // an old stump that was already in the world: dug out for good
+        const i = Math.floor(m.idx);
+        if (!(i >= 0 && i < 5000)) return;
+        w.oldStumps = w.oldStumps || {};
+        if (w.oldStumps[i]) { reply({ t: 'oldStump', idx: i }); return; }
+        w.oldStumps[i] = Date.now();
+        this.send({ t: 'oldStump', idx: i }, null);
+      } else if (m.what === 'tree' || m.what === 'stump') {
         const i = Math.floor(m.idx);
         if (!(i >= 0 && i < 5000)) return;
         const st = w.trees[i];

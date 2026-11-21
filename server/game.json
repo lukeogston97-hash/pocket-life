@@ -153,14 +153,14 @@
   "chopping": {
     "tool": "stone-axe",
     "tree": {
-      "seconds": 15,
+      "seconds": 10,
       "gives": {
         "log": 1,
         "stick": 2
       }
     },
     "stump": {
-      "seconds": 20,
+      "seconds": 10,
       "gives": {
         "log": 1
       }

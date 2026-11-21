@@ -1,6 +1,6 @@
 {
   "version": "0.1.2",
-  "build": 1,
+  "build": 2,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,
@@ -116,14 +116,14 @@
   "chopping": {
     "tool": "stone-axe",
     "tree": {
-      "seconds": 15,
+      "seconds": 10,
       "gives": {
         "log": 1,
         "stick": 2
       }
     },
     "stump": {
-      "seconds": 20,
+      "seconds": 10,
       "gives": {
         "log": 1
       }
@@ -650,8 +650,8 @@
       "version": "0.1.2",
       "date": "2026-11-21",
       "notes": [
-        "Chopping: with a stone axe, tap a tree and Chop tree (about 15 s). You get a log and 2 sticks, and a stump is left.",
-        "Stumps grow back into trees after 3 days, unless you Remove stump (about 20 s, 1 more log): then the tree is gone for good.",
+        "Chopping: with a stone axe, tap a tree and Chop tree (about 10 s). You get a log and 2 sticks, and a stump is left.",
+        "Stumps grow back into trees after 3 days, unless you Remove stump (about 10 s, 1 more log): then the tree is gone for good. The old stumps already in the world can be dug out the same way.",
         "Tap a log on the ground and Chop into sticks (about 8 s, 4 sticks). Logs weigh 10.",
         "Each chop wears your axe (20 uses), and it breaks when worn out. Chopping takes a fair bit of energy."
       ]

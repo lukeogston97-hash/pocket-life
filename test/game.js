@@ -245,6 +245,7 @@ const dummy = new THREE.Object3D();
 let DRY = false; // while true, put() works a copy out but doesn't keep it (so the clearing's layout never changes)
 let recording = null; // while a tree is being placed: [set, chunk, index] of every copy it's made of (so it can be chopped down)
 const trees = []; // every tree you can walk up to: { x, z, s, parts, state }
+const oldStumps = []; // the old stumps already in the world when it was made: { x, z, parts, proxy, gone }
 function IM(geo, material, n, shadow = true) {
   const m = new THREE.InstancedMesh(geo, material, n);
   m.count = 0;
@@ -722,9 +723,13 @@ for (let i = 0; i < 90; i++) {
   top.position.y = 0.39;
   g.add(body, top);
   g.userData.label = 'Tree stump';
+  g.userData.oldStump = oldStumps.length;
   scene.add(g);
+  recording = [];
   drawAlong(wild.stump, body);
   drawAlong(wild.stumpTop, top);
+  oldStumps.push({ x, z, parts: recording, proxy: g });
+  recording = null;
   addSpot(x, z, 0.5);
   interactive.push(g);
 }
@@ -831,8 +836,10 @@ withWorldRand(() => {
     const at = findRoom(14, 0.55 * k + 0.3, 0.5);
     if (!at) continue;
     const [x, z] = at, y = groundY(x, z);
+    if (!DRY) recording = [];
     put(wild.stump, x, y + 0.17 * k, z, 0, rand() * 6, 0, k, k, k, tint('#7a5c40', 0.01, 0.04, 0.03));
     put(wild.stumpTop, x, y + 0.39 * k, z, 0, 0, 0, k, k, k, tint('#cfb48a', 0.005, 0.03, 0.03));
+    if (recording) { oldStumps.push({ x, z, parts: recording }); recording = null; }
     addSpot(x, z, 0.55 * k);
   }
   // fallen logs, on fairly flat ground
@@ -926,7 +933,33 @@ for (const set of [...Object.values(far), drawnTogether.bushes, ...drawnTogether
 for (const set of [...Object.values(near), wild.bush, ...wild.boulders, wild.rock, wild.stump, wild.stumpTop, wild.log, wild.logEnd]) {
   interactive.push(...buildSet(set));
 }
-for (const t of trees) t.parts = t.parts.map(([m, key, idx]) => ({ ...(m.byKey.get(key) || {}), idx }));
+for (const t of [...trees, ...oldStumps]) t.parts = t.parts.map(([m, key, idx]) => ({ ...(m.byKey.get(key) || {}), idx }));
+// which tree or old stump a tapped copy belongs to (the drawn mesh and its copy number)
+const copyOwner = new Map();
+trees.forEach((t, i) => { for (const p of t.parts) for (const mesh of [p.full, p.simple]) if (mesh) copyOwner.set(`${mesh.uuid}:${p.idx}`, { kind: 'tree', i }); });
+oldStumps.forEach((t, i) => { for (const p of t.parts) if (p.full) copyOwner.set(`${p.full.uuid}:${p.idx}`, { kind: 'oldStump', i }); });
+// hide (or show again) the drawn copies a tree or stump is made of
+function showParts(t, show) {
+  for (const p of t.parts) for (const mesh of [p.full, p.simple]) {
+    if (!mesh) continue;
+    p.saved = p.saved || {};
+    if (!show) {
+      if (!p.saved[mesh.uuid]) { const m4 = new THREE.Matrix4(); mesh.getMatrixAt(p.idx, m4); p.saved[mesh.uuid] = m4; }
+      mesh.setMatrixAt(p.idx, NO_TREE);
+    } else if (p.saved[mesh.uuid]) mesh.setMatrixAt(p.idx, p.saved[mesh.uuid]);
+    mesh.instanceMatrix.needsUpdate = true;
+  }
+}
+// an old stump dug out: gone for good
+function removeOldStump(i) {
+  const t = oldStumps[i];
+  if (!t || t.gone) return;
+  t.gone = true;
+  showParts(t, false);
+  if (t.proxy) { scene.remove(t.proxy); const j = interactive.indexOf(t.proxy); if (j >= 0) interactive.splice(j, 1); }
+  removeSpotNear(t.x, t.z);
+  clearCellsNear(t.x, t.z, 2);
+}
 
 /* ---------- chopping trees down (0.1.2): a tree becomes a stump, then grows back, unless the stump is removed ---------- */
 const CHOP = DATA.chopping || {};
@@ -936,16 +969,7 @@ function setTreeState(i, state) {
   const t = trees[i];
   if (!t || t.state === state) return;
   const standing = state === 'tree';
-  for (const p of t.parts) for (const mesh of [p.full, p.simple]) {
-    if (!mesh) continue;
-    if (!p.saved) { p.saved = p.saved || {}; }
-    const key = mesh.uuid;
-    if (!standing) {
-      if (!p.saved[key]) { const m4 = new THREE.Matrix4(); mesh.getMatrixAt(p.idx, m4); p.saved[key] = m4; }
-      mesh.setMatrixAt(p.idx, NO_TREE);
-    } else if (p.saved[key]) mesh.setMatrixAt(p.idx, p.saved[key]);
-    mesh.instanceMatrix.needsUpdate = true;
-  }
+  showParts(t, standing);
   if (t.stump) { scene.remove(t.stump); const j = interactive.indexOf(t.stump); if (j >= 0) interactive.splice(j, 1); t.stump = null; }
   if (state === 'stump') { // a fresh stump where the tree was
     const g = new THREE.Group();
@@ -1502,7 +1526,7 @@ function drawHeld() {
   if (hold === 'none') return; // too big to hold in one hand (a log)
   const wrap = new THREE.Group();
   if (hold === 'axe') {
-    // Held at the end of the handle, the head up and in front, the blade facing forward. Worked out in the person's
+    // Held at the end of the handle. Worked out in the person's
     // own frame (forward, up), then turned into the hand's frame, so it looks right however the arm is built.
     const P = player.userData.parts;
     const saved = P.armR.rotation.clone();
@@ -1513,7 +1537,9 @@ function drawHeld() {
     P.armR.rotation.copy(saved);
     player.updateMatrixWorld(true);
     const handInMe = qMe.invert().multiply(qHand);
-    const along = V(0, 0.82, 0.57).normalize(), blade = V(0, -0.57, 0.82).normalize(), side = V().crossVectors(blade, along);
+    // the handle carries on down the line of the arm, head at the far end and the blade facing forward,
+    // so raising the arm lifts the axe overhead and swinging down brings the blade down onto the tree
+    const along = V(0, -1, 0.18).normalize(), blade = V(0, 0.18, 1).normalize(), side = V().crossVectors(blade, along);
     const want = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(along, side, blade));
     wrap.quaternion.copy(handInMe.invert().multiply(want));
     model.position.x = grip || 0.2;
@@ -2283,8 +2309,8 @@ function nextTask() {
       else walkTo(shore, () => doUse(t), nextTask);
     } else approach(t.x, t.z, t.stop, t.stop + 0.3, () => doUse(t));
   } else if (t.type === 'chop') {
-    if (t.what !== 'tree' && t.what !== 'stump' && !getItem(t.id)) { nextTask(); return; }
-    const stop = t.what === 'tree' ? 0.95 : t.what === 'stump' ? 0.8 : 0.6;
+    if (!['tree', 'stump', 'oldStump'].includes(t.what) && !getItem(t.id)) { nextTask(); return; }
+    const stop = t.what === 'tree' ? 0.95 : t.what === 'log' ? 0.6 : 0.85;
     approach(t.x, t.z, stop, stop + 0.35, () => doChop(t));
   } else if (t.type === 'drop') doDrop(t);
   else if (t.type === 'walk') walkTo(V(t.x, 0, t.z), nextTask, nextTask);
@@ -2461,11 +2487,12 @@ function eatOne(kind) {
 }
 // chopping: swing the axe for a while, then the server says what came of it
 function doChop(t) {
-  const rule = CHOP[t.what] || {};
+  const rule = CHOP[t.what === 'oldStump' ? 'stump' : t.what] || {};
+  if (t.what === 'oldStump' && oldStumps[t.idx] && oldStumps[t.idx].gone) { nextTask(); return; }
   if (CHOP.tool && !you.carry[CHOP.tool]) { showTag(`You need a ${ITEMS[CHOP.tool].name.toLowerCase()}`, headTop(), 2); nextTask(); return; }
   if ((t.what === 'tree' && trees[t.idx] && trees[t.idx].state !== 'tree') || (t.what === 'stump' && trees[t.idx] && trees[t.idx].state !== 'stump')) { nextTask(); return; }
   face(t.x, t.z);
-  showTag(t.what === 'tree' ? 'Chopping…' : t.what === 'stump' ? 'Digging out the stump…' : 'Chopping…', headTop(), 2, (rule.seconds || 10) + 0.3);
+  showTag(t.what === 'tree' ? 'Chopping…' : t.what === 'stump' || t.what === 'oldStump' ? 'Digging out the stump…' : 'Chopping…', headTop(), 2, (rule.seconds || 10) + 0.3);
   tagLabel.busy = true;
   startAction({ pose: 'chop', seconds: rule.seconds || 10, end: () => {
     spendEnergy('chop');
@@ -2523,7 +2550,7 @@ function taskName(t, now) {
     return harvests(src) ? `Harvest ${ITEMS[Object.keys(src.harvest)[0]].name}` : src.action || `Use ${src.name.toLowerCase()}`;
   }
   if (t.type === 'drop') return now ? 'Putting down' : `Drop ${countLabel(t.kind, t.n)}`;
-  if (t.type === 'chop') return t.what === 'tree' ? (now ? 'Chopping a tree' : 'Chop tree') : t.what === 'stump' ? (now ? 'Removing a stump' : 'Remove stump') : (now ? 'Chopping a log' : 'Chop log');
+  if (t.type === 'chop') return t.what === 'tree' ? (now ? 'Chopping a tree' : 'Chop tree') : t.what === 'stump' || t.what === 'oldStump' ? (now ? 'Removing a stump' : 'Remove stump') : (now ? 'Chopping a log' : 'Chop log');
   if (t.type === 'walk') return now ? 'Walking' : 'Walk there';
   return '';
 }
@@ -2717,6 +2744,10 @@ function pickTarget(px, py) {
   if (isWater) return { kind: 'shore', name: 'Pond' };
   if (owner && owner.userData.grave) return { kind: 'grave', name: owner.userData.label, x: owner.position.x, z: owner.position.z };
   if (owner && owner.userData.stump != null) return { kind: 'stump', idx: owner.userData.stump, name: 'Tree stump', x: owner.position.x, z: owner.position.z };
+  if (owner && owner.userData.oldStump != null) { const o = oldStumps[owner.userData.oldStump]; return { kind: 'oldStump', idx: owner.userData.oldStump, name: 'Tree stump', x: o.x, z: o.z }; }
+  const copy = hit && hit.object && hit.object.isInstancedMesh && hit.instanceId != null ? copyOwner.get(`${hit.object.uuid}:${hit.instanceId}`) : null;
+  if (copy && copy.kind === 'oldStump' && !oldStumps[copy.i].gone) { const o = oldStumps[copy.i]; return { kind: 'oldStump', idx: copy.i, name: 'Tree stump', x: o.x, z: o.z }; }
+  if (copy && copy.kind === 'tree' && trees[copy.i].state === 'tree') { const tr = trees[copy.i]; return { kind: 'tree', idx: copy.i, name: tr.pine ? 'Pine tree' : 'Tree', x: tr.x, z: tr.z, hit }; }
   if (owner && (owner.userData.label === 'Tree' || owner.userData.label === 'Pine tree')) {
     const i = treeNear(hit.point);
     if (i >= 0) return { kind: 'tree', idx: i, name: owner.userData.label, x: trees[i].x, z: trees[i].z, hit };
@@ -2753,7 +2784,7 @@ function handleTap(px, py) {
   if (!t) return;
   if (t.kind === 'you') { firstTap = null; openMenuAt(px, py, { kind: 'self', name: 'You' }); return; }
   // a stick, stone, berry bush or the pond: open the menu of what you can do with it
-  if (['item', 'use', 'person', 'grave', 'tree', 'stump'].includes(t.kind)) { firstTap = null; openMenuAt(px, py, t); return; }
+  if (['item', 'use', 'person', 'grave', 'tree', 'stump', 'oldStump'].includes(t.kind)) { firstTap = null; openMenuAt(px, py, t); return; }
   // the ground (or a rock, tree or log): one tap opens Walk here, a quick double-tap walks straight there
   const now = performance.now();
   if (!firstTap || now - firstTap.t > DOUBLE_MS || Math.hypot(px - firstTap.px, py - firstTap.py) > DOUBLE_PX) {
@@ -2797,9 +2828,9 @@ function menuActions(t) {
   if (t.kind === 'ground' || t.kind === 'thing' || t.kind === 'shore') {
     return [{ label: 'Walk here', run: () => walkToTarget(t) }, ...adminMore(adminGroundActions(t.point || (t.hit && t.hit.point)))];
   }
-  if (t.kind === 'tree' || t.kind === 'stump') {
+  if (t.kind === 'tree' || t.kind === 'stump' || t.kind === 'oldStump') {
     const what = t.kind;
-    const rule = CHOP[what] || {}, tool = CHOP.tool && ITEMS[CHOP.tool];
+    const rule = CHOP[what === 'oldStump' ? 'stump' : what] || {}, tool = CHOP.tool && ITEMS[CHOP.tool];
     const has = !tool || you.carry[CHOP.tool];
     return [{ label: what === 'tree' ? 'Chop tree' : 'Remove stump', note: has ? `${rule.seconds || 15} s` : `Needs a ${tool.name.toLowerCase()}`, disabled: !has,
       run: () => queueTask({ type: 'chop', what, idx: t.idx, x: t.x, z: t.z }) },
@@ -3363,6 +3394,7 @@ function goOnline() {
     else if (m.t === 'stroll') { const o = others.get(m.id); if (o) Object.assign(o, { tx: m.x, tz: m.z, speed: m.speed || null, then: m.then || null, act: null }); }
     else if (m.t === 'act') { const o = others.get(m.id); if (o && ['bend', 'kneel', 'pick', 'chop'].includes(m.pose)) o.act = { pose: m.pose, seconds: Math.min(25, Number(m.seconds) || 0.5), t0: elapsed }; }
     else if (m.t === 'tree') setTreeState(m.idx, m.state || 'tree');
+    else if (m.t === 'oldStump') removeOldStump(m.idx);
     else if (m.t === 'broke') { showTag(`Your ${(ITEMS[m.kind] || { name: 'tool' }).name.toLowerCase()} broke`, headTop(), 3); drawHeld(); }
     else if (m.t === 'graves') drawGraves(m.graves);
     else if (m.t === 'speed') setSpeed(m.speed);
@@ -3502,6 +3534,7 @@ function useSharedWorld(w) {
   drawGraves(w.graves || []);
   const ts = w.trees || {};
   trees.forEach((t, i) => setTreeState(i, ts[i] ? ts[i][0] : 'tree'));
+  for (const i of Object.keys(w.oldStumps || {})) removeOldStump(Number(i));
   berryBushes.forEach((b, i) => {
     const s = (w.bushes || [])[i];
     b.userData.count = s && s[0] != null ? s[0] : null;
