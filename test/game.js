@@ -1682,7 +1682,7 @@ function buildNeeds() {
     return row;
   }));
 }
-$('needs').addEventListener('click', () => { $('needs').classList.toggle('open'); drawNeeds(); setTimeout(measureHud, 50); });
+$('needs').addEventListener('click', () => { $('needs').classList.toggle('open'); hideHint(); drawNeeds(); setTimeout(measureHud, 50); });
 buildNeeds();
 function drawNeeds() {
   if (!you.stats) return;
@@ -2922,7 +2922,7 @@ document.addEventListener('keydown', (e) => {
   if (maint.on) return;
   if (!$('news').hidden) closeNews();
   else if (!$('back').hidden) $('back').hidden = true;
-  else if (!$('adminList').hidden) $('adminList').hidden = true;
+  else if (!$('adminList').hidden) $('adminListClose').click(); // back to the Admin panel
   else if (!$('adminPanel').hidden) closeAdminPanel();
   else if (!$('report').hidden) closeReport();
   else if (!$('feedback').hidden) closeFeedback();
@@ -3887,8 +3887,9 @@ $('adminResetBtn').addEventListener('click', () => {
   adminSend({ t: 'a.reset' });
   closeAdminPanel();
 });
-$('adminListBtn').addEventListener('click', () => { adminSend({ t: 'a.list' }); $('adminListBody').textContent = 'Loading…'; $('adminList').hidden = false; });
-$('adminListClose').addEventListener('click', () => { $('adminList').hidden = true; });
+// the list opens in place of the Admin panel, and Close goes back to it
+$('adminListBtn').addEventListener('click', () => { adminSend({ t: 'a.list' }); $('adminListBody').textContent = 'Loading…'; $('adminPanel').hidden = true; $('adminList').hidden = false; });
+$('adminListClose').addEventListener('click', () => { $('adminList').hidden = true; $('adminPanel').hidden = false; });
 let adminData = null, adminTab = 'feedback';
 for (const b of document.querySelectorAll('[data-admin-tab]')) b.addEventListener('click', () => { adminTab = b.dataset.adminTab; drawAdminList(); });
 const when = (iso) => { try { return new Date(iso).toLocaleString([], { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }); } catch (err) { return ''; } };
@@ -4107,6 +4108,7 @@ function openSay() {
   closeMenu();
   closeBag();
   closeCraft();
+  hideHint();
   drawChat();
   $('chat').hidden = false;
   app.classList.add('chatting');

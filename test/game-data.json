@@ -1,6 +1,6 @@
 {
   "version": "0.1.3",
-  "build": 1,
+  "build": 2,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,
@@ -655,7 +655,9 @@
         "Make your person has a Back button.",
         "The pause menu is now just Resume and Exit (Exit goes back to the main menu and your person goes away and looks after themselves).",
         "Graphics moved to Settings on the main menu.",
-        "Tidied up old code and the help notes for adding items."
+        "Tidied up old code and the help notes for adding items.",
+        "The walking tip no longer covers your needs when you open them, the chat or the inventory.",
+        "Admin: the Feedback, reports, players list now opens in place of the Admin panel, and Close (or Escape) goes back to it."
       ]
     },
     {
