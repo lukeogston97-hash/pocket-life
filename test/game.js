@@ -970,7 +970,18 @@ function rodGeo(len, t, twig) {
   }
   return rodGeos.get(key);
 }
+const axeHeadGeo = jitterGeo(new THREE.BoxGeometry(0.075, 0.07, 0.19), 0.12, 9);
 const SHAPES = {
+  // a handle with a stone head lashed across one end
+  axe(look) {
+    const len = look.length ?? 0.55, t = look.thickness ?? 0.025;
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(rodGeo(len, t, false), matFor(look.colour)));
+    const head = new THREE.Mesh(axeHeadGeo, matFor(look.head || '#8f8a80'));
+    head.position.set(len / 2 - 0.05, 0.005, 0.045);
+    g.add(head);
+    return { model: g, rest: 0.035, hold: 'rod', hit: [len + 0.3, 0.3, 0.4] };
+  },
   rod(look) {
     const len = look.length ?? 0.6, t = look.thickness ?? 0.03;
     const g = new THREE.Group();
@@ -1014,6 +1025,7 @@ for (const [id, raw] of Object.entries(DATA.items || {})) {
     look,
     startInWorld: Math.max(0, Math.floor(raw.startInWorld || 0)),
     startNear: Math.max(0, Math.floor(raw.startNear ?? 4)),
+    uses: raw.tool && Number.isFinite(raw.tool.uses) ? Math.max(1, Math.floor(raw.tool.uses)) : 0, // a tool wears out after this many uses
   };
   ITEMS[id].startNear = Math.min(ITEMS[id].startNear, ITEMS[id].startInWorld);
 }
@@ -1325,7 +1337,7 @@ const START_ITEMS = world.items.map(({ kind, x, z, rot }) => ({ kind, x, z, rot 
 
 /* ---------- you: plain data, plus your 3D person ---------- */
 const START = { x: 0.6, z: 1.9 };
-const you = { look: null, carry: {}, lastKind: null, lifeStart: 0, stats: null, statsAt: 0, dead: false }; // carry: item id -> how many; stats: need -> 0 to 100
+const you = { look: null, carry: {}, wear: {}, lastKind: null, lifeStart: 0, stats: null, statsAt: 0, dead: false }; // carry: item id -> how many; stats: need -> 0 to 100
 const ui = { mode: 'creator' };
 let player = null, playerGround = 0, heldView = null;
 const ring = new THREE.Mesh(new THREE.RingGeometry(0.44, 0.54, 40).rotateX(-Math.PI / 2),
@@ -1353,10 +1365,12 @@ function takeFromCarry(kind, n = 1) {
   return taken;
 }
 // the thing you picked up last is shown in your hand
+const heldKind = () => Object.keys(you.carry).find((k) => ITEMS[k] && ITEMS[k].uses) || (you.carry[you.lastKind] ? you.lastKind : null);
 function drawHeld() {
   if (heldView) { if (heldView.parent) heldView.parent.remove(heldView); heldView = null; }
-  if (!player || !you.lastKind || !you.carry[you.lastKind]) return;
-  const { model, hold } = buildItem(you.lastKind);
+  const kind = player && heldKind();
+  if (!kind) return;
+  const { model, hold } = buildItem(kind);
   const wrap = new THREE.Group();
   if (hold === 'rod') { model.rotation.y = -Math.PI / 2; wrap.rotation.x = 0.25; wrap.position.set(0, -0.02, 0.12); }
   else wrap.position.set(0, -0.07, 0.03);
@@ -1615,6 +1629,9 @@ function make(r) {
   if (!canMake(r)) return;
   for (const [k, n] of Object.entries(r.needs)) takeFromCarry(k, n);
   for (const [k, n] of Object.entries(r.makes)) addToCarry(k, n);
+  if (online()) net.sock.send(JSON.stringify({ t: 'craft', id: r.id }));
+  startAction({ pose: 'kneel', seconds: 1.6 });
+  drawBag();
   drawHeld();
   drawCarry();
   showGain(`Made ${r.name || ITEMS[Object.keys(r.makes)[0]].name}`);
@@ -1631,7 +1648,16 @@ function drawBag() {
     if (Object.keys(ITEMS[kind].eat || {}).length) buttons.push(smallButton('Eat', () => eatOne(kind), true));
     buttons.push(smallButton(n > 1 ? 'Drop 1' : 'Drop', () => dropItems(kind, 1)));
     if (n > 1) buttons.push(smallButton('Drop all', () => dropItems(kind, n)));
-    return bagRow(ITEMS[kind].look.colour, countLabel(kind, n), `Weight ${fmt(ITEMS[kind].weight * n)}`, buttons);
+    const it = ITEMS[kind];
+    const left = it.uses ? (you.wear[kind] ?? it.uses) : 0;
+    const row = bagRow(it.look.head || it.look.colour, countLabel(kind, n), `Weight ${fmt(it.weight * n)}${it.uses ? ` · ${left} ${left === 1 ? 'use' : 'uses'} left` : ''}`, buttons);
+    if (it.uses) { // a small wear bar for tools
+      const bar = document.createElement('span');
+      bar.className = 'wear';
+      bar.style.setProperty('--w', (left / it.uses).toFixed(2));
+      row.querySelector('.what').appendChild(bar);
+    }
+    return row;
   }));
   $('makeSection').hidden = RECIPES.length === 0;
   $('makeList').replaceChildren(...RECIPES.map((r) => {
@@ -3100,6 +3126,7 @@ function applyMe(m, spawn = false) {
   const carry = Object.fromEntries(Object.entries(m.carry || {}).filter(([k, n]) => ITEMS[k] && n > 0));
   for (const kind of shared.taking.values()) carry[kind] = (carry[kind] || 0) + 1;
   you.carry = carry;
+  you.wear = m.wear || {};
   you.lastKind = carry[you.lastKind] ? you.lastKind : (ITEMS[m.lastKind] && carry[m.lastKind] ? m.lastKind : Object.keys(carry)[0] || null);
   tickStats();
   drawNeeds();

@@ -41,16 +41,35 @@
   "items": {
     "stick": {
       "weight": 1,
-      "eat": null
+      "eat": null,
+      "uses": 0
     },
     "stone": {
       "weight": 1,
-      "eat": null
+      "eat": null,
+      "uses": 0
     },
     "berry": {
       "weight": 0.1,
       "eat": {
         "hunger": 10
+      },
+      "uses": 0
+    },
+    "stone-axe": {
+      "weight": 2,
+      "eat": null,
+      "uses": 20
+    }
+  },
+  "recipes": {
+    "stone-axe": {
+      "needs": {
+        "stick": 2,
+        "stone": 3
+      },
+      "makes": {
+        "stone-axe": 1
       }
     }
   },

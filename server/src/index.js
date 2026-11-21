@@ -9,7 +9,7 @@ import WORLDS from '../worlds.json'; // minimum version for each link
 import FILTER from '../words.json'; // the chat filter, copied from game-data.json by tools/worlds.py
 import G from '../game.json'; // needs, items, berry bushes, away rules: copied from game-data.json by tools/worlds.py
 import { starText, badName } from './filter.js';
-import { HOUR, MINUTE, freshStats, advanceStats, weightOf, addCarry, takeCarry, applyGives, eatOne, posAt, dist } from './people.js';
+import { HOUR, MINUTE, freshStats, advanceStats, weightOf, addCarry, takeCarry, applyGives, eatOne, posAt, dist, craft } from './people.js';
 
 const PROTOCOL = 2; // bump when the game and server stop understanding each other
 const CORS = { 'Access-Control-Allow-Origin': '*' };
@@ -29,7 +29,7 @@ function tooOld(v, b, min) {
 }
 const FEEDBACK_KEEP = 300, REPORTS_KEEP = 300;
 // Spam limits: each kind of message refills at so many a second, up to a small burst. The admin is never limited.
-const LIMITS = { act: [3, 6], say: [1, 3], take: [5, 10], pick: [5, 10], drop: [2, 6], move: [12, 20], eat: [3, 6], drink: [1, 3], create: [1 / 5, 3],
+const LIMITS = { craft: [1, 3], act: [3, 6], say: [1, 3], take: [5, 10], pick: [5, 10], drop: [2, 6], move: [12, 20], eat: [3, 6], drink: [1, 3], create: [1 / 5, 3],
   feedback: [1 / 30, 3], report: [1 / 30, 3], adminLogin: [1 / 5, 3] };
 const buckets = new WeakMap(); // per connection, kept in memory only
 const lastHeard = new WeakMap(); // per connection: when it last sent anything (the game pings every 25 seconds)
@@ -130,7 +130,7 @@ export class World extends DurableObject {
   // what the player is told about their own person
   mine(p) {
     return { t: 'me', name: p.name, look: p.look, age: p.age, born: p.born, x: num(p.x), z: num(p.z), ry: num(p.ry),
-      stats: p.stats, statsAt: p.statsAt, carry: p.carry, lastKind: p.lastKind };
+      stats: p.stats, statsAt: p.statsAt, carry: p.carry, wear: p.wear || {}, lastKind: p.lastKind };
   }
   catchUp(p, now = Date.now()) {
     if (!this.alive(p)) return;
@@ -172,6 +172,7 @@ export class World extends DurableObject {
     }
     p.hadThings = out.length > 0;
     p.carry = {};
+    p.wear = {};
     p.lastKind = null;
     if (w && out.length) { w.items.push(...out); this.save(); this.send({ t: 'added', items: out }, null); }
   }
@@ -383,6 +384,9 @@ export class World extends DurableObject {
       p.x = num(m.x); p.z = num(m.z); p.ry = num(m.ry);
       this.touch(p);
       this.send({ t: 'move', id: me.id, x: p.x, z: p.z, ry: p.ry, doing: clean(m.doing, 24) }, me.id);
+    } else if (m.t === 'craft') {
+      if (craft(p, (G.recipes || {})[m.id], G)) save();
+      reply(this.mine(p));
     } else if (m.t === 'eat') {
       if (eatOne(p, G, m.kind)) save();
       reply(this.mine(p));

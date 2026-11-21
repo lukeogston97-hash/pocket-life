@@ -47,7 +47,7 @@ export function addCarry(p, kind, n, G) {
 export function takeCarry(p, kind, n) {
   const have = p.carry[kind] || 0, taken = Math.min(have, n);
   if (taken <= 0) return 0;
-  if (have - taken > 0) p.carry[kind] = have - taken; else delete p.carry[kind];
+  if (have - taken > 0) p.carry[kind] = have - taken; else { delete p.carry[kind]; if (p.wear) delete p.wear[kind]; } // a tool's wear goes with the last one
   if (!p.carry[p.lastKind]) p.lastKind = Object.keys(p.carry)[0] || null;
   return taken;
 }
@@ -70,3 +70,17 @@ export function posAt(p, t) {
   return [pl.from[0] + (pl.to[0] - pl.from[0]) * k, pl.from[1] + (pl.to[1] - pl.from[1]) * k];
 }
 export const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+// make something from a recipe: true if it was made
+export function craft(p, r, G) {
+  if (!r) return false;
+  for (const [k, n] of Object.entries(r.needs)) if ((p.carry[k] || 0) < n) return false;
+  if (weightOf(p.carry, G) - weightOf(r.needs, G) + weightOf(r.makes, G) > G.carryCapacity + 1e-6) return false;
+  for (const [k, n] of Object.entries(r.needs)) takeCarry(p, k, n);
+  for (const [k, n] of Object.entries(r.makes)) {
+    p.carry[k] = (p.carry[k] || 0) + n;
+    p.lastKind = k;
+    const it = G.items[k];
+    if (it && it.uses) { p.wear = p.wear || {}; if (p.wear[k] == null) p.wear[k] = it.uses; }
+  }
+  return true;
+}

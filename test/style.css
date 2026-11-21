@@ -350,3 +350,5 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--moss); outl
 .is-creating .auto-chip { display: none; }
 /* layers, bottom to top: the world, name tags (1), HUD (2), task list and tip (3), autopilot chip (20), tap menu (25), inventory (26), say box (30), pop-ups (40), banners (55, 58), maintenance (60) */
 .hint { z-index: 3; }
+.wear { display: block; height: 4px; width: 64px; margin-top: 4px; border-radius: 3px; background: rgba(44, 43, 33, 0.13); overflow: hidden; }
+.wear::after { content: ""; display: block; height: 100%; width: calc(var(--w, 1) * 100%); background: #7a9a5a; border-radius: 3px; }

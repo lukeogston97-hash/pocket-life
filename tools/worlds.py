@@ -18,7 +18,8 @@ if cmd == 'test-build':
     berry = next((k for s in srcs.values() for k in (s.get('harvest') or {})), 'berry')
     game = {
         'needs': data['stats'],
-        'items': {k: {'weight': v.get('weight', 1), 'eat': v.get('eat')} for k, v in data['items'].items()},
+        'items': {k: {'weight': v.get('weight', 1), 'eat': v.get('eat'), 'uses': (v.get('tool') or {}).get('uses', 0)} for k, v in data['items'].items()},
+        'recipes': {r['id']: {'needs': r['needs'], 'makes': r['makes']} for r in data.get('recipes', [])},
         'sources': {k: {'gives': v.get('gives'), 'harvest': v.get('harvest'), 'water': bool(v.get('water'))} for k, v in srcs.items()},
         'berryKind': berry,
         'carryCapacity': data['settings']['carryCapacity'],
