@@ -1,6 +1,6 @@
 {
   "version": "0.1.1",
-  "build": 1,
+  "build": 2,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,
@@ -75,7 +75,8 @@
       "atZero": {
         "health": -0.5
       },
-      "fullLabel": "Not hungry"
+      "fullLabel": "Not hungry",
+      "whileAsleep": -2.5
     },
     {
       "id": "thirst",
@@ -88,9 +89,30 @@
       "atZero": {
         "health": -2
       },
-      "fullLabel": "Not thirsty"
+      "fullLabel": "Not thirsty",
+      "whileAsleep": -3
+    },
+    {
+      "id": "energy",
+      "name": "Energy",
+      "colour": "#e8c547",
+      "icon": "bolt",
+      "start": 100,
+      "perHour": 30,
+      "whileAsleep": 60,
+      "lowAt": 15,
+      "lowLabel": "Worn out",
+      "fullLabel": "Full of energy"
     }
   ],
+  "energyCosts": {
+    "pickup": 1,
+    "harvest": 1,
+    "drink": 0.5,
+    "craft": 3,
+    "chop": 6,
+    "walkPerMetre": 0.04
+  },
   "items": {
     "stick": {
       "name": "Stick",
@@ -498,7 +520,8 @@
     "chatFilter": "Words kept out of speech bubbles (shown as stars) and names (pick another). anywhere: caught even inside a longer word. words: only caught as a whole word (so 'class' is fine), plus endings like s, ed, ing. phrases: caught as a run of words. Numbers and symbols standing in for letters (sh1t, @ss) are caught too. The server gets a copy: tools/worlds.py test-build copies it to server/words.json. names: extra words only kept out of names, so nobody can pretend to be the admin.",
     "away": "How a person looks after themselves while their player is away (the server does this). near: 'pond' keeps them strolling round the main pond (anything else: round where you left them). wanderMin and wanderMax: how far in metres from there they stroll. strollSpeed in metres per second. They eat what they carry when hunger is under eatBelow, go for berries if they have none, and drink at the pond when thirst is under drinkBelow. After sleepAfterHours away they lie down asleep (needs pause); after goneAfterDays asleep they leave the world and their things stay where they slept. A grave marks where someone died for graveHours. idleMinutes: if you're in the game but don't touch anything for this long, your person goes on autopilot and does the same, until you tap. sleepBelow: someone on autopilot or away lies down to sleep when Rest is under this, and gets up when it's full.",
     "berryBushes": "extra: how many more berry bushes grow out in the wider world, besides the ones by the start. seed: their own random numbers, so they're in the same places on every phone (change it to move them all).",
-    "devlog": "What's new, shown in the Menu. Newest first: version, date and a short list of changes, written for players."
+    "devlog": "What's new, shown in the Menu. Newest first: version, date and a short list of changes, written for players.",
+    "energyCosts": "Energy (the yellow ring): every task takes a little (these amounts), walking takes walkPerMetre for each metre. It comes back by itself (perHour in its need, 30 an hour) and twice as fast asleep (whileAsleep). With too little energy for a task your person says they need a rest. The server uses the same numbers."
   },
   "chatFilter": {
     "anywhere": [
@@ -591,10 +614,13 @@
       "date": "2026-11-21",
       "notes": [
         "New need: Rest (the moon ring, between health and hunger). Awake it lasts about 16 hours; sleeping fills it in about 8.",
+        "New need: Energy (the yellow ring on the right). Every task and walk takes a little; it comes back while you take it easy, and twice as fast asleep. Too low and your person needs a breather before doing more.",
+        "Realistic sleep: 8 hours fills Rest (about 12 an hour), and you get hungry and thirsty more slowly while asleep.",
         "Tap yourself and choose Sleep; tap yourself again (or give your person something to do) to wake up. Others see you lying down, sleeping.",
         "People who are away or on autopilot sleep by themselves when they get tired.",
         "No rest for about 3 days and you collapse and die.",
-        "Sticks, stones, berries and the stone axe look better, each with a little variety, and show as small pictures in your Inventory and Craft."
+        "Sticks, stones, berries and the stone axe look better, each with a little variety, and show as small pictures in your Inventory and Craft.",
+        "The stone axe is held properly: by the end of the handle, head up, blade forward."
       ]
     },
     {

@@ -37,7 +37,8 @@
       "atZero": {
         "health": -0.5
       },
-      "fullLabel": "Not hungry"
+      "fullLabel": "Not hungry",
+      "whileAsleep": -2.5
     },
     {
       "id": "thirst",
@@ -50,7 +51,20 @@
       "atZero": {
         "health": -2
       },
-      "fullLabel": "Not thirsty"
+      "fullLabel": "Not thirsty",
+      "whileAsleep": -3
+    },
+    {
+      "id": "energy",
+      "name": "Energy",
+      "colour": "#e8c547",
+      "icon": "bolt",
+      "start": 100,
+      "perHour": 30,
+      "whileAsleep": 60,
+      "lowAt": 15,
+      "lowLabel": "Worn out",
+      "fullLabel": "Full of energy"
     }
   ],
   "items": {
@@ -122,6 +136,14 @@
     "idleMinutes": 3,
     "near": "pond",
     "sleepBelow": 35
+  },
+  "energyCosts": {
+    "pickup": 1,
+    "harvest": 1,
+    "drink": 0.5,
+    "craft": 3,
+    "chop": 6,
+    "walkPerMetre": 0.04
   },
   "start": {
     "x": 0.6,

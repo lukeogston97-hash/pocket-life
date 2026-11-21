@@ -91,3 +91,8 @@ export function craft(p, r, G) {
   }
   return true;
 }
+// tasks take a little energy (energyCosts in game-data.json); never below zero
+export function spend(p, what, G, amount = 1) {
+  const c = ((G.energyCosts || {})[what] || 0) * amount;
+  if (c && p.stats && p.stats.energy != null) p.stats.energy = Math.max(0, p.stats.energy - c);
+}

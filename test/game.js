@@ -995,10 +995,10 @@ function stickGeo(len, t, twig) {
 const pebbleGeos = [1, 2, 3].map((k) => jitterGeo(new THREE.IcosahedronGeometry(1, 1), 0.16, 40 + k));
 // the stone axe: a handle that's thicker at the grip, a wedge of stone with a sharp edge, and a lashing where they meet
 const axeHeadGeo = (() => {
-  const g = new THREE.BoxGeometry(0.07, 0.075, 0.2, 1, 1, 2).toNonIndexed();
+  const g = new THREE.BoxGeometry(0.085, 0.095, 0.25, 1, 1, 2).toNonIndexed();
   const p = g.attributes.position;
   for (let i = 0; i < p.count; i++) { // taper to a blade along z, rounded back
-    const z = p.getZ(i), k = (z + 0.1) / 0.2;
+    const z = p.getZ(i), k = (z + 0.125) / 0.25;
     p.setX(i, p.getX(i) * (1 - k * 0.82));
     p.setY(i, p.getY(i) * (1 + k * 0.35));
   }
@@ -1012,12 +1012,12 @@ const SHAPES = {
     const handle = new THREE.Mesh(new THREE.CylinderGeometry(t * 0.85, t * 1.15, len, 6).rotateZ(Math.PI / 2), tinted(look.colour || '#8a6847', 0.04));
     g.add(handle);
     const head = new THREE.Mesh(axeHeadGeo, tinted(look.head || '#8f8a80', 0.06));
-    head.position.set(len / 2 - 0.055, 0.004, 0.05);
+    head.position.set(len / 2 - 0.06, 0.004, 0.065);
     g.add(head);
     const lash = new THREE.Mesh(new THREE.CylinderGeometry(t * 1.45, t * 1.45, 0.05, 7).rotateZ(Math.PI / 2), matFor(look.lashing || '#5b4330'));
     lash.position.set(len / 2 - 0.055, 0, 0);
     g.add(lash);
-    return { model: g, rest: 0.04, hold: 'rod', hit: [len + 0.3, 0.3, 0.42] };
+    return { model: g, rest: 0.04, hold: 'axe', grip: len / 2 - 0.06, hit: [len + 0.3, 0.3, 0.42] };
   },
   rod(look) {
     const len = look.length ?? 0.6, t = look.thickness ?? 0.03;
@@ -1418,11 +1418,31 @@ function drawHeld() {
   if (heldView) { if (heldView.parent) heldView.parent.remove(heldView); heldView = null; }
   const kind = player && heldKind();
   if (!kind) return;
-  const { model, hold } = buildItem(kind);
+  const { model, hold, grip } = buildItem(kind);
   const wrap = new THREE.Group();
-  if (hold === 'rod') { model.rotation.y = -Math.PI / 2; wrap.rotation.x = 0.25; wrap.position.set(0, -0.02, 0.12); }
-  else wrap.position.set(0, -0.07, 0.03);
-  wrap.add(model);
+  if (hold === 'axe') {
+    // Held at the end of the handle, the head up and in front, the blade facing forward. Worked out in the person's
+    // own frame (forward, up), then turned into the hand's frame, so it looks right however the arm is built.
+    const P = player.userData.parts;
+    const saved = P.armR.rotation.clone();
+    setArm(P.armR, 0);
+    player.updateMatrixWorld(true);
+    const qHand = P.handR.getWorldQuaternion(new THREE.Quaternion());
+    const qMe = player.getWorldQuaternion(new THREE.Quaternion());
+    P.armR.rotation.copy(saved);
+    player.updateMatrixWorld(true);
+    const handInMe = qMe.invert().multiply(qHand);
+    const along = V(0, 0.82, 0.57).normalize(), blade = V(0, -0.57, 0.82).normalize(), side = V().crossVectors(blade, along);
+    const want = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(along, side, blade));
+    wrap.quaternion.copy(handInMe.invert().multiply(want));
+    model.position.x = grip || 0.2;
+    wrap.add(model);
+    wrap.position.set(0, -0.05, 0);
+  } else {
+    if (hold === 'rod') { model.rotation.y = -Math.PI / 2; wrap.rotation.x = 0.25; wrap.position.set(0, -0.02, 0.12); }
+    else wrap.position.set(0, -0.07, 0.03);
+    wrap.add(model);
+  }
   heldView = shadowsOn(wrap);
   player.userData.parts.handR.add(heldView);
 }
@@ -1544,8 +1564,17 @@ const NEED_ICONS = {
   food: '<path d="M12 7c1-2 3-3 5-3"/><path d="M12 8c-2.5-1.5-7-1-7 4.5C5 17 8 21 10 21c1 0 1.5-.5 2-.5s1 .5 2 .5c2 0 5-4 5-8.5C19 7 14.5 6.5 12 8z"/>',
   drop: '<path d="M12 3.5 6.5 11a6.5 6.5 0 1 0 11 0z"/>',
   moon: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
+  bolt: '<path d="M13 3 5 14h6l-1 7 8-11h-6z"/>',
 };
-const iconFor = (s) => NEED_ICONS[s.icon] || NEED_ICONS[{ health: 'heart', hunger: 'food', thirst: 'drop', rest: 'moon' }[s.id]] || NEED_ICONS.heart;
+const iconFor = (s) => NEED_ICONS[s.icon] || NEED_ICONS[{ health: 'heart', hunger: 'food', thirst: 'drop', rest: 'moon', energy: 'bolt' }[s.id]] || NEED_ICONS.heart;
+// Energy: every task takes a little (energyCosts in game-data.json), and it comes back while you take it easy
+const COSTS = DATA.energyCosts || {};
+function spendEnergy(what, amount = 1) {
+  const c = (COSTS[what] || 0) * amount;
+  if (c && you.stats && you.stats.energy != null) { you.stats.energy = Math.max(0, you.stats.energy - c); }
+}
+const costOf = (t) => (t.type === 'pickup' ? COSTS.pickup : t.type === 'use' ? (t.water ? COSTS.drink : COSTS.harvest) : 0) || 0;
+const tooTired = (cost) => you.stats && you.stats.energy != null && cost > 0 && you.stats.energy < cost;
 function buildNeeds() {
   $('needs').replaceChildren(...STATS.map((s) => {
     const row = document.createElement('div');
@@ -1731,6 +1760,8 @@ function canMake(r) {
 }
 function make(r) {
   if (!canMake(r)) return;
+  if (tooTired(COSTS.craft || 0)) { showTag('Too tired. I need a breather', headTop(), 2.5); return; }
+  spendEnergy('craft');
   for (const [k, n] of Object.entries(r.needs)) takeFromCarry(k, n);
   for (const [k, n] of Object.entries(r.makes)) addToCarry(k, n);
   if (online()) net.sock.send(JSON.stringify({ t: 'craft', id: r.id }));
@@ -2141,6 +2172,11 @@ function nextTask() {
   drawQueue();
   const t = tasks.current;
   if (!t || !player || you.dead) return;
+  if (tooTired(costOf(t)) || (t.type === 'walk' && you.stats && you.stats.energy <= 0)) {
+    showTag('Too tired. I need a breather', headTop(), 2.5);
+    stopQueue();
+    return;
+  }
   if (t.type === 'pickup') {
     const item = getItem(t.id);
     if (!item) { nextTask(); return; }
@@ -2268,6 +2304,7 @@ function doPickup(item) {
     if (!getItem(item.id)) return;
     removeWorldItem(item.id);
     addToCarry(item.kind);
+    spendEnergy('pickup');
     shareTake(item); // online: tell the world (if someone beat you to it, it comes back out of your inventory)
     drawHeld();
     drawCarry();
@@ -2286,6 +2323,7 @@ function doUse(t) {
     if (harvests(src)) harvestFrom(src, t);
     else {
       applyGives(src.gives);
+      spendEnergy('drink');
       if (online()) net.sock.send(JSON.stringify({ t: 'drink', source: src.id }));
     }
   } });
@@ -2306,6 +2344,7 @@ function harvestFrom(src, t) {
   const b = berryBushes[t.bush];
   if ((b && !ripe(b)) || carried() + weightOf(src.harvest) > SETTINGS.carryCapacity) return;
   for (const [k, n] of Object.entries(src.harvest)) addToCarry(k, n);
+  spendEnergy('harvest');
   if (b) { pickBerry(b); drawBerries(b); sharePick(t.bush); }
   drawHeld();
   drawCarry();
@@ -2890,6 +2929,7 @@ function updatePlayer(dt) {
       }
       if (!ok) stop("Can't get there");
       else {
+        spendEnergy('walkPerMetre', Math.hypot(nx - player.position.x, nz - player.position.z));
         playerGround = groundY(nx, nz);
         player.position.set(nx, playerGround, nz);
         player.rotation.y = lerpAngle(player.rotation.y, heading, Math.min(1, dt * 10));

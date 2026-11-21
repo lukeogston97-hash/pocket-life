@@ -9,7 +9,7 @@ import WORLDS from '../worlds.json'; // minimum version for each link
 import FILTER from '../words.json'; // the chat filter, copied from game-data.json by tools/worlds.py
 import G from '../game.json'; // needs, items, berry bushes, away rules: copied from game-data.json by tools/worlds.py
 import { starText, badName } from './filter.js';
-import { HOUR, MINUTE, freshStats, advanceStats, weightOf, addCarry, takeCarry, applyGives, eatOne, posAt, dist, craft, sleepMs } from './people.js';
+import { HOUR, MINUTE, freshStats, advanceStats, weightOf, addCarry, takeCarry, applyGives, eatOne, posAt, dist, craft, sleepMs, spend } from './people.js';
 
 const PROTOCOL = 2; // bump when the game and server stop understanding each other
 const CORS = { 'Access-Control-Allow-Origin': '*' };
@@ -215,11 +215,12 @@ export class World extends DurableObject {
     }
     if (plan.then === 'drink') {
       const src = G.sources[plan.source];
-      for (let n = 0; n < 8 && src && p.stats.thirst != null && p.stats.thirst < 95; n++) { applyGives(p, src.gives); p.log.drank++; }
+      for (let n = 0; n < 8 && src && p.stats.thirst != null && p.stats.thirst < 95; n++) { applyGives(p, src.gives); spend(p, 'drink', G); p.log.drank++; }
     } else if (plan.then === 'pick') {
       for (let n = 0; n < 4 && this.berriesOn(plan.bush, t) > 0; n++) {
         if (!addCarry(p, G.berryKind, 1, G)) break;
         this.takeBerry(plan.bush, t);
+        spend(p, 'harvest', G);
         p.log.picked++;
       }
     }
@@ -241,6 +242,7 @@ export class World extends DurableObject {
     const walk = (to, extra) => {
       const ms = (dist(at, to) / AWAY.strollSpeed) * 1000 + 500;
       p.plan = { kind: 'walk', from: at, to: [num(to[0]), num(to[1])], start: t, arrive: t + ms, ...extra };
+      spend(p, 'walkPerMetre', G, dist(at, to));
       if (p.plan.arrive > now) this.send({ t: 'stroll', id: p.who, x: p.plan.to[0], z: p.plan.to[1], speed: AWAY.strollSpeed, then: extra && extra.then }, null);
     };
     const idle = (ms) => { p.plan = { kind: 'idle', start: t, arrive: t + ms }; };
@@ -397,7 +399,9 @@ export class World extends DurableObject {
       const pose = ['bend', 'kneel', 'pick'].includes(m.pose) ? m.pose : 'bend';
       this.send({ t: 'act', id: me.id, pose, seconds: Math.max(0.3, Math.min(5, Number(m.seconds) || 0.5)) }, me.id);
     } else if (m.t === 'move') {
-      p.x = num(m.x); p.z = num(m.z); p.ry = num(m.ry);
+      const nx = num(m.x), nz = num(m.z), moved = Math.hypot(nx - p.x, nz - p.z);
+      if (moved < 30) spend(p, 'walkPerMetre', G, moved); // walking takes a little energy
+      p.x = nx; p.z = nz; p.ry = num(m.ry);
       this.touch(p);
       this.send({ t: 'move', id: me.id, x: p.x, z: p.z, ry: p.ry, doing: clean(m.doing, 24) }, me.id);
     } else if (m.t === 'sleep') { // lie down to rest, or get up
@@ -406,14 +410,14 @@ export class World extends DurableObject {
       reply(this.mine(p));
       this.send({ t: 'state', id: me.id, state: p.sleeping ? 'sleeping' : 'online', x: num(p.x), z: num(p.z) }, me.id);
     } else if (m.t === 'craft') {
-      if (craft(p, (G.recipes || {})[m.id], G)) save();
+      if (craft(p, (G.recipes || {})[m.id], G)) { spend(p, 'craft', G); save(); }
       reply(this.mine(p));
     } else if (m.t === 'eat') {
       if (eatOne(p, G, m.kind)) save();
       reply(this.mine(p));
     } else if (m.t === 'drink') {
       const src = G.sources[m.source];
-      if (src && src.gives && src.water) { applyGives(p, src.gives); save(); }
+      if (src && src.gives && src.water) { applyGives(p, src.gives); spend(p, 'drink', G); save(); }
       reply(this.mine(p));
     } else if (!w) {
       return;
@@ -421,6 +425,7 @@ export class World extends DurableObject {
       const i = w.items.findIndex((it) => it.id === m.id);
       if (i < 0 || !addCarry(p, w.items[i].kind, 1, G)) { reply({ t: 'took', id: m.id, ok: false }); return; }
       w.items.splice(i, 1);
+      spend(p, 'pickup', G);
       await this.save();
       save();
       reply({ t: 'took', id: m.id, ok: true });
@@ -443,6 +448,7 @@ export class World extends DurableObject {
       if (!(i >= 0 && i < 200)) return;
       if (this.berriesOn(i) < 1 || !addCarry(p, G.berryKind, 1, G)) { reply({ t: 'picked', bush: i, ok: false }); return; }
       this.takeBerry(i);
+      spend(p, 'harvest', G);
       save();
     }
   }

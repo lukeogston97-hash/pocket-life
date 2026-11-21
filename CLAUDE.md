@@ -20,6 +20,9 @@ Luke's mobile "life in your pocket" game: SEED meets One Hour One Life. Built st
   - Crafting (built 0.0.9): the Craft (hammer) button at the bottom right opens its own sheet of recipe cards: what it makes, chips showing what it needs and how many you have (green when enough), and Make (or Need more); Make is checked by the server ('craft'). Recipes in game-data.json, copied to server/game.json. First recipe: stone axe = 2 sticks + 3 stones. Tools (items with tool.uses) show in your hand and have a wear bar; the server keeps wear per person (p.wear). Simple now, more complex later.
   - Stone axe: shows in your hand; chop a tree (about 15 s, gives 1 log; the tree becomes a stump and grows back over 3 real days, but removing a stump means it's gone for good); chop a log into sticks; wears out after about 20 chops (a small wear bar). A log weighs 10.
   - Rest (built 0.1.1, the moon ring between Health and Hunger): perHour -6.25 awake, whileAsleep +12.5; tap yourself for Sleep / Wake up; any task wakes you; sleeping people lie down with 'sleeping' under their name; away and autopilot people sleep when Rest < away.sleepBelow (35) until full (night-time sleeping can come later); no rest for about 3 days and you die.
+  - Energy (built 0.1.1, the yellow bolt ring on the right): perHour +30, whileAsleep +60; tasks and walking spend it (energyCosts in game-data.json, used by game and server); too little for a task and your person says they need a breather. Not deadly.
+  - Sleeping also slows hunger (-2.5/h) and thirst (-3/h) via whileAsleep.
+  - Held tools: the axe uses hold 'axe' (gripped at the handle end, head up, blade forward), worked out in the person's frame and converted to the hand's frame in drawHeld.
   - No families or babies: everyone starts as an adult person they make.
 - Later: everything saved on the server, day planner, skills, more stats, regions and time zones, app store wrapper.
 
