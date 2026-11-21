@@ -474,7 +474,7 @@ try {
 // Browsers keep a page for a few minutes. If this page is older than the data it just loaded,
 // load the new page (once), so old code never runs with new data.
 const CODE_VERSION = '0.0.5'; // keep the same as "version" in game-data.json
-const CODE_BUILD = 3;         // and this the same as "build" (count up with each test copy)
+const CODE_BUILD = 4;         // and this the same as "build" (count up with each test copy)
 {
   const url = new URL(location.href);
   const dataStamp = `${DATA.version}.${DATA.build || 0}`;
@@ -2421,6 +2421,14 @@ function itemNear(px, py, maxPx) {
   }
   return best;
 }
+function itemCloseTo(x, z, maxM) {
+  let best = null, bd = maxM;
+  for (const it of world.items) {
+    const d = Math.hypot(it.x - x, it.z - z);
+    if (d < bd) { bd = d; best = it; }
+  }
+  return best;
+}
 // What's under a tap or click. Something you can pick up or use wins over a tree or rock in front of it,
 // and a near miss only picks up a stick or stone when the tap didn't land on something else useful.
 function pickTarget(px, py) {
@@ -2437,9 +2445,12 @@ function pickTarget(px, py) {
   const useful = hits.find(({ o }) => o === player || o.userData.itemId || o.userData.source);
   const { h: hit = null, o: owner = null } = useful || hits[0] || {};
   if (owner === player) return { kind: 'you' };
-  const item = (owner && owner.userData.itemId && getItem(owner.userData.itemId)) || (useful ? null : itemNear(px, py, 34));
-  if (item) return { kind: 'item', item, name: ITEMS[item.kind].name };
   const gp = groundHit && groundHit.point;
+  // a near miss still counts: within a finger's width on screen, or within about a metre on the ground
+  const item = (owner && owner.userData.itemId && getItem(owner.userData.itemId))
+    || (useful ? null : itemNear(px, py, lastPointer === 'mouse' ? 34 : 46))
+    || (useful || !gp ? null : itemCloseTo(gp.x, gp.z, 0.9));
+  if (item) return { kind: 'item', item, name: ITEMS[item.kind].name };
   const isWater = owner === water || (!hit && gp && (pondShape(gp.x, gp.z) < 0.86 || gp.y < WATER_Y + 0.1));
   const srcId = isWater ? water.userData.source : owner && owner.userData.source;
   if (srcId && SOURCES[srcId]) {
