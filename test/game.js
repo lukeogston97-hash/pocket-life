@@ -3283,8 +3283,18 @@ function updateOthers(dt) {
     else if (d > 0.02) {
       // someone away strolls at their own pace; a player here is caught up quickly
       const step = Math.min(d, (o.speed ? o.speed : Math.max(SETTINGS.walkSpeed * 1.15, d * 3)) * dt);
-      m.position.x += (dx / d) * step;
-      m.position.z += (dz / d) * step;
+      const ux = dx / d, uz = dz / d;
+      let nx = m.position.x + ux * step, nz = m.position.z + uz * step;
+      // someone strolling while away goes round rocks, bushes and trees rather than through them
+      const block = o.speed && solidAt(nx, nz);
+      if (block) {
+        const ax = nx - block.x, az = nz - block.z, ad = Math.hypot(ax, az) || 1;
+        let tx = -az / ad, tz = ax / ad;
+        if (tx * ux + tz * uz < 0) { tx = -tx; tz = -tz; }
+        [nx, nz] = outsideSolid(m.position.x + tx * step, m.position.z + tz * step);
+      }
+      m.position.x = nx;
+      m.position.z = nz;
       m.rotation.y = lerpAngle(m.rotation.y, Math.atan2(dx, dz), Math.min(1, dt * 10));
       o.phase += dt * (o.speed ? 6 : 9);
       if (P) setLegs(P, Math.sin(o.phase));

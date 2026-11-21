@@ -1,6 +1,6 @@
 {
   "version": "0.0.7",
-  "build": 1,
+  "build": 2,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,
@@ -547,6 +547,7 @@
         "After a day away they lie down asleep (needs pause). After 7 days asleep they leave the world, and their things are left where they slept.",
         "Welcome back card: what your person did while you were away.",
         "People who are away or asleep show it under their name. Graves mark where someone died, for a day.",
+        "People strolling about while away walk round rocks, bushes and trees.",
         "Needs are now realistic: hunger lasts about a day, thirst about 16 hours. A berry fills 10 hunger (was 2), a drink fills 15 thirst (was 10). No water for about 3 days or no food for about a week and you die.",
         "26 more berry bushes out in the wider world.",
         "Tap the ground for Walk here. Double-tap still walks straight there.",

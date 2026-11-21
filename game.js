@@ -16,6 +16,12 @@ const worldRand = () => { seed2 = (seed2 * 16807) % 2147483647; return (seed2 - 
 let useRand = startRand;
 const rand = () => useRand();
 function withWorldRand(fn) { useRand = worldRand; try { fn(); } finally { useRand = startRand; } }
+// things added to the world later get their own random numbers, so nothing already placed moves
+function withOwnRand(start, fn) {
+  let s3 = Math.max(1, Math.floor(start) % 2147483646);
+  useRand = () => { s3 = (s3 * 16807) % 2147483647; return (s3 - 1) / 2147483646; };
+  try { fn(); } finally { useRand = startRand; }
+}
 const rr = (a, b) => a + (b - a) * rand();
 const pick = (arr) => arr[Math.floor(rand() * arr.length)];
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
@@ -618,7 +624,7 @@ const drawAlong = (set, m) => {
   put(set, p.x, p.y, p.z, e.x, e.y, e.z, sc.x, sc.y, sc.z, m.material.color);
   m.visible = false;
 };
-const berries = IM(new THREE.IcosahedronGeometry(0.065, 0), mat('#ffffff', { roughness: 0.5 }), 400, true);
+const berries = IM(new THREE.IcosahedronGeometry(0.065, 0), mat('#ffffff', { roughness: 0.5 }), 900, true);
 const berryBushes = [];
 function bush(x, z, s = 1, withBerries = true) {
   const g = new THREE.Group();
@@ -657,7 +663,9 @@ function bush(x, z, s = 1, withBerries = true) {
   interactive.push(g);
   return g;
 }
+const ROCK_MIN = 0.45;
 function rock(x, z, s, label = 'Boulder', color) {
+  s = Math.max(s, ROCK_MIN);
   const m = new THREE.Mesh(pick(rockGeos), mat(color || tint(pick(ROCK_COLOURS))));
   m.position.set(x, groundY(x, z) + s * 0.16, z);
   m.scale.set(s * rr(0.9, 1.3), s * rr(0.55, 0.8), s * rr(0.9, 1.2));
@@ -795,7 +803,8 @@ withWorldRand(() => {
     }
     stone(wild.boulders[Math.floor(rand() * 3)], x, z, s);
     addSpot(x, z, s * 1.1);
-    for (const [rx, rz, rs] of small) { stone(wild.rock, rx, rz, rs); addSpot(rx, rz, rs * 1.1); }
+    // small rocks are drawn at least ROCK_MIN across, so they can't be mistaken for stones you pick up
+    for (const [rx, rz, rs] of small) { const r2 = Math.max(rs, ROCK_MIN); stone(wild.rock, rx, rz, r2); addSpot(rx, rz, r2 * 1.1); }
   }
   // old tree stumps
   for (let i = 0, n = Math.round(area / 1500); i < n; i++) {
@@ -824,6 +833,20 @@ withWorldRand(() => {
       for (const [px, pz] of pts) addSpot(px, pz, 0.6);
       break;
     }
+  }
+});
+
+// More berry bushes out in the wider world (berryBushes.extra in game-data.json), on their own random numbers
+const BB = DATA.berryBushes || {};
+withOwnRand(BB.seed || 7331, () => {
+  const L = WALK_LIMIT - 2;
+  let made = 0;
+  for (let t = 0; t < 4000 && made < (BB.extra || 0); t++) {
+    const x = rr(-L, L), z = rr(-L, L);
+    if (Math.hypot(x - CLEAR.x, z - CLEAR.z) < 16 || pondShape(x, z) < 1.6 || !roomAt(x, z, 1.4, 0.8)) continue;
+    if (berryBushes.some((b) => Math.hypot(b.position.x - x, b.position.z - z) < 9)) continue;
+    bush(x, z, rr(0.85, 1.05));
+    made++;
   }
 });
 
@@ -898,7 +921,7 @@ function updateDetails(x, z) {
 
 
 /* =====================================================================
-   Pocket life prototype
+   Pocket Life
    The game's content lives in game-data.json beside this page:
    settings, items (with weights), recipes, needs, things to use, day
    and night, character looks and body shapes. Adding things later means editing that small file, not this
@@ -1352,7 +1375,6 @@ function spawnPlayer(look) {
   drawHeld();
 }
 function removePlayer() {
-  goOffline();
   if (!player) return;
   scene.remove(player);
   disposeMaterials(player);
@@ -1475,20 +1497,22 @@ function stepStats(hours) {
   for (const s of empty) for (const [k, v] of Object.entries(s.atZero)) if (k in change) change[k] += v;
   for (const s of STATS) st[s.id] = clampStat(st[s.id] + change[s.id] * hours);
 }
+// the admin's "speed up time" for testing ({ x, until }), told by the server
+let timeSpeed = null;
+function setSpeed(sp) { timeSpeed = sp && sp.until > Date.now() ? sp : null; tickStats(); if (admin.on) drawAdmin(); }
 function tickStats() {
   if (!you.stats || you.dead) return;
   const now = Date.now();
-  let hours = ((now - you.statsAt) / 3600000) * SETTINGS.needsSpeed;
+  const fast = timeSpeed && now < timeSpeed.until ? timeSpeed.x : 1;
+  let hours = ((now - you.statsAt) / 3600000) * SETTINGS.needsSpeed * fast;
   you.statsAt = now;
   const before = { ...you.stats };
-  // a game minute at a time, so a long time away adds up properly
-  while (hours > 0 && !you.dead) {
+  // a game minute at a time (the server does the same, and has the final say on dying)
+  while (hours > 0) {
     const h = Math.min(hours, 1 / 60);
     stepStats(h);
     hours -= h;
-    if (STATS.some((s) => s.deadAtZero && you.stats[s.id] <= 0)) die();
   }
-  if (you.dead) return;
   const low = STATS.find((s) => s.lowAt != null && s.lowLabel && before[s.id] > s.lowAt && you.stats[s.id] <= s.lowAt);
   if (low && !action) showTag(low.lowLabel, headTop(), 2);
   drawNeeds();
@@ -1880,7 +1904,10 @@ function doUse(t) {
   tagLabel.busy = true;
   startAction({ pose: src.pose, seconds: src.seconds, end: () => {
     if (harvests(src)) harvestFrom(src, t);
-    else applyGives(src.gives);
+    else {
+      applyGives(src.gives);
+      if (online()) net.sock.send(JSON.stringify({ t: 'drink', source: src.id }));
+    }
   } });
 }
 function applyGives(gives) {
@@ -1911,6 +1938,7 @@ function eatOne(kind) {
   if (!useHelps({ gives })) { showTag(fullLabel({ gives }), headTop(), 2); return; }
   takeFromCarry(kind, 1);
   applyGives(gives);
+  if (online()) net.sock.send(JSON.stringify({ t: 'eat', kind }));
   drawHeld();
   drawCarry();
 }
@@ -2151,9 +2179,10 @@ function pickTarget(px, py) {
     if (owner && owner.userData.bushId != null) t.bush = owner.userData.bushId;
     return { kind: 'use', task: t, name: SOURCES[srcId].name };
   }
-  if (isWater) return { kind: 'shore' };
-  if (owner) return { kind: 'thing', owner, hit };
-  if (gp) return { kind: 'ground', point: gp };
+  if (isWater) return { kind: 'shore', name: 'Pond' };
+  if (owner && owner.userData.grave) return { kind: 'grave', name: owner.userData.label, x: owner.position.x, z: owner.position.z };
+  if (owner) return { kind: 'thing', owner, hit, name: owner.userData.label || '' };
+  if (gp) return { kind: 'ground', point: gp, name: '' };
   return null;
 }
 // Walking needs a double tap (or double-click), so a stray tap doesn't send you off.
@@ -2179,31 +2208,34 @@ function fadeTapRing(dt) {
 }
 function handleTap(px, py) {
   if (ui.mode !== 'world' || !player || you.dead || paused) return;
+  if (!online()) { showTag('Reconnecting…', headTop(), 1.5); return; }
   const t = pickTarget(px, py);
   if (!t) return;
-  if (t.kind === 'you') { showTag('You', headTop(), 2); return; }
+  if (t.kind === 'you') {
+    if (admin.on) { firstTap = null; openMenuAt(px, py, { kind: 'self', name: 'You' }); return; }
+    showTag('You', headTop(), 2); return;
+  }
   // a stick, stone, berry bush or the pond: open the menu of what you can do with it
-  if (t.kind === 'item' || t.kind === 'use' || t.kind === 'person') { firstTap = null; openMenuAt(px, py, t); return; }
+  if (t.kind === 'item' || t.kind === 'use' || t.kind === 'person' || t.kind === 'grave') { firstTap = null; openMenuAt(px, py, t); return; }
+  // the ground (or a rock, tree or log): one tap opens Walk here, a quick double-tap walks straight there
   const now = performance.now();
   if (!firstTap || now - firstTap.t > DOUBLE_MS || Math.hypot(px - firstTap.px, py - firstTap.py) > DOUBLE_PX) {
     firstTap = { t: now, px, py };
     const p = t.point || (t.hit && t.hit.point);
     if (p) showTapRing(p);
+    openMenuAt(px, py, t);
     return;
   }
   firstTap = null;
   tapRing.visible = false;
-  // anything else: walk there (after anything already queued)
+  closeMenu();
+  walkToTarget(t);
+}
+// walk to the ground, the shore, or up to a rock, tree or log (after anything already queued)
+function walkToTarget(t) {
   if (t.kind === 'shore') { walkFirst(shorePointToward(player.position)); return; }
   if (t.kind === 'thing') {
     const { owner, hit } = t;
-    const top = hit.point.clone();
-    if (!owner.isInstancedMesh) {
-      const box = new THREE.Box3().setFromObject(owner);
-      top.set((box.min.x + box.max.x) / 2, box.max.y, (box.min.z + box.max.z) / 2);
-    }
-    top.y += 0.3;
-    showTag(owner.userData.label, top);
     const p = hit.point;
     const dx = p.x - player.position.x, dz = p.z - player.position.z, d = Math.hypot(dx, dz) || 1;
     const stopAt = owner.isInstancedMesh ? 1.1 : 0.9;
@@ -2225,7 +2257,11 @@ function menuActions(t) {
       { label: 'Report', run: () => openReport(o) },
       { label: 'Walk here', run: () => walkFirst(V(o.mesh.position.x, 0, o.mesh.position.z)) }, ...adminPersonActions(o)];
   }
-  if (t.kind === 'ground' || t.kind === 'thing') return adminGroundActions(t.point || t.hit.point);
+  if (t.kind === 'ground' || t.kind === 'thing' || t.kind === 'shore') {
+    return [{ label: 'Walk here', run: () => walkToTarget(t) }, ...adminGroundActions(t.point || (t.hit && t.hit.point))];
+  }
+  if (t.kind === 'self') return admin.on ? [{ label: 'Fill my needs', run: () => adminSend({ t: 'a.fill', id: net.myId }) }] : [];
+  if (t.kind === 'grave') return [{ label: 'Walk here', run: () => walkFirst(V(t.x + 0.8, 0, t.z)) }];
   if (t.kind === 'item') {
     const it = t.item;
     return [{ label: `Pick up ${ITEMS[it.kind].name}`, run: () => queueTask({ type: 'pickup', id: it.id }) },
@@ -2278,7 +2314,10 @@ function closeMenu() { $('actMenu').hidden = true; }
 document.addEventListener('pointerdown', (e) => {
   if ($('actMenu').hidden || $('actMenu').contains(e.target)) return;
   closeMenu();
-  if (e.target === canvas) swallowTap = true;
+  if (e.target !== canvas) return;
+  const r = canvas.getBoundingClientRect();
+  const second = firstTap && performance.now() - firstTap.t <= DOUBLE_MS && Math.hypot(e.clientX - r.left - firstTap.px, e.clientY - r.top - firstTap.py) <= DOUBLE_PX;
+  if (!second) swallowTap = true; // that press only closed the menu
 }, true);
 
 /* ---------- pause menu (Escape on a computer): your person waits, the real-time clock keeps going ---------- */
@@ -2294,20 +2333,19 @@ function openPause() {
 }
 function closePause() { paused = false; $('pause').hidden = true; }
 $('resumeBtn').addEventListener('click', closePause);
-$('pauseBagBtn').addEventListener('click', () => { closePause(); openBag(); });
-$('pauseNewBtn').addEventListener('click', () => { closePause(); $('confirm').hidden = false; $('keepBtn').focus(); });
 $('pause').addEventListener('click', (e) => { if (e.target === $('pause')) closePause(); });
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape' || ui.mode !== 'world') return;
   e.preventDefault();
   if (maint.on) return;
-  if (!$('adminList').hidden) $('adminList').hidden = true;
+  if (!$('news').hidden) closeNews();
+  else if (!$('back').hidden) $('back').hidden = true;
+  else if (!$('adminList').hidden) $('adminList').hidden = true;
   else if (!$('adminPanel').hidden) closeAdminPanel();
   else if (!$('report').hidden) closeReport();
   else if (!$('feedback').hidden) closeFeedback();
   else if (!$('sayBox').hidden) closeSay();
   else if (!$('actMenu').hidden) closeMenu();
-  else if (!$('confirm').hidden) $('confirm').hidden = true;
   else if (!$('death').hidden) return;
   else if (bagOpen()) closeBag();
   else if (paused && !$('pause').hidden) closePause();
@@ -2535,7 +2573,6 @@ function enterWorld() {
   drawQueue();
   placeCamera();
   showHint();
-  goOnline();
 }
 $('sheet').addEventListener('submit', (e) => {
   e.preventDefault();
@@ -2545,35 +2582,40 @@ $('sheet').addEventListener('submit', (e) => {
     $('nameErr').hidden = false; $('nameInput').focus(); return;
   }
   $('nameInput').blur();
-  you.lifeStart = Date.now();
-  you.stats = freshStats();
-  you.statsAt = Date.now();
-  you.dead = false;
+  if (!online()) { showJoining(true); return; }
+  if (creating) return;
+  creating = true;
   you.carry = {};
   you.lastKind = null;
-  spawnPlayer({ ...draft, name });
-  enterWorld();
-  saveGame();
+  net.sock.send(JSON.stringify({ t: 'create', name, age: draft.age, look: { ...draft, name } }));
 });
 
-/* ---------- the end of a life: starting over, or dying ---------- */
-// everything you were carrying stays where you were
-function dropEverything() {
-  if (!player) return;
-  let i = 0;
-  const out = [];
-  for (const [kind, n] of Object.entries(you.carry)) for (let k = 0; k < n; k++, i++) {
-    const a = i * 2.39996, r = 0.3 + Math.sqrt(i) * 0.16;
-    out.push({ kind, x: player.position.x + Math.cos(a) * r, z: player.position.z + Math.sin(a) * r, rot: rand() * Math.PI });
-  }
-  placeItems(out);
+/* ---------- the end of a life ----------
+   The server decides when someone dies (needs run on the server, even while you're away).
+   Everything they carried is left on the ground where they fell, with a small grave for a day. */
+function die(m) {
+  if (you.dead || !player) return;
+  you.dead = true;
+  closeMenu();
+  closePause();
+  stopQueue();
+  closeBag();
+  hideHint();
   you.carry = {};
   you.lastKind = null;
   drawHeld();
+  drawCarry();
+  drawNeeds();
+  resetPose();
+  player.rotation.x = -Math.PI / 2; // lying where they fell
+  player.position.y = playerGround + 0.2;
+  $('deathTitle').textContent = `${m.name || you.look.name} has died`;
+  $('deathText').textContent = `${m.cause ? `They died of ${m.cause}` : 'They died'} at ${m.age || you.look.age}. What they were carrying is on the ground where they fell.`;
+  $('death').hidden = false;
+  $('deathBtn').focus();
 }
 function endLife() {
   stopQueue();
-  dropEverything();
   walk.target = null;
   action = null;
   removePlayer();
@@ -2581,34 +2623,37 @@ function endLife() {
   you.stats = null;
   you.dead = false;
   enterCreator();
-  saveGame();
 }
-function die() {
-  if (you.dead || !player) return;
-  you.dead = true;
-  closeMenu();
-  closePause();
-  const cause = STATS.filter((s) => s.atZero && you.stats[s.id] <= 0).sort((a, b) => (a.atZero.health ?? 0) - (b.atZero.health ?? 0))[0];
-  const had = carryingAnything();
-  stopQueue();
-  closeBag();
-  hideHint();
-  $('confirm').hidden = true;
-  dropEverything();
-  drawCarry();
-  drawNeeds();
-  resetPose();
-  player.rotation.x = -Math.PI / 2; // lying where they fell
-  player.position.y = playerGround + 0.2;
-  $('deathTitle').textContent = `${you.look.name} has died`;
-  $('deathText').textContent = `${cause ? `They died of ${cause.name.toLowerCase()}` : 'They died'} at ${you.look.age}.${had ? ' What they were carrying is on the ground where they fell.' : ''}`;
+// coming back to a person who died or left while you were away
+function showGoneCard(d) {
+  const away = d.away ? ' while you were away' : '';
+  $('deathTitle').textContent = d.gone ? `${d.name} has left the world` : `${d.name} has died`;
+  $('deathText').textContent = d.gone
+    ? `They slept for a long time and left the world.${d.had ? ' Their things were left where they slept.' : ''}`
+    : `They died of ${d.cause || 'weakness'}${away}, at ${d.age}.${d.had ? ' Their things were left where they fell.' : ''}`;
   $('death').hidden = false;
-  $('deathBtn').focus();
+}
+// what your person did while you were away
+function showWelcomeBack(a) {
+  const hrs = a.ms / 3600000;
+  const long = hrs >= 1 ? `${Math.round(hrs)} hour${Math.round(hrs) === 1 ? '' : 's'}` : `${Math.max(1, Math.round(a.ms / 60000))} minutes`;
+  const bits = [];
+  if (a.ate) bits.push(`ate ${a.ate} ${a.ate === 1 ? 'berry' : 'berries'}`);
+  if (a.picked) bits.push(`picked ${a.picked}`);
+  if (a.drank) bits.push(`drank ${a.drank} time${a.drank === 1 ? '' : 's'}`);
+  if (a.slept) bits.push('slept');
+  if (a.ms < 5 * 60000 && !bits.length) return; // only gone a moment
+  $('backText').textContent = `You were away ${long}.${bits.length ? ` ${you.look.name} ${bits.join(', ').replace(/, ([^,]*)$/, ' and $1')}.` : ` ${you.look.name} rested.`}`;
+  $('back').hidden = false;
+}
+$('backBtn').addEventListener('click', () => { $('back').hidden = true; });
+// joining the world, or getting back after the internet dropped
+function showJoining(on, inWorld = false) {
+  $('joining').hidden = !on;
+  $('joiningText').textContent = inWorld ? 'Reconnecting… Your person carries on while you\'re gone.' : 'Joining the world…';
 }
 $('menuBtn').addEventListener('click', () => openPause());
-$('keepBtn').addEventListener('click', () => { $('confirm').hidden = true; });
-$('newBtn').addEventListener('click', () => { $('confirm').hidden = true; endLife(); });
-$('deathBtn').addEventListener('click', () => { $('death').hidden = true; endLife(); });
+$('deathBtn').addEventListener('click', () => { $('death').hidden = true; if (player) endLife(); });
 
 /* ---------- loop ---------- */
 const clock = new THREE.Clock();
@@ -2699,7 +2744,7 @@ function setMuted(who, on) {
 }
 function goOnline() {
   net.wanted = true;
-  if (!SERVER || net.sock || !player) return;
+  if (!SERVER || net.sock || net.stopped) return;
   let sock;
   try { sock = new WebSocket(`${SERVER}?world=live`); } catch (err) { return; }
   net.sock = sock;
@@ -2707,7 +2752,7 @@ function goOnline() {
   sock.onopen = () => {
     net.retry = 1000;
     net.last = null;
-    sock.send(JSON.stringify({ t: 'hello', name: you.look.name, look: you.look, x: player.position.x, z: player.position.z, ry: player.rotation.y, v: VERSION, b: DATA.build || 0, link: TEST_BUILD ? 'test' : 'release', pid, adminCode: admin.code || undefined, adminTag: admin.tag }));
+    sock.send(JSON.stringify({ t: 'hello', proto: 2, v: VERSION, b: DATA.build || 0, link: TEST_BUILD ? 'test' : 'release', pid, adminCode: admin.code || undefined, adminTag: admin.tag }));
   };
   sock.onmessage = (e) => {
     let m;
@@ -2719,14 +2764,15 @@ function goOnline() {
     else if (m.t.startsWith('admin') || ['announce', 'kicked', 'banned', 'badge', 'reset'].includes(m.t)) adminMessage(m);
     else if (m.t === 'slow') showTag('Slow down a little', headTop(), 2);
     else if (m.t === 'reported') showTag(m.ok ? 'Thanks, your report was sent' : "They've left, so it couldn't be sent", headTop(), 2.5);
-    else if (m.t === 'welcome') {
-      net.myId = m.id;
-      hideMaintenance();
-      setNet('online', m.count);
-      for (const p of m.people || []) addOther(p);
-      if (m.world) useSharedWorld(m.world);
-      else if (m.needSeed) seedWorld();
-    }
+    else if (m.t === 'welcome') welcome(m);
+    else if (m.t === 'me') { const fresh = !player; applyMe(m); if (fresh) enterWorld(); }
+    else if (m.t === 'died') die(m);
+    else if (m.t === 'badName') { $('nameErr').textContent = 'Pick a different name.'; $('nameErr').hidden = false; creating = false; }
+    else if (m.t === 'elsewhere') { net.stopped = true; showMaintenance('Pocket Life was opened somewhere else on this phone. Reload this page to play here instead.', 'Playing somewhere else', ''); }
+    else if (m.t === 'state') setOtherState(m);
+    else if (m.t === 'stroll') { const o = others.get(m.id); if (o) Object.assign(o, { tx: m.x, tz: m.z, speed: m.speed || null }); }
+    else if (m.t === 'graves') drawGraves(m.graves);
+    else if (m.t === 'speed') setSpeed(m.speed);
     else if (m.t === 'world') useSharedWorld(m.world);
     else if (m.t === 'gone') removeWorldItem(m.id);
     else if (m.t === 'added') for (const it of m.items || []) { if (ITEMS[it.kind]) addWorldItem(it.kind, it.x, it.z, it.rot, it.id); }
@@ -2738,7 +2784,7 @@ function goOnline() {
     }
     else if (m.t === 'join') addOther(m.person);
     else if (m.t === 'leave') removeOther(m.id);
-    else if (m.t === 'move') { const o = others.get(m.id); if (o) Object.assign(o, { tx: m.x, tz: m.z, tr: m.ry }); }
+    else if (m.t === 'move') { const o = others.get(m.id); if (o) Object.assign(o, { tx: m.x, tz: m.z, tr: m.ry, speed: null }); }
     else if (m.t === 'say') {
       if (m.id === net.myId) { if (player) bubble(null, m.text); }
       else if (others.has(m.id) && !muted.has(others.get(m.id).who)) bubble(others.get(m.id), starText(m.text, FILTER));
@@ -2748,18 +2794,106 @@ function goOnline() {
     if (net.sock === sock) net.sock = null;
     net.myId = null;
     setNet(net.wanted ? 'connecting' : 'offline');
+    if (!maint.on && !net.stopped) showJoining(true, !!player);
     shared.on = false;
     for (const id of [...others.keys()]) removeOther(id);
     if (net.wanted && !net.stopped) { setTimeout(goOnline, maint.on ? 20000 : net.retry); net.retry = Math.min(30000, net.retry * 2); }
   };
   sock.onerror = () => {};
 }
+// Graves: a small stone where someone died, for a day
+const graves = [];
+const graveGeo = new THREE.BoxGeometry(0.34, 0.46, 0.1);
+const graveMat = mat('#a39e92');
+function drawGraves(list) {
+  for (const g of graves.splice(0)) { scene.remove(g); const i = interactive.indexOf(g); if (i >= 0) interactive.splice(i, 1); }
+  for (const g of list || []) {
+    const m = new THREE.Mesh(graveGeo, graveMat);
+    m.position.set(g.x, groundY(g.x, g.z) + 0.2, g.z);
+    m.rotation.set(-0.08, (g.at % 628) / 100, 0);
+    m.castShadow = m.receiveShadow = true;
+    m.userData.label = `Grave of ${g.name}`;
+    m.userData.grave = true;
+    scene.add(m);
+    interactive.push(m);
+    graves.push(m);
+  }
+}
+// The server's welcome: the world, everyone in it, and your person (or how they got on while you were away)
+let creating = false;
+function welcome(m) {
+  net.myId = m.id;
+  hideMaintenance();
+  showJoining(false);
+  setNet('online', m.count);
+  setSpeed(m.speed);
+  for (const id of [...others.keys()]) removeOther(id);
+  for (const p of m.people || []) addOther(p);
+  if (m.world) { useSharedWorld(m.world); if (m.needLayout) sendLayout(); }
+  else if (m.needSeed) seedWorld();
+  if (m.me) {
+    if (!player) { applyMe(m.me, true); enterWorld(); }
+    else applyMe(m.me);
+    if (m.away) showWelcomeBack(m.away);
+  } else if (player && !you.dead) {
+    // the server has no person for us (a reset world, say): start again
+    removePlayer();
+    enterCreator();
+  }
+  if (m.dead) showGoneCard(m.dead);
+}
+// what the server says about your person: needs, what you carry, and (when joining) who and where you are
+function applyMe(m, spawn = false) {
+  if (spawn || !player) {
+    const look = { ...DEFAULT_LOOK, ...(m.look || {}) };
+    for (const k of ['sex', 'skin', 'build', 'hair', 'hairColour', 'tunic']) look[k] = pickId(LOOKS[k], look[k]);
+    look.age = Math.round(Math.min(LOOKS.age.max, Math.max(LOOKS.age.min, Number(m.age) || LOOKS.age.start)));
+    look.name = String(m.name || look.name || 'You').slice(0, 20);
+    you.lifeStart = m.born || Date.now();
+    you.dead = false;
+    spawnPlayer(look);
+    const px = inWorld(Number(m.x) || START.x), pz = inWorld(Number(m.z) || START.z);
+    playerGround = groundY(px, pz);
+    player.position.set(px, playerGround, pz);
+    player.rotation.y = Number(m.ry) || 0;
+    creating = false;
+  }
+  you.stats = { ...freshStats(), ...(m.stats || {}) };
+  you.statsAt = m.statsAt || Date.now();
+  // what you carry: the server's word, plus anything you're picking up that it hasn't confirmed yet
+  const carry = Object.fromEntries(Object.entries(m.carry || {}).filter(([k, n]) => ITEMS[k] && n > 0));
+  for (const kind of shared.taking.values()) carry[kind] = (carry[kind] || 0) + 1;
+  you.carry = carry;
+  you.lastKind = carry[you.lastKind] ? you.lastKind : (ITEMS[m.lastKind] && carry[m.lastKind] ? m.lastKind : Object.keys(carry)[0] || null);
+  tickStats();
+  drawNeeds();
+  drawCarry();
+  drawHeld();
+}
+// the starting layout of things the server needs to look after people while they're away
+function layoutData() {
+  const shore = [];
+  for (let k = 0; k < 48; k++) {
+    const a = (k / 48) * Math.PI * 2;
+    const p = shorePointToward(V(POND.x + Math.cos(a) * 20, 0, POND.z + Math.sin(a) * 20));
+    if (!solidAt(p.x, p.z)) shore.push([+p.x.toFixed(2), +p.z.toFixed(2)]);
+  }
+  const open = [];
+  for (let t = 0; t < 6000 && open.length < 600; t++) {
+    const x = (hash(t, 11) * 2 - 1) * (WALK_LIMIT - 1), z = (hash(t, 29) * 2 - 1) * (WALK_LIMIT - 1);
+    if (pondShape(x, z) < 1.3 || !roomAt(x, z, 0.6, 0.5)) continue;
+    open.push([+x.toFixed(2), +z.toFixed(2)]);
+  }
+  return { bushes: berryBushes.map((b) => [+b.position.x.toFixed(2), +b.position.z.toFixed(2)]), shore, open };
+}
+function sendLayout() { if (net.sock) net.sock.send(JSON.stringify({ t: 'layout', ...layoutData() })); }
 // The shared world: what lies on the ground and how far each berry bush has grown back.
 const shared = { on: false, taking: new Map() }; // taking: item id -> kind, while the server confirms
 function useSharedWorld(w) {
   shared.on = true;
   for (const it of [...world.items]) removeWorldItem(it.id);
   for (const it of w.items || []) if (ITEMS[it.kind]) addWorldItem(it.kind, it.x, it.z, it.rot, it.id);
+  drawGraves(w.graves || []);
   berryBushes.forEach((b, i) => {
     const s = (w.bushes || [])[i];
     b.userData.count = s && s[0] != null ? s[0] : null;
@@ -2788,6 +2922,7 @@ function seedWorld() {
   net.sock.send(JSON.stringify({
     t: 'seed', items: START_ITEMS, spots: spotsFor, caps,
     holds: src ? bushHolds(src) : 5, regrowMs: src ? src.regrowHours * 3600000 : 0, respawnMs: (SETTINGS.respawnMinutes || 10) * 60000,
+    layout: layoutData(),
   }));
 }
 function shareTake(item) {
@@ -2809,7 +2944,6 @@ function sharePick(bush) {
 function placeItems(list) {
   if (!list.length) return;
   if (online() && shared.on) net.sock.send(JSON.stringify({ t: 'drop', items: list }));
-  else for (const it of list) addWorldItem(it.kind, it.x, it.z, it.rot);
 }
 // The server can close the world for maintenance, and send out-of-date games to the newest version.
 // The new version can take a minute or two to reach the link, so if a reload still gets the old one,
@@ -2817,7 +2951,6 @@ function placeItems(list) {
 const UPDATE_KEY = 'pocket-life:updating';
 const maint = { on: false };
 function getUpdate(min) {
-  saveGame();
   let last = 0;
   try { last = Number(sessionStorage.getItem(UPDATE_KEY)) || 0; } catch (err) { /* private mode */ }
   const wait = Date.now() - last < 90000 ? 20000 : 0; // reloaded a moment ago and still old: give the link time
@@ -2831,6 +2964,7 @@ function getUpdate(min) {
 }
 function showMaintenance(text, title = 'Back soon', note = 'Your person is safe. This page checks again by itself.') {
   maint.on = true;
+  showJoining(false);
   $('maintTitle').textContent = title;
   $('maintNote').textContent = note;
   $('adminPanel').hidden = true; $('adminList').hidden = true;
@@ -2867,6 +3001,28 @@ $('feedbackForm').addEventListener('submit', async (e) => {
   } catch (err) { showTag("Couldn't send it, try again later", headTop(), 2.5); }
 });
 $('pauseFeedbackBtn').addEventListener('click', openFeedback);
+// What's new: the dev log from game-data.json, newest first
+function openNews() {
+  closePause();
+  paused = true;
+  const rows = (DATA.devlog || []).map((v) => {
+    const el = document.createElement('div');
+    el.className = 'admin-entry';
+    const h = document.createElement('div');
+    h.className = 'admin-head';
+    h.textContent = `v${v.version}${v.date ? ` · ${new Date(`${v.date}T12:00:00`).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}`;
+    const ul = document.createElement('ul');
+    for (const n of v.notes || []) { const li = document.createElement('li'); li.textContent = n; ul.appendChild(li); }
+    el.append(h, ul);
+    return el;
+  });
+  $('newsBody').replaceChildren(...rows);
+  $('news').hidden = false;
+  $('newsBody').scrollTop = 0;
+}
+function closeNews() { $('news').hidden = true; paused = false; }
+$('pauseNewsBtn').addEventListener('click', openNews);
+$('newsClose').addEventListener('click', closeNews);
 for (const b of document.querySelectorAll('[data-gfx]')) b.addEventListener('click', () => applyGraphics(b.dataset.gfx));
 // Report: pick a reason, add a note if you like. It goes to the server with what they said lately.
 let reporting = null;
@@ -2918,6 +3074,7 @@ function adminMessage(m) {
   if (m.t === 'admin' || m.t === 'adminDone') {
     const was = admin.on;
     Object.assign(admin, { on: true, tag: m.tag, maintenance: m.maintenance, message: m.message || '' });
+    if ('speed' in m) timeSpeed = m.speed && m.speed.until > Date.now() ? m.speed : null;
     try { localStorage.setItem(ADMIN_KEY, admin.code); } catch (err) { /* full */ }
     drawAdmin();
     if (!was) showTag('Admin on. Open the Menu for admin tools', headTop(), 3);
@@ -2928,7 +3085,7 @@ function adminMessage(m) {
     showTag("That code didn't work", headTop(), 2.5);
   } else if (m.t === 'adminList') drawAdminList(m);
   else if (m.t === 'announce') announce(m.text);
-  else if (m.t === 'badge') { const o = others.get(m.id); if (o) o.name.el.textContent = tagText(o.title, m.on); }
+  else if (m.t === 'badge') { const o = others.get(m.id); if (o) { o.badge = m.on; drawTag(o); } }
   else if (m.t === 'kicked' || m.t === 'banned') {
     net.stopped = true;
     showMaintenance(m.t === 'kicked' ? 'You were removed from the world by the admin. Reload the page to join again.' : "You can't join this world.",
@@ -2958,7 +3115,11 @@ function adminPersonActions(o) {
     { label: 'Unmute for everyone', run: () => adminSend({ t: 'a.mute', id: o.id, on: false }) },
     { label: 'Kick', run: () => adminSend({ t: 'a.kick', id: o.id }) },
     { label: 'Ban', note: 'Keeps this phone out', run: () => adminSend({ t: 'a.ban', id: o.id }) },
-    { label: 'Teleport to them', run: () => teleportTo(o.mesh.position.x + 1, o.mesh.position.z) }];
+    { label: 'Teleport to them', run: () => teleportTo(o.mesh.position.x + 1, o.mesh.position.z) },
+    { label: 'Fill their needs', run: () => adminSend({ t: 'a.fill', id: o.id }) },
+    ...(o.state === 'asleep' ? [{ label: 'Wake up', run: () => adminSend({ t: 'a.wake', id: o.id }) }] : []),
+    ...(o.state === 'away' ? [{ label: 'Send to sleep', run: () => adminSend({ t: 'a.sleep', id: o.id }) }] : []),
+    ...(o.state !== 'online' ? [{ label: 'Remove from world', note: 'Drops their things', run: () => adminSend({ t: 'a.removePerson', id: o.id }) }] : [])];
 }
 function adminGroundActions(p) {
   if (!admin.on || !p) return [];
@@ -2972,6 +3133,8 @@ function drawAdmin() {
   $('adminMaintBtn').textContent = admin.maintenance ? 'Turn off' : 'Turn on';
   $('adminMaintText').value = admin.message || '';
   $('adminTagBtn').textContent = admin.tag ? 'Admin tag: on' : 'Admin tag: off';
+  const fast = timeSpeed && timeSpeed.until > Date.now();
+  $('adminSpeedBtn').textContent = fast ? `Time ${timeSpeed.x}x fast: tap to stop` : 'Speed up time (60x for 10 min)';
   if (!admin.on) { $('adminPanel').hidden = true; $('adminList').hidden = true; }
 }
 function openAdminPanel() { closePause(); paused = true; drawAdmin(); $('adminPanel').hidden = false; }
@@ -2985,6 +3148,10 @@ $('adminAnnounceForm').addEventListener('submit', (e) => {
   if (!text) return;
   adminSend({ t: 'a.announce', text });
   $('adminAnnounceText').value = '';
+});
+$('adminSpeedBtn').addEventListener('click', () => {
+  const fast = timeSpeed && timeSpeed.until > Date.now();
+  adminSend({ t: 'a.speed', x: fast ? 1 : 60, minutes: 10 });
 });
 $('adminTagBtn').addEventListener('click', () => {
   admin.tag = !admin.tag;
@@ -3027,11 +3194,12 @@ function drawAdminList(m) {
     }
     rows.push(el);
   };
-  if (adminTab === 'feedback') for (const f of d.feedback || []) row(`${when(f.at)} · ${f.name || 'Someone'} · v${f.v}`, f.text);
+  const del = (list, at) => ['Delete', () => { adminSend({ t: 'a.delete', list, at }); d[list] = (d[list] || []).filter((x) => x.at !== at); drawAdminList(); }];
+  if (adminTab === 'feedback') for (const f of d.feedback || []) row(`${when(f.at)} · ${f.name || 'Someone'} · v${f.v}`, f.text, [del('feedback', f.at)]);
   if (adminTab === 'reports') for (const r of d.reports || []) {
     const said = (r.said || []).map(([, t]) => `"${t}"`).join('  ');
     row(`${when(r.at)} · ${r.by.name} reported ${r.about.name} · ${r.reason}`, [r.note, said && `They said: ${said}`].filter(Boolean).join('\n'),
-      [['Mute them', () => adminSend({ t: 'a.mute', who: r.about.who, on: true })]]);
+      [['Mute them', () => adminSend({ t: 'a.mute', who: r.about.who, on: true })], del('reports', r.at)]);
   }
   if (adminTab === 'online') for (const p of d.online || []) {
     if (p.id === net.myId) { row(`${p.name} (you) · v${p.v} · ${p.link} link`); continue; }
@@ -3041,6 +3209,7 @@ function drawAdminList(m) {
       ['Ban', () => adminSend({ t: 'a.ban', id: p.id })]]);
   }
   if (adminTab === 'banned') for (const who of d.banned || []) row(`Phone ${who}`, '', [['Unban', () => { adminSend({ t: 'a.unban', who }); adminSend({ t: 'a.list' }); }]]);
+  if (adminTab === 'online' && d.counts) rows.unshift(Object.assign(document.createElement('p'), { className: 'admin-empty', textContent: `People in the world: ${d.counts.online} playing, ${d.counts.away} away, ${d.counts.asleep} asleep` }));
   if (!rows.length) rows.push(Object.assign(document.createElement('p'), { className: 'admin-empty', textContent: 'Nothing here yet.' }));
   $('adminListBody').replaceChildren(...rows);
 }
@@ -3060,8 +3229,40 @@ function addOther(p) {
   mesh.rotation.y = Number(p.ry) || 0;
   mesh.userData.label = p.name || 'Someone';
   scene.add(mesh);
-  const name = addLabel({ cls: 'name-tag', text: tagText(p.name || 'Someone', p.badge), anchor: mesh.position, offset: V(0, 2.0, 0), gap: 0 });
-  others.set(p.id, { id: p.id, who: p.who || p.id, title: p.name || 'Someone', mesh, tx: x, tz: z, tr: mesh.rotation.y, phase: 0, name, bubble: null });
+  const name = addLabel({ cls: 'name-tag', text: '', anchor: mesh.position, offset: V(0, 2.0, 0), gap: 0 });
+  const o = { id: p.id, who: p.who || p.id, title: p.name || 'Someone', badge: !!p.badge, state: p.state || 'online', mesh, tx: x, tz: z, tr: mesh.rotation.y, phase: 0, name, bubble: null,
+    speed: p.speed || null };
+  if (p.tx != null) Object.assign(o, { tx: p.tx, tz: p.tz });
+  others.set(p.id, o);
+  drawTag(o);
+  poseOther(o);
+}
+// a name tag, with "away" or "asleep" under it when their player isn't here
+function drawTag(o) {
+  const el = o.name.el;
+  el.textContent = tagText(o.title, o.badge);
+  if (o.state === 'away' || o.state === 'asleep') {
+    const sub = document.createElement('small');
+    sub.className = 'tag-sub';
+    sub.textContent = o.state === 'asleep' ? 'asleep · zz' : 'away';
+    el.appendChild(sub);
+  }
+}
+// sleepers lie on the ground
+function poseOther(o) {
+  const lying = o.state === 'asleep';
+  o.mesh.rotation.x = lying ? -Math.PI / 2 : 0;
+  o.name.offset.y = lying ? 0.7 : 2.0;
+}
+function setOtherState(m) {
+  const o = others.get(m.id);
+  if (!o) return;
+  o.state = m.state;
+  if (m.x != null) { o.tx = m.x; o.tz = m.z; }
+  if (m.state !== 'away') o.speed = null;
+  if (m.state === 'online' && o.bubble) { removeLabel(o.bubble); o.bubble = null; }
+  drawTag(o);
+  poseOther(o);
 }
 function removeOther(id) {
   const o = others.get(id);
@@ -3077,13 +3278,25 @@ function updateOthers(dt) {
   for (const o of others.values()) {
     const m = o.mesh, dx = o.tx - m.position.x, dz = o.tz - m.position.z, d = Math.hypot(dx, dz);
     const P = m.userData.parts;
-    if (d > 8) { m.position.x = o.tx; m.position.z = o.tz; } // too far behind: jump there
+    if (o.state === 'asleep') { m.position.x = o.tx; m.position.z = o.tz; m.position.y = groundY(m.position.x, m.position.z) + 0.2; continue; }
+    if (d > (o.speed ? 120 : 8)) { m.position.x = o.tx; m.position.z = o.tz; } // too far behind: jump there
     else if (d > 0.02) {
-      const step = Math.min(d, Math.max(SETTINGS.walkSpeed * 1.15, d * 3) * dt);
-      m.position.x += (dx / d) * step;
-      m.position.z += (dz / d) * step;
+      // someone away strolls at their own pace; a player here is caught up quickly
+      const step = Math.min(d, (o.speed ? o.speed : Math.max(SETTINGS.walkSpeed * 1.15, d * 3)) * dt);
+      const ux = dx / d, uz = dz / d;
+      let nx = m.position.x + ux * step, nz = m.position.z + uz * step;
+      // someone strolling while away goes round rocks, bushes and trees rather than through them
+      const block = o.speed && solidAt(nx, nz);
+      if (block) {
+        const ax = nx - block.x, az = nz - block.z, ad = Math.hypot(ax, az) || 1;
+        let tx = -az / ad, tz = ax / ad;
+        if (tx * ux + tz * uz < 0) { tx = -tx; tz = -tz; }
+        [nx, nz] = outsideSolid(m.position.x + tx * step, m.position.z + tz * step);
+      }
+      m.position.x = nx;
+      m.position.z = nz;
       m.rotation.y = lerpAngle(m.rotation.y, Math.atan2(dx, dz), Math.min(1, dt * 10));
-      o.phase += dt * 9;
+      o.phase += dt * (o.speed ? 6 : 9);
       if (P) setLegs(P, Math.sin(o.phase));
     } else {
       m.rotation.y = lerpAngle(m.rotation.y, o.tr, Math.min(1, dt * 6));
@@ -3133,63 +3346,13 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && ui.mode === 'world' && !paused && !typing(e.target) && $('sayBox').hidden) { e.preventDefault(); openSay(); }
 });
 
-/* ---------- saving on this phone ---------- */
-// The test link and the release each keep their own save, so testing never touches your real game.
-// Everything saved is plain data, ready to move to a server when the world goes online.
-const SAVE_KEY = `pocket-life:${TEST_BUILD ? 'test' : 'release'}`;
-const SAVE_FORMAT = 1;
-function saveGame() {
-  try {
-    const alive = player && !you.dead;
-    localStorage.setItem(SAVE_KEY, JSON.stringify({
-      format: SAVE_FORMAT, worldSize: WORLD_HALF * 2, savedAt: Date.now(),
-      items: world.items.map(({ kind, x, z, rot }) => [kind, +x.toFixed(2), +z.toFixed(2), +rot.toFixed(2)]),
-      bushes: berryBushes.map((b) => [b.userData.count ?? null, b.userData.growFrom ?? null]),
-      you: alive ? { look: you.look, carry: you.carry, lastKind: you.lastKind, lifeStart: you.lifeStart, stats: you.stats, statsAt: you.statsAt,
-        x: +player.position.x.toFixed(2), z: +player.position.z.toFixed(2), ry: +player.rotation.y.toFixed(2) } : null,
-    }));
-  } catch (err) { /* private browsing or storage full: the game still plays, it just won't remember */ }
-}
-function loadGame() {
-  let d = null;
-  try { d = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (err) { d = null; }
-  if (!d || d.format !== SAVE_FORMAT) return false;
-  // the world: where things lie, and how far each berry bush has grown back
-  if (d.worldSize === WORLD_HALF * 2 && Array.isArray(d.items)) {
-    for (const it of [...world.items]) removeWorldItem(it.id);
-    for (const [kind, x, z, rot] of d.items) if (ITEMS[kind] && Number.isFinite(x) && Number.isFinite(z)) addWorldItem(kind, x, z, rot || 0);
-  }
-  (d.bushes || []).forEach(([count, growFrom], i) => {
-    const b = berryBushes[i];
-    if (b && Number.isFinite(count) && Number.isFinite(growFrom)) { b.userData.count = count; b.userData.growFrom = growFrom; drawBerries(b); }
-  });
-  // your person, if they were alive when you left
-  const y = d.you;
-  if (!y || !y.look || !y.stats) return false;
-  const look = { ...DEFAULT_LOOK, ...y.look };
-  for (const k of ['sex', 'skin', 'build', 'hair', 'hairColour', 'tunic']) look[k] = pickId(LOOKS[k], look[k]);
-  look.age = Math.round(Math.min(LOOKS.age.max, Math.max(LOOKS.age.min, Number(look.age) || LOOKS.age.start)));
-  look.name = String(look.name || 'You').slice(0, 20);
-  you.lifeStart = y.lifeStart || Date.now();
-  you.stats = { ...freshStats(), ...y.stats };
-  you.statsAt = y.statsAt || Date.now();
-  you.dead = false;
-  you.carry = Object.fromEntries(Object.entries(y.carry || {}).filter(([k, n]) => ITEMS[k] && n > 0));
-  you.lastKind = ITEMS[y.lastKind] ? y.lastKind : Object.keys(you.carry)[0] || null;
-  spawnPlayer(look);
-  const px = inWorld(Number(y.x) || START.x), pz = inWorld(Number(y.z) || START.z);
-  playerGround = groundY(px, pz);
-  player.position.set(px, playerGround, pz);
-  player.rotation.y = Number(y.ry) || 0;
-  enterWorld();
-  tickStats(); // needs carry on while you're away
-  return true;
-}
-setInterval(() => { if (player || ui.mode === 'world') saveGame(); }, 5000);
-document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });
-window.addEventListener('pagehide', saveGame);
-
+/* ---------- your person lives on the server now ----------
+   The game joins the world first; the server says whether you have a person (and how they got on while you were away),
+   or whether you're making a new one. Old saves from before 0.0.7 are cleared. */
+try { localStorage.removeItem('pocket-life:test'); localStorage.removeItem('pocket-life:release'); } catch (err) { /* none */ }
 applyGraphics(gfx);
-setNet('offline');
-if (!loadGame()) enterCreator();
+setNet('connecting');
+enterCreator();
+showJoining(true);
+goOnline();
 requestAnimationFrame(frame);
