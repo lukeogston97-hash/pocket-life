@@ -1476,6 +1476,7 @@ function drawWeightBar(bar, w) {
   bar.parentElement.classList.toggle('full', w >= SETTINGS.carryCapacity);
 }
 function drawCarry() {
+  if (typeof craftOpen === 'function' && craftOpen()) drawCraft();
   const w = carried();
   $('carryWeight').textContent = fmt(w);
   $('carryMax').textContent = fmt(SETTINGS.carryCapacity);
@@ -1631,7 +1632,7 @@ function make(r) {
   for (const [k, n] of Object.entries(r.makes)) addToCarry(k, n);
   if (online()) net.sock.send(JSON.stringify({ t: 'craft', id: r.id }));
   startAction({ pose: 'kneel', seconds: 1.6 });
-  drawBag();
+  if (bagOpen()) drawBag();
   drawHeld();
   drawCarry();
   showGain(`Made ${r.name || ITEMS[Object.keys(r.makes)[0]].name}`);
@@ -1659,16 +1660,49 @@ function drawBag() {
     }
     return row;
   }));
-  $('makeSection').hidden = RECIPES.length === 0;
-  $('makeList').replaceChildren(...RECIPES.map((r) => {
-    const makes = Object.keys(r.makes)[0];
-    const needs = Object.entries(r.needs).map(([k, n]) => countLabel(k, n)).join(' + ');
-    const b = smallButton('Make', () => make(r), true);
-    b.disabled = !canMake(r);
-    return bagRow(ITEMS[makes].look.colour, r.name || ITEMS[makes].name, `Needs ${needs}`, [b]);
+}
+/* ---------- crafting: its own sheet (the Craft button at the top) ----------
+   Each recipe is a card: what it makes, what it needs (with how many you have), and Make. */
+const craftOpen = () => $('craft').classList.contains('open');
+function drawCraft() {
+  $('craftList').replaceChildren(...RECIPES.map((r) => {
+    const makes = Object.keys(r.makes)[0], it = ITEMS[makes];
+    const li = document.createElement('li');
+    li.className = 'craft-card';
+    const head = document.createElement('div');
+    head.className = 'craft-head';
+    const dot = document.createElement('span');
+    dot.className = 'dot';
+    dot.style.background = it.look.head || it.look.colour || '#9a948a';
+    const title = document.createElement('strong');
+    title.textContent = r.name || it.name;
+    const info = document.createElement('small');
+    info.textContent = [`Weight ${fmt(it.weight)}`, it.uses ? `${it.uses} uses` : '', r.about || ''].filter(Boolean).join(' · ');
+    const words = document.createElement('span');
+    words.className = 'craft-words';
+    words.append(title, info);
+    head.append(dot, words);
+    const needs = document.createElement('div');
+    needs.className = 'craft-needs';
+    for (const [k, n] of Object.entries(r.needs)) {
+      const have = you.carry[k] || 0;
+      const chip = document.createElement('span');
+      chip.className = 'need-chip' + (have >= n ? ' ok' : '');
+      chip.textContent = `${ITEMS[k].plural} ${Math.min(have, n)}/${n}`;
+      needs.appendChild(chip);
+    }
+    const ok = canMake(r);
+    const b = smallButton(ok ? 'Make' : 'Need more', () => { make(r); drawCraft(); }, ok);
+    b.disabled = !ok;
+    li.append(head, needs, b);
+    return li;
   }));
 }
-function openBag() { drawBag(); $('bag').classList.add('open'); $('bagBtn').setAttribute('aria-expanded', 'true'); hideHint(); }
+function openCraft() { closeBag(); drawCraft(); $('craft').classList.add('open'); $('craftBtn').setAttribute('aria-expanded', 'true'); hideHint(); }
+function closeCraft() { $('craft').classList.remove('open'); $('craftBtn').setAttribute('aria-expanded', 'false'); }
+$('craftBtn').addEventListener('click', () => (craftOpen() ? closeCraft() : openCraft()));
+$('craftClose').addEventListener('click', closeCraft);
+function openBag() { closeCraft(); drawBag(); $('bag').classList.add('open'); $('bagBtn').setAttribute('aria-expanded', 'true'); hideHint(); }
 function closeBag() { $('bag').classList.remove('open'); $('bagBtn').setAttribute('aria-expanded', 'false'); }
 $('bagBtn').addEventListener('click', () => (bagOpen() ? closeBag() : openBag()));
 $('bagClose').addEventListener('click', closeBag);
@@ -2186,6 +2220,7 @@ function doDrop(t) {
 function dropItems(kind, n) {
   if (ui.mode !== 'world' || !player || you.dead || !you.carry[kind]) return;
   closeBag();
+  closeCraft();
   const t = { type: 'drop', kind, n };
   if (action) { tasks.list.unshift(t); return; }
   if (tasks.current) tasks.list.unshift(tasks.current);
@@ -2291,6 +2326,7 @@ const cancelPress = () => { clearTimeout(pressTimer); pressTimer = null; };
 canvas.addEventListener('pointerdown', (e) => {
   lastPointer = e.pointerType;
   if (bagOpen()) closeBag();
+  if (craftOpen()) closeCraft();
   cancelPress();
   if (!e.isPrimary) { multi = true; return; }
   multi = false;
@@ -2562,6 +2598,7 @@ function openPause() {
   if (ui.mode !== 'world' || !player || you.dead) return;
   closeMenu();
   closeBag();
+  closeCraft();
   keysDown.clear();
   paused = true;
   $('pause').hidden = false;
@@ -2583,6 +2620,7 @@ document.addEventListener('keydown', (e) => {
   else if (!$('sayBox').hidden) closeSay();
   else if (!$('actMenu').hidden) closeMenu();
   else if (!$('death').hidden) return;
+  else if (craftOpen()) closeCraft();
   else if (bagOpen()) closeBag();
   else if (paused && !$('pause').hidden) closePause();
   else openPause();
@@ -2798,6 +2836,7 @@ function enterCreator() {
   $('creator').hidden = false;
   controls.enabled = false;
   closeBag();
+  closeCraft();
   hideHint();
   removeLabel(tagLabel);
   tagLabel = null;
@@ -2850,6 +2889,7 @@ function die(m) {
   closePause();
   stopQueue();
   closeBag();
+  closeCraft();
   hideHint();
   you.carry = {};
   you.lastKind = null;

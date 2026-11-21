@@ -23,6 +23,7 @@
       <div class="meta net-line" id="netLine" data-state="offline"><i class="net-dot" aria-hidden="true"></i><span id="netText">Offline</span></div>
     </div>
     <div class="top-btns">
+      <button id="craftBtn" class="pill-btn" type="button" aria-controls="craft">Craft</button>
       <button id="menuBtn" class="pill-btn" type="button" aria-controls="pause">Menu</button>
     </div>
   </header>
@@ -66,10 +67,16 @@
     <div class="bag-weight"><span>Weight <strong id="bagWeight">0 / 30</strong></span><span class="carry-bar wide" aria-hidden="true"><i id="bagBar"></i></span></div>
     <ul id="bagList" class="bag-list"></ul>
     <p id="bagEmpty" class="bag-empty">Nothing in your inventory yet. Tap a stick or stone to pick it up.</p>
-    <div id="makeSection" class="make" hidden>
-      <h3>Make</h3>
-      <ul id="makeList" class="bag-list"></ul>
+  </section>
+
+  <section id="craft" class="bag" aria-labelledby="craftTitle">
+    <div class="grab" aria-hidden="true"></div>
+    <div class="bag-head">
+      <h2 id="craftTitle">Craft</h2>
+      <button id="craftClose" class="text-btn" type="button">Close</button>
     </div>
+    <p class="craft-note">Things you can make from what you carry.</p>
+    <ul id="craftList" class="craft-list"></ul>
   </section>
 
   <section id="creator" class="creator" aria-labelledby="creatorTitle">
