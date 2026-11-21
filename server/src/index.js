@@ -9,7 +9,7 @@ import WORLDS from '../worlds.json'; // minimum version for each link
 import FILTER from '../words.json'; // the chat filter, copied from game-data.json by tools/worlds.py
 import G from '../game.json'; // needs, items, berry bushes, away rules: copied from game-data.json by tools/worlds.py
 import { starText, badName } from './filter.js';
-import { HOUR, MINUTE, freshStats, advanceStats, weightOf, addCarry, takeCarry, applyGives, eatOne, posAt, dist, craft, sleepMs, spend } from './people.js';
+import { HOUR, MINUTE, freshStats, advanceStats, addCarry, takeCarry, applyGives, eatOne, posAt, dist, craft, sleepMs, spend } from './people.js';
 
 const PROTOCOL = 2; // bump when the game and server stop understanding each other
 const CORS = { 'Access-Control-Allow-Origin': '*' };
@@ -30,7 +30,7 @@ function tooOld(v, b, min) {
 const FEEDBACK_KEEP = 300, REPORTS_KEEP = 300;
 // Spam limits: each kind of message refills at so many a second, up to a small burst. The admin is never limited.
 const LIMITS = { chop: [1, 3], sleep: [1, 4], craft: [1, 3], act: [3, 6], say: [1, 3], take: [5, 10], pick: [5, 10], drop: [2, 6], move: [12, 20], eat: [3, 6], drink: [1, 3], create: [1 / 5, 3],
-  feedback: [1 / 30, 3], report: [1 / 30, 3], adminLogin: [1 / 5, 3] };
+  feedback: [1 / 30, 3], report: [1 / 30, 3], adminLogin: [1 / 5, 3], hello: [1 / 2, 4] };
 const buckets = new WeakMap(); // per connection, kept in memory only
 const lastHeard = new WeakMap(); // per connection: when it last sent anything (the game pings every 25 seconds)
 const QUIET_MS = 90000; // nothing heard for this long: the phone is asleep or gone, so the person goes away
@@ -97,7 +97,7 @@ export class World extends DurableObject {
     for (let i = 0; i < keys.length; i += 100) await this.ctx.storage.put(Object.fromEntries(keys.slice(i, i + 100).map((k) => [k, batch[k]])));
   }
   sockets() { return this.ctx.getWebSockets().map((ws) => ({ ws, p: ws.deserializeAttachment() })).filter(({ p }) => p && p.id); }
-  socketOf(who) { return this.sockets().find(({ p }) => p.who === who); }
+  socketOf(who) { return who ? this.sockets().find(({ p }) => p.who === who) : undefined; }
   send(msg, except) {
     const text = JSON.stringify(msg);
     for (const { ws, p } of this.sockets()) if (p.id !== except) { try { ws.send(text); } catch (err) { /* gone */ } }
@@ -112,11 +112,16 @@ export class World extends DurableObject {
     for (let i = 0; i < want.length; i++) diff |= want.charCodeAt(i) ^ have.charCodeAt(i);
     return diff === 0;
   }
-  sendCount() { this.send({ t: 'count', n: this.sockets().filter(({ p }) => p.who).length }, null); }
+  sendCount() { this.send({ t: 'count', n: this.playing() }, null); }
+  playing() { return this.sockets().filter(({ p }) => p.who).length; } // watchers on the main menu aren't counted
+  // Who is this? For now a person belongs to the phone's random id (pid). Sign-in later (Google, say) plugs in here:
+  // check the sign-in with Google, then look up 'acct:<their Google id>' in storage to find their who. The first time
+  // someone signs in, save 'acct:<id>' = the who from their phone, so they keep the person they already have.
+  async whoFor(m) { return tagOf(m.pid || crypto.randomUUID()); }
 
   /* ---------- people ---------- */
   alive(p) { return p && p.state === 'alive'; }
-  isOnline(who) { return !!this.sockets().find(({ p }) => p.who === who && p.alive); }
+  isOnline(who) { return !!who && !!this.sockets().find(({ p }) => p.who === who && p.alive); }
   // online, away, asleep (a day away, needs paused) or sleeping (resting, by choice or when tired)
   stateOf(p) { return p.asleep && !this.isOnline(p.who) ? 'asleep' : p.sleeping ? 'sleeping' : this.isOnline(p.who) ? 'online' : 'away'; }
   // what everyone else is told about a person
@@ -330,9 +335,10 @@ export class World extends DurableObject {
     if (m.t === 'ping') return;
     const me = ws.deserializeAttachment() || {};
     const reply = (msg) => { try { ws.send(JSON.stringify(msg)); } catch (err) { /* gone */ } };
-    if (m.t === 'hello') { await this.hello(ws, me, m, reply); return; }
+    if (m.t === 'hello') { if (me.id && !allowed(ws, me, 'hello')) { reply({ t: 'slow' }); return; } await this.hello(ws, me, m, reply); return; }
     if (m.t === 'bye') { try { ws.close(1000, 'bye'); } catch (err) { /* gone */ } this.webSocketClose(ws); return; }
     if (!me.id) return;
+    if (me.watch && m.t !== 'feedback') return; // on the main menu: only watching the world
     if (!allowed(ws, me, m.t)) {
       if (m.t === 'take') reply({ t: 'took', id: m.id, ok: false });
       else if (m.t === 'pick') reply({ t: 'picked', bush: m.bush, ok: false });
@@ -508,14 +514,23 @@ export class World extends DurableObject {
     const link = m.link === 'test' ? 'test' : 'release';
     const min = (WORLDS.minVersion || {})[link];
     const isAdmin = this.codeOk(m.adminCode);
-    const who = await tagOf(m.pid || crypto.randomUUID());
+    const who = await this.whoFor(m);
     if (!isAdmin && this.admin.banned.includes(who)) { this.boot(ws, { t: 'banned' }); return; }
     if (!isAdmin && this.admin.maintenance && link !== 'test') { this.boot(ws, { t: 'maintenance', text: this.admin.message }); return; }
     if (min && tooOld(m.v, m.b, min)) { this.boot(ws, { t: 'update', min }); return; }
     if (m.adminCode && !isAdmin) reply({ t: 'adminNo' });
+    if (me.who) this.leave(ws, me); // was playing on this connection (Exit to the main menu): their person goes away
+    if (m.watch) { // the main menu: watch the world go by without a person
+      Object.assign(me, { id: `w:${crypto.randomUUID().slice(0, 8)}`, who: null, watch: true, admin: isAdmin, tag: m.adminTag !== false, v: clean(m.v, 20), link, alive: false });
+      ws.serializeAttachment(me);
+      const p = this.persons.get(who);
+      reply({ t: 'welcome', watch: true, id: me.id, people: this.people(null), world: this.view(), count: this.playing(), speed: this.speed,
+        yours: this.alive(p) ? { name: p.name, age: p.age } : null });
+      return;
+    }
     // the same phone in another tab or link: that one closes
     for (const s of this.sockets()) if (s.p.who === who && s.ws !== ws) { s.p.alive = false; s.ws.serializeAttachment(s.p); this.boot(s.ws, { t: 'elsewhere' }); }
-    Object.assign(me, { id: who, who, admin: isAdmin, tag: m.adminTag !== false, said: me.said || [], v: clean(m.v, 20), link, alive: false });
+    Object.assign(me, { id: who, who, watch: false, admin: isAdmin, tag: m.adminTag !== false, said: me.said || [], v: clean(m.v, 20), link, alive: false });
     const p = this.persons.get(who);
     let away = null, dead = null;
     if (p && this.alive(p)) {
@@ -540,7 +555,7 @@ export class World extends DurableObject {
     if (isAdmin) reply(this.adminState(me));
     const w = this.world;
     reply({ t: 'welcome', id: who, people: this.people(who), world: this.view(), needSeed: !w, needLayout: !!w && !w.layout,
-      count: this.sockets().length, me: me.alive ? this.mine(p) : null, away, dead, speed: this.speed });
+      count: this.playing(), me: me.alive ? this.mine(p) : null, away, dead, speed: this.speed });
     if (me.alive) this.send({ t: 'join', person: this.pub(p) }, who);
     this.sendCount();
   }
@@ -573,7 +588,7 @@ export class World extends DurableObject {
     const now = Date.now();
     try {
       // connections that have gone quiet (a phone locked, or the page closed without saying) are closed
-      for (const { ws, p } of this.sockets()) {
+      for (const { ws } of this.sockets()) {
         if (!lastHeard.has(ws)) { lastHeard.set(ws, now); continue; }
         if (now - lastHeard.get(ws) > QUIET_MS) { try { ws.close(1000, 'quiet'); } catch (err) { /* gone */ } this.webSocketClose(ws); }
       }
@@ -635,11 +650,17 @@ export class World extends DurableObject {
 
   webSocketClose(ws) {
     const me = ws.deserializeAttachment();
-    if (!me || !me.who || !me.id) return; // not joined, or already handled
-    me.id = null; // this connection is finished
+    if (!me || !me.id) return; // not joined, or already handled
+    if (!me.who) { me.id = null; ws.serializeAttachment(me); return; } // a watcher on the main menu
+    this.leave(ws, me);
+  }
+  // someone stops playing (closed the game, or Exit to the main menu): their person goes away and looks after themselves
+  leave(ws, me) {
+    const who = me.who, wasAlive = me.alive;
+    me.id = null; me.who = null; me.alive = false; // this connection no longer plays them
     ws.serializeAttachment(me);
-    const p = this.persons.get(me.who);
-    if (me.alive && this.alive(p) && !this.socketOf(me.who)) { // away now: they start looking after themselves
+    const p = this.persons.get(who);
+    if (wasAlive && this.alive(p) && !this.socketOf(who)) { // away now: they start looking after themselves
       p.leftAt = Date.now(); p.simAt = p.leftAt; p.statsAt = Math.min(p.statsAt, p.leftAt);
       p.home = [p.x, p.z]; p.plan = null; p.asleep = false; p.wanderNext = true; p.log = { ate: 0, drank: 0, picked: 0 }; // off for a stroll straight away
       this.touch(p);

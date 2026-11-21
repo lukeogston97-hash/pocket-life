@@ -878,7 +878,6 @@ withOwnRand(BB.seed || 7331, () => {
 
 /* ---------- build everything collected above ---------- */
 const woodMat = mat('#8a6847');
-const leafSmall = mat('#6f9a4e');
 for (const m of [reeds, cattails, pads, berries]) {
   m.instanceMatrix.needsUpdate = true;
   if (m.instanceColor) m.instanceColor.needsUpdate = true;
@@ -1045,22 +1044,6 @@ function matFor(colour) {
   const key = colour || '#9a948a';
   if (!matCache.has(key)) { const m = mat(key); m.userData.shared = true; matCache.set(key, m); }
   return matCache.get(key);
-}
-// a stick (with its little side twig) as one shape, made once and shared
-const rodGeos = new Map();
-function rodGeo(len, t, twig) {
-  const key = `${len}|${t}|${!!twig}`;
-  if (!rodGeos.has(key)) {
-    const parts = [new THREE.CylinderGeometry(t * 0.85, t, len, 5).rotateZ(Math.PI / 2)];
-    if (twig) {
-      const nub = new THREE.CylinderGeometry(t * 0.5, t * 0.62, len * 0.22, 5);
-      nub.applyMatrix4(new THREE.Matrix4().compose(V(len * 0.16, t * 0.5, t * 1.7),
-        new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, 0, -0.8)), V(1, 1, 1)));
-      parts.push(nub);
-    }
-    rodGeos.set(key, mergeGeometries(parts));
-  }
-  return rodGeos.get(key);
 }
 // Things you can carry. Each look gets a little variety of its own (Math.random, never the world's random numbers,
 // so the layout of the world never shifts).
@@ -1490,7 +1473,7 @@ const START_ITEMS = world.items.map(({ kind, x, z, rot }) => ({ kind, x, z, rot 
 /* ---------- you: plain data, plus your 3D person ---------- */
 const START = { x: 0.6, z: 1.9 };
 const you = { look: null, carry: {}, wear: {}, lastKind: null, lifeStart: 0, stats: null, statsAt: 0, dead: false }; // carry: item id -> how many; stats: need -> 0 to 100
-const ui = { mode: 'creator' };
+const ui = { mode: 'menu' }; // menu (the main menu), creator (making your person) or world (playing)
 let player = null, playerGround = 0, heldView = null;
 const ring = new THREE.Mesh(new THREE.RingGeometry(0.44, 0.54, 40).rotateX(-Math.PI / 2),
   new THREE.MeshBasicMaterial({ color: '#fbf8eb', transparent: true, opacity: 0.7, depthWrite: false }));
@@ -1502,7 +1485,6 @@ scene.add(tapMark);
 /* carrying: everything has a weight, and you can carry up to SETTINGS.carryCapacity */
 const weightOf = (counts) => Object.entries(counts).reduce((sum, [k, n]) => sum + (ITEMS[k] ? ITEMS[k].weight * n : 0), 0);
 const carried = () => weightOf(you.carry);
-const carryingAnything = () => Object.keys(you.carry).length > 0;
 function addToCarry(kind, n = 1) {
   you.carry[kind] = (you.carry[kind] || 0) + n;
   you.lastKind = kind;
@@ -1597,7 +1579,7 @@ function showTag(text, pos, gap = 10, ttl = 2.2) {
   tagLabel = addLabel({ cls: 'tag3d', text, anchor: pos.clone(), ttl, gap });
 }
 function showGain(text) { addLabel({ cls: 'gain', text, anchor: headTop(), ttl: 1.3, rise: 0.5, gap: 4 }); }
-const headTop = () => V(player.position.x, playerGround + player.userData.headTop + 0.1, player.position.z);
+const headTop = () => (player ? V(player.position.x, playerGround + player.userData.headTop + 0.1, player.position.z) : controls.target.clone()); // on the main menu: the middle of the view
 const tmp = V();
 // The free space between the info at the top and the bars at the bottom, measured (big phone text makes the HUD taller).
 // Name tags fade out where they'd run into the HUD, and menus and pop-ups stay inside the free space.
@@ -2934,6 +2916,7 @@ function closePause() { paused = false; $('pause').hidden = true; }
 $('resumeBtn').addEventListener('click', closePause);
 $('pause').addEventListener('click', (e) => { if (e.target === $('pause')) closePause(); });
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && ui.mode === 'menu') { closeNews(); closeFeedback(); closeSettings(); return; }
   if (e.key !== 'Escape' || ui.mode !== 'world') return;
   e.preventDefault();
   if (maint.on) return;
@@ -3164,7 +3147,9 @@ function enterCreator() {
   closeMenu();
   closePause();
   keysDown.clear();
+  app.classList.remove('is-menu');
   app.classList.add('is-creating');
+  $('mainMenu').hidden = true;
   $('creator').hidden = false;
   controls.enabled = false;
   closeBag();
@@ -3183,9 +3168,11 @@ function enterCreator() {
 }
 function enterWorld() {
   ui.mode = 'world';
-  app.classList.remove('is-creating');
+  app.classList.remove('is-creating', 'is-menu');
   $('creator').hidden = true;
+  $('mainMenu').hidden = true;
   controls.enabled = true;
+  ring.visible = true;
   if (previewPerson) { pscene.remove(previewPerson); disposeMaterials(previewPerson); previewPerson = null; }
   drawHud();
   drawCarry();
@@ -3246,6 +3233,76 @@ function endLife() {
   you.dead = false;
   enterCreator();
 }
+/* ---------- the main menu ----------
+   The first screen: Play, What's new, Settings and Feedback over a live view of the world, the camera slowly
+   circling the main pond. The game joins the world just to watch (no person, not counted as playing);
+   Play asks the server for your person on the same connection, and Exit in the pause menu comes back here. */
+const menuCam = { angle: deg(26) };
+function enterMenu() {
+  ui.mode = 'menu';
+  closeMenu(); closePause(); closeBag(); closeCraft(); closeSay(); hideHint();
+  keysDown.clear();
+  app.classList.remove('is-creating');
+  app.classList.add('is-menu');
+  $('creator').hidden = true;
+  $('mainMenu').hidden = false;
+  $('playBtn').disabled = false;
+  controls.enabled = false;
+  ring.visible = false; // the ring under your person
+  if (previewPerson) { pscene.remove(previewPerson); disposeMaterials(previewPerson); previewPerson = null; }
+  removeLabel(tagLabel);
+  tagLabel = null;
+  drawMenu();
+}
+// what's under Play: who you'll carry on as, or that you'll make a new person
+function drawMenu() {
+  $('playSub').textContent = menuYours ? `as ${menuYours.name} · ${menuYours.age}` : menuYours === null ? 'Make your person' : '';
+  const n = others.size;
+  $('menuNet').dataset.state = $('netLine').dataset.state;
+  $('menuNetText').textContent = $('netLine').dataset.state !== 'online' ? $('netText').textContent : n ? `${n} ${n === 1 ? 'person' : 'people'} in the world` : 'Nobody in the world yet';
+}
+let menuYours; // undefined until the server says; null when you have no person
+// the camera slowly circles the main pond (it holds still if the phone asks for less motion)
+function menuCamera(dt) {
+  if (!reduceMotion) menuCam.angle += dt * 0.035; // about three minutes a lap
+  const t = V(POND.x, groundY(POND.x, POND.z) + 1.0, POND.z);
+  controls.target.copy(t);
+  camera.position.copy(t).add(V().setFromSpherical(new THREE.Spherical(30, deg(57), menuCam.angle)));
+  camera.lookAt(t);
+}
+function sendHello() {
+  net.sock.send(JSON.stringify({ t: 'hello', proto: 2, watch: net.mode === 'watch', v: VERSION, b: DATA.build || 0, link: TEST_BUILD ? 'test' : 'release', pid, adminCode: admin.code || undefined, adminTag: admin.tag }));
+}
+// Play: the same connection now plays your person (or makes a new one)
+function play() {
+  if (ui.mode !== 'menu') return;
+  net.mode = 'play';
+  $('playBtn').disabled = true; // until the server answers
+  if (net.sock && net.sock.readyState === 1) sendHello();
+  else { showJoining(true); goOnline(); }
+}
+// back to the main menu: from making a person, or Exit in the pause menu (your person goes away and looks after themselves)
+function toMenu() {
+  net.mode = 'watch';
+  if (player) {
+    stopQueue();
+    action = null;
+    auto.on = false; $('autoChip').hidden = true;
+    removePlayer();
+    you.look = null; you.stats = null; you.dead = false; you.sleeping = false;
+  }
+  enterMenu();
+  if (net.sock && net.sock.readyState === 1) sendHello();
+}
+$('playBtn').addEventListener('click', play);
+$('creatorBack').addEventListener('click', toMenu);
+$('exitBtn').addEventListener('click', () => { closePause(); toMenu(); });
+$('menuNewsBtn').addEventListener('click', () => openNews());
+$('menuFeedbackBtn').addEventListener('click', () => openFeedback());
+$('menuSettingsBtn').addEventListener('click', () => { $('settings').hidden = false; $('settingsClose').focus(); });
+function closeSettings() { $('settings').hidden = true; }
+$('settingsClose').addEventListener('click', closeSettings);
+$('settings').addEventListener('click', (e) => { if (e.target === $('settings')) closeSettings(); });
 // coming back to a person who died or left while you were away
 function showGoneCard(d) {
   const away = d.away ? ' while you were away' : '';
@@ -3289,6 +3346,12 @@ function frame() {
     if (!previewDrag && !reduceMotion) previewSpin += dt * 0.35;
     if (previewPerson) previewPerson.rotation.y = previewSpin;
     renderCreator(w, h);
+  } else if (ui.mode === 'menu') {
+    menuCamera(raw);
+    updateOthers(dt);
+    renderWorld(w, h, raw);
+    hudTimer += raw;
+    if (hudTimer > 1) { hudTimer = 0; drawMenu(); applyDaylight(); for (const b of berryBushes) drawBerries(b); }
   } else if (player) {
     if (!you.dead && !paused && !you.sleeping) updatePlayer(dt);
     if (!paused) keyCamera(dt);
@@ -3297,22 +3360,27 @@ function frame() {
     sendMove();
     followPlayer(dt);
     controls.update();
-    updateDetails(controls.target.x, controls.target.z);
-    sun.position.copy(controls.target).add(SUN_OFFSET);
-    sun.target.position.copy(controls.target);
-    sun.target.updateMatrixWorld();
-    if (!reduceMotion) animateWater(elapsed);
-    renderer.setScissorTest(false);
-    renderer.setViewport(0, 0, w, h);
-    renderer.setClearColor(sky, 1);
-    renderer.render(scene, camera);
-    watchSpeed(raw);
-    updateLabels();
+    renderWorld(w, h, raw);
     hudTimer += raw;
     if (hudTimer > 1) { hudTimer = 0; drawHud(); tickStats(); applyDaylight(); for (const b of berryBushes) drawBerries(b); }
   }
   window.__frames = (window.__frames || 0) + 1;
   requestAnimationFrame(frame);
+}
+
+// the world as the camera sees it (playing, and behind the main menu)
+function renderWorld(w, h, raw) {
+  updateDetails(controls.target.x, controls.target.z);
+  sun.position.copy(controls.target).add(SUN_OFFSET);
+  sun.target.position.copy(controls.target);
+  sun.target.updateMatrixWorld();
+  if (!reduceMotion) animateWater(elapsed);
+  renderer.setScissorTest(false);
+  renderer.setViewport(0, 0, w, h);
+  renderer.setClearColor(sky, 1);
+  renderer.render(scene, camera);
+  watchSpeed(raw);
+  updateLabels();
 }
 
 /* ---------- online: other people in the same world, and speech bubbles ---------- */
@@ -3321,7 +3389,7 @@ function frame() {
 // can't be reached, the game carries on as normal and keeps trying quietly.
 const SERVER = typeof DATA.server === 'string' ? DATA.server : '';
 const others = new Map(); // id -> { mesh, tx, tz, tr, phase, name, bubble }
-const net = { sock: null, myId: null, wanted: false, retry: 1000, sentAt: 0, last: null };
+const net = { sock: null, myId: null, wanted: false, retry: 1000, sentAt: 0, last: null, mode: 'watch' }; // mode: watch (main menu) or play
 function cleanLook(look) {
   const l = { ...DEFAULT_LOOK, ...(look || {}) };
   for (const k of ['sex', 'skin', 'build', 'hair', 'hairColour', 'tunic']) l[k] = pickId(LOOKS[k], l[k]);
@@ -3374,7 +3442,7 @@ function goOnline() {
   sock.onopen = () => {
     net.retry = 1000;
     net.last = null;
-    sock.send(JSON.stringify({ t: 'hello', proto: 2, v: VERSION, b: DATA.build || 0, link: TEST_BUILD ? 'test' : 'release', pid, adminCode: admin.code || undefined, adminTag: admin.tag }));
+    sendHello();
   };
   sock.onmessage = (e) => {
     let m;
@@ -3384,13 +3452,13 @@ function goOnline() {
     else if (m.t === 'maintenance') showMaintenance(m.text);
     else if (m.t === 'thanks') showTag('Thanks for the feedback!', headTop(), 2.5);
     else if (m.t.startsWith('admin') || ['announce', 'kicked', 'banned', 'badge', 'reset'].includes(m.t)) adminMessage(m);
-    else if (m.t === 'slow') showTag('Slow down a little', headTop(), 2);
+    else if (m.t === 'slow') { $('playBtn').disabled = false; showTag('Slow down a little', headTop(), 2); }
     else if (m.t === 'reported') showTag(m.ok ? 'Thanks, your report was sent' : "They've left, so it couldn't be sent", headTop(), 2.5);
     else if (m.t === 'welcome') welcome(m);
     else if (m.t === 'me') { const fresh = !player; applyMe(m); if (fresh) enterWorld(); }
     else if (m.t === 'died') die(m);
     else if (m.t === 'badName') { $('nameErr').textContent = 'Pick a different name.'; $('nameErr').hidden = false; creating = false; }
-    else if (m.t === 'elsewhere') { net.stopped = true; showMaintenance('Pocket Life was opened somewhere else on this phone. Reload this page to play here instead.', 'Playing somewhere else', ''); }
+    else if (m.t === 'elsewhere') { net.stopped = true; showMaintenance('Your person is being played in another tab or window. Reload this page to play here instead.', 'Playing somewhere else', ''); }
     else if (m.t === 'state') setOtherState(m);
     else if (m.t === 'stroll') { const o = others.get(m.id); if (o) Object.assign(o, { tx: m.x, tz: m.z, speed: m.speed || null, then: m.then || null, act: null }); }
     else if (m.t === 'act') { const o = others.get(m.id); if (o && ['bend', 'kneel', 'pick', 'chop'].includes(m.pose)) o.act = { pose: m.pose, seconds: Math.min(25, Number(m.seconds) || 0.5), t0: elapsed }; }
@@ -3420,7 +3488,8 @@ function goOnline() {
     if (net.sock === sock) net.sock = null;
     net.myId = null;
     setNet(net.wanted ? 'connecting' : 'offline');
-    if (!maint.on && !net.stopped) showJoining(true, !!player);
+    if (!maint.on && !net.stopped && ui.mode !== 'menu') showJoining(true, !!player);
+    $('playBtn').disabled = false;
     shared.on = false;
     for (const id of [...others.keys()]) removeOther(id);
     if (net.wanted && !net.stopped) { setTimeout(goOnline, maint.on ? 20000 : net.retry); net.retry = Math.min(30000, net.retry * 2); }
@@ -3455,6 +3524,13 @@ function welcome(m) {
   setSpeed(m.speed);
   for (const id of [...others.keys()]) removeOther(id);
   for (const p of m.people || []) addOther(p);
+  if (m.watch) { // watching from the main menu
+    if (m.world) useSharedWorld(m.world);
+    menuYours = m.yours || null;
+    if (ui.mode !== 'menu') toMenu();
+    drawMenu();
+    return;
+  }
   if (m.world) { useSharedWorld(m.world); if (m.needLayout) sendLayout(); }
   else if (m.needSeed) seedWorld();
   if (m.me) {
@@ -3472,10 +3548,10 @@ function welcome(m) {
       }
     }
     if (m.away) showWelcomeBack(m.away);
-  } else if (player && !you.dead) {
-    // the server has no person for us (a reset world, say): start again
+  } else if (!(player && you.dead)) {
+    // no person yet (or the world was reset): make one
     removePlayer();
-    enterCreator();
+    if (ui.mode !== 'creator') enterCreator();
   }
   if (m.dead) showGoneCard(m.dead);
 }
@@ -3623,6 +3699,7 @@ function hideMaintenance() {
 function setNet(state, n) {
   $('netLine').dataset.state = state;
   $('netText').textContent = state === 'online' ? `${n || 1} online` : state === 'connecting' ? 'Connecting…' : 'Offline';
+  if (ui.mode === 'menu') drawMenu();
 }
 // feedback from the Menu: goes to the server (and on to the admin page), with the version and device
 const HTTP_BASE = SERVER.replace(/^ws/, 'http').replace(/\/world$/, '');
@@ -3642,7 +3719,6 @@ $('feedbackForm').addEventListener('submit', async (e) => {
     showTag('Thanks for the feedback!', headTop(), 2.5);
   } catch (err) { showTag("Couldn't send it, try again later", headTop(), 2.5); }
 });
-$('pauseFeedbackBtn').addEventListener('click', openFeedback);
 // What's new: the dev log from game-data.json, newest first
 function openNews() {
   closePause();
@@ -3665,7 +3741,6 @@ function openNews() {
   $('newsBody').scrollTop = 0;
 }
 function closeNews() { $('news').hidden = true; paused = false; }
-$('pauseNewsBtn').addEventListener('click', openNews);
 $('newsClose').addEventListener('click', closeNews);
 for (const b of document.querySelectorAll('[data-gfx]')) b.addEventListener('click', () => applyGraphics(b.dataset.gfx));
 // Report: pick a reason, add a note if you like. It goes to the server with what they said lately.
@@ -3874,11 +3949,6 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 setInterval(() => { if (online() && !document.hidden) net.sock.send(JSON.stringify({ t: 'ping' })); }, 25000);
-function goOffline() {
-  net.wanted = false;
-  if (net.sock) { try { net.sock.close(); } catch (err) { /* already closed */ } }
-  net.sock = null;
-}
 const online = () => net.sock && net.sock.readyState === 1 && net.myId;
 function addOther(p) {
   if (!p || !p.id || p.id === net.myId) return;
@@ -4066,9 +4136,8 @@ document.addEventListener('keydown', (e) => {
 try { localStorage.removeItem('pocket-life:test'); localStorage.removeItem('pocket-life:release'); } catch (err) { /* none */ }
 applyGraphics(gfx);
 setNet('connecting');
-enterCreator();
-showJoining(true);
+enterMenu();
 goOnline();
 requestAnimationFrame(frame);
 // for automated checks only: open the page with ?debug to reach the game's state from the browser console
-if (location.search.includes('debug')) window.__pl = { walk, tasks, trees, you, get player() { return player; }, findPath, freeAt };
+if (location.search.includes('debug')) window.__pl = { walk, tasks, trees, you, get player() { return player; }, findPath, freeAt, die, showWelcomeBack, showGoneCard, showMaintenance, hideMaintenance };
