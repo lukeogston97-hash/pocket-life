@@ -101,12 +101,24 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--moss); outl
 .warn[hidden] { display: none; }
 .queue {
   position: absolute; left: 50%; bottom: 100px; transform: translateX(-50%);
-  display: flex; align-items: center; gap: 8px;
-  padding: 3px 3px 3px 15px; border-radius: 999px;
-  background: var(--paper-solid); box-shadow: 0 4px 14px rgba(40, 42, 24, 0.18);
-  font-size: 13.5px; font-weight: 800; white-space: nowrap; font-variant-numeric: tabular-nums;
+  width: max-content; min-width: 200px; max-width: calc(100% - 24px);
+  padding: 7px 8px 7px 12px; border-radius: 14px;
+  background: var(--paper); box-shadow: 0 4px 14px rgba(40, 42, 24, 0.16);
+  font-size: 13px; font-weight: 800; pointer-events: auto;
 }
 .queue[hidden] { display: none; }
+.q-now { display: flex; align-items: baseline; gap: 6px; min-height: 22px; align-items: center; }
+.q-now small { font-size: 10px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); }
+.q-now.idle span { color: var(--ink-soft); font-weight: 700; }
+.q-list { list-style: none; margin: 4px 0 0; padding: 4px 0 0; border-top: 1px solid rgba(44, 43, 33, 0.1); display: grid; gap: 2px; }
+.q-list[hidden] { display: none; }
+.q-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12.5px; font-weight: 700; }
+.q-list li.more { color: var(--ink-soft); padding: 4px 0; }
+.q-list .n { color: var(--ink-soft); margin-right: 5px; font-variant-numeric: tabular-nums; }
+.q-x { flex: none; width: 34px; height: 34px; border: 0; border-radius: 999px; background: none; color: var(--ink-soft); font: 800 17px/1 var(--font-ui); cursor: pointer; }
+.q-x:hover { background: rgba(44, 43, 33, 0.07); }
+.q-stop { width: 100%; min-height: 36px; margin-top: 5px; }
+.q-stop[hidden] { display: none; }
 .qnum { min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: var(--moss); color: var(--paper-solid); font: 800 12px/22px var(--font-ui); text-align: center; box-shadow: 0 2px 6px rgba(40, 42, 24, 0.25); }
 .carry svg { width: 24px; height: 24px; color: var(--ink-soft); flex: none; }
 .carry-text small { display: block; font-size: 9.5px; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-soft); }
@@ -287,7 +299,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--moss); outl
 
   <p id="hint" class="hint" hidden>Tap the ground to walk. Tap a stick, stone, berry bush or the pond to see what you can do (do a few to queue them). Menu is at the top right.</p>
 
-  <div id="queue" class="queue" hidden><span id="queueText">2 in queue</span><button id="queueStop" class="small-btn" type="button">Stop</button></div>
+  <div id="queue" class="queue" hidden aria-live="polite">
+    <div id="queueNowRow" class="q-now"><small>Now</small><span id="queueNow">Waiting for something to do</span></div>
+    <ol id="queueList" class="q-list" hidden></ol>
+    <button id="queueStop" class="small-btn q-stop" type="button" hidden>Stop all</button>
+  </div>
 
   <div id="actMenu" class="act-menu" role="menu" aria-labelledby="actTitle" hidden>
     <div id="actTitle" class="act-title"></div>
@@ -474,7 +490,7 @@ try {
 // Browsers keep a page for a few minutes. If this page is older than the data it just loaded,
 // load the new page (once), so old code never runs with new data.
 const CODE_VERSION = '0.0.5'; // keep the same as "version" in game-data.json
-const CODE_BUILD = 6;         // and this the same as "build" (count up with each test copy)
+const CODE_BUILD = 8;         // and this the same as "build" (count up with each test copy)
 {
   const url = new URL(location.href);
   const dataStamp = `${DATA.version}.${DATA.build || 0}`;
@@ -2147,7 +2163,7 @@ function startAction(a) { walk.target = null; action = { t0: elapsed, done: fals
 const tasks = { current: null, list: [] }; // { type: 'pickup', id } | { type: 'use', source, ... } | { type: 'drop', kind, n }
 const MAX_QUEUE = 30;
 const allTasks = () => (tasks.current ? [tasks.current, ...tasks.list] : [...tasks.list]);
-const shownTasks = () => allTasks().filter((t) => t.type !== 'drop' && t.type !== 'walk');
+const shownTasks = () => allTasks().filter((t) => t.type !== 'drop');
 // the weight you'll be carrying once everything queued is picked up or harvested
 const plannedWeight = () => carried() + allTasks().reduce((sum, t) => {
   if (t.type === 'pickup') { const it = getItem(t.id); return sum + (it ? ITEMS[it.kind].weight : 0); }
@@ -2225,17 +2241,22 @@ function nextTask() {
   else if (t.type === 'walk') walkTo(V(t.x, 0, t.z), nextTask, nextTask);
   else nextTask();
 }
-// walking somewhere doesn't cancel your queue: you go there first, then carry on
+// a walk joins the end of the queue, so it never interrupts anything
 function walkFirst(p) {
   const t = { type: 'walk', x: p.x, z: p.z };
-  if (tasks.list[0] && tasks.list[0].type === 'walk') tasks.list.shift(); // a new walk replaces one you hadn't started
-  if (action) { tasks.list.unshift(t); return; } // finish what you're doing, then go
-  if (tasks.current && tasks.current.type !== 'walk') tasks.list.unshift(tasks.current);
-  walk.target = null;
-  walk.onArrive = walk.onFail = null;
-  tasks.list.unshift(t);
-  tasks.current = null;
-  nextTask();
+  const last = tasks.list[tasks.list.length - 1];
+  if (last && last.type === 'walk') tasks.list.pop(); // a new walk replaces one still waiting at the end
+  else if (!tasks.list.length && tasks.current && tasks.current.type === 'walk' && !action) {
+    // only walking, nothing else queued: change course straight away
+    walk.target = null;
+    walk.onArrive = walk.onFail = null;
+    tasks.current = null;
+  }
+  if (allTasks().length >= MAX_QUEUE) { showTag('Your queue is full', headTop(), 2); return; }
+  hideHint();
+  tasks.list.push(t);
+  if (!tasks.current && !action) nextTask();
+  else drawQueue();
 }
 function doPickup(item) {
   if (!getItem(item.id)) { nextTask(); return; }
@@ -2331,16 +2352,56 @@ let badges = [];
 function taskSpot(t) {
   if (t.type === 'pickup') { const v = itemViews.get(t.id); return v ? V(v.position.x, v.position.y + 0.22, v.position.z) : null; }
   if (t.type === 'use') return t.water ? V(POND.x, WATER_Y + 0.5, POND.z) : V(t.x, t.top + 0.15, t.z);
+  if (t.type === 'walk') return V(t.x, groundY(t.x, t.z) + 0.3, t.z);
   return null;
 }
+// what a task is called in the queue list: "Pick up Stick" next, "Picking up Stick" now
+function taskName(t, now) {
+  if (t.type === 'pickup') { const it = getItem(t.id); const n = it ? ITEMS[it.kind].name : 'item'; return now ? `Picking up ${n}` : `Pick up ${n}`; }
+  if (t.type === 'use') {
+    const src = SOURCES[t.source];
+    if (!src) return 'Use';
+    if (now) return src.verb;
+    return harvests(src) ? `Harvest ${ITEMS[Object.keys(src.harvest)[0]].name}` : src.action || `Use ${src.name.toLowerCase()}`;
+  }
+  if (t.type === 'drop') return now ? 'Putting down' : `Drop ${countLabel(t.kind, t.n)}`;
+  if (t.type === 'walk') return now ? 'Walking' : 'Walk there';
+  return '';
+}
+// the list above the bottom bar: what your person is doing now, then what's next
 function drawQueue() {
   for (const b of badges) removeLabel(b);
   badges = [];
-  const list = shownTasks();
-  const show = list.length >= 2 && ui.mode === 'world';
+  const show = ui.mode === 'world' && !!player && !you.dead;
   $('queue').hidden = !show;
   if (!show) return;
-  $('queueText').textContent = `${list.length} in queue`;
+  const cur = tasks.current;
+  $('queueNow').textContent = cur ? taskName(cur, true) : 'Waiting for something to do';
+  $('queueNowRow').classList.toggle('idle', !cur);
+  const next = tasks.list.map((t, i) => ({ t, i })).filter(({ t }) => t.type !== 'drop');
+  const rows = next.slice(0, 5).map(({ t, i }, k) => {
+    const li = document.createElement('li');
+    const name = document.createElement('span');
+    const num = document.createElement('span');
+    num.className = 'n';
+    num.textContent = `${k + 1}.`;
+    name.append(num, taskName(t, false));
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.className = 'q-x';
+    x.textContent = '\u00d7';
+    x.setAttribute('aria-label', `Remove ${taskName(t, false)}`);
+    x.addEventListener('click', () => { const j = tasks.list.indexOf(t); if (j >= 0) tasks.list.splice(j, 1); drawQueue(); });
+    li.append(name, x);
+    return li;
+  });
+  if (next.length > 5) { const li = document.createElement('li'); li.className = 'more'; li.textContent = `+${next.length - 5} more`; rows.push(li); }
+  $('queueList').replaceChildren(...rows);
+  $('queueList').hidden = rows.length === 0;
+  $('queueStop').hidden = !cur && !next.length;
+  // numbers over the things you've queued
+  const list = shownTasks();
+  if (list.length < 2) return;
   const used = new Set();
   list.forEach((t, i) => {
     const p = taskSpot(t);
@@ -2476,7 +2537,7 @@ function handleTap(px, py) {
   if (t.kind === 'you') { showTag('You', headTop(), 2); return; }
   // a stick, stone, berry bush or the pond: open the menu of what you can do with it
   if (t.kind === 'item' || t.kind === 'use') { openMenuAt(px, py, t); return; }
-  // anything else: walk there first, then carry on with anything queued
+  // anything else: walk there (after anything already queued)
   if (t.kind === 'shore') { walkFirst(shorePointToward(player.position)); return; }
   if (t.kind === 'thing') {
     const { owner, hit } = t;
@@ -2594,11 +2655,14 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('keyup', (e) => keysDown.delete(e.code));
 window.addEventListener('blur', () => keysDown.clear());
 const panVel = V();
+const camVel = { turn: 0, tilt: 0 }; // turning and tilting speed, eased so keys start and stop smoothly
 const keyAxis = (plus, minus) => (keysDown.has(plus) ? 1 : 0) - (keysDown.has(minus) ? 1 : 0);
 function keyCamera(dt) {
   const t = controls.target;
   // Q and E: turn round your person
-  const turn = keyAxis('KeyE', 'KeyQ') * 1.7 * dt;
+  camVel.turn += (keyAxis('KeyE', 'KeyQ') * 1.5 - camVel.turn) * Math.min(1, dt * 5);
+  if (Math.abs(camVel.turn) < 0.002 && !keysDown.has('KeyE') && !keysDown.has('KeyQ')) camVel.turn = 0;
+  const turn = camVel.turn * dt;
   if (turn && player) {
     const c = Math.cos(turn), s = Math.sin(turn), px = player.position.x, pz = player.position.z;
     for (const v of [camera.position, t]) {
@@ -2608,7 +2672,9 @@ function keyCamera(dt) {
     }
   }
   // R and F: R swings the camera up to look down from above, F brings it down toward the horizon
-  const tilt = keyAxis('KeyF', 'KeyR') * 0.9 * dt;
+  camVel.tilt += (keyAxis('KeyF', 'KeyR') * 0.8 - camVel.tilt) * Math.min(1, dt * 5);
+  if (Math.abs(camVel.tilt) < 0.002 && !keysDown.has('KeyF') && !keysDown.has('KeyR')) camVel.tilt = 0;
+  const tilt = camVel.tilt * dt;
   if (tilt) {
     const off = camera.position.clone().sub(t);
     const sph = new THREE.Spherical().setFromVector3(off);
@@ -2621,7 +2687,7 @@ function keyCamera(dt) {
   const fwd = V(t.x - camera.position.x, 0, t.z - camera.position.z).normalize();
   const right = V(-fwd.z, 0, fwd.x);
   const speed = camera.position.distanceTo(t) * 0.6;
-  panVel.lerp(fwd.multiplyScalar(f * speed).add(right.multiplyScalar(r * speed)), Math.min(1, dt * 8));
+  panVel.lerp(fwd.multiplyScalar(f * speed).add(right.multiplyScalar(r * speed)), Math.min(1, dt * 4));
   if (f || r) camFree = true;
   const lim = WORLD_HALF + 4;
   const dx = Math.max(-lim, Math.min(lim, t.x + panVel.x * dt)) - t.x, dz = Math.max(-lim, Math.min(lim, t.z + panVel.z * dt)) - t.z;
@@ -2774,6 +2840,11 @@ function enterCreator() {
   removeLabel(tagLabel);
   tagLabel = null;
   draft = { ...DEFAULT_LOOK };
+  // while testing, a ready-made name so starting is one tap (settings.autoName; you can still change it)
+  if (SETTINGS.autoName) {
+    const names = DATA.testNames && DATA.testNames.length ? DATA.testNames : ['Alex', 'Sam', 'Jo'];
+    draft.name = names[Math.floor(Math.random() * names.length)];
+  }
   syncForm();
   refreshPreview();
 }

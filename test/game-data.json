@@ -1,12 +1,31 @@
 {
   "version": "0.0.5",
-  "build": 6,
+  "build": 8,
   "settings": {
     "carryCapacity": 30,
     "walkSpeed": 2.2,
     "worldSize": 100,
-    "needsSpeed": 1
+    "needsSpeed": 1,
+    "autoName": true
   },
+  "testNames": [
+    "Alex",
+    "Sam",
+    "Jordan",
+    "Riley",
+    "Casey",
+    "Jamie",
+    "Taylor",
+    "Morgan",
+    "Charlie",
+    "Quinn",
+    "Harper",
+    "Rowan",
+    "Ash",
+    "Billie",
+    "Kit",
+    "Robin"
+  ],
   "defaultLook": {
     "sex": "male",
     "hair": "short",
@@ -401,7 +420,7 @@
     }
   },
   "help": {
-    "settings": "carryCapacity is the most weight a person can carry. walkSpeed is in metres per second. worldSize is how wide the square world is in metres (100 makes it 100 m x 100 m, with the clearing in the middle); it can be 40 to 300, and the bigger it is the more your phone has to draw. needsSpeed is 1 for real time; set it higher to test, for example 60 makes an hour of hunger and thirst pass in a minute.",
+    "settings": "carryCapacity is the most weight a person can carry. walkSpeed is in metres per second. worldSize is how wide the square world is in metres (100 makes it 100 m x 100 m, with the clearing in the middle); it can be 40 to 300, and the bigger it is the more your phone has to draw. needsSpeed is 1 for real time; set it higher to test, for example 60 makes an hour of hunger and thirst pass in a minute. autoName fills in a name from testNames on the Make your person screen (handy while testing; set it to false for the real game).",
     "items": "To add an item, copy one of the items above, give it a new id (lower case, no spaces) and set its name, plural, weight and look. eat is what eating one gives (a berry gives hunger 2), which adds an Eat button in the inventory. Shapes: rod (length, thickness, colour, twig), rock (size, colour), ball (size, colour), box (width, height, depth, colour). startInWorld is how many lie around when the world starts (0 for things you can only make), and startNear is how many of those start close to where you appear; the rest are spread over the whole world.",
     "recipes": "To add a recipe, put it in the recipes list like this: {\"id\": \"stone-axe\", \"name\": \"Stone axe\", \"needs\": {\"stick\": 1, \"stone\": 1}, \"makes\": {\"stone-axe\": 1}}. Every item in needs and makes must exist in items. Recipes show up in your bag automatically.",
     "looks": "Each list here is a set of choices on the Make your person screen. Add an entry to add a choice.",
