@@ -10,8 +10,9 @@ Luke's mobile "life in your pocket" game: SEED meets One Hour One Life. Built st
 - Players are 13+. Deaths: hunger, thirst, tiredness, old age, animals, accidents. No PvP.
 - Home storage can't be taken, but if a player is gone too long and upkeep lapses, it goes out to the world.
 - Start-from-nothing world. Every item has a weight (stick 1, stone 1). Carry capacity 30.
-- Berries are picked from gooseberry bushes into your inventory and eaten from there, one at a time. A bush gives 5 berries (5 hunger each) and grows them back over regrowHours (4).
-- Controls: tap or left-click to walk, or to pick up or use what you tapped. Walking doesn't cancel the task queue. Right-click (or hold a finger down on a phone) opens a small action menu. Escape opens the pause menu. On a computer, W A S D move the camera, Q and E turn it round your person, and R and F tilt it.
+- Berries are picked one at a time from gooseberry bushes into your inventory, and eaten from there one at a time (2 hunger each). A full bush holds 5, and picked berries grow back one by one (a bare bush is full again after regrowHours, 4). One drink at the pond gives 10 thirst. These are playtest amounts; proper eating, drinking and resting tasks come later.
+- Your person walks round rocks, bushes, logs, stumps and tree trunks.
+- Controls: tap or left-click to walk, or to pick up or use what you tapped. Walking doesn't cancel the task queue. Right-click (or hold a finger down on a phone) opens a small action menu. Escape, or the Menu button at the top right, opens the pause menu (Resume, Inventory, New person). On a computer, W A S D move the camera, Q and E turn it round your person, and R and F tilt it.
 - Later: shared persistent world (needs a server and database), day planner, skills, more stats, regions and time zones, app store wrapper.
 
 ## How the code is laid out
@@ -30,5 +31,5 @@ Luke's mobile "life in your pocket" game: SEED meets One Hour One Life. Built st
 - Test first, then release. Make every change in the test/ folder (test/index.html and test/game-data.json), push it to main, and tell Luke to try it on the test link: https://lukeogston97-hash.github.io/pocket-life/test/ (the page shows "(test)" by the version).
 - Only when Luke says to release it, copy test/index.html and test/game-data.json over index.html and game-data.json in the root, and push. That updates the release link: https://lukeogston97-hash.github.io/pocket-life/
 - Push to main, not only to a separate branch, or neither link updates. GitHub Pages updates about a minute or two after each push.
-- When you bump the version, change it in both places: "version" in game-data.json and CODE_VERSION near the top of the script in index.html. If a phone has kept an older copy of the page, the page sees the mismatch and reloads itself.
+- When you bump the version, change it in both places: "version" in game-data.json and CODE_VERSION near the top of the script in index.html. Each new test copy of the same version also counts "build" (game-data.json) and CODE_BUILD (index.html) up by one; the test page shows it, like "v0.0.5 (test 2)". If a phone has kept an older copy of the page, the page sees the mismatch and reloads itself.
 - No em-dashes in anything Luke reads.

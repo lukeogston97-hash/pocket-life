@@ -282,10 +282,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--moss); outl
       <div class="meta"><span id="hudAge">25</span> years old</div>
       <div class="meta" id="hudTime">9:00 am</div>
     </div>
-    <button id="newPersonBtn" class="pill-btn" type="button">New person</button>
+    <button id="menuBtn" class="pill-btn" type="button" aria-controls="pause">Menu</button>
   </header>
 
-  <p id="hint" class="hint" hidden>Tap the ground to walk. Tap sticks and stones to pick them up (tap a few to queue them). Tap the pond to drink and a berry bush to pick its berries.</p>
+  <p id="hint" class="hint" hidden>Tap the ground to walk. Tap sticks and stones to pick them up (tap a few to queue them). Tap the pond to drink and a berry bush to pick a berry.</p>
 
   <div id="queue" class="queue" hidden><span id="queueText">2 in queue</span><button id="queueStop" class="small-btn" type="button">Stop</button></div>
 
@@ -474,10 +474,12 @@ try {
 // Browsers keep a page for a few minutes. If this page is older than the data it just loaded,
 // load the new page (once), so old code never runs with new data.
 const CODE_VERSION = '0.0.5'; // keep the same as "version" in game-data.json
+const CODE_BUILD = 2;         // and this the same as "build" (count up with each test copy)
 {
   const url = new URL(location.href);
-  if (String(DATA.version) !== CODE_VERSION && url.searchParams.get('v') !== String(DATA.version)) {
-    url.searchParams.set('v', DATA.version);
+  const dataStamp = `${DATA.version}.${DATA.build || 0}`;
+  if (dataStamp !== `${CODE_VERSION}.${CODE_BUILD}` && url.searchParams.get('v') !== dataStamp) {
+    url.searchParams.set('v', dataStamp);
     location.replace(url.href);
     await new Promise(() => {});
   }
@@ -485,7 +487,7 @@ const CODE_VERSION = '0.0.5'; // keep the same as "version" in game-data.json
 const SETTINGS = { carryCapacity: 30, walkSpeed: 2.2, worldSize: 100, needsSpeed: 1, ...(DATA.settings || {}) };
 const VERSION = String(DATA.version || '0.0.0');
 const TEST_BUILD = location.pathname.includes('/test/'); // the test copy, before it's released
-const VERSION_LABEL = TEST_BUILD ? `${VERSION} (test)` : VERSION;
+const VERSION_LABEL = TEST_BUILD ? `${VERSION} (test ${DATA.build || 1})` : VERSION;
 for (const el of document.querySelectorAll('.ver')) el.textContent = VERSION_LABEL;
 document.title = `Game Prototype v${VERSION_LABEL}`;
 
@@ -619,7 +621,7 @@ function animateWater(t) {
   const a = water.geometry.attributes.position.array;
   for (let i = 0; i < a.length; i += 3) {
     const x = waterBase[i], z = waterBase[i + 2];
-    a[i + 1] = Math.sin(x * 1.35 + t * 1.3) * 0.035 + Math.sin(z * 1.8 - t * 1.05 + x * 0.4) * 0.03;
+    a[i + 1] = Math.sin(x * 1.35 + t * 0.55) * 0.012 + Math.sin(z * 1.8 - t * 0.45 + x * 0.4) * 0.01; // a gentle ripple
   }
   water.geometry.attributes.position.needsUpdate = true;
   water.geometry.computeVertexNormals();
@@ -1049,6 +1051,7 @@ function bush(x, z, s = 1, withBerries = true) {
     }
   }
   g.userData.label = withBerries ? 'Gooseberry bush' : 'Bush';
+  addSpot(x, z, s * 0.85);
   interactive.push(g);
   return g;
 }
@@ -1061,6 +1064,7 @@ function rock(x, z, s, label = 'Boulder', color) {
   m.userData.label = label;
   scene.add(m);
   drawAlong(drawnTogether.rocks[rockGeos.indexOf(m.geometry)], m);
+  addSpot(x, z, s * 1.1);
   interactive.push(m);
   return m;
 }
@@ -1100,6 +1104,7 @@ for (let i = 0; i < 90; i++) {
   scene.add(g);
   drawAlong(wild.stump, body);
   drawAlong(wild.stumpTop, top);
+  addSpot(x, z, 0.5);
   interactive.push(g);
 }
 {
@@ -1116,6 +1121,7 @@ for (let i = 0; i < 90; i++) {
   g.userData.label = 'Fallen log';
   scene.add(g);
   drawAlong(wild.log, log);
+  for (const k of [-1, 0, 1]) addSpot(x + Math.cos(0.5) * 1.2 * k, z - Math.sin(0.5) * 1.2 * k, 0.6);
   drawAlong(wild.logEnd, e1);
   drawAlong(wild.logEnd, e2);
   interactive.push(g);
@@ -1234,24 +1240,42 @@ for (const m of [reeds, cattails, pads, berries]) {
   m.instanceMatrix.needsUpdate = true;
   if (m.instanceColor) m.instanceColor.needsUpdate = true;
 }
-/* berry bushes: picking takes every berry, then they grow back one by one (hidden berries are shrunk to nothing) */
+/* berry bushes: you pick one berry at a time, and picked berries grow back one by one (hidden ones are shrunk to nothing) */
 const berryMatrices = berries.instanceMatrix.array.slice();
 const NO_BERRY = new THREE.Matrix4().makeScale(0, 0, 0);
-function berryGrowth(b) { // 0 just picked, 1 ripe again
+const bushHolds = (src) => Math.max(1, Math.min(15, src.holds || 5)); // how many berries a full bush has
+const growEvery = (src) => (src.regrowHours * 3600000) / bushHolds(src); // how long one berry takes to grow back
+// how many berries are on a bush right now (picked ones come back over time)
+function berriesOn(b) {
   const src = SOURCES[b.userData.source];
-  if (!b.userData.pickedAt || !src || !src.regrowHours) return 1;
-  return clamp01((Date.now() - b.userData.pickedAt) / (src.regrowHours * 3600000));
+  if (!src || !harvests(src)) return 0;
+  const holds = bushHolds(src);
+  if (b.userData.count == null) return holds;
+  if (!src.regrowHours) return holds;
+  const grown = Math.floor((Date.now() - b.userData.growFrom) / growEvery(src));
+  return Math.min(holds, b.userData.count + grown);
 }
-const ripe = (b) => berryGrowth(b) >= 1;
+function pickBerry(b) {
+  const src = SOURCES[b.userData.source];
+  const holds = bushHolds(src);
+  if (b.userData.count == null) { b.userData.count = holds; b.userData.growFrom = Date.now(); }
+  else if (src.regrowHours) {
+    const grown = Math.floor((Date.now() - b.userData.growFrom) / growEvery(src));
+    b.userData.count = Math.min(holds, b.userData.count + grown);
+    b.userData.growFrom = b.userData.count >= holds ? Date.now() : b.userData.growFrom + grown * growEvery(src);
+  }
+  b.userData.count -= 1;
+}
+const ripe = (b) => berriesOn(b) >= 1;
 function readyIn(b) {
-  const mins = Math.max(1, Math.ceil((1 - berryGrowth(b)) * SOURCES[b.userData.source].regrowHours * 60));
+  const src = SOURCES[b.userData.source];
+  const mins = Math.max(1, Math.ceil((b.userData.growFrom + growEvery(src) - Date.now()) / 60000));
   return mins >= 90 ? `${Math.round(mins / 60)} h` : `${mins} min`;
 }
 function drawBerries(b) {
   const { start, n } = b.userData.berries;
   const src = SOURCES[b.userData.source];
-  const full = src && harvests(src) ? Math.min(n, Object.values(src.harvest).reduce((a, c) => a + c, 0)) : n; // a bush shows as many berries as it gives
-  const shown = Math.min(full, Math.floor(full * berryGrowth(b)));
+  const shown = Math.min(n, src && harvests(src) ? berriesOn(b) : n);
   if (b.userData.shown === shown) return;
   b.userData.shown = shown;
   const a = berries.instanceMatrix.array;
@@ -1396,7 +1420,7 @@ for (const [id, raw] of Object.entries(DATA.sources || {})) {
   // harvest: what picking it puts in your inventory; regrowHours: how long until it can be picked again
   const harvest = Object.fromEntries(Object.entries(raw.harvest || {}).filter(([k, v]) => ITEMS[k] && v >= 1).map(([k, v]) => [k, Math.floor(v)]));
   SOURCES[id] = { id, name: raw.name || id, verb: raw.verb || 'Using', seconds: Math.max(0.3, Number(raw.seconds) || 1), pose: raw.pose || 'pick',
-    gives, harvest, regrowHours: Math.max(0, Number(raw.regrowHours) || 0) };
+    gives, harvest, holds: Math.floor(Number(raw.holds) || 0), regrowHours: Math.max(0, Number(raw.regrowHours) || 0) };
 }
 const harvests = (src) => Object.keys(src.harvest).length > 0;
 // a thing in the world becomes usable when a source has its name, like "Pond" or "Gooseberry bush"
@@ -2038,8 +2062,38 @@ function shorePointToward(from) {
   return V(from.x, 0, from.z);
 }
 const inWorld = (v) => Math.max(-WALK_LIMIT, Math.min(WALK_LIMIT, v)); // the forest past the edge is too thick to walk into
+// Solid things your person walks round: rocks, bushes, logs, stumps and tree trunks.
+// Returns the thing you'd be standing in at x, z (or null), and how far into it.
+const BODY_R = 0.22;
+function solidAt(x, z) {
+  let best = null;
+  for (let i = -1; i <= 1; i++) {
+    for (let j = -1; j <= 1; j++) {
+      const a = spots.get(spotKey(x + i * 4, z + j * 4));
+      if (!a) continue;
+      for (let k = 0; k < a.length; k += 4) {
+        const r = (a[k + 3] ? 0.3 : a[k + 2] * 0.8) + BODY_R; // a tree's trunk, not its crown
+        const d = Math.hypot(a[k] - x, a[k + 1] - z);
+        if (d < r && (!best || r - d > best.depth)) best = { x: a[k], z: a[k + 1], r, depth: r - d };
+      }
+    }
+  }
+  return best;
+}
+// a spot you tapped inside something solid moves to just outside it
+function outsideSolid(x, z) {
+  for (let n = 0; n < 3; n++) {
+    const s = solidAt(x, z);
+    if (!s) break;
+    const dx = x - s.x, dz = z - s.z, d = Math.hypot(dx, dz) || 1;
+    x = s.x + (dx / d) * (s.r + 0.05);
+    z = s.z + (dz / d) * (s.r + 0.05);
+  }
+  return [x, z];
+}
 function walkTo(p, onArrive, onFail) {
-  const dest = V(inWorld(p.x), 0, inWorld(p.z));
+  const [ox, oz] = outsideSolid(inWorld(p.x), inWorld(p.z));
+  const dest = V(inWorld(ox), 0, inWorld(oz));
   walk.target = dest;
   walk.onArrive = onArrive || null;
   walk.onFail = onFail || null;
@@ -2079,7 +2133,9 @@ function cantUse(t, planning) {
   if (!src) return 'Nothing to do here';
   if (harvests(src)) {
     const b = berryBushes[t.bush];
-    if (b && !ripe(b)) return `${ITEMS[Object.keys(src.harvest)[0]].plural} ready in ${readyIn(b)}`;
+    // berries you've already queued to pick count as gone
+    const queued = planning && b ? allTasks().filter((q) => q.type === 'use' && q.bush === t.bush).length : 0;
+    if (b && berriesOn(b) - queued < 1) return queued ? 'No more berries' : `Next ${ITEMS[Object.keys(src.harvest)[0]].name.toLowerCase()} in ${readyIn(b)}`;
     if ((planning ? plannedWeight() : carried()) + weightOf(src.harvest) > SETTINGS.carryCapacity) return 'Inventory full';
     return null;
   }
@@ -2093,7 +2149,6 @@ function queueTask(t) {
     if (plannedWeight() + w > SETTINGS.carryCapacity) { showTag('Inventory full', headTop(), 2); return; }
   }
   if (t.type === 'use') {
-    if (t.bush != null && allTasks().some((q) => q.type === 'use' && q.bush === t.bush)) return;
     const why = cantUse(t, true);
     if (why) { showTag(why, headTop(), 2); return; }
   }
@@ -2189,12 +2244,12 @@ function applyGives(gives) {
   if (shown.length) showGain(shown.join(', '));
   drawNeeds();
 }
-// picking a berry bush: every berry goes into your inventory, and the bush starts growing them back
+// picking a berry bush: one berry into your inventory, and that berry starts growing back
 function harvestFrom(src, t) {
   const b = berryBushes[t.bush];
   if ((b && !ripe(b)) || carried() + weightOf(src.harvest) > SETTINGS.carryCapacity) return;
   for (const [k, n] of Object.entries(src.harvest)) addToCarry(k, n);
-  if (b) { b.userData.pickedAt = Date.now(); drawBerries(b); }
+  if (b) { pickBerry(b); drawBerries(b); }
   drawHeld();
   drawCarry();
   showGain(Object.entries(src.harvest).map(([k, n]) => `+${countLabel(k, n)}`).join(', '));
@@ -2346,6 +2401,7 @@ function pickTarget(px, py) {
   const hits = [];
   for (const h of ray.intersectObjects(interactive, true)) {
     if (h.distance > limit) break;
+    if (h.object === water && groundY(h.point.x, h.point.z) > WATER_Y + 0.02) continue; // that bit of the pond is under the grass
     const o = labelOf(h.object);
     if (o) hits.push({ h, o });
   }
@@ -2406,7 +2462,7 @@ function menuActions(t) {
   if (t.kind === 'use' && harvests(SOURCES[t.task.source])) {
     const src = SOURCES[t.task.source], b = berryBushes[t.task.bush];
     const ready = !b || ripe(b);
-    return [{ label: `Harvest ${ITEMS[Object.keys(src.harvest)[0]].plural}`, note: ready ? '' : `Ready in ${readyIn(b)}`,
+    return [{ label: `Harvest ${ITEMS[Object.keys(src.harvest)[0]].plural}`, note: ready ? (b ? `${berriesOn(b)} left` : '') : `Next in ${readyIn(b)}`,
       disabled: !ready, run: () => queueTask(t.task) }];
   }
   return [];
@@ -2577,12 +2633,14 @@ function updatePlayer(dt) {
       // head straight there, or curve round the pond if it's in the way
       const step = Math.min(d, SETTINGS.walkSpeed * dt);
       const base = Math.atan2(dx, dz);
-      const tries = walk.side < 0 ? [0, -0.5, -1, -1.5, 0.5, 1, 1.5] : [0, 0.5, 1, 1.5, -0.5, -1, -1.5];
+      const tries = walk.side < 0 ? [0, -0.5, -1, -1.5, -2, 0.5, 1, 1.5, 2] : [0, 0.5, 1, 1.5, 2, -0.5, -1, -1.5, -2];
       let nx = 0, nz = 0, heading = base, ok = false;
       for (const off of tries) {
         nx = inWorld(player.position.x + Math.sin(base + off) * step);
         nz = inWorld(player.position.z + Math.cos(base + off) * step);
-        if (pondShape(nx, nz) >= 0.86) { ok = true; heading = base + off; if (off && !walk.side) walk.side = Math.sign(off); break; }
+        const hitNow = solidAt(player.position.x, player.position.z), hitNext = solidAt(nx, nz);
+        const blocked = hitNext && (!hitNow || hitNext.depth > hitNow.depth - 1e-4); // you can always step out of something
+        if (pondShape(nx, nz) >= 0.86 && !blocked) { ok = true; heading = base + off; if (off && !walk.side) walk.side = Math.sign(off); break; }
       }
       if (!ok) stop("Can't get there");
       else {
@@ -2741,7 +2799,7 @@ function die() {
   $('death').hidden = false;
   $('deathBtn').focus();
 }
-$('newPersonBtn').addEventListener('click', () => { if (you.dead) return; closeBag(); $('confirm').hidden = false; $('keepBtn').focus(); });
+$('menuBtn').addEventListener('click', () => openPause());
 $('keepBtn').addEventListener('click', () => { $('confirm').hidden = true; });
 $('newBtn').addEventListener('click', () => { $('confirm').hidden = true; endLife(); });
 $('deathBtn').addEventListener('click', () => { $('death').hidden = true; endLife(); });
