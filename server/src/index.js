@@ -20,6 +20,7 @@ const num = (v) => (Number.isFinite(v) ? Math.round(v * 100) / 100 : 0);
 const kindOk = (k) => typeof k === 'string' && /^[a-z0-9-]{1,24}$/.test(k);
 const AWAY = { sleepBelow: 35, wanderMin: 25, wanderMax: 50, strollSpeed: 1.2, eatBelow: 60, drinkBelow: 55, sleepAfterHours: 24, goneAfterDays: 7, graveHours: 24, ...(G.away || {}) };
 const START = G.start || { x: 0.6, z: 1.9 };
+const REST = (G.needs || []).find((s) => s.id === 'rest');
 // '0.0.6' with build 5 is [0,0,6,5]; a minVersion of '0.0.6' only checks the first three
 const parts = (v) => String(v || '0').split('.').map((n) => parseInt(n, 10) || 0);
 function tooOld(v, b, min) {
@@ -193,13 +194,21 @@ export class World extends DurableObject {
   // what the player is told about their own person
   mine(p) {
     return { t: 'me', name: p.name, look: p.look, age: p.age, born: p.born, x: num(p.x), z: num(p.z), ry: num(p.ry),
-      stats: p.stats, statsAt: p.statsAt, carry: p.carry, wear: p.wear || {}, lastKind: p.lastKind, sleeping: !!p.sleeping };
+      stats: p.stats, statsAt: p.statsAt, carry: p.carry, wear: p.wear || {}, lastKind: p.lastKind, sleeping: !!p.sleeping, collapsed: !!p.collapsed };
   }
   catchUp(p, now = Date.now()) {
     if (!this.alive(p)) return;
     if (p.asleep && !this.isOnline(p.who)) { p.statsAt = now; return; }
-    if (this.isOnline(p.who) || !p.leftAt) { const d = advanceStats(p, now, G, this.speed); if (d) this.die(p, d.cause, false); }
+    if (this.isOnline(p.who) || !p.leftAt) { const d = advanceStats(p, now, G, this.speed); if (d) this.die(p, d.cause, false); else this.collapse(p); }
     else this.advanceAway(p, now);
+  }
+  // Rest ran out (collapseAtZero): they drop asleep where they stand, and can't get up until it's back to wakeAt
+  collapse(p) {
+    if (!REST || !REST.collapseAtZero || p.sleeping || !(p.stats.rest <= 0)) return;
+    p.sleeping = true; p.collapsed = true;
+    this.touch(p);
+    this.send({ t: 'state', id: p.who, state: 'sleeping', x: num(p.x), z: num(p.z) }, p.who);
+    this.tell(p.who, this.mine(p));
   }
   // a person dies: their things drop where they fell and a small grave marks the spot for a day
   die(p, cause, away) {
@@ -472,7 +481,9 @@ export class World extends DurableObject {
       const go = Number.isFinite(m.tx) && Number.isFinite(m.tz) ? { tx: num(m.tx), tz: num(m.tz) } : {};
       this.send({ t: 'move', id: me.id, x: p.x, z: p.z, ry: p.ry, ...go }, me.id);
     } else if (m.t === 'sleep') { // lie down to rest, or get up
+      if (!m.on && p.collapsed && p.stats.rest < (REST.wakeAt || 0)) { reply(this.mine(p)); return; } // too tired to get up yet
       p.sleeping = !!m.on;
+      if (!p.sleeping) p.collapsed = false;
       save();
       reply(this.mine(p));
       this.send({ t: 'state', id: me.id, state: p.sleeping ? 'sleeping' : 'online', x: num(p.x), z: num(p.z) }, me.id);
@@ -605,7 +616,7 @@ export class World extends DurableObject {
         this.advanceAway(p, Date.now());
         if (this.alive(p)) {
           away = { ms: Date.now() - p.leftAt, ...(p.log || {}) };
-          p.plan = null; p.asleep = false; p.sleeping = false; p.leftAt = 0; p.log = { ate: 0, drank: 0, picked: 0 }; // back: awake
+          p.plan = null; p.asleep = false; p.sleeping = false; p.collapsed = false; p.leftAt = 0; p.log = { ate: 0, drank: 0, picked: 0 }; // back: awake
           this.touch(p);
         }
       }

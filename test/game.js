@@ -1725,6 +1725,13 @@ function tickStats() {
   }
   const low = STATS.find((s) => s.lowAt != null && s.lowLabel && before[s.id] > s.lowAt && you.stats[s.id] <= s.lowAt);
   if (low && !action) showTag(low.lowLabel, headTop(), 2);
+  // Rest ran out: collapse asleep where you stand (the server does the same and tells everyone)
+  if (REST && REST.collapseAtZero && you.stats.rest <= 0 && !you.sleeping && player) {
+    stopQueue();
+    you.collapsed = true;
+    setSleeping(true, true);
+    showTag('Collapsed from tiredness', headTop(), 3);
+  }
   drawNeeds();
 }
 
@@ -2236,7 +2243,7 @@ function cantUse(t, planning) {
   return useHelps(src) ? null : fullLabel(src);
 }
 function queueTask(t) {
-  wakeUp();
+  if (!wakeUp()) return;
   if (t.type === 'pickup') {
     if (allTasks().some((q) => q.type === 'pickup' && q.id === t.id)) return;
     const w = ITEMS[getItem(t.id).kind].weight;
@@ -2381,15 +2388,24 @@ function setSleeping(on, fromServer = false) {
     if (!was) showTag('Zzz…', headTop(), 2.5);
   } else if (was) {
     resetPose();
+    you.collapsed = false;
     if (!fromServer) showTag('Awake', headTop(), 1.5);
   }
   if (!fromServer && online()) net.sock.send(JSON.stringify({ t: 'sleep', on }));
   drawNeeds();
 }
-const wakeUp = () => { if (you.sleeping) setSleeping(false); };
+// Waking: any task wakes your person, unless they collapsed from no Rest and it isn't back to wakeAt yet.
+const REST = STATS.find((s) => s.id === 'rest');
+const tooTiredToWake = () => !!(you.collapsed && REST && you.stats && you.stats.rest < (REST.wakeAt || 0));
+function wakeUp() {
+  if (!you.sleeping) return true;
+  if (tooTiredToWake()) { showTag(`Too tired to get up yet (Rest ${Math.floor(you.stats.rest)}%)`, headTop(), 2.5); return false; }
+  setSleeping(false);
+  return true;
+}
 // a walk joins the end of the queue, so it never interrupts anything
 function walkFirst(p) {
-  wakeUp();
+  if (!wakeUp()) return;
   const t = { type: 'walk', x: p.x, z: p.z };
   const last = tasks.list[tasks.list.length - 1];
   if (last && last.type === 'walk') tasks.list.pop(); // a new walk replaces one still waiting at the end
@@ -2823,7 +2839,7 @@ function menuActions(t) {
   }
   if (t.kind === 'self') {
     const rest = you.stats && you.stats.rest != null ? Math.round(you.stats.rest) : null;
-    return [you.sleeping ? { label: 'Wake up', run: () => setSleeping(false) } : { label: 'Sleep', note: rest != null ? `Rest ${rest}` : '', run: () => setSleeping(true) },
+    return [you.sleeping ? { label: 'Wake up', note: tooTiredToWake() ? `Rest ${Math.floor(you.stats.rest)} of ${REST.wakeAt}` : '', run: wakeUp } : { label: 'Sleep', note: rest != null ? `Rest ${rest}` : '', run: () => setSleeping(true) },
       ...adminMore(admin.on ? [{ label: 'Fill my needs', run: () => adminSend({ t: 'a.fill', id: net.myId }) }] : [])];
   }
   if (t.kind === 'grave') return [{ label: 'Walk here', run: () => walkFirst(V(t.x + 0.8, 0, t.z)) }];
@@ -3598,6 +3614,7 @@ function applyMe(m, spawn = false) {
   you.carry = carry;
   you.wear = m.wear || {};
   if (!!m.sleeping !== !!you.sleeping) setSleeping(m.sleeping, true);
+  you.collapsed = !!m.collapsed;
   you.lastKind = carry[you.lastKind] ? you.lastKind : (ITEMS[m.lastKind] && carry[m.lastKind] ? m.lastKind : Object.keys(carry)[0] || null);
   tickStats();
   drawNeeds();
@@ -4201,4 +4218,4 @@ enterMenu();
 goOnline();
 requestAnimationFrame(frame);
 // for automated checks only: open the page with ?debug to reach the game's state from the browser console
-if (location.search.includes('debug')) window.__pl = { walk, tasks, trees, you, others, get player() { return player; }, findPath, freeAt, die, showWelcomeBack, showGoneCard, showMaintenance, hideMaintenance };
+if (location.search.includes('debug')) window.__pl = { walk, tasks, trees, you, others, net, get player() { return player; }, findPath, freeAt, die, showWelcomeBack, showGoneCard, showMaintenance, hideMaintenance };

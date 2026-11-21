@@ -21,10 +21,9 @@
       "whileAsleep": 12.5,
       "lowAt": 25,
       "lowLabel": "Tired",
-      "atZero": {
-        "health": -1.4
-      },
-      "fullLabel": "Not tired"
+      "fullLabel": "Not tired",
+      "collapseAtZero": true,
+      "wakeAt": 25
     },
     {
       "id": "hunger",
