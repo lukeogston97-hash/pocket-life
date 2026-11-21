@@ -1735,7 +1735,7 @@ new ResizeObserver(resize).observe(app);
 resize();
 
 /* ---------- moving about ---------- */
-const walk = { target: null, onArrive: null, onFail: null, phase: 0, side: 0, best: Infinity, bestAt: 0 };
+const walk = { target: null, path: null, replanned: false, onArrive: null, onFail: null, phase: 0, side: 0, best: Infinity, bestAt: 0 };
 let action = null; // what your person is doing right now: bending to pick up or put down, drinking, eating
 function setLegs(P, s) { P.legL.rotation.x = s * 0.55; P.legR.rotation.x = -s * 0.55; }
 function shorePointToward(from) {
@@ -1777,10 +1777,92 @@ function outsideSolid(x, z) {
   }
   return [x, z];
 }
+/* ---------- finding a way round things ----------
+   The walkable ground is a grid of half-metre cells (free unless a rock, bush, log, trunk or the pond is there).
+   A walk finds a route through it (A*), then cuts corners wherever there's a clear straight line,
+   so your person (and people strolling while away) go round obstacles instead of getting stuck on them. */
+const PATH_CELL = 0.5, GRID_N = Math.ceil((WALK_LIMIT * 2) / PATH_CELL) + 1;
+const cellFree = new Uint8Array(GRID_N * GRID_N); // 0 not checked yet, 1 free, 2 blocked
+const toCell = (v) => Math.max(0, Math.min(GRID_N - 1, Math.round((v + WALK_LIMIT) / PATH_CELL)));
+const cellPos = (i) => i * PATH_CELL - WALK_LIMIT;
+function freeCell(ix, iz) {
+  if (ix < 0 || iz < 0 || ix >= GRID_N || iz >= GRID_N) return false;
+  const k = iz * GRID_N + ix;
+  if (!cellFree[k]) { const x = cellPos(ix), z = cellPos(iz); cellFree[k] = pondShape(x, z) >= 0.9 && !solidAt(x, z) ? 1 : 2; }
+  return cellFree[k] === 1;
+}
+const freeAt = (x, z) => freeCell(toCell(x), toCell(z));
+// is the straight line from a to b clear? (checked every quarter metre)
+function clearLine(ax, az, bx, bz) {
+  const d = Math.hypot(bx - ax, bz - az), n = Math.ceil(d / 0.25);
+  for (let i = 1; i <= n; i++) { const t = i / n; if (!freeAt(ax + (bx - ax) * t, az + (bz - az) * t)) return false; }
+  return true;
+}
+// the nearest free cell to a spot (for a goal that's inside a bush, say), within about 3 metres
+function nearestFree(x, z) {
+  const cx = toCell(x), cz = toCell(z);
+  if (freeCell(cx, cz)) return [cx, cz];
+  for (let r = 1; r <= 6; r++) {
+    let best = null, bd = Infinity;
+    for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
+      if (Math.max(Math.abs(i), Math.abs(j)) !== r || !freeCell(cx + i, cz + j)) continue;
+      const dd = Math.hypot(cellPos(cx + i) - x, cellPos(cz + j) - z);
+      if (dd < bd) { bd = dd; best = [cx + i, cz + j]; }
+    }
+    if (best) return best;
+  }
+  return null;
+}
+// A route from (ax, az) to (bx, bz) as a list of points to walk through, or null if there's no way
+function findPath(ax, az, bx, bz) {
+  if (clearLine(ax, az, bx, bz)) return [[bx, bz]];
+  const s = nearestFree(ax, az), g = nearestFree(bx, bz);
+  if (!s || !g) return null;
+  const sk = s[1] * GRID_N + s[0], gk = g[1] * GRID_N + g[0];
+  const from = new Map([[sk, -1]]), cost = new Map([[sk, 0]]);
+  const heap = [[0, sk]];
+  const push = (f, k) => { heap.push([f, k]); let i = heap.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (heap[p][0] <= heap[i][0]) break; [heap[p], heap[i]] = [heap[i], heap[p]]; i = p; } };
+  const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let i = 0; for (;;) { const l = i * 2 + 1, r = l + 1; let m = i; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === i) break; [heap[m], heap[i]] = [heap[i], heap[m]]; i = m; } } return top; };
+  const h = (ix, iz) => { const dx = Math.abs(ix - g[0]), dz = Math.abs(iz - g[1]); return (dx + dz + (Math.SQRT2 - 2) * Math.min(dx, dz)); };
+  let found = false;
+  for (let n = 0; heap.length && n < 30000; n++) {
+    const [, k] = pop();
+    if (k === gk) { found = true; break; }
+    const ix = k % GRID_N, iz = (k - ix) / GRID_N, c = cost.get(k);
+    for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) {
+      if (!di && !dj) continue;
+      const nx = ix + di, nz = iz + dj;
+      if (!freeCell(nx, nz)) continue;
+      if (di && dj && (!freeCell(ix + di, iz) || !freeCell(ix, iz + dj))) continue; // no squeezing past corners
+      const nk = nz * GRID_N + nx, nc = c + (di && dj ? Math.SQRT2 : 1);
+      if (cost.has(nk) && cost.get(nk) <= nc) continue;
+      cost.set(nk, nc); from.set(nk, k);
+      push(nc + h(nx, nz), nk);
+    }
+  }
+  if (!found) return null;
+  const cells = [];
+  for (let k = gk; k !== -1; k = from.get(k)) cells.push([cellPos(k % GRID_N), cellPos(Math.floor(k / GRID_N))]);
+  cells.reverse();
+  cells[cells.length - 1] = freeAt(bx, bz) ? [bx, bz] : cells[cells.length - 1];
+  // cut corners: from each point, jump to the furthest point you can walk to in a straight line
+  const out = [];
+  let cx = ax, cz = az, i = 0;
+  while (i < cells.length) {
+    let j = cells.length - 1;
+    while (j > i && !clearLine(cx, cz, cells[j][0], cells[j][1])) j--;
+    out.push(cells[j]);
+    [cx, cz] = cells[j];
+    i = j + 1;
+  }
+  return out;
+}
 function walkTo(p, onArrive, onFail) {
   const [ox, oz] = outsideSolid(inWorld(p.x), inWorld(p.z));
   const dest = V(inWorld(ox), 0, inWorld(oz));
   walk.target = dest;
+  walk.path = findPath(player.position.x, player.position.z, dest.x, dest.z) || [[dest.x, dest.z]];
+  walk.replanned = false;
   walk.onArrive = onArrive || null;
   walk.onFail = onFail || null;
   walk.side = 0;
@@ -2585,13 +2667,27 @@ function updatePlayer(dt) {
       if (message) { showTag(message, headTop(), 2); if (fail) fail(); }
       else if (ok) ok();
     };
-    if (d < walk.best - 0.05) { walk.best = d; walk.bestAt = elapsed; }
+    // the next point on the route (the last one is where you're going)
+    while (walk.path && walk.path.length > 1 && Math.hypot(walk.path[0][0] - player.position.x, walk.path[0][1] - player.position.z) < 0.25) {
+      walk.path.shift(); walk.best = Infinity; walk.bestAt = elapsed;
+    }
+    const aim = walk.path && walk.path.length > 1 ? walk.path[0] : [walk.target.x, walk.target.z];
+    const ax = aim[0] - player.position.x, az = aim[1] - player.position.z, ad = Math.hypot(ax, az);
+    if (ad < walk.best - 0.05) { walk.best = ad; walk.bestAt = elapsed; }
     if (d < 0.06) stop();
-    else if (elapsed - walk.bestAt > 2.5) stop("Can't get there");
+    else if (elapsed - walk.bestAt > 1.5) {
+      // not getting any closer: look for a new way round once, then give up
+      if (!walk.replanned) {
+        walk.replanned = true;
+        walk.path = findPath(player.position.x, player.position.z, walk.target.x, walk.target.z);
+        walk.best = Infinity; walk.bestAt = elapsed;
+        if (!walk.path) stop("Can't get there");
+      } else stop("Can't get there");
+    }
     else {
-      // head straight there, or curve round the pond if it's in the way
-      const step = Math.min(d, SETTINGS.walkSpeed * dt);
-      const base = Math.atan2(dx, dz);
+      // head for the next point, stepping round anything small in the way
+      const step = Math.min(ad, SETTINGS.walkSpeed * dt);
+      const base = Math.atan2(ax, az);
       const tries = walk.side < 0 ? [0, -0.5, -1, -1.5, -2, 0.5, 1, 1.5, 2] : [0, 0.5, 1, 1.5, 2, -0.5, -1, -1.5, -2];
       let nx = 0, nz = 0, heading = base, ok = false;
       for (const off of tries) {
@@ -3444,7 +3540,16 @@ function removeOther(id) {
 // other people glide to where the server says they are, legs moving while they walk
 function updateOthers(dt) {
   for (const o of others.values()) {
-    const m = o.mesh, dx = o.tx - m.position.x, dz = o.tz - m.position.z, d = Math.hypot(dx, dz);
+    const m = o.mesh;
+    // someone strolling while away follows a route round things, like you do
+    let gx = o.tx, gz = o.tz;
+    if (o.speed && o.state === 'away') {
+      const key = `${o.tx},${o.tz}`;
+      if (o.pathKey !== key) { o.pathKey = key; o.path = findPath(m.position.x, m.position.z, o.tx, o.tz); }
+      while (o.path && o.path.length > 1 && Math.hypot(o.path[0][0] - m.position.x, o.path[0][1] - m.position.z) < 0.25) o.path.shift();
+      if (o.path && o.path.length > 1) [gx, gz] = o.path[0];
+    }
+    const dx = gx - m.position.x, dz = gz - m.position.z, d = Math.hypot(dx, dz);
     const P = m.userData.parts;
     if (o.state === 'asleep') { m.position.x = o.tx; m.position.z = o.tz; m.position.y = groundY(m.position.x, m.position.z) + 0.2; continue; }
     if (d > (o.speed ? 120 : 8)) { m.position.x = o.tx; m.position.z = o.tz; } // too far behind: jump there
