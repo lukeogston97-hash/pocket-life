@@ -29,7 +29,7 @@ function tooOld(v, b, min) {
 }
 const FEEDBACK_KEEP = 300, REPORTS_KEEP = 300;
 // Spam limits: each kind of message refills at so many a second, up to a small burst. The admin is never limited.
-const LIMITS = { sleep: [1, 4], craft: [1, 3], act: [3, 6], say: [1, 3], take: [5, 10], pick: [5, 10], drop: [2, 6], move: [12, 20], eat: [3, 6], drink: [1, 3], create: [1 / 5, 3],
+const LIMITS = { chop: [1, 3], sleep: [1, 4], craft: [1, 3], act: [3, 6], say: [1, 3], take: [5, 10], pick: [5, 10], drop: [2, 6], move: [12, 20], eat: [3, 6], drink: [1, 3], create: [1 / 5, 3],
   feedback: [1 / 30, 3], report: [1 / 30, 3], adminLogin: [1 / 5, 3] };
 const buckets = new WeakMap(); // per connection, kept in memory only
 const lastHeard = new WeakMap(); // per connection: when it last sent anything (the game pings every 25 seconds)
@@ -297,7 +297,7 @@ export class World extends DurableObject {
   /* ---------- the shared world as players see it ---------- */
   view() {
     const w = this.world;
-    return w ? { items: w.items, bushes: w.bushes, graves: w.graves || [] } : null;
+    return w ? { items: w.items, bushes: w.bushes, graves: w.graves || [], trees: w.trees || {} } : null;
   }
 
   async fetch(request) {
@@ -396,8 +396,8 @@ export class World extends DurableObject {
     this.catchUp(p);
     if (!this.alive(p)) return;
     if (m.t === 'act') { // bending, picking, drinking: shown to everyone else
-      const pose = ['bend', 'kneel', 'pick'].includes(m.pose) ? m.pose : 'bend';
-      this.send({ t: 'act', id: me.id, pose, seconds: Math.max(0.3, Math.min(5, Number(m.seconds) || 0.5)) }, me.id);
+      const pose = ['bend', 'kneel', 'pick', 'chop'].includes(m.pose) ? m.pose : 'bend';
+      this.send({ t: 'act', id: me.id, pose, seconds: Math.max(0.3, Math.min(25, Number(m.seconds) || 0.5)) }, me.id);
     } else if (m.t === 'move') {
       const nx = num(m.x), nz = num(m.z), moved = Math.hypot(nx - p.x, nz - p.z);
       if (moved < 30) spend(p, 'walkPerMetre', G, moved); // walking takes a little energy
@@ -443,6 +443,49 @@ export class World extends DurableObject {
       if (!added.length) return;
       await this.save();
       this.send({ t: 'added', items: added }, null);
+    } else if (m.t === 'chop') { // chopping a tree, digging out a stump, or chopping a log into sticks
+      const C = G.chopping || {}, rule = C[m.what], tool = C.tool;
+      if (!rule || (tool && !p.carry[tool])) { reply(this.mine(p)); return; }
+      w.trees = w.trees || {};
+      let at = [num(m.x), num(m.z)];
+      if (m.what === 'tree' || m.what === 'stump') {
+        const i = Math.floor(m.idx);
+        if (!(i >= 0 && i < 5000)) return;
+        const st = w.trees[i];
+        if (m.what === 'tree' && st) { reply({ t: 'tree', idx: i, state: st[0] }); return; } // someone else got it first
+        if (m.what === 'stump' && (!st || st[0] !== 'stump')) { reply({ t: 'tree', idx: i, state: st ? st[0] : 'tree' }); return; }
+        w.trees[i] = [m.what === 'tree' ? 'stump' : 'gone', Date.now()];
+        this.send({ t: 'tree', idx: i, state: w.trees[i][0] }, null);
+      } else {
+        const j = w.items.findIndex((it) => it.id === m.id && it.kind === m.what);
+        if (j < 0) { reply(this.mine(p)); return; }
+        at = [w.items[j].x, w.items[j].z];
+        w.items.splice(j, 1);
+        this.send({ t: 'gone', id: m.id }, null);
+      }
+      // what falls: round where it was chopped
+      const out = [];
+      let n = 0;
+      for (const [kind, count] of Object.entries(rule.gives || {})) for (let k = 0; k < count && n < 20; k++, n++) {
+        const a = Math.random() * Math.PI * 2, r = 0.5 + Math.random() * 0.8;
+        out.push({ id: w.nextId++, kind, x: num(at[0] + Math.cos(a) * r), z: num(at[1] + Math.sin(a) * r), rot: num(Math.random() * Math.PI) });
+      }
+      w.items.push(...out);
+      if (out.length) this.send({ t: 'added', items: out }, null);
+      spend(p, 'chop', G);
+      // the tool wears; a worn-out tool breaks
+      if (tool && G.items[tool] && G.items[tool].uses) {
+        p.wear = p.wear || {};
+        p.wear[tool] = (p.wear[tool] ?? G.items[tool].uses) - 1;
+        if (p.wear[tool] <= 0) {
+          takeCarry(p, tool, 1);
+          if (p.carry[tool]) p.wear[tool] = G.items[tool].uses;
+          reply({ t: 'broke', kind: tool });
+        }
+      }
+      await this.save();
+      save();
+      reply(this.mine(p));
     } else if (m.t === 'pick') {
       const i = Math.floor(m.bush);
       if (!(i >= 0 && i < 200)) return;
@@ -554,6 +597,11 @@ export class World extends DurableObject {
         const keep = (w.graves || []).filter((g) => g.at > now - AWAY.graveHours * HOUR);
         if (keep.length !== (w.graves || []).length) { w.graves = keep; this.send({ t: 'graves', graves: keep }, null); await this.save(); }
         if (now >= (w.nextRespawn || 0)) await this.respawn(now);
+        // stumps grow back into trees after a few days (removed stumps are gone for good)
+        const regrow = ((G.chopping || {}).regrowDays || 3) * 24 * HOUR;
+        let grew = false;
+        for (const [i, st] of Object.entries(w.trees || {})) if (st[0] === 'stump' && now - st[1] > regrow) { delete w.trees[i]; this.send({ t: 'tree', idx: Number(i), state: 'tree' }, null); grew = true; }
+        if (grew) await this.save();
       }
       if (this.speed && now > this.speed.until) { this.speed = null; await this.ctx.storage.delete('speed'); this.send({ t: 'speed', speed: null }, null); }
     } finally {

@@ -89,6 +89,11 @@
       "weight": 2,
       "eat": null,
       "uses": 20
+    },
+    "log": {
+      "weight": 10,
+      "eat": null,
+      "uses": 0
     }
   },
   "recipes": {
@@ -144,6 +149,29 @@
     "craft": 3,
     "chop": 6,
     "walkPerMetre": 0.04
+  },
+  "chopping": {
+    "tool": "stone-axe",
+    "tree": {
+      "seconds": 15,
+      "gives": {
+        "log": 1,
+        "stick": 2
+      }
+    },
+    "stump": {
+      "seconds": 20,
+      "gives": {
+        "log": 1
+      }
+    },
+    "log": {
+      "seconds": 8,
+      "gives": {
+        "stick": 4
+      }
+    },
+    "regrowDays": 3
   },
   "start": {
     "x": 0.6,
