@@ -21,7 +21,8 @@ Luke's mobile "life in your pocket" game: SEED meets One Hour One Life. Built st
 - Adding content should almost always be a small edit to game-data.json, not code.
 - The world is settings.worldSize metres square (100 for now), with thick forest past the edge. The clearing round the start is laid out from its own random numbers and the rest of the world from a second set, so changing the world never reshuffles the clearing.
 - Keep it light for phones. Lots of copies of a shape are drawn as one InstancedMesh, split into chunks of the map. Grass, flowers and pebbles are only drawn near the camera. Far-off trees use simpler shapes.
-- Nothing saves yet, so a reload starts a fresh life. The world and the player are kept as plain data (world.items and you), ready to be saved or sent to a server later.
+- The game saves on the phone (localStorage) every few seconds and when the page is hidden: your person, inventory, needs, where things lie and how far each berry bush has grown back. The test link and the release keep separate saves. Saves are plain data (SAVE_FORMAT in index.html; bump it if the save's shape changes), ready to move to a server when the world goes online.
+- If the frame rate drops below about 45, the game lowers its sharpness a step (pixel ratio), never below 1.
 
 ## Working on it
 - Build in small steps. After each change, tell Luke in a few short lines what changed and what to try on his phone.

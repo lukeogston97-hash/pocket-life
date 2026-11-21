@@ -285,7 +285,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--moss); outl
     <button id="menuBtn" class="pill-btn" type="button" aria-controls="pause">Menu</button>
   </header>
 
-  <p id="hint" class="hint" hidden>Tap the ground to walk. Tap sticks and stones to pick them up (tap a few to queue them). Tap the pond to drink and a berry bush to pick a berry.</p>
+  <p id="hint" class="hint" hidden>Tap to walk. Tap sticks, stones, berry bushes or the pond to use them (tap a few to queue them). Hold on something (or right-click) for more. Menu is at the top right.</p>
 
   <div id="queue" class="queue" hidden><span id="queueText">2 in queue</span><button id="queueStop" class="small-btn" type="button">Stop</button></div>
 
@@ -474,7 +474,7 @@ try {
 // Browsers keep a page for a few minutes. If this page is older than the data it just loaded,
 // load the new page (once), so old code never runs with new data.
 const CODE_VERSION = '0.0.5'; // keep the same as "version" in game-data.json
-const CODE_BUILD = 2;         // and this the same as "build" (count up with each test copy)
+const CODE_BUILD = 3;         // and this the same as "build" (count up with each test copy)
 {
   const url = new URL(location.href);
   const dataStamp = `${DATA.version}.${DATA.build || 0}`;
@@ -611,7 +611,19 @@ function groundY(x, z) {
 /* water */
 const waterGeo = new THREE.PlaneGeometry(15, 12.5, 30, 25);
 waterGeo.rotateX(-Math.PI / 2);
-const water = new THREE.Mesh(waterGeo.toNonIndexed(), new THREE.MeshStandardMaterial({ color: '#86bdb7', roughness: 0.16, metalness: 0, transparent: true, opacity: 0.86, flatShading: true }));
+// keep only the water inside the pond's outline, so low bits of the bank never show water
+const waterTris = (() => {
+  const g = waterGeo.toNonIndexed(), a = g.attributes.position.array, keep = [];
+  for (let i = 0; i < a.length; i += 9) {
+    const inPond = [0, 3, 6].some((k) => pondShape(a[i + k] + POND.x, a[i + k + 2] + POND.z) < 0.98);
+    if (inPond) for (let k = 0; k < 9; k++) keep.push(a[i + k]);
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.Float32BufferAttribute(keep, 3));
+  out.computeVertexNormals();
+  return out;
+})();
+const water = new THREE.Mesh(waterTris, new THREE.MeshStandardMaterial({ color: '#86bdb7', roughness: 0.16, metalness: 0, transparent: true, opacity: 0.86, flatShading: true }));
 water.position.set(POND.x, WATER_Y, POND.z);
 water.receiveShadow = true;
 water.userData.label = 'Pond';
@@ -2039,6 +2051,23 @@ function followPlayer(dt) {
   camera.position.y += dy;
   camera.position.z += dz;
 }
+// If the phone is struggling, draw a little less sharp (a step at a time, never back up in one visit)
+const PIXEL_STEPS = [Math.min(window.devicePixelRatio || 1, 2), 1.5, 1.25, 1].filter((v, i, a) => i === 0 || v < a[0]);
+const speed = { step: 0, time: 0, frames: 0, warm: 0 };
+function watchSpeed(raw) {
+  if (document.hidden || raw > 0.5) return;
+  if (speed.warm < 3) { speed.warm += raw; return; } // let it settle after starting
+  speed.time += raw;
+  speed.frames++;
+  if (speed.time < 2) return;
+  const fps = speed.frames / speed.time;
+  speed.time = speed.frames = 0;
+  if (fps < 45 && speed.step < PIXEL_STEPS.length - 1) {
+    speed.step++;
+    renderer.setPixelRatio(PIXEL_STEPS[speed.step]);
+    resize();
+  }
+}
 function resize() {
   const w = app.clientWidth, h = app.clientHeight;
   renderer.setSize(w, h, false);
@@ -2751,6 +2780,7 @@ $('sheet').addEventListener('submit', (e) => {
   you.lastKind = null;
   spawnPlayer({ ...draft, name });
   enterWorld();
+  saveGame();
 });
 
 /* ---------- the end of a life: starting over, or dying ---------- */
@@ -2776,6 +2806,7 @@ function endLife() {
   you.stats = null;
   you.dead = false;
   enterCreator();
+  saveGame();
 }
 function die() {
   if (you.dead || !player) return;
@@ -2830,6 +2861,7 @@ function frame() {
     renderer.setViewport(0, 0, w, h);
     renderer.setClearColor(sky, 1);
     renderer.render(scene, camera);
+    watchSpeed(raw);
     updateLabels();
     hudTimer += raw;
     if (hudTimer > 1) { hudTimer = 0; drawHud(); tickStats(); applyDaylight(); for (const b of berryBushes) drawBerries(b); }
@@ -2837,7 +2869,63 @@ function frame() {
   window.__frames = (window.__frames || 0) + 1;
   requestAnimationFrame(frame);
 }
-enterCreator();
+/* ---------- saving on this phone ---------- */
+// The test link and the release each keep their own save, so testing never touches your real game.
+// Everything saved is plain data, ready to move to a server when the world goes online.
+const SAVE_KEY = `pocket-life:${TEST_BUILD ? 'test' : 'release'}`;
+const SAVE_FORMAT = 1;
+function saveGame() {
+  try {
+    const alive = player && !you.dead;
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      format: SAVE_FORMAT, worldSize: WORLD_HALF * 2, savedAt: Date.now(),
+      items: world.items.map(({ kind, x, z, rot }) => [kind, +x.toFixed(2), +z.toFixed(2), +rot.toFixed(2)]),
+      bushes: berryBushes.map((b) => [b.userData.count ?? null, b.userData.growFrom ?? null]),
+      you: alive ? { look: you.look, carry: you.carry, lastKind: you.lastKind, lifeStart: you.lifeStart, stats: you.stats, statsAt: you.statsAt,
+        x: +player.position.x.toFixed(2), z: +player.position.z.toFixed(2), ry: +player.rotation.y.toFixed(2) } : null,
+    }));
+  } catch (err) { /* private browsing or storage full: the game still plays, it just won't remember */ }
+}
+function loadGame() {
+  let d = null;
+  try { d = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (err) { d = null; }
+  if (!d || d.format !== SAVE_FORMAT) return false;
+  // the world: where things lie, and how far each berry bush has grown back
+  if (d.worldSize === WORLD_HALF * 2 && Array.isArray(d.items)) {
+    for (const it of [...world.items]) removeWorldItem(it.id);
+    for (const [kind, x, z, rot] of d.items) if (ITEMS[kind] && Number.isFinite(x) && Number.isFinite(z)) addWorldItem(kind, x, z, rot || 0);
+  }
+  (d.bushes || []).forEach(([count, growFrom], i) => {
+    const b = berryBushes[i];
+    if (b && Number.isFinite(count) && Number.isFinite(growFrom)) { b.userData.count = count; b.userData.growFrom = growFrom; drawBerries(b); }
+  });
+  // your person, if they were alive when you left
+  const y = d.you;
+  if (!y || !y.look || !y.stats) return false;
+  const look = { ...DEFAULT_LOOK, ...y.look };
+  for (const k of ['sex', 'skin', 'build', 'hair', 'hairColour', 'tunic']) look[k] = pickId(LOOKS[k], look[k]);
+  look.age = Math.round(Math.min(LOOKS.age.max, Math.max(LOOKS.age.min, Number(look.age) || LOOKS.age.start)));
+  look.name = String(look.name || 'You').slice(0, 20);
+  you.lifeStart = y.lifeStart || Date.now();
+  you.stats = { ...freshStats(), ...y.stats };
+  you.statsAt = y.statsAt || Date.now();
+  you.dead = false;
+  you.carry = Object.fromEntries(Object.entries(y.carry || {}).filter(([k, n]) => ITEMS[k] && n > 0));
+  you.lastKind = ITEMS[y.lastKind] ? y.lastKind : Object.keys(you.carry)[0] || null;
+  spawnPlayer(look);
+  const px = inWorld(Number(y.x) || START.x), pz = inWorld(Number(y.z) || START.z);
+  playerGround = groundY(px, pz);
+  player.position.set(px, playerGround, pz);
+  player.rotation.y = Number(y.ry) || 0;
+  enterWorld();
+  tickStats(); // needs carry on while you're away
+  return true;
+}
+setInterval(() => { if (player || ui.mode === 'world') saveGame(); }, 5000);
+document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });
+window.addEventListener('pagehide', saveGame);
+
+if (!loadGame()) enterCreator();
 requestAnimationFrame(frame);
 </script>
 </body>
