@@ -2,7 +2,8 @@
 // - the shared world: things on the ground, berry bushes, graves
 // - every person: needs, inventory and where they are, kept here so they stay in the world 24/7
 // - while a player is away their person looks after themselves (wanders, eats, picks berries, drinks),
-//   after a day away they lie down asleep (needs pause), and after a week asleep they're gone
+//   after a day away they lie down asleep (needs pause), and after another day asleep they're gone (away.goneAfterDays)
+// - at most G.maxPlaying people play at once; anyone else waits in line on the main menu
 // - chat, reports, feedback and the admin player's tools
 import { DurableObject } from 'cloudflare:workers';
 import WORLDS from '../worlds.json'; // minimum version for each link
@@ -35,6 +36,13 @@ const buckets = new WeakMap(); // per connection, kept in memory only
 const lastHeard = new WeakMap(); // per connection: when it last sent anything (the game pings every 25 seconds)
 const QUIET_MS = 90000; // nothing heard for this long: the phone is asleep or gone, so the person goes away
 const TICK_MS = 20000; // how often the world moves on (needs, people away, sticks and stones)
+// Cloudflare's free plan allows 100,000 storage writes and 100,000 requests a day (20 messages from a game count as 1).
+// What people do (eat, pick up, craft) is saved straight away; walking about and needs ticking over are saved
+// at most every SAVE_EVERY. If the world is shut down in between, people away are simply played forward again.
+const SAVE_EVERY = 5 * MINUTE;
+const FREE = { writes: 100000, requests: 100000 };
+const MAX_PLAYING = Math.max(1, Number(G.maxPlaying) || 20); // more than this wait in line on the main menu
+const TURN_MS = 60000; // how long someone at the front of the line has to take their spot
 function allowed(ws, me, t) {
   const lim = LIMITS[t];
   if (!lim || me.admin) return true;
@@ -73,28 +81,52 @@ export class World extends DurableObject {
     this.world = null;
     this.persons = new Map(); // who -> person
     this.dirty = new Set();
+    this.savedAt = new Map(); // who -> when they were last saved
+    this.usage = { day: '', messages: 0, connections: 0, writes: 0, alarms: 0 }; // today's use of the free plan (UTC days)
     this.speed = null; // the admin's "speed up time": { x, until }
     this.admin = { maintenance: false, message: '', banned: [], muted: [] }; // set by the admin player in the game
     ctx.blockConcurrencyWhile(async () => {
       this.world = (await ctx.storage.get('world')) || null;
       Object.assign(this.admin, (await ctx.storage.get('admin')) || {});
       this.speed = (await ctx.storage.get('speed')) || null;
+      Object.assign(this.usage, (await ctx.storage.get('usage')) || {});
       for (const [k, p] of await ctx.storage.list({ prefix: 'p:' })) this.persons.set(k.slice(2), p);
       if (!(await ctx.storage.getAlarm())) await ctx.storage.setAlarm(Date.now() + TICK_MS);
     });
   }
 
   /* ---------- storage and sending ---------- */
-  save() { return this.ctx.storage.put('world', this.world); }
-  saveAdmin() { return this.ctx.storage.put('admin', this.admin); }
+  // every storage write goes through here, so today's use can be counted
+  put(key, value) { this.use('writes'); return this.ctx.storage.put(key, value); }
+  save() { return this.put('world', this.world); }
+  saveAdmin() { return this.put('admin', this.admin); }
   touch(p) { this.dirty.add(p.who); }
-  async flush() {
-    if (!this.dirty.size) return;
-    const batch = {};
-    for (const who of this.dirty) { const p = this.persons.get(who); if (p) batch[`p:${who}`] = p; }
-    this.dirty.clear();
+  // Save people who changed: just `only` (straight after they did something), everyone changed (all), or
+  // by default only those not saved for SAVE_EVERY (the world's tick: walking about, needs ticking over).
+  async flush(only, all = false) {
+    const now = Date.now(), batch = {};
+    for (const who of [...this.dirty]) {
+      if (!all && (only ? who !== only : now - (this.savedAt.get(who) || 0) < SAVE_EVERY)) continue;
+      this.dirty.delete(who);
+      const p = this.persons.get(who);
+      if (!p) continue;
+      batch[`p:${who}`] = p;
+      this.savedAt.set(who, now);
+    }
     const keys = Object.keys(batch);
+    this.use('writes', keys.length);
     for (let i = 0; i < keys.length; i += 100) await this.ctx.storage.put(Object.fromEntries(keys.slice(i, i + 100).map((k) => [k, batch[k]])));
+  }
+  // today's use of the free plan, shown to the admin
+  use(what, n = 1) {
+    const day = new Date().toISOString().slice(0, 10);
+    if (this.usage.day !== day) this.usage = { day, messages: 0, connections: 0, writes: 0, alarms: 0 };
+    this.usage[what] += n;
+  }
+  usageNow() {
+    const u = this.usage, requests = u.connections + u.alarms + Math.ceil(u.messages / 20);
+    const pct = (n, of) => Math.round((n / of) * 100);
+    return { requests: pct(requests, FREE.requests), writes: pct(u.writes, FREE.writes), messages: u.messages, playing: this.playing(), max: MAX_PLAYING, waiting: this.line().length };
   }
   sockets() { return this.ctx.getWebSockets().map((ws) => ({ ws, p: ws.deserializeAttachment() })).filter(({ p }) => p && p.id); }
   socketOf(who) { return who ? this.sockets().find(({ p }) => p.who === who) : undefined; }
@@ -113,7 +145,32 @@ export class World extends DurableObject {
     return diff === 0;
   }
   sendCount() { this.send({ t: 'count', n: this.playing() }, null); }
-  playing() { return this.sockets().filter(({ p }) => p.who).length; } // watchers on the main menu aren't counted
+  playing(except) { return this.sockets().filter(({ p }) => p.who && p.who !== except).length; } // watchers on the main menu aren't counted
+  /* ---------- the line: at most MAX_PLAYING play at once, the rest wait on the main menu ---------- */
+  line() { return this.sockets().filter(({ p }) => p.watch && p.queued).sort((a, b) => a.p.queued - b.p.queued); }
+  placeOf(ws) { return this.line().findIndex((s) => s.ws === ws) + 1; }
+  // can this connection play now? Only if there's a free spot that nobody ahead of them in the line is waiting for
+  mayPlay(ws, me, who) {
+    const spots = MAX_PLAYING - this.playing(who); // (the same person reconnecting doesn't count twice)
+    if (spots <= 0) return false;
+    const ahead = this.line().filter((s) => s.ws !== ws && (!me.queued || s.p.queued < me.queued)).length;
+    return ahead < spots;
+  }
+  // tell everyone waiting where they are; those at the front whose spot is free are asked to come in
+  callLine() {
+    const now = Date.now(), free = Math.max(0, MAX_PLAYING - this.playing());
+    let spots = free;
+    for (const [i, s] of this.line().entries()) {
+      if (spots > 0) {
+        spots -= 1;
+        if (!s.p.turnAt) { s.p.turnAt = now; s.ws.serializeAttachment(s.p); }
+        if (now - s.p.turnAt > TURN_MS) { s.p.queued = 0; s.ws.serializeAttachment(s.p); try { s.ws.send(JSON.stringify({ t: 'line', place: 0, missed: true })); } catch (err) { /* gone */ } continue; } // didn't come: out of the line
+        try { s.ws.send(JSON.stringify({ t: 'turn' })); } catch (err) { /* gone */ }
+      } else {
+        try { s.ws.send(JSON.stringify({ t: 'line', place: i + 1 - free })); } catch (err) { /* gone */ }
+      }
+    }
+  }
   // Who is this? For now a person belongs to the phone's random id (pid). Sign-in later (Google, say) plugs in here:
   // check the sign-in with Google, then look up 'acct:<their Google id>' in storage to find their who. The first time
   // someone signs in, save 'acct:<id>' = the who from their phone, so they keep the person they already have.
@@ -313,6 +370,7 @@ export class World extends DurableObject {
       await this.addFeedback(note);
       return new Response('ok', { headers: CORS });
     }
+    this.use('connections');
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
     this.ctx.acceptWebSocket(server);
@@ -324,7 +382,7 @@ export class World extends DurableObject {
     if (!text) return;
     const list = (await this.ctx.storage.get('feedback')) || [];
     list.push({ at: new Date().toISOString(), name: clean(note.name, 20), v: clean(note.v, 30), device: clean(note.device, 200), x: num(note.x), z: num(note.z), text });
-    await this.ctx.storage.put('feedback', list.slice(-FEEDBACK_KEEP));
+    await this.put('feedback', list.slice(-FEEDBACK_KEEP));
   }
 
   async webSocketMessage(ws, raw) {
@@ -332,6 +390,7 @@ export class World extends DurableObject {
     try { m = JSON.parse(raw); } catch (err) { return; }
     if (!m || typeof m.t !== 'string') return;
     lastHeard.set(ws, Date.now());
+    this.use('messages');
     if (m.t === 'ping') return;
     const me = ws.deserializeAttachment() || {};
     const reply = (msg) => { try { ws.send(JSON.stringify(msg)); } catch (err) { /* gone */ } };
@@ -347,7 +406,7 @@ export class World extends DurableObject {
     }
     const w = this.world;
     const p = this.persons.get(me.who);
-    const save = () => { this.touch(p); this.flush(); };
+    const save = () => { this.touch(p); this.flush(p.who); }; // what they did is saved straight away
     switch (m.t) {
       case 'feedback': await this.addFeedback(m); reply({ t: 'thanks' }); return;
       case 'adminLogin':
@@ -364,7 +423,7 @@ export class World extends DurableObject {
         const list = (await this.ctx.storage.get('reports')) || [];
         list.push({ at: new Date().toISOString(), by: { name: p ? p.name : '', who: me.who }, about: { name: them.name, who: them.who, v: sock ? sock.p.v : '' },
           reason: clean(m.reason, 30), note: clean(m.note, 500), said: (sock && sock.p.said) || [], x: num(them.x), z: num(them.z) });
-        await this.ctx.storage.put('reports', list.slice(-REPORTS_KEEP));
+        await this.put('reports', list.slice(-REPORTS_KEEP));
         reply({ t: 'reported', ok: true });
         return;
       }
@@ -380,7 +439,7 @@ export class World extends DurableObject {
         me.alive = true;
         ws.serializeAttachment(me);
         this.touch(np);
-        await this.flush();
+        await this.flush(np.who);
         reply(this.mine(np));
         this.send({ t: 'join', person: this.pub(np) }, me.id);
         return;
@@ -409,7 +468,9 @@ export class World extends DurableObject {
       if (moved < 30) spend(p, 'walkPerMetre', G, moved); // walking takes a little energy
       p.x = nx; p.z = nz; p.ry = num(m.ry);
       this.touch(p);
-      this.send({ t: 'move', id: me.id, x: p.x, z: p.z, ry: p.ry, doing: clean(m.doing, 24) }, me.id);
+      // a walk is sent once with where it's going (tx, tz), plus now and then where they've got to; everyone else's game walks them there
+      const go = Number.isFinite(m.tx) && Number.isFinite(m.tz) ? { tx: num(m.tx), tz: num(m.tz) } : {};
+      this.send({ t: 'move', id: me.id, x: p.x, z: p.z, ry: p.ry, ...go }, me.id);
     } else if (m.t === 'sleep') { // lie down to rest, or get up
       p.sleeping = !!m.on;
       save();
@@ -520,14 +581,19 @@ export class World extends DurableObject {
     if (min && tooOld(m.v, m.b, min)) { this.boot(ws, { t: 'update', min }); return; }
     if (m.adminCode && !isAdmin) reply({ t: 'adminNo' });
     if (me.who) this.leave(ws, me); // was playing on this connection (Exit to the main menu): their person goes away
-    if (m.watch) { // the main menu: watch the world go by without a person
-      Object.assign(me, { id: `w:${crypto.randomUUID().slice(0, 8)}`, who: null, watch: true, admin: isAdmin, tag: m.adminTag !== false, v: clean(m.v, 20), link, alive: false });
+    // the world is full: watch from the main menu and wait in line (the admin always gets in)
+    const full = !m.watch && !isAdmin && !this.mayPlay(ws, me, who);
+    if (m.watch || full) { // the main menu: watch the world go by without a person
+      const queued = full ? me.queued || Date.now() : 0;
+      Object.assign(me, { id: me.watch && me.id ? me.id : `w:${crypto.randomUUID().slice(0, 8)}`, who: null, watch: true, queued, turnAt: 0, admin: isAdmin, tag: m.adminTag !== false, v: clean(m.v, 20), link, alive: false });
       ws.serializeAttachment(me);
       const p = this.persons.get(who);
       reply({ t: 'welcome', watch: true, id: me.id, people: this.people(null), world: this.view(), count: this.playing(), speed: this.speed,
-        yours: this.alive(p) ? { name: p.name, age: p.age } : null });
+        yours: this.alive(p) ? { name: p.name, age: p.age } : null, line: full ? this.placeOf(ws) : 0 });
+      if (full) this.callLine();
       return;
     }
+    me.queued = 0; me.turnAt = 0;
     // the same phone in another tab or link: that one closes
     for (const s of this.sockets()) if (s.p.who === who && s.ws !== ws) { s.p.alive = false; s.ws.serializeAttachment(s.p); this.boot(s.ws, { t: 'elsewhere' }); }
     Object.assign(me, { id: who, who, watch: false, admin: isAdmin, tag: m.adminTag !== false, said: me.said || [], v: clean(m.v, 20), link, alive: false });
@@ -551,7 +617,7 @@ export class World extends DurableObject {
     }
     if (p && this.alive(p)) me.alive = true;
     ws.serializeAttachment(me);
-    await this.flush();
+    if (p) await this.flush(who);
     if (isAdmin) reply(this.adminState(me));
     const w = this.world;
     reply({ t: 'welcome', id: who, people: this.people(who), world: this.view(), needSeed: !w, needLayout: !!w && !w.layout,
@@ -586,6 +652,7 @@ export class World extends DurableObject {
   /* ---------- every minute: needs, people away, sleepers, graves, sticks and stones ---------- */
   async alarm() {
     const now = Date.now();
+    this.use('alarms');
     try {
       // connections that have gone quiet (a phone locked, or the page closed without saying) are closed
       for (const { ws } of this.sockets()) {
@@ -613,7 +680,9 @@ export class World extends DurableObject {
           } else { this.advanceAway(p, now); this.touch(p); }
         }
       }
-      await this.flush();
+      await this.flush(); // only people not saved for a while
+      if (this.usage.alarms % 15 === 0) await this.put('usage', this.usage); // about every 5 minutes
+      this.callLine();
       const w = this.world;
       if (w) {
         const keep = (w.graves || []).filter((g) => g.at > now - AWAY.graveHours * HOUR);
@@ -664,16 +733,17 @@ export class World extends DurableObject {
       p.leftAt = Date.now(); p.simAt = p.leftAt; p.statsAt = Math.min(p.statsAt, p.leftAt);
       p.home = [p.x, p.z]; p.plan = null; p.asleep = false; p.wanderNext = true; p.log = { ate: 0, drank: 0, picked: 0 }; // off for a stroll straight away
       this.touch(p);
-      this.flush();
+      this.flush(who);
       this.send({ t: 'state', id: p.who, state: 'away', x: num(p.x), z: num(p.z) }, null);
     }
     this.sendCount();
+    this.callLine(); // a spot may have opened for someone waiting
   }
   webSocketError(ws) { this.webSocketClose(ws); }
 
   /* ---------- the admin player ---------- */
   adminState(me) {
-    return { t: 'admin', on: true, tag: !!me.tag, maintenance: this.admin.maintenance, message: this.admin.message, speed: this.speed };
+    return { t: 'admin', on: true, tag: !!me.tag, maintenance: this.admin.maintenance, message: this.admin.message, speed: this.speed, usage: this.usageNow() };
   }
   // Each admin message starts with 'a.' and only works for the admin.
   async adminDo(ws, me, m) {
@@ -683,6 +753,7 @@ export class World extends DurableObject {
     const them = m.id ? this.persons.get(m.id) : null;
     const sock = m.id ? this.socketOf(m.id) : null;
     switch (m.t) {
+      case 'a.state': return reply(this.adminState(me)); // the Admin panel was opened: fresh numbers
       case 'a.tag':
         me.tag = !!m.on; ws.serializeAttachment(me);
         this.send({ t: 'badge', id: me.id, on: me.tag }, me.id);
@@ -707,7 +778,7 @@ export class World extends DurableObject {
       case 'a.delete': { // delete one feedback note or report
         const key = m.list === 'reports' ? 'reports' : 'feedback';
         const list = (await this.ctx.storage.get(key)) || [];
-        await this.ctx.storage.put(key, list.filter((x) => x.at !== m.at));
+        await this.put(key, list.filter((x) => x.at !== m.at));
         return done('Deleted');
       }
       case 'a.announce': {
@@ -738,19 +809,19 @@ export class World extends DurableObject {
         this.catchUp(them);
         for (const s of G.needs) them.stats[s.id] = 100;
         them.statsAt = Date.now();
-        this.touch(them); await this.flush();
+        this.touch(them); await this.flush(them.who);
         this.tell(them.who, this.mine(them));
         return done(`${them.name} fed and watered`);
       case 'a.wake': // a sleeper gets up and starts another day away
         if (!this.alive(them) || !them.asleep) return done("They're not asleep");
         Object.assign(them, { asleep: false, leftAt: Date.now(), simAt: Date.now(), statsAt: Date.now(), plan: null, home: [them.x, them.z] });
-        this.touch(them); await this.flush();
+        this.touch(them); await this.flush(them.who);
         this.send({ t: 'state', id: them.who, state: 'away', x: num(them.x), z: num(them.z) }, null);
         return done(`${them.name} woke up`);
       case 'a.sleep': // send someone away to sleep now (for testing)
         if (!this.alive(them) || sock) return done('Only for people who are away');
         Object.assign(them, { asleep: true, sleepAt: Date.now(), plan: null });
-        this.touch(them); await this.flush();
+        this.touch(them); await this.flush(them.who);
         this.send({ t: 'state', id: them.who, state: 'asleep', x: num(them.x), z: num(them.z) }, null);
         return done(`${them.name} is asleep`);
       case 'a.removePerson': // take someone out of the world; their things drop where they are
@@ -758,14 +829,14 @@ export class World extends DurableObject {
         if (sock) return done("They're playing right now");
         them.state = 'gone'; them.diedAt = Date.now();
         this.spill(them);
-        this.touch(them); await this.flush();
+        this.touch(them); await this.flush(them.who);
         this.send({ t: 'leave', id: them.who }, null);
         return done(`${them.name} removed`);
       case 'a.speed': { // needs run x times faster for a few minutes, to test people looking after themselves
         const x = Math.max(1, Math.min(600, Number(m.x) || 1));
         for (const p of this.persons.values()) this.catchUp(p);
         this.speed = x > 1 ? { x, until: Date.now() + Math.max(1, Math.min(60, Number(m.minutes) || 10)) * MINUTE } : null;
-        if (this.speed) await this.ctx.storage.put('speed', this.speed); else await this.ctx.storage.delete('speed');
+        if (this.speed) await this.put('speed', this.speed); else await this.ctx.storage.delete('speed');
         this.send({ t: 'speed', speed: this.speed }, null);
         return done(this.speed ? `Time ${x}x faster for ${Math.round((this.speed.until - Date.now()) / MINUTE)} minutes` : 'Time back to normal');
       }

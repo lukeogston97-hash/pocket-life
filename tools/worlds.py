@@ -23,6 +23,7 @@ if cmd == 'test-build':
         'sources': {k: {'gives': v.get('gives'), 'harvest': v.get('harvest'), 'water': bool(v.get('water'))} for k, v in srcs.items()},
         'berryKind': berry,
         'carryCapacity': data['settings']['carryCapacity'],
+        'maxPlaying': data['settings'].get('maxPlaying', 20),
         'age': {'min': data['looks']['age']['min'], 'max': data['looks']['age']['max']},
         'away': data.get('away', {}),
         'energyCosts': data.get('energyCosts', {}),

@@ -125,6 +125,7 @@
   },
   "berryKind": "berry",
   "carryCapacity": 30,
+  "maxPlaying": 20,
   "age": {
     "min": 18,
     "max": 90
@@ -136,7 +137,7 @@
     "eatBelow": 60,
     "drinkBelow": 55,
     "sleepAfterHours": 24,
-    "goneAfterDays": 7,
+    "goneAfterDays": 1,
     "graveHours": 24,
     "idleMinutes": 3,
     "near": "pond",
