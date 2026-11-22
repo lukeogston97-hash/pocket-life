@@ -199,7 +199,7 @@
     "knife": {
       "name": "Stone knife",
       "plural": "Stone knives",
-      "weight": 0.5,
+      "weight": 1,
       "look": {
         "shape": "knife",
         "length": 0.26,
@@ -764,7 +764,7 @@
       "version": "0.2.3",
       "date": "2026-11-22",
       "notes": [
-        "New weights: logs 5 (was 10), campfires 15 (was 17), twine and berries 1 each.",
+        "New weights: logs 5 (was 10), campfires 15 (was 17), twine, berries and the stone knife 1 each.",
         "Chopping a log into sticks gives 5 sticks (was 4)."
       ]
     },

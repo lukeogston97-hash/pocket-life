@@ -99,7 +99,7 @@
       "places": null
     },
     "knife": {
-      "weight": 0.5,
+      "weight": 1,
       "eat": null,
       "uses": 10,
       "places": null
