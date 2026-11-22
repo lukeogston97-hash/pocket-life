@@ -1,6 +1,6 @@
 {
-  "version": "0.1.7",
-  "build": 2,
+  "version": "0.1.8",
+  "build": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,
@@ -698,6 +698,15 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.1.8",
+      "date": "2026-11-22",
+      "notes": [
+        "World picker: each world shows how many people are in it, and a world that's coming soon shows empty.",
+        "Fixed people getting stuck in the pond: you can always wade out, and nobody comes back or appears standing in the water.",
+        "Twine looks like twine now: a coil of thin cord, tied across, with a loose end."
+      ]
+    },
     {
       "version": "0.1.7",
       "date": "2026-11-22",

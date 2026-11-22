@@ -490,7 +490,8 @@ function updatePlayer(dt) {
         nz = inWorld(player.position.z + Math.cos(base + off) * step);
         const hitNow = solidAt(player.position.x, player.position.z), hitNext = solidAt(nx, nz);
         const blocked = hitNext && (!hitNow || hitNext.depth > hitNow.depth - 1e-4); // you can always step out of something
-        if (pondShape(nx, nz) >= 0.86 && !blocked) { ok = true; heading = base + off; if (off && !walk.side) walk.side = Math.sign(off); break; }
+        const wet = pondShape(nx, nz) < 0.86 && pondShape(nx, nz) <= pondShape(player.position.x, player.position.z); // you can always wade out of the pond
+        if (!wet && !blocked) { ok = true; heading = base + off; if (off && !walk.side) walk.side = Math.sign(off); break; }
       }
       if (!ok) stop("Can't get there");
       else {

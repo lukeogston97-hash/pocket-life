@@ -20,7 +20,7 @@ function addOther(p) {
   removeOther(p.id);
   const mesh = makePerson(cleanLook({ ...p.look, name: p.name }));
   let x = Number(p.x) || 0, z = Number(p.z) || 0;
-  if (solidAt(x, z)) [x, z] = outsideSolid(x, z); // never start inside a tree or rock
+  [x, z] = onDryLand(x, z); // never start in the pond or inside a tree or rock
   mesh.position.set(x, groundY(x, z), z);
   mesh.rotation.y = Number(p.ry) || 0;
   mesh.userData.label = p.name || 'Someone';
@@ -65,7 +65,7 @@ function setOtherState(m) {
   const o = others.get(m.id);
   if (!o) return;
   o.state = m.state;
-  if (m.x != null) { o.tx = m.x; o.tz = m.z; }
+  if (m.x != null) [o.tx, o.tz] = onDryLand(m.x, m.z);
   if (m.state !== 'away') o.speed = null;
   if (m.state === 'online' && o.bubble) { removeLabel(o.bubble); o.bubble = null; }
   drawTag(o);
@@ -86,8 +86,9 @@ const SHOW_PEOPLE = 30;
 let shownAt = -1;
 function pickShown() {
   const c = controls.target, d2 = (o) => (o.mesh.position.x - c.x) ** 2 + (o.mesh.position.z - c.z) ** 2;
+  const empty = ui.mode === 'menu' && menuRegion && !menuRegion.open; // looking at a world that isn't open yet: nobody there
   [...others.values()].sort((a, b) => d2(a) - d2(b)).forEach((o, i) => {
-    const on = i < SHOW_PEOPLE;
+    const on = !empty && i < SHOW_PEOPLE;
     if (o.shown === on) return;
     o.shown = on;
     o.mesh.visible = on;
