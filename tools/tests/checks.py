@@ -250,4 +250,23 @@ async def pond():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
-CHECKS = {'layout': layout, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond}
+async def smoke():
+    """A quick look that the game still works: menu, make a person, inventory, craft, walk, back to the menu."""
+    async with world(TESTKIT=1) as W:
+        a = await W.page('smoke')
+        expect(await shown(a, '#mainMenu'), 'main menu')
+        await join(a)
+        expect(bool(await text(a, '#hudName')), 'in the world')
+        await a.click('#bagBtn'); expect(await shown(a, '#bag'), 'inventory opens'); await a.click('#bagClose')
+        await a.click('#craftBtn'); expect(await a.evaluate("document.querySelectorAll('#craftList .craft-card').length") > 0, 'craft shows recipes'); await a.click('#craftClose')
+        await a.evaluate("(() => { const p = __pl.player.position; __pl.queueTask({ type: 'walk', x: p.x + 1.5, z: p.z + 1 }); })()")
+        await idle(a, 20)
+        await a.click('#menuBtn'); await a.wait_for_timeout(300); await a.click('#exitBtn'); await a.wait_for_timeout(1500)
+        expect(await shown(a, '#mainMenu'), 'Exit goes back to the menu')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond}
+
+# shortcuts: `run.py quick` for small changes
+GROUPS = {'quick': ['layout', 'smoke']}

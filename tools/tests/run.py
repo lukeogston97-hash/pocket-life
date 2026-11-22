@@ -1,10 +1,10 @@
-"""Run the checks: python3 tools/tests/run.py [names...]   (no names runs them all; UPDATE_LAYOUT=1 saves a new layout baseline)
+"""Run the checks: python3 tools/tests/run.py [names...]   (no names runs them all, about 12 minutes; `quick` is layout + smoke, about 1 minute; UPDATE_LAYOUT=1 saves a new layout baseline)
 
 First time: cd tools/tests && npm install   (also needs Python Playwright and Chrome)."""
 import asyncio, sys, time, traceback
-from checks import CHECKS
+from checks import CHECKS, GROUPS
 
-names = sys.argv[1:] or list(CHECKS)
+names = [n for a in (sys.argv[1:] or list(CHECKS)) for n in GROUPS.get(a, [a])]
 failed = []
 for n in names:
     print(f'{n}: {CHECKS[n].__doc__}')
