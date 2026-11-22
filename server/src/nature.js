@@ -1,16 +1,17 @@
 // Nature and the shared world: berry bushes, tools wearing out, the world as players see it, laying out a new world, sticks and stones topping up.
 // These are methods of the World (index.js adds them to it), so `this` is the world.
-import { G, MINUTE, takeCarry, WORLD_FORMAT, num, kindOk, pickRandom } from './shared.js';
+import { G, MINUTE, takeCarry, wearList, WORLD_FORMAT, num, kindOk, pickRandom } from './shared.js';
 
 export const natureMethods = {
   // a tool wears with each use; a worn-out one breaks (and the next one you carry takes over)
   wearTool(p, tool, reply) {
     if (!tool || !p.carry[tool] || !G.items[tool] || !G.items[tool].uses) return;
+    const list = wearList(p, tool, G);
+    list[0] -= 1;
     p.wear = p.wear || {};
-    p.wear[tool] = (p.wear[tool] ?? G.items[tool].uses) - 1;
-    if (p.wear[tool] <= 0) {
-      takeCarry(p, tool, 1);
-      if (p.carry[tool]) p.wear[tool] = G.items[tool].uses;
+    p.wear[tool] = list;
+    if (list[0] <= 0) {
+      takeCarry(p, tool, 1, 0); // the next one you carry takes over, with its own wear
       reply({ t: 'broke', kind: tool });
     }
   },

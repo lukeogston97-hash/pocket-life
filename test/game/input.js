@@ -254,7 +254,7 @@ function menuActions(t) {
   if (t.kind === 'item') {
     const it = t.item;
     const chopIt = CHOP[it.kind] && CHOP.tool;
-    return [{ label: `Pick up ${ITEMS[it.kind].name}`, run: () => queueTask({ type: 'pickup', id: it.id }) },
+    return [{ label: `Pick up ${ITEMS[it.kind].name}`, note: it.uses != null ? `${it.uses} ${it.uses === 1 ? 'use' : 'uses'} left` : '', run: () => queueTask({ type: 'pickup', id: it.id }) },
       ...(chopIt ? [{ label: 'Chop into sticks', note: you.carry[CHOP.tool] ? `${CHOP[it.kind].seconds || 8} s` : `Needs a ${ITEMS[CHOP.tool].name.toLowerCase()}`, disabled: !you.carry[CHOP.tool],
         run: () => queueTask({ type: 'chop', what: it.kind, id: it.id, x: it.x, z: it.z }) }] : []),
       { label: 'Walk here', foot: true, run: () => walkFirst(V(it.x, 0, it.z)) },

@@ -6,9 +6,9 @@ let nextItemId = 1;
 const HIT_MAT = new THREE.MeshBasicMaterial({ visible: false });
 HIT_MAT.userData.shared = true;
 const HIT_BOX = new THREE.BoxGeometry(1, 1, 1), HIT_BALL = new THREE.SphereGeometry(1, 8, 6);
-function addWorldItem(kind, x, z, rot, id) {
+function addWorldItem(kind, x, z, rot, id, uses) { // uses: a worn tool's uses left (none means new)
   if (id != null && itemViews.has(id)) return getItem(id); // already here
-  const item = { id: id ?? nextItemId++, kind, x, z, rot };
+  const item = { id: id ?? nextItemId++, kind, x, z, rot, ...(uses != null ? { uses } : {}) };
   if (id != null) nextItemId = Math.max(nextItemId, id + 1);
   world.items.push(item);
   const { model, rest, hit, hitR } = buildItem(kind);

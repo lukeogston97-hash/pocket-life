@@ -100,10 +100,26 @@ export function addCarry(p, kind, n, G) {
   p.lastKind = kind;
   return true;
 }
-export function takeCarry(p, kind, n) {
+// A tool's wear is a list of uses left, one per tool carried, the one in use first; tools past the end of the list
+// are new (saves from before 0.2.6 kept one number, for the one in use). wearList gives the whole list.
+export function wearList(p, kind, G) {
+  const n = p.carry[kind] || 0, full = (G.items[kind] || {}).uses || 0, w = (p.wear || {})[kind];
+  const list = (Array.isArray(w) ? w : w != null ? [w] : []).slice(0, n);
+  while (list.length < n) list.push(full);
+  return list;
+}
+// taking things out of what someone carries; for a tool, which says which one (0 is the one in use), else spares go first
+export function takeCarry(p, kind, n, which) {
   const have = p.carry[kind] || 0, taken = Math.min(have, n);
   if (taken <= 0) return 0;
-  if (have - taken > 0) p.carry[kind] = have - taken; else { delete p.carry[kind]; if (p.wear) delete p.wear[kind]; } // a tool's wear goes with the last one
+  const w = p.wear && p.wear[kind];
+  if (w != null) { // keep the wear list in step: the taken tool's number goes with it
+    const list = (Array.isArray(w) ? w : [w]).slice(0, have);
+    if (taken === 1 && Number.isInteger(which) && which >= 0 && which < have) list.splice(which, 1);
+    list.length = Math.min(list.length, have - taken);
+    if (list.length) p.wear[kind] = list; else delete p.wear[kind];
+  }
+  if (have - taken > 0) p.carry[kind] = have - taken; else delete p.carry[kind];
   if (!p.carry[p.lastKind]) p.lastKind = Object.keys(p.carry)[0] || null;
   return taken;
 }

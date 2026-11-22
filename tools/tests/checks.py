@@ -119,7 +119,13 @@ async def grass_and_tools():
           const c = P.clumps.filter((c) => !c.readyAt).sort((x, y) => Math.hypot(x.x - p.x, x.z - p.z) - Math.hypot(y.x - p.x, y.z - p.z))[0];
           __pl.queueTask({ type: 'cut', plant: 'tallGrass', i: c.i, x: c.x, z: c.z }); })()""")
         await idle(a, 60); await a.wait_for_timeout(1500)
-        expect(await a.evaluate('(__pl.you.wear || {}).knife') == KNIFE_USES - 1, 'the knife wears with each cut')
+        knife_wear = "(() => { const w = (__pl.you.wear || {}).knife; return Array.isArray(w) ? w[0] : w; })()"
+        expect(await a.evaluate(knife_wear) == KNIFE_USES - 1, 'the knife wears with each cut')
+        await a.evaluate("__pl.queueTask({ type: 'drop', kind: 'knife', n: 1, which: 0 })"); await idle(a, 20); await a.wait_for_timeout(1500)
+        kid = await a.evaluate("(() => { const e = [...__pl.itemViews.entries()].find(([id, v]) => v.userData.label === 'Stone knife'); return e ? e[0] : null; })()")
+        expect(kid is not None and not await a.evaluate('__pl.you.carry.knife'), f'dropped the worn knife ({kid})')
+        await a.evaluate(f"__pl.queueTask({{ type: 'pickup', id: {kid} }})"); await idle(a, 20); await a.wait_for_timeout(1500)
+        expect(await a.evaluate(knife_wear) == KNIFE_USES - 1, 'picked back up, it is still worn (not new again)')
         expect(await a.evaluate('!__pl.heldView'), 'hands empty when not using a tool')
         await a.evaluate("""(() => { const p = __pl.player.position; const [i, b] = __pl.berryBushes.map((b, i) => [i, b]).sort((x, y) => x[1].position.distanceTo(p) - y[1].position.distanceTo(p))[0];
           __pl.queueTask({ type: 'use', source: b.userData.source, bush: i, x: b.position.x, z: b.position.z, stop: 1.1, top: b.position.y + 1 }); })()""")
@@ -267,10 +273,10 @@ async def smoke():
         await a.click('#bagBtn'); expect(await shown(a, '#bag'), 'inventory opens')
         expect(await a.evaluate("document.querySelectorAll('#bagList > li').length >= 10 && document.getElementById('bagInfo').hidden"), 'inventory shows the grid, no info until a tap')
         await a.click('#bagClose')
-        tools = await a.evaluate("""(() => { __pl.you.carry.knife = 2; __pl.you.wear.knife = 5; document.getElementById('bagBtn').click();
+        tools = await a.evaluate("""(() => { __pl.you.carry.knife = 2; __pl.you.wear.knife = [5, 12]; document.getElementById('bagBtn').click();
           const t = [...document.querySelectorAll('#bagList .bag-tile[data-kind="knife"]')].map((b) => b.getAttribute('aria-label'));
           document.getElementById('bagClose').click(); return t; })()""")
-        expect(tools == ['Stone knife, 5 uses left', f'Stone knife, spare, {KNIFE_USES} uses'], f'each tool gets its own tile: the one in use, then a spare ({tools})')
+        expect(tools == ['Stone knife, 5 uses left', 'Stone knife, spare, 12 uses'], f'each tool gets its own tile: the one in use, then a spare ({tools})')
         await a.click('#craftBtn'); expect(await a.evaluate("document.querySelectorAll('#craftList .craft-card').length") > 0, 'craft shows recipes'); await a.click('#craftClose')
         await a.evaluate("(() => { const p = __pl.player.position; __pl.queueTask({ type: 'walk', x: p.x + 1.5, z: p.z + 1 }); })()")
         await idle(a, 20)

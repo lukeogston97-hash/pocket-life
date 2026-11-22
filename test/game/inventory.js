@@ -65,15 +65,22 @@ const bagKinds = () => Object.keys(you.carry).filter((k) => ITEMS[k] && you.carr
   .sort((a, b) => bagGroup(ITEMS[a]) - bagGroup(ITEMS[b]) || ITEM_ORDER.indexOf(a) - ITEM_ORDER.indexOf(b));
 // a line about it: its own "about" in game-data.json, else the about of the recipe that makes it
 const itemAbout = (kind) => ITEMS[kind].about || (RECIPES.find((r) => r.makes[kind]) || {}).about || '';
-const usesLeft = (kind) => (ITEMS[kind].uses ? (you.wear[kind] ?? ITEMS[kind].uses) : 0);
-// what the grid shows: a tile for each kind, but each tool gets its own (Luke's pick). The game keeps wear for the
-// tool in use, so the first of a kind has its wear and the rest are spares, full; dropping one drops a spare.
+// a tool's uses left, one per tool you carry, the one in use first (the server sends a list; before 0.2.6 one number)
+function wearList(kind) {
+  const n = you.carry[kind] || 0, w = you.wear[kind];
+  const list = (Array.isArray(w) ? w : w != null ? [w] : []).slice(0, n);
+  while (list.length < n) list.push(ITEMS[kind].uses);
+  return list;
+}
+// what the grid shows: a tile for each kind, but each tool gets its own (Luke's pick), with its own wear: the first
+// of a kind is the one in use, the rest are spares. Each can be dropped, and keeps its wear on the ground.
 function bagSlots() {
   const out = [];
   for (const kind of bagKinds()) {
     const n = you.carry[kind], it = ITEMS[kind];
     if (!it.uses) { out.push({ kind, key: `${kind}:0`, n }); continue; }
-    for (let i = 0; i < n; i++) out.push({ kind, key: `${kind}:${i}`, n: 1, spare: i > 0, spares: n - 1, left: i > 0 ? it.uses : usesLeft(kind) });
+    const worn = wearList(kind);
+    for (let i = 0; i < n; i++) out.push({ kind, key: `${kind}:${i}`, n: 1, i, spare: i > 0, spares: n - 1, left: worn[i] });
   }
   return out;
 }
@@ -120,10 +127,8 @@ function drawBagInfo(s) {
   if (about) { const p = document.createElement('p'); p.className = 'info-about'; p.textContent = about; parts.push(p); }
   const acts = document.createElement('div');
   acts.className = 'info-acts';
-  if (!it.uses || s.spare || !s.spares) { // the tool in use can't be dropped while you carry spares (a spare would go)
-    acts.appendChild(smallButton(n > 1 ? 'Drop 1' : 'Drop', () => dropItems(kind, 1)));
-    if (n > 1) acts.appendChild(smallButton('Drop all', () => dropItems(kind, n)));
-  }
+  acts.appendChild(smallButton(n > 1 ? 'Drop 1' : 'Drop', () => dropItems(kind, 1, it.uses ? s.i : undefined))); // a tool: this one
+  if (n > 1) acts.appendChild(smallButton('Drop all', () => dropItems(kind, n)));
   if (RECIPES.some((r) => r.needs[kind])) acts.appendChild(smallButton('Craft with ›', () => openCraft(kind)));
   parts.push(acts);
   box.replaceChildren(...parts);

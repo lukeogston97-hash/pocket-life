@@ -4,7 +4,7 @@
 // person (p), the world (w), reply() to answer just you, and save() to save your person straight away; `this` is the
 // world (index.js), so this.send() tells everyone. Remember a spam limit in LIMITS (shared.js) for anything new.
 import { PLACEABLES, fireRule, seatAt } from './placed.js';
-import { FILTER, G, starText, badName, freshStats, addCarry, takeCarry, applyGives, eatOne, craft, spend, clean, num, kindOk, START, REST, BERRY_SRC, cleanLook, REPORTS_KEEP } from './shared.js';
+import { FILTER, G, starText, badName, freshStats, addCarry, takeCarry, wearList, applyGives, eatOne, craft, spend, clean, num, kindOk, START, REST, BERRY_SRC, cleanLook, REPORTS_KEEP } from './shared.js';
 
 export const ACTIONS = {
   // feedback from the Send feedback screen
@@ -115,6 +115,8 @@ export const ACTIONS = {
   take: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
     const i = w.items.findIndex((it) => it.id === m.id);
     if (i < 0 || !addCarry(p, w.items[i].kind, 1, G)) { reply({ t: 'took', id: m.id, ok: false }); return; }
+    const got = w.items[i];
+    if (got.uses != null) { const list = wearList(p, got.kind, G); list[list.length - 1] = got.uses; p.wear = p.wear || {}; p.wear[got.kind] = list; } // a worn tool stays worn
     w.items.splice(i, 1);
     spend(p, 'pickup', G);
     await this.save();
@@ -126,8 +128,12 @@ export const ACTIONS = {
   drop: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
     const added = [];
     for (const it of (Array.isArray(m.items) ? m.items : []).slice(0, 60)) {
-      if (!it || !kindOk(it.kind) || !takeCarry(p, it.kind, 1)) continue;
+      if (!it || !kindOk(it.kind) || !p.carry[it.kind]) continue;
+      const full = (G.items[it.kind] || {}).uses, which = Number.isInteger(it.which) && it.which >= 0 && it.which < p.carry[it.kind] ? it.which : undefined; // which tool (0 is the one in use)
+      const uses = full ? wearList(p, it.kind, G)[which ?? p.carry[it.kind] - 1] : null;
+      if (!takeCarry(p, it.kind, 1, which)) continue;
       const item = { id: w.nextId++, kind: it.kind, x: num(it.x), z: num(it.z), rot: num(it.rot) };
+      if (uses != null && uses < full) item.uses = uses; // a worn tool stays worn on the ground
       w.items.push(item);
       added.push(item);
     }
