@@ -138,7 +138,7 @@ function drawPlaced(th) {
     pc.obj.quaternion.copy(pc.from.q).slerp(pc.to.q, t);
   });
   const P = PLACEABLES[th.kind];
-  const show = th.built && P.fire ? Math.min(FUEL_STICKS, Math.ceil((fuelIn(th) / P.fire.maxFuel) * FUEL_STICKS - 0.001)) : 0;
+  const show = th.built && P.fire ? Math.min(FUEL_STICKS, Math.ceil((fuelIn(th) / Math.min(P.fire.maxFuel, 10)) * FUEL_STICKS - 0.001)) : 0;
   parts.fuel.forEach((m, i) => { m.visible = i < show; });
   const lit = th.built && isLit(th);
   for (const pc of parts.pieces.slice(-4)) pc.obj.traverse((m) => { if (m.isMesh) { if (!m.userData.wood) m.userData.wood = m.material; m.material = th.burnt ? charMat : m.userData.wood; } }); // the log and sticks go black once burnt
@@ -192,7 +192,7 @@ function animatePlaced(dt) {
   let near = null, nd = Infinity;
   const c = controls.target;
   for (const th of placed.values()) {
-    if (second && th.shown && (th.shown.lit !== isLit(th) || (th.built && PLACEABLES[th.kind].fire && th.shown.show !== Math.min(FUEL_STICKS, Math.ceil((fuelIn(th) / PLACEABLES[th.kind].fire.maxFuel) * FUEL_STICKS - 0.001))))) {
+    if (second && th.shown && (th.shown.lit !== isLit(th) || (th.built && PLACEABLES[th.kind].fire && th.shown.show !== Math.min(FUEL_STICKS, Math.ceil((fuelIn(th) / Math.min(PLACEABLES[th.kind].fire.maxFuel, 10)) * FUEL_STICKS - 0.001))))) {
       burnNow(th); drawPlaced(th); // burnt down a stick, or out of fuel: the fire goes out by itself
     }
     const parts = th.view.userData.parts;
