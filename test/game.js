@@ -1652,6 +1652,7 @@ function drawHeld() {
     const want = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(along, side, blade));
     wrap.quaternion.copy(handInMe.invert().multiply(want));
     model.position.x = grip || 0.2;
+    model.rotation.x = Math.PI; // turned over on the handle so the cutting edge faces the other way (Luke, 0.1.6)
     wrap.add(model);
     wrap.position.set(0, -0.05, 0);
   } else {

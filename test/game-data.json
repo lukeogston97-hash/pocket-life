@@ -1,6 +1,6 @@
 {
   "version": "0.1.6",
-  "build": 3,
+  "build": 4,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,
@@ -708,7 +708,8 @@
         "New: Stone knife (1 stick, 1 stone, 1 twine). It cuts grass fast and picks 2 berries at a time, and wears out after 10 uses.",
         "The stone axe now needs 1 twine too, to lash the head on.",
         "The stone axe looks like an axe now: a flat stone head with a curved cutting edge, lashed on with twine.",
-        "Energy is now called Stamina, the berry bush button says Pick berries, and people away for over a day show 'away · fast asleep'."
+        "Energy is now called Stamina, the berry bush button says Pick berries, and people away for over a day show 'away · fast asleep'.",
+        "The axe in your hand is turned round so the cutting edge faces the right way."
       ]
     },
     {
