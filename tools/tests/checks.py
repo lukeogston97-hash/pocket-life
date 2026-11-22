@@ -217,4 +217,18 @@ async def strolling():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
-CHECKS = {'layout': layout, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling}
+async def regions():
+    """The world picker under Play: Oceania is open; Europe and Americas say Coming soon and can't be played."""
+    async with world() as W:
+        a = await W.page('regionA')
+        names = await a.evaluate("[...document.querySelectorAll('#regions .region')].map((b) => b.innerText.split('\\n')[0])")
+        expect(names == ['Oceania', 'Europe', 'Americas'], f'three worlds under Play ({names})')
+        await a.evaluate("document.querySelectorAll('#regions .region')[1].click()"); await a.wait_for_timeout(600)
+        expect(await text(a, '#playText') == 'Europe is coming soon' and await a.evaluate("document.getElementById('playBtn').disabled"), 'Europe is coming soon and Play is off')
+        await shot(a, 'regions_europe')
+        await a.evaluate("document.querySelectorAll('#regions .region')[0].click()"); await a.wait_for_timeout(600)
+        expect(await text(a, '#playText') == 'Play' and not await a.evaluate("document.getElementById('playBtn').disabled"), 'back on Oceania, Play works')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
+CHECKS = {'layout': layout, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions}

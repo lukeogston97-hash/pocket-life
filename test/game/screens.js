@@ -153,10 +153,39 @@ function enterMenu() {
   drawMenu();
 }
 // what's under Play: who you'll carry on as, or that you'll make a new person
+// The worlds (regions in game-data.json): each has its own clock. Only open ones can be played; tapping another shows
+// this world's view at that region's time of day, with Play saying it's coming soon.
+function drawRegions() {
+  const row = $('regions');
+  row.hidden = REGIONS.length < 2;
+  row.replaceChildren(...REGIONS.map((r) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'region';
+    b.classList.toggle('on', r === menuRegion);
+    b.classList.toggle('soon', !r.open);
+    b.setAttribute('aria-pressed', r === menuRegion ? 'true' : 'false');
+    const name = document.createElement('span'); name.textContent = r.name;
+    const sub = document.createElement('small'); sub.textContent = r.open ? formatTime(worldNow(r.timeZone)) : 'Coming soon';
+    b.append(name, sub);
+    b.addEventListener('click', () => { menuRegion = r; applyDaylight(); drawMenu(); });
+    return b;
+  }));
+}
 function drawMenu() {
+  drawRegions();
+  if (menuRegion && !menuRegion.open) { // looking at a world that isn't open yet
+    $('playText').textContent = `${menuRegion.name} is coming soon`;
+    $('playSub').textContent = `${formatTime(worldNow(menuRegion.timeZone))} there now`;
+    $('playBtn').disabled = true;
+    return drawMenuNet();
+  }
   $('playText').textContent = menuLine ? 'World is full' : 'Play';
   $('playSub').textContent = menuLine ? `You're ${ordinal(menuLine)} in line. You'll join by yourself.` : menuYours ? `as ${menuYours.name} · ${menuYours.age}` : menuYours === null ? 'Make your person' : '';
   $('playBtn').disabled = menuJoining || menuLine > 0;
+  drawMenuNet();
+}
+function drawMenuNet() {
   const n = others.size;
   $('menuNet').dataset.state = $('netLine').dataset.state;
   $('menuNetText').textContent = $('netLine').dataset.state !== 'online' ? $('netText').textContent : n ? `${n} ${n === 1 ? 'person' : 'people'} in the world` : 'Nobody in the world yet';
@@ -177,7 +206,7 @@ function sendHello() {
 }
 // Play: the same connection now plays your person (or makes a new one)
 function play() {
-  if (ui.mode !== 'menu') return;
+  if (ui.mode !== 'menu' || (menuRegion && !menuRegion.open)) return;
   net.mode = 'play';
   menuJoining = true; // until the server answers
   drawMenu();

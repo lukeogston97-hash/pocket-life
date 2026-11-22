@@ -152,14 +152,23 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 // The world has one clock for everyone: settings.worldTimeZone (Darwin time for the Oceania world). worldNow() gives
 // a Date whose UTC fields read as the time there, so the date, the time and day and night are the same on every phone.
 const WORLD_TZ = SETTINGS.worldTimeZone || 'Australia/Darwin';
-let tzParts = null;
-try { tzParts = new Intl.DateTimeFormat('en-US', { timeZone: WORLD_TZ, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' }); } catch (err) { /* very old browser */ }
-function worldNow() {
+const tzFormats = new Map();
+// the time now in a time zone (the world's own unless another is asked for), as a Date whose UTC fields read as that time
+function worldNow(tz = WORLD_TZ) {
   const now = new Date();
-  if (!tzParts) return new Date(now.getTime() + 9.5 * 3600000); // Darwin is UTC+9:30 all year
-  const p = Object.fromEntries(tzParts.formatToParts(now).map((x) => [x.type, x.value]));
+  if (!tzFormats.has(tz)) {
+    let f = null;
+    try { f = new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' }); } catch (err) { /* very old browser */ }
+    tzFormats.set(tz, f);
+  }
+  const f = tzFormats.get(tz);
+  if (!f) return new Date(now.getTime() + 9.5 * 3600000); // Darwin is UTC+9:30 all year
+  const p = Object.fromEntries(f.formatToParts(now).map((x) => [x.type, x.value]));
   return new Date(Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second));
 }
+// the worlds (regions) shown on the main menu; menuRegion is the one being looked at there (see screens.js)
+const REGIONS = (DATA.regions || []).filter((r) => r && r.id && r.name);
+let menuRegion = REGIONS.find((r) => r.open) || null;
 const formatDate = (d) => `${DAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 const formatTime = (d) => `${((d.getUTCHours() + 11) % 12) + 1}:${String(d.getUTCMinutes()).padStart(2, '0')} ${d.getUTCHours() < 12 ? 'am' : 'pm'}`;
 function drawHud() {

@@ -99,7 +99,7 @@ const lerpNum = (a, b, t) => (Number.isFinite(a) && Number.isFinite(b) ? a + (b 
 let hourOverride = null; // lets a test pick the time of day
 function localHour() {
   if (hourOverride != null) return hourOverride;
-  const d = worldNow();
+  const d = worldNow(ui.mode === 'menu' && menuRegion ? menuRegion.timeZone : WORLD_TZ); // on the main menu, the region being looked at
   return d.getUTCHours() + d.getUTCMinutes() / 60 + d.getUTCSeconds() / 3600;
 }
 function applyDaylight() {

@@ -5,7 +5,7 @@ Luke's mobile "life in your pocket" game: SEED meets One Hour One Life. Built st
 ## Design decisions (keep to these)
 - Soft low-poly 3D like SEED, minimal UI like One Hour One Life. Luke is very particular about the look: don't restyle without asking.
 - One person per player. When you die you start as a new person in the same world.
-- Real-time 24-hour clock and real dates, one clock for the whole world (0.1.6): settings.worldTimeZone, Australia/Darwin for the Oceania world (worldNow() in game.js), so day and night are the same for everyone. Later: regions (Oceania, Europe, Americas), each its own world on its own time, picked on the main menu (decided with Luke 22 Nov 2026).
+- Real-time 24-hour clock and real dates, one clock for the whole world (0.1.6): settings.worldTimeZone, Australia/Darwin for the Oceania world (worldNow() in game.js), so day and night are the same for everyone. Regions (decided with Luke 22 Nov 2026): Oceania, Europe, Americas, each its own world on its own time. The world picker sits under Play on the main menu (0.1.7, regions in game-data.json): only Oceania is open; tapping Europe or Americas shows this world's view at that region's time of day (worldNow(tz), menuRegion) with Play saying '<Region> is coming soon'. Later each will be its own Durable Object world.
 - Age is chosen when making a person (planned: 13 to 90, was 18 to 90) and goes up in real time, a year per real year. Male or female, male is the default with short hair.
 - Players are 13+. Deaths: hunger, thirst, tiredness, old age, animals, accidents. No PvP.
 - Home storage can't be taken, but if a player is gone too long and upkeep lapses, it goes out to the world.

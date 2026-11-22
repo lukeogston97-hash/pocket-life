@@ -297,6 +297,15 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .play-btn small { font: 700 12px/1 var(--font-ui); opacity: 0.7; }
 .play-btn small:empty { display: none; }
 .play-btn:disabled { opacity: 0.6; cursor: default; }
+.regions { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; }
+.regions[hidden] { display: none; }
+.region { min-height: 46px; display: grid; justify-items: center; align-content: center; gap: 3px; padding: 5px 4px; border: 1px solid var(--line); border-radius: 14px;
+  background: transparent; color: var(--ink-soft); font: 700 12.5px/1 var(--font-ui); cursor: pointer; }
+.region small { font: 700 10.5px/1 var(--font-ui); color: var(--ink-faint); }
+.region.on { background: var(--hover); color: var(--ink); border-color: rgba(143, 212, 158, 0.55); }
+.region.on small { color: var(--accent); }
+.region.soon.on small { color: var(--ink-soft); }
+.region:active { transform: scale(0.97); }
 .menu-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .menu-tile { min-height: 64px; display: grid; justify-items: center; align-content: center; gap: 6px; padding: 6px 4px; border: 1px solid var(--line); border-radius: 16px;
   background: var(--hover); color: var(--ink); font: 700 12px/1 var(--font-ui); cursor: pointer; }
