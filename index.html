@@ -109,6 +109,7 @@
     </div>
     <div class="menu-card glass">
       <button id="playBtn" type="button" class="action-btn play-btn"><span id="playText">Play</span><small id="playSub"></small></button>
+      <div id="regions" class="regions" role="group" aria-label="World" hidden></div>
       <div class="menu-row">
         <button id="menuNewsBtn" type="button" class="menu-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.4 5.6 6.1.5-4.6 4 1.4 5.9L12 16l-5.3 3 1.4-5.9-4.6-4 6.1-.5z"/></svg>What's new</button>
         <button id="menuSettingsBtn" type="button" class="menu-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Settings</button>
@@ -264,6 +265,20 @@
 // Loads the newest copy of everything. game-data.json is always fetched fresh, and its version
 // and build are added to the style and code addresses, so a phone never mixes old and new files.
 const failed = (msg) => { const b = document.getElementById('noGL'); b.textContent = msg; b.hidden = false; document.documentElement.style.visibility = ''; };
+// The game's home is pocketlife.pages.dev (0.1.7). The old GitHub address sends you there, bringing this phone's id
+// (in the part after #, which never leaves the phone) so you carry on as the same person.
+const HOME = 'https://pocketlife.pages.dev/';
+const PID_KEY = 'pocket-life:pid';
+if (location.hostname.endsWith('github.io')) {
+  const pid = localStorage.getItem(PID_KEY);
+  location.replace(`${HOME}${location.pathname.includes('/test/') ? 'test/' : ''}${pid ? `#pid=${encodeURIComponent(pid)}` : ''}`);
+  await new Promise(() => {}); // stop here while the new page loads
+}
+const brought = new URLSearchParams(location.hash.slice(1)).get('pid');
+if (brought) {
+  if (!localStorage.getItem(PID_KEY)) localStorage.setItem(PID_KEY, brought.slice(0, 64)); // a person you already have here stays yours
+  history.replaceState(null, '', location.pathname + location.search);
+}
 try {
   const res = await fetch('game-data.json', { cache: 'no-store' });
   if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -281,7 +296,22 @@ await new Promise((done) => {
   document.head.appendChild(css);
 });
 document.documentElement.style.visibility = '';
-await import(`./game.js?v=${v}`);
+// The game's code is kept in small files by topic (game/*.js, in this order). They share one scope, so they're
+// joined into one module here and run together, exactly as if they were one file.
+const PARTS = ['core', 'land', 'nature', 'plants', 'world-build', 'items', 'people', 'world-items', 'you', 'needs',
+  'inventory', 'camera', 'moving', 'input', 'screens', 'loop', 'online', 'admin', 'others', 'start'];
+let code;
+try {
+  code = await Promise.all(PARTS.map(async (p) => {
+    const r = await fetch(`game/${p}.js?v=${v}`);
+    if (!r.ok) throw new Error(`game/${p}.js: HTTP ${r.status}`);
+    return `// ===== game/${p}.js =====\n${await r.text()}`;
+  }));
+} catch (err) {
+  failed("The game couldn't be loaded. Check your connection, then reload the page.");
+  throw err;
+}
+await import(URL.createObjectURL(new Blob([`${code.join('\n')}\n//# sourceURL=pocket-life-game.js`], { type: 'text/javascript' })));
 </script>
 </body>
 </html>

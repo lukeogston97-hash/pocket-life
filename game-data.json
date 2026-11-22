@@ -1,6 +1,6 @@
 {
-  "version": "0.1.6",
-  "build": 4,
+  "version": "0.1.7",
+  "build": 2,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,
@@ -609,7 +609,8 @@
     "devlog": "What's new, shown in the Menu. Newest first: version, date and a short list of changes, written for players.",
     "energyCosts": "Stamina (the yellow ring, id energy) is short-term: every task takes these amounts and walking takes walkPerMetre for each metre. It comes back by itself quickly (perHour in its need: 400 an hour, so empty to full in about 15 minutes). Below slowBelow (20) your person is out of breath: walking and tasks take slowBy (1.5) times as long. It never stops you and it's not deadly. The server uses the same numbers.",
     "chopping": "Chopping with a tool (tool: the item you need). tree: chopping a standing tree (seconds, and what falls: gives); it leaves a stump that grows back into a tree after regrowDays real days. stump: digging out a stump (then the tree is gone for good). log: chopping a log (an item) into sticks. Each chop wears the tool by one use, and takes energyCosts.chop energy. The server uses the same rules.",
-    "plants": "Plants you cut, like tall grass. Each kind is laid out by itself: count clumps (nearStart of them near the start), on its own random numbers (seed) so nothing else moves. action is the tap menu button, verb what shows while doing it. gives goes into your inventory each cut. seconds is how long by hand, toolSeconds with the tool (each use wears the tool). regrowHours [lo, hi]: a cut clump grows back at a random time in between. look: blades per clump, height, colour and tips (the seed heads). Run tools/worlds.py test-build after changing plants."
+    "plants": "Plants you cut, like tall grass. Each kind is laid out by itself: count clumps (nearStart of them near the start), on its own random numbers (seed) so nothing else moves. action is the tap menu button, verb what shows while doing it. gives goes into your inventory each cut. seconds is how long by hand, toolSeconds with the tool (each use wears the tool). regrowHours [lo, hi]: a cut clump grows back at a random time in between. look: blades per clump, height, colour and tips (the seed heads). Run tools/worlds.py test-build after changing plants.",
+    "regions": "The worlds (regions) on the main menu, under Play. Each is its own world on its own clock (timeZone). open: false shows it as Coming soon; tapping it shows this world's view at that region's time of day. For now only one world exists, so only one region can be open, and its timeZone should match settings.worldTimeZone."
   },
   "chatFilter": {
     "anywhere": [
@@ -697,6 +698,16 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.1.7",
+      "date": "2026-11-22",
+      "notes": [
+        "New home: the game is now at pocketlife.pages.dev. The old address sends you there and you keep your person.",
+        "The main menu has a world picker under Play: Oceania (Darwin time) is open now, with Europe and Americas coming soon. Tap one to see the world at that time of day.",
+        "People away from the game no longer walk through trees or get stuck: they keep to a route round things and keep up with where they're meant to be.",
+        "A big clean-up behind the scenes so lots of new things can be added quickly. Nothing about how the game plays has changed."
+      ]
+    },
     {
       "version": "0.1.6",
       "date": "2026-11-22",
@@ -856,5 +867,25 @@
         "tips": "#efe0a0"
       }
     }
-  }
+  },
+  "regions": [
+    {
+      "id": "oceania",
+      "name": "Oceania",
+      "timeZone": "Australia/Darwin",
+      "open": true
+    },
+    {
+      "id": "europe",
+      "name": "Europe",
+      "timeZone": "Europe/London",
+      "open": false
+    },
+    {
+      "id": "americas",
+      "name": "Americas",
+      "timeZone": "America/New_York",
+      "open": false
+    }
+  ]
 }
