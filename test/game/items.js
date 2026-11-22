@@ -67,6 +67,20 @@ const axeHeadGeo = (() => {
   g.computeVertexNormals();
   return g;
 })();
+// A stone pick head: a long, narrow stone across the end of the handle, curving back a little and coming to a point
+// at each end. Built along z (across the handle), thick in x and y at the middle, thin at the points.
+const pickHeadGeo = (() => {
+  const g = new THREE.CylinderGeometry(0.022, 0.022, 0.3, 6, 8).rotateX(Math.PI / 2);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const z = p.getZ(i), k = Math.abs(z) / 0.15; // 0 at the middle, 1 at the points
+    const w = Math.max(0.06, 1 - k * k * 0.94);
+    p.setX(i, p.getX(i) * w * 1.15 - k * k * 0.035); // curving back towards the handle
+    p.setY(i, p.getY(i) * w);
+  }
+  g.computeVertexNormals();
+  return g;
+})();
 // A campfire: a ring of stones round a bed of ash, a log and a few sticks laid in the middle, and a little teepee of
 // sticks stood up over them (the fuel: more sticks, more teepee). Each building piece knows where it sits when the
 // campfire is built (to) and where it lies in a loose pile before then (from), so building can move them into place.
@@ -136,6 +150,31 @@ const SHAPES = {
     cross.position.set(hx, 0, 0.022);
     cross.rotation.y = 0.5;
     g.add(cross);
+    return { model: g, rest: 0.04, hold: 'axe', grip: len / 2 - 0.06, hit: [len + 0.3, 0.3, 0.42] };
+  },
+  // a stone pickaxe: the axe's handle, with a long pointed stone across its end, lashed on
+  pickaxe(look) {
+    const len = look.length ?? 0.6, t = look.thickness ?? 0.025;
+    const g = new THREE.Group();
+    const wood = tinted(look.colour || '#8a6847', 0.04);
+    g.add(new THREE.Mesh(new THREE.CylinderGeometry(t * 0.9, t * 1.1, len, 6).rotateZ(Math.PI / 2), wood)); // the handle
+    const knob = new THREE.Mesh(new THREE.CylinderGeometry(t * 1.35, t * 1.1, 0.03, 6).rotateZ(Math.PI / 2), wood);
+    knob.position.x = -len / 2 + 0.015;
+    g.add(knob);
+    const hx = len / 2 - 0.035;
+    const head = new THREE.Mesh(pickHeadGeo, tinted(look.head || '#8f8a80', 0.06));
+    head.position.set(hx, 0, 0);
+    g.add(head);
+    const twine = matFor(look.lashing || '#c9b77a');
+    const lash = new THREE.Mesh(new THREE.CylinderGeometry(t * 1.5, t * 1.5, 0.05, 7).rotateZ(Math.PI / 2), twine); // wrapped round the handle under the head
+    lash.position.set(hx - 0.035, 0, 0);
+    g.add(lash);
+    for (const r of [0.6, -0.6]) { // and crossed over the head
+      const cross = new THREE.Mesh(new THREE.BoxGeometry(0.075, t * 2.4, 0.012), twine);
+      cross.position.set(hx, 0, 0);
+      cross.rotation.y = r;
+      g.add(cross);
+    }
     return { model: g, rest: 0.04, hold: 'axe', grip: len / 2 - 0.06, hit: [len + 0.3, 0.3, 0.42] };
   },
   // a knife: a short stick handle with a sharp stone flake lashed into the end

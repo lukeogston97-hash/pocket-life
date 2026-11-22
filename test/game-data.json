@@ -1,6 +1,6 @@
 {
   "version": "0.2.8",
-  "build": 1,
+  "build": 2,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,
@@ -235,6 +235,23 @@
       },
       "startInWorld": 0
     },
+    "stone-pickaxe": {
+      "name": "Stone pickaxe",
+      "plural": "Stone pickaxes",
+      "weight": 2,
+      "look": {
+        "shape": "pickaxe",
+        "length": 0.6,
+        "thickness": 0.025,
+        "colour": "#8a6847",
+        "head": "#8f8a80",
+        "lashing": "#c9b77a"
+      },
+      "tool": {
+        "uses": 30
+      },
+      "startInWorld": 0
+    },
     "log": {
       "name": "Log",
       "about": "Chop it into sticks with an axe, or burn it on a campfire.",
@@ -290,6 +307,19 @@
         "stone-axe": 1
       },
       "about": "Chops trees, stumps and logs"
+    },
+    {
+      "id": "stone-pickaxe",
+      "name": "Stone pickaxe",
+      "needs": {
+        "stick": 2,
+        "stone": 3,
+        "twine": 1
+      },
+      "makes": {
+        "stone-pickaxe": 1
+      },
+      "about": "For breaking rock. What it does is coming soon"
     },
     {
       "id": "campfire",
@@ -768,7 +798,8 @@
       "version": "0.2.8",
       "date": "2026-11-22",
       "notes": [
-        "Sit by campfire is one tap now, with no time to pick. Your person sits until you tap Stand up, give them something else to do, or the fire goes out."
+        "Sit by campfire is one tap now, with no time to pick. Your person sits until you tap Stand up, give them something else to do, or the fire goes out.",
+        "New: the stone pickaxe, made from 2 sticks, 3 stones and 1 twine. What it's for is coming soon."
       ]
     },
     {
