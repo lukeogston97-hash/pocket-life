@@ -1,6 +1,6 @@
 {
   "version": "0.2.8",
-  "build": 2,
+  "build": 3,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,
@@ -799,7 +799,8 @@
       "date": "2026-11-22",
       "notes": [
         "Sit by campfire is one tap now, with no time to pick. Your person sits until you tap Stand up, give them something else to do, or the fire goes out.",
-        "New: the stone pickaxe, made from 2 sticks, 3 stones and 1 twine. What it's for is coming soon."
+        "New: the stone pickaxe, made from 2 sticks, 3 stones and 1 twine. What it's for is coming soon.",
+        "Giving your person a task while they're sitting by the fire makes them stand up and do it."
       ]
     },
     {

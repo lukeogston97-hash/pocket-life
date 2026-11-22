@@ -244,8 +244,10 @@ function queueTask(t) {
   }
   if (allTasks().length >= MAX_QUEUE) { showTag('Your queue is full', headTop(), 2); return; }
   hideHint();
+  if (t.type === 'sit' && you.sit) return; // already sitting
   tasks.list.push(t);
   if (!tasks.current) nextTask();
+  else if (you.sit && tasks.current.type === 'sit') endSit(true); // a new task while sitting by the fire: stand up and do it
   else drawQueue();
 }
 function stopQueue() {
