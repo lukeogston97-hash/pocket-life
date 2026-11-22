@@ -187,6 +187,32 @@ export const ACTIONS = {
     save();
     reply(this.mine(p));
   } },
+  // mining (0.2.9): breaking a rock (gone, one comes back now and then) or mining a boulder (it stays, and can be mined again after regrowDays)
+  quarry: { when: 'world', async run({ m, p, w, reply, save }) {
+    const R = G.mining || {}, rule = R[m.what], tool = R.tool, i = Math.floor(m.idx);
+    if (!rule || (m.what !== 'rock' && m.what !== 'boulder') || !(i >= 0 && i < 2000)) return;
+    if (tool && !p.carry[tool]) { reply(this.mine(p)); return; }
+    w.rocks = w.rocks || {};
+    if (w.rocks[i]) { reply({ t: 'rock', idx: i, state: w.rocks[i][0], at: w.rocks[i][1] }); return; } // someone else got it first
+    w.rocks[i] = [m.what === 'rock' ? 'gone' : 'mined', Date.now()];
+    this.send({ t: 'rock', idx: i, state: w.rocks[i][0], at: w.rocks[i][1] }, null);
+    // the stones fall round where you're standing
+    const ax = Number.isFinite(m.x) ? num(m.x) : p.x, az = Number.isFinite(m.z) ? num(m.z) : p.z, out = [];
+    for (const [kind, c] of Object.entries(rule.gives || {})) {
+      const count = Array.isArray(c) ? c[0] + Math.floor(Math.random() * (c[1] - c[0] + 1)) : c;
+      for (let k = 0; k < count && out.length < 20; k++) {
+        const a = Math.random() * Math.PI * 2, r = 0.3 + Math.random() * 0.5;
+        out.push({ id: w.nextId++, kind, x: num(ax + Math.cos(a) * r), z: num(az + Math.sin(a) * r), rot: num(Math.random() * Math.PI) });
+      }
+    }
+    w.items.push(...out);
+    if (out.length) this.send({ t: 'added', items: out }, null);
+    spend(p, 'chop', G);
+    this.wearTool(p, tool, reply);
+    await this.save();
+    save();
+    reply(this.mine(p));
+  } },
   // picking berries (2 at a time with a knife)
   pick: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
     const i = Math.floor(m.bush);

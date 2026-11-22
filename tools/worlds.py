@@ -32,6 +32,7 @@ if cmd == 'test-build':
         'timeZone': data['settings'].get('worldTimeZone', 'Australia/Darwin'),
         'energyCosts': data.get('energyCosts', {}),
         'chopping': data.get('chopping', {}),
+        'mining': data.get('mining', {}),
         # things you place and build (the campfire): which item places them, how they burn, where people sit
         'placeables': {k: {'item': next((i for i, it in data['items'].items() if it.get('places') == k), k), 'buildSeconds': v.get('buildSeconds', 10),
                            'solid': v.get('solid', 0.5), 'fire': v.get('fire'), 'seats': v.get('seats')} for k, v in data.get('placeables', {}).items()},

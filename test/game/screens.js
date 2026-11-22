@@ -182,6 +182,7 @@ function setFresh(on) {
   freshLook = on;
   trees.forEach((t) => { showParts(t, on || t.state === 'tree'); if (t.stump) t.stump.visible = !on; });
   oldStumps.forEach((t) => showParts(t, on || !t.gone));
+  rocks.forEach(drawRock);
   for (const v of itemViews.values()) v.visible = !on;
   for (const th of placed.values()) if (th.view) th.view.visible = !on;
   fireLight.visible = !on;

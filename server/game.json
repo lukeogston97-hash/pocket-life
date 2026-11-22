@@ -266,6 +266,26 @@
     },
     "regrowDays": 3
   },
+  "mining": {
+    "tool": "stone-pickaxe",
+    "rock": {
+      "seconds": 10,
+      "gives": {
+        "stone": 5
+      }
+    },
+    "boulder": {
+      "seconds": 15,
+      "gives": {
+        "stone": [
+          3,
+          5
+        ]
+      }
+    },
+    "regrowDays": 3,
+    "rockBackHours": 4
+  },
   "placeables": {
     "campfire": {
       "item": "campfire",

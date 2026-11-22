@@ -1,6 +1,6 @@
 {
-  "version": "0.2.8",
-  "build": 6,
+  "version": "0.2.9",
+  "build": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,
@@ -144,6 +144,26 @@
       }
     },
     "regrowDays": 3
+  },
+  "mining": {
+    "tool": "stone-pickaxe",
+    "rock": {
+      "seconds": 10,
+      "gives": {
+        "stone": 5
+      }
+    },
+    "boulder": {
+      "seconds": 15,
+      "gives": {
+        "stone": [
+          3,
+          5
+        ]
+      }
+    },
+    "regrowDays": 3,
+    "rockBackHours": 4
   },
   "items": {
     "stick": {
@@ -319,7 +339,7 @@
       "makes": {
         "stone-pickaxe": 1
       },
-      "about": "For breaking rock. What it does is coming soon"
+      "about": "Breaks rocks and mines boulders for stones"
     },
     {
       "id": "campfire",
@@ -706,7 +726,8 @@
     "plants": "Plants you cut, like tall grass. Each kind is laid out by itself: count clumps (nearStart of them near the start), on its own random numbers (seed) so nothing else moves. action is the tap menu button, verb what shows while doing it. gives goes into your inventory each cut. seconds is how long by hand, toolSeconds with the tool (each use wears the tool). regrowHours [lo, hi]: a cut clump grows back at a random time in between. look: blades per clump, height, colour and tips (the seed heads). Run tools/worlds.py test-build after changing plants.",
     "regions": "The worlds (regions) on the main menu, under Play. Each is its own world on its own clock (timeZone). open: false shows it as Coming soon; tapping it shows this world's view at that region's time of day. For now only one world exists, so only one region can be open, and its timeZone should match settings.worldTimeZone.",
     "night": "Night in the world's clock (settings.worldTimeZone), from the hour 'from' to the hour 'to'. Sleeping at night fills Rest at whileAsleepAtNight instead of whileAsleep. People away or on autopilot go to sleep when night starts and get up in the morning. The server uses the same numbers.",
-    "placeables": "Things you place in the world and build, like the campfire. An item with places (the id of an entry here) gets a Place button in the Inventory: you pick a spot, your person puts it down as an unbuilt site, then builds it (buildSeconds; buildVerb shows while building). solid is how big it is for walking round (metres). fire makes it a fire you can light and put out: fuel is the item you add (sticks), secondsEach is how long one burns (300 = 5 minutes), otherFuels are more items it burns with their seconds each (log: 1800), maxFuel is the most it holds (in fuel items, 24 sticks = 2 hours), lightSeconds how long lighting takes. It only burns while lit, keeps burning while players are away, and goes out by itself when the fuel runs out. seats: people can sit round it (count places, distance metres from the middle). Sitting is a task with no set time: your person sits until you stand up, do something else or the fire goes out, and keeps sitting while you're away. Run tools/worlds.py test-build after changing placeables. craftLabel names the tap menu list of recipes made there (recipes with near), like Cook."
+    "placeables": "Things you place in the world and build, like the campfire. An item with places (the id of an entry here) gets a Place button in the Inventory: you pick a spot, your person puts it down as an unbuilt site, then builds it (buildSeconds; buildVerb shows while building). solid is how big it is for walking round (metres). fire makes it a fire you can light and put out: fuel is the item you add (sticks), secondsEach is how long one burns (300 = 5 minutes), otherFuels are more items it burns with their seconds each (log: 1800), maxFuel is the most it holds (in fuel items, 24 sticks = 2 hours), lightSeconds how long lighting takes. It only burns while lit, keeps burning while players are away, and goes out by itself when the fuel runs out. seats: people can sit round it (count places, distance metres from the middle). Sitting is a task with no set time: your person sits until you stand up, do something else or the fire goes out, and keeps sitting while you're away. Run tools/worlds.py test-build after changing placeables. craftLabel names the tap menu list of recipes made there (recipes with near), like Cook.",
+    "mining": "Mining with a tool (tool: the item you need, the stone pickaxe). rock: breaking a small rock (seconds, and what falls: gives); the rock is then gone, but one broken rock comes back by a boulder every rockBackHours. boulder: mining a boulder; gives can be a range like [3, 5]. A mined boulder stays (it can't be removed) and can be mined again after regrowDays real days (the same as trees). Each hit wears the tool by one use and takes energyCosts.chop energy. The server uses the same rules."
   },
   "chatFilter": {
     "anywhere": [
@@ -794,6 +815,15 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.2.9",
+      "date": "2026-11-22",
+      "notes": [
+        "The stone pickaxe works now. Tap a rock and Break rock (about 10 s) to get 5 stones. The rock is gone, but broken rocks slowly come back beside boulders.",
+        "Tap a boulder and Mine boulder (about 15 s) for 3 to 5 stones. Boulders stay for good; a mined one looks worn down and can be mined again after 3 days, like a tree stump growing back.",
+        "Tap a mined boulder to see how long until you can mine it again."
+      ]
+    },
     {
       "version": "0.2.8",
       "date": "2026-11-22",

@@ -133,6 +133,8 @@ function pickTarget(px, py) {
   if (owner && owner.userData.stump != null) return { kind: 'stump', idx: owner.userData.stump, name: 'Tree stump', x: owner.position.x, z: owner.position.z };
   if (owner && owner.userData.oldStump != null) { const o = oldStumps[owner.userData.oldStump]; return { kind: 'oldStump', idx: owner.userData.oldStump, name: 'Tree stump', x: o.x, z: o.z }; }
   const copy = hit && hit.object && hit.object.isInstancedMesh && hit.instanceId != null ? copyOwner.get(`${hit.object.uuid}:${hit.instanceId}`) : null;
+  const rk = owner && owner.userData.rock != null ? owner.userData.rock : copy && copy.kind === 'rock' ? copy.i : -1;
+  if (rk >= 0 && rocks[rk].state !== 'gone') { const r = rocks[rk]; return { kind: 'rock', idx: rk, name: r.boulder ? (r.state === 'mined' ? 'Mined boulder' : 'Boulder') : 'Rock', x: r.x, z: r.z }; }
   if (copy && copy.kind === 'oldStump' && !oldStumps[copy.i].gone) { const o = oldStumps[copy.i]; return { kind: 'oldStump', idx: copy.i, name: 'Tree stump', x: o.x, z: o.z }; }
   if (copy && copy.kind === 'tree' && trees[copy.i].state === 'tree') { const tr = trees[copy.i]; return { kind: 'tree', idx: copy.i, name: tr.pine ? 'Pine tree' : 'Tree', x: tr.x, z: tr.z, hit }; }
   if (owner && (owner.userData.label === 'Tree' || owner.userData.label === 'Pine tree')) {
@@ -183,7 +185,7 @@ function handleTap(px, py) {
   if (!t) return;
   if (t.kind === 'you') { firstTap = null; openMenuAt(px, py, { kind: 'self', name: 'You' }); return; }
   // a stick, stone, berry bush or the pond: open the menu of what you can do with it
-  if (['item', 'use', 'person', 'grave', 'tree', 'stump', 'oldStump', 'plant', 'placed'].includes(t.kind)) { firstTap = null; openMenuAt(px, py, t); return; }
+  if (['item', 'use', 'person', 'grave', 'tree', 'stump', 'oldStump', 'rock', 'plant', 'placed'].includes(t.kind)) { firstTap = null; openMenuAt(px, py, t); return; }
   // the ground (or a rock, tree or log): one tap opens Walk here, a quick double-tap walks straight there
   const now = performance.now();
   if (!firstTap || now - firstTap.t > DOUBLE_MS || Math.hypot(px - firstTap.px, py - firstTap.py) > DOUBLE_PX) {
@@ -235,6 +237,14 @@ function menuActions(t) {
       run: () => queueTask({ type: 'chop', what, idx: t.idx, x: t.x, z: t.z }) },
       ...(what === 'stump' && trees[t.idx] ? [{ label: `Grows back in ${stumpGrowsIn(trees[t.idx])}`, disabled: true }] : []),
       { label: 'Walk here', foot: true, run: () => walkFirst(V(t.x + 1.2, 0, t.z)) }];
+  }
+  if (t.kind === 'rock') {
+    const r = rocks[t.idx], rule = MINE[r.boulder ? 'boulder' : 'rock'] || {}, tool = MINE.tool && ITEMS[MINE.tool];
+    const has = !tool || you.carry[MINE.tool];
+    const walk = { label: 'Walk here', foot: true, run: () => walkFirst(V(r.x + r.r + 0.6, 0, r.z)) };
+    if (r.state === 'mined') return [{ label: `Mine again in ${growsBackIn(r.since, MINE.regrowDays || 3)}`, disabled: true }, walk];
+    return [{ label: r.boulder ? 'Mine boulder' : 'Break rock', note: has ? `${rule.seconds || 10} s` : `Needs a ${tool.name.toLowerCase()}`, disabled: !has,
+      run: () => queueTask({ type: 'mine', idx: t.idx, x: r.x, z: r.z }) }, walk];
   }
   if (t.kind === 'self') {
     const rest = you.stats && you.stats.rest != null ? Math.round(you.stats.rest) : null;

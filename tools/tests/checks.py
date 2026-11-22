@@ -379,7 +379,25 @@ async def campfire():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire}
+async def mining():
+    """The stone pickaxe breaks a rock (5 stones, rock gone) and mines a boulder (3-5 stones, it stays, mined)."""
+    async with world(MINEKIT=1) as W:
+        a = await W.page('mineA'); await join(a)
+        near = """((boulder) => { const p = __pl.player.position;
+          return __pl.rocks.map((r, i) => [i, r]).filter(([i, r]) => r.boulder === boulder && r.state === 'whole').sort((x, y) => Math.hypot(x[1].x - p.x, x[1].z - p.z) - Math.hypot(y[1].x - p.x, y[1].z - p.z))[0][0]; })"""
+        stones = "[...__pl.itemViews.values()].filter((v) => v.userData.label === 'Stone').length"
+        for boulder, lo, hi, state in [(False, 5, 5, 'gone'), (True, 3, 5, 'mined')]:
+            i = await a.evaluate(f"{near}({'true' if boulder else 'false'})")
+            before = await a.evaluate(stones)
+            await a.evaluate(f"(() => {{ const r = __pl.rocks[{i}]; __pl.queueTask({{ type: 'mine', idx: {i}, x: r.x, z: r.z }}); }})()")
+            await idle(a, 90); await a.wait_for_timeout(2000)
+            got = await a.evaluate(stones) - before
+            expect(lo <= got <= hi, f"{'boulder' if boulder else 'rock'} gave {lo}-{hi} stones ({got})")
+            expect(await a.evaluate(f"__pl.rocks[{i}].state") == state, f"{'boulder' if boulder else 'rock'} is {state}")
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

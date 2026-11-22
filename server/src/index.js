@@ -253,6 +253,19 @@ export class World extends DurableObject {
         const regrow = ((G.chopping || {}).regrowDays || 3) * 24 * HOUR;
         let grew = false;
         for (const [i, st] of Object.entries(w.trees || {})) if (st[0] === 'stump' && now - st[1] > regrow) { delete w.trees[i]; this.send({ t: 'tree', idx: Number(i), state: 'tree' }, null); grew = true; }
+        // mined boulders can be mined again after the same time; one broken rock comes back every rockBackHours
+        const R = G.mining || {}, again = (R.regrowDays || 3) * 24 * HOUR;
+        for (const [i, st] of Object.entries(w.rocks || {})) if (st[0] === 'mined' && now - st[1] > again) { delete w.rocks[i]; this.send({ t: 'rock', idx: Number(i), state: 'whole' }, null); grew = true; }
+        const broken = Object.keys(w.rocks || {}).filter((i) => w.rocks[i][0] === 'gone');
+        if (!broken.length) w.nextRockBack = 0;
+        else if (!w.nextRockBack) { w.nextRockBack = now + (R.rockBackHours || 4) * HOUR; grew = true; }
+        else if (now >= w.nextRockBack) {
+          const i = broken[Math.floor(Math.random() * broken.length)];
+          delete w.rocks[i];
+          this.send({ t: 'rock', idx: Number(i), state: 'whole' }, null);
+          w.nextRockBack = broken.length > 1 ? now + (R.rockBackHours || 4) * HOUR : 0;
+          grew = true;
+        }
         if (grew) await this.save();
       }
       if (this.speed && now > this.speed.until) { this.speed = null; await this.ctx.storage.delete('speed'); this.send({ t: 'speed', speed: null }, null); }

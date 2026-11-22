@@ -89,6 +89,7 @@ function goOnline() {
       showTag('Someone cut it first', headTop(), 2);
     }
     else if (m.t === 'oldStump') removeOldStump(m.idx);
+    else if (m.t === 'rock') setRockState(m.idx, m.state || 'whole', m.at);
     else if (m.t === 'broke') { showTag(`Your ${(ITEMS[m.kind] || { name: 'tool' }).name.toLowerCase()} broke`, headTop(), 3); drawHeld(); }
     else if (m.t === 'graves') drawGraves(m.graves);
     else if (m.t === 'speed') setSpeed(m.speed);
@@ -254,6 +255,8 @@ function useSharedWorld(w) {
   const ts = w.trees || {};
   trees.forEach((t, i) => setTreeState(i, ts[i] ? ts[i][0] : 'tree', ts[i] && ts[i][1]));
   for (const i of Object.keys(w.oldStumps || {})) removeOldStump(Number(i));
+  const rs = w.rocks || {};
+  rocks.forEach((r, i) => setRockState(i, rs[i] ? rs[i][0] : 'whole', rs[i] && rs[i][1]));
   for (const [kind, P] of Object.entries(plants)) for (const c of P.clumps) setPlant(kind, c.i, ((w.plants || {})[kind] || {})[c.i] || 0);
   berryBushes.forEach((b, i) => {
     const s = (w.bushes || [])[i];

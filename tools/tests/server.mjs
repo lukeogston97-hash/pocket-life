@@ -1,6 +1,6 @@
 // The real world server (server/src/index.js, bundled to build/server.mjs by lib.py) running on this computer at
 // ws://127.0.0.1:8795/world, with storage kept in memory. Env: ADMIN_CODE (default secret123456),
-// TESTKIT=1 gives every new person 2 sticks, 3 stones, 1 twine and a stone axe, CAMPKIT=1 a log, 9 sticks and 4 stones, COLLAPSE=1 starts them with no Rest.
+// TESTKIT=1 gives every new person 2 sticks, 3 stones, 1 twine and a stone axe, MINEKIT=1 a stone pickaxe, CAMPKIT=1 a log, 9 sticks and 4 stones, COLLAPSE=1 starts them with no Rest.
 import { WebSocketServer } from 'ws';
 import { World } from './build/server.mjs';
 const store = new Map(); const socks = [];
@@ -29,9 +29,10 @@ wss.on('connection', (raw) => {
     if (m.t === 'create') {
       const p = w.persons.get(s.att.who);
       if (process.env.TESTKIT) p.carry = { stick: 2, stone: 3, twine: 1, 'stone-axe': 1 };
+      if (process.env.MINEKIT) p.carry = { 'stone-pickaxe': 1 };
       if (process.env.CAMPKIT) p.carry = { log: 1, stick: 9, stone: 4 };
       if (process.env.COLLAPSE) p.stats.rest = 0;
-      if (process.env.TESTKIT || process.env.CAMPKIT || process.env.COLLAPSE) s.send(JSON.stringify(w.mine(p)));
+      if (process.env.TESTKIT || process.env.MINEKIT || process.env.CAMPKIT || process.env.COLLAPSE) s.send(JSON.stringify(w.mine(p)));
     }
   });
   raw.on('close', () => { s.closed = true; w.webSocketClose(s); });
