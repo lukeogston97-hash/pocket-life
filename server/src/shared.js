@@ -5,14 +5,15 @@
 // - the shared world: things on the ground, berry bushes, graves
 // - every person: needs, inventory and where they are, kept here so they stay in the world 24/7
 // - while a player is away their person looks after themselves (wanders, eats, picks berries, drinks),
-//   after a day away they lie down asleep (needs pause), and after another day asleep they're gone (away.goneAfterDays)
+//   after a day away they lie down asleep (hunger and thirst drop slowly to away.asleepFloor, they can't die),
+//   and after away.goneAfterDays asleep they're gone (3 days away in all)
 // - at most G.maxPlaying people play at once; anyone else waits in line on the main menu
 // - chat, reports, feedback and the admin player's tools
 import WORLDS from '../worlds.json'; // minimum version for each link
 import FILTER from '../words.json'; // the chat filter, copied from game-data.json by tools/worlds.py
 import G from '../game.json'; // needs, items, berry bushes, away rules: copied from game-data.json by tools/worlds.py
 import { starText, badName } from './filter.js';
-import { HOUR, MINUTE, freshStats, advanceStats, addCarry, takeCarry, applyGives, eatOne, posAt, dist, craft, sleepMs, spend } from './needs.js';
+import { HOUR, MINUTE, freshStats, advanceStats, addCarry, takeCarry, applyGives, eatOne, posAt, dist, craft, sleepMs, spend, useTimeZone, isNight, morningAfter, ageOf } from './needs.js';
 
 export const PROTOCOL = 2; // bump when the game and server stop understanding each other
 export const CORS = { 'Access-Control-Allow-Origin': '*' };
@@ -20,7 +21,8 @@ export const WORLD_FORMAT = 1;
 export const clean = (s, n) => String(s ?? '').replace(/[\u0000-\u001f]/g, '').slice(0, n);
 export const num = (v) => (Number.isFinite(v) ? Math.round(v * 100) / 100 : 0);
 export const kindOk = (k) => typeof k === 'string' && /^[a-z0-9-]{1,24}$/.test(k);
-export const AWAY = { sleepBelow: 35, wanderMin: 25, wanderMax: 50, strollSpeed: 1.2, eatBelow: 60, drinkBelow: 55, sleepAfterHours: 24, goneAfterDays: 7, graveHours: 24, ...(G.away || {}) };
+useTimeZone(G.timeZone); // the world's clock (Darwin time) for night and birthdays
+export const AWAY = { sleepBelow: 35, wanderMin: 25, wanderMax: 50, strollSpeed: 1.2, eatBelow: 60, drinkBelow: 55, sleepAfterHours: 24, goneAfterDays: 2, asleepFloor: 10, graveHours: 24, ...(G.away || {}) };
 export const START = G.start || { x: 0.6, z: 1.9 };
 export const REST = (G.needs || []).find((s) => s.id === 'rest');
 export const BERRY_SRC = Object.values(G.sources || {}).find((s) => s.harvest) || {}; // the berry bush
@@ -79,4 +81,4 @@ export function cleanLook(look) {
 }
 export const pickRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
-export { WORLDS, FILTER, G, starText, badName, HOUR, MINUTE, freshStats, advanceStats, addCarry, takeCarry, applyGives, eatOne, posAt, dist, craft, sleepMs, spend };
+export { WORLDS, FILTER, G, starText, badName, HOUR, MINUTE, freshStats, advanceStats, addCarry, takeCarry, applyGives, eatOne, posAt, dist, craft, sleepMs, spend, isNight, morningAfter, ageOf };

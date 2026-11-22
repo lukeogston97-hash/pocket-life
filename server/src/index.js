@@ -7,7 +7,7 @@
 // - what players do, one small handler each (actions.js); chat, reports, feedback; the admin player's tools (admin.js)
 // What every part shares (the game's rules from game.json, limits, helpers) is in shared.js.
 import { DurableObject } from 'cloudflare:workers';
-import { WORLDS, G, HOUR, PROTOCOL, CORS, clean, num, AWAY, tooOld, FEEDBACK_KEEP, lastHeard, QUIET_MS, TICK_MS, SAVE_EVERY, FREE, MAX_PLAYING, allowed, tagOf } from './shared.js';
+import { WORLDS, G, HOUR, PROTOCOL, CORS, clean, num, AWAY, tooOld, FEEDBACK_KEEP, lastHeard, QUIET_MS, TICK_MS, SAVE_EVERY, FREE, MAX_PLAYING, allowed, tagOf, ageOf } from './shared.js';
 import { lineMethods } from './line.js';
 import { personsMethods } from './persons.js';
 import { awayMethods } from './away.js';
@@ -171,7 +171,7 @@ export class World extends DurableObject {
       ws.serializeAttachment(me);
       const p = this.persons.get(who);
       reply({ t: 'welcome', watch: true, id: me.id, people: this.people(null), world: this.view(), count: this.playing(), speed: this.speed,
-        yours: this.alive(p) ? { name: p.name, age: p.age } : null, line: full ? this.placeOf(ws) : 0 });
+        yours: this.alive(p) ? { name: p.name, age: ageOf(p) } : null, line: full ? this.placeOf(ws) : 0 });
       if (full) this.callLine();
       return;
     }
@@ -182,7 +182,7 @@ export class World extends DurableObject {
     const p = this.persons.get(who);
     let away = null, dead = null;
     if (p && this.alive(p)) {
-      if (p.asleep) p.statsAt = Date.now(); // needs were paused while asleep
+      if (p.asleep) this.catchUp(p, Date.now()); // asleep away: hunger and thirst dropped slowly to the floor
       if (p.leftAt) {
         this.advanceAway(p, Date.now());
         if (this.alive(p)) {
@@ -193,7 +193,7 @@ export class World extends DurableObject {
       }
     }
     if (p && !this.alive(p)) {
-      dead = { name: p.name, age: p.age, cause: p.cause, away: p.diedAway, gone: p.state === 'gone', had: !!p.hadThings };
+      dead = { name: p.name, age: ageOf(p, p.diedAt || Date.now()), cause: p.cause, away: p.diedAway, gone: p.state === 'gone', had: !!p.hadThings };
       this.persons.delete(who);
       await this.ctx.storage.delete(`p:${who}`);
     }
@@ -229,8 +229,8 @@ export class World extends DurableObject {
           this.touch(p);
         } else {
           if (!p.leftAt) { p.leftAt = now; p.simAt = now; p.home = [p.x, p.z]; p.log = { ate: 0, drank: 0, picked: 0 }; this.touch(p); }
-          if (p.asleep) { // needs pause while asleep (nothing to save until they wake or go)
-            if (now - p.sleepAt > AWAY.goneAfterDays * 24 * HOUR) { // a week asleep: gone, their things left where they slept
+          if (p.asleep) { // asleep: needs are caught up when they come back (nothing to save until they wake or go)
+            if (now - p.sleepAt > AWAY.goneAfterDays * 24 * HOUR) { // asleep too long (3 days away in all): gone, their things left where they slept
               p.state = 'gone'; p.diedAt = now;
               this.spill(p);
               this.send({ t: 'leave', id: p.who }, null);

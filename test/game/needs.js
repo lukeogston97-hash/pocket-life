@@ -53,11 +53,15 @@ function drawNeeds() {
 }
 // one slice of time: every need moves by perHour, an empty need (atZero) drags others down,
 // and needs marked onlyWhenFine (health) only recover while nothing is empty
+// (asleep: whileAsleep instead, and whileAsleepAtNight at night, so Rest fills faster at night)
 function stepStats(hours) {
   const st = you.stats;
   const empty = STATS.filter((s) => s.atZero && st[s.id] <= 0);
-  const change = {};
-  for (const s of STATS) change[s.id] = s.onlyWhenFine && empty.length ? 0 : you.sleeping && Number.isFinite(s.whileAsleep) ? s.whileAsleep : s.perHour;
+  const change = {}, night = you.sleeping && nightNow();
+  for (const s of STATS) {
+    const sleepRate = night && Number.isFinite(s.whileAsleepAtNight) ? s.whileAsleepAtNight : s.whileAsleep;
+    change[s.id] = s.onlyWhenFine && empty.length ? 0 : you.sleeping && Number.isFinite(sleepRate) ? sleepRate : s.perHour;
+  }
   for (const s of empty) for (const [k, v] of Object.entries(s.atZero)) if (k in change) change[k] += v;
   for (const s of STATS) st[s.id] = clampStat(st[s.id] + change[s.id] * hours);
 }
@@ -97,6 +101,14 @@ const sky = new THREE.Color(HAZE);
 const colA = new THREE.Color(), colB = new THREE.Color(), srgb = {};
 const lerpNum = (a, b, t) => (Number.isFinite(a) && Number.isFinite(b) ? a + (b - a) * t : null);
 let hourOverride = null; // lets a test pick the time of day
+// night in the world's clock (night in game-data.json: from and to, in hours): Rest fills faster asleep, and autopilot goes to bed
+const NIGHT = DATA.night || null;
+function nightNow() {
+  if (!NIGHT) return false;
+  let h = hourOverride;
+  if (h == null) { const d = worldNow(); h = d.getUTCHours() + d.getUTCMinutes() / 60; }
+  return NIGHT.from > NIGHT.to ? h >= NIGHT.from || h < NIGHT.to : h >= NIGHT.from && h < NIGHT.to;
+}
 function localHour() {
   if (hourOverride != null) return hourOverride;
   const d = worldNow(ui.mode === 'menu' && menuRegion ? menuRegion.timeZone : WORLD_TZ); // on the main menu, the region being looked at

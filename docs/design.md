@@ -28,12 +28,12 @@ Luke's mobile "life in your pocket" game: SEED meets One Hour One Life. Built st
   - Names Luke kept or picked (22 Nov 2026): Hunger and Thirst stay (the ring is how full you are), Energy shown as Stamina, berry bush button 'Pick berries'. The stone axe (0.1.6) has a flat flared head with a curved edge (axeHeadGeo), twine lashing and a knob at the grip end.
   - Held tools: the axe uses hold 'axe' (gripped at the handle end, carried head-down along the line of the arm with the blade forward, so raising the arm to chop lifts it overhead), worked out in the person's frame and converted to the hand's frame in drawHeld.
   - No families or babies: everyone starts as an adult person they make.
-- Timing, away, sleep and death (decided with Luke 22 Nov 2026, not built yet; Luke wants realism in timing):
+- Timing, away, sleep and death (decided with Luke 22 Nov 2026, built in 0.1.9 all at once; Luke wants realism in timing):
   - Away: gone for good after 3 days away (was 48 h). Sleepers stay visible, lying asleep, until then.
   - While away and asleep (after the first 24 h), hunger and thirst keep dropping slowly (at the asleep rates) but stop at a 10% floor, so away people can't die; they wake hungry and thirsty.
   - Sleep gets a bonus at night (Darwin clock): sleep any time, but Rest fills faster at night. Away and autopilot people go to sleep when it gets dark.
   - Clock stays real Darwin time. Ageing is real time: age goes up 1 each real year on the person's birthday (the day they were made). Old age death left out for now.
-  - Build order, small updates: 0.1.9 away 3 days + slow needs to 10% floor; then night sleep; then birthdays.
+  - How it's built: away.goneAfterDays 2 (after sleepAfterHours 24) and away.asleepFloor 10 (advanceStats floor: needs with atZero stop there or where they were, no harm, no death; caught up lazily when they come back). night {from 20, to 6} in game-data.json plus settings.worldTimeZone (server: isNight, morningAfter, hourAt in needs.js); rest.whileAsleepAtNight 16 (full in about 6 h). Away and autopilot people sleep when night starts until morning. ageOf(p) in needs.js: p.age plus birthdays since p.born (Darwin date); sent in me, pub look, yours and died; the game shows Happy birthday.
 - Sign-in (decided 21 Nov 2026, not built yet): Google sign-in later, optional, so the same person works on phone and PC; signing in keeps the person you already have. The server's whoFor(m) in index.js is where it plugs in (map 'acct:<google id>' to the phone's who). Luke makes the Google Cloud web client ID when we build it.
 - Placeables and buildings: not built yet; when they come they must show in the admin Add list and Craft automatically, like items.
 - Later: everything saved on the server, day planner, skills, more stats, regions and time zones, app store wrapper.

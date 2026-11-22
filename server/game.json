@@ -24,7 +24,8 @@
       "lowLabel": "Tired",
       "fullLabel": "Not tired",
       "collapseAtZero": true,
-      "wakeAt": 25
+      "wakeAt": 25,
+      "whileAsleepAtNight": 16
     },
     {
       "id": "hunger",
@@ -179,12 +180,18 @@
     "eatBelow": 60,
     "drinkBelow": 55,
     "sleepAfterHours": 24,
-    "goneAfterDays": 1,
+    "goneAfterDays": 2,
     "graveHours": 24,
     "idleMinutes": 3,
     "near": "pond",
-    "sleepBelow": 35
+    "sleepBelow": 35,
+    "asleepFloor": 10
   },
+  "night": {
+    "from": 20,
+    "to": 6
+  },
+  "timeZone": "Australia/Darwin",
   "energyCosts": {
     "pickup": 2,
     "harvest": 2,

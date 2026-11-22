@@ -1,6 +1,6 @@
 // Away: while a player is gone their person looks after themselves (strolls, eats, drinks, picks berries, sleeps), played forward to now.
 // These are methods of the World (index.js adds them to it), so `this` is the world.
-import { G, HOUR, MINUTE, advanceStats, addCarry, applyGives, eatOne, posAt, dist, sleepMs, spend, num, AWAY, pickRandom } from './shared.js';
+import { G, HOUR, MINUTE, advanceStats, addCarry, applyGives, eatOne, posAt, dist, sleepMs, spend, num, AWAY, pickRandom, isNight, morningAfter } from './shared.js';
 
 export const awayMethods = {
   // Plays a person's time forward to `now`: walking, drinking, picking berries, eating, idling,
@@ -15,7 +15,7 @@ export const awayMethods = {
       [p.x, p.z] = posAt(p, until);
       p.simAt = until;
       if (d) { this.die(p, d.cause, true); return; }
-      if (until >= sleepAt) { // a day away: lie down and sleep (needs pause)
+      if (until >= sleepAt) { // a day away: lie down and sleep (hunger and thirst drop slowly to a floor)
         p.plan = null; p.asleep = true; p.sleepAt = sleepAt; p.log.slept = true;
         this.touch(p);
         this.send({ t: 'state', id: p.who, state: 'asleep', x: num(p.x), z: num(p.z) }, null);
@@ -54,11 +54,13 @@ export const awayMethods = {
   decide(p, t, now, L) {
     while (p.stats.hunger != null && p.stats.hunger < AWAY.eatBelow && eatOne(p, G)) p.log.ate++;
     const at = [p.x, p.z];
-    // tired (or already lying down): sleep where they are until rest is full
-    if (p.sleeping || (p.stats.rest != null && p.stats.rest < AWAY.sleepBelow)) {
+    // night: off to bed until morning. Tired (or already lying down): sleep where they are until rest is full
+    const night = isNight(t, G);
+    if (night || p.sleeping || (p.stats.rest != null && p.stats.rest < AWAY.sleepBelow)) {
       const was = p.sleeping;
       p.sleeping = true;
-      p.plan = { kind: 'sleep', start: t, arrive: t + sleepMs(p, G) / (this.speed && t < this.speed.until ? this.speed.x : 1) };
+      const fast = this.speed && t < this.speed.until ? this.speed.x : 1;
+      p.plan = { kind: 'sleep', start: t, arrive: night ? t + (morningAfter(t, G) - t) / fast : t + sleepMs(p, G) / fast };
       if (!was) p.log.slept = true;
       if (!was && p.plan.arrive > now) this.send({ t: 'state', id: p.who, state: 'sleeping', x: num(p.x), z: num(p.z) }, null);
       return;

@@ -190,7 +190,7 @@ function applyMe(m, spawn = false) {
   if (spawn || !player) {
     const look = { ...DEFAULT_LOOK, ...(m.look || {}) };
     for (const k of ['sex', 'skin', 'build', 'hair', 'hairColour', 'tunic']) look[k] = pickId(LOOKS[k], look[k]);
-    look.age = Math.round(Math.min(LOOKS.age.max, Math.max(LOOKS.age.min, Number(m.age) || LOOKS.age.start)));
+    look.age = Math.round(Math.max(LOOKS.age.min, Number(m.age) || LOOKS.age.start)); // can go past the max with birthdays
     look.name = String(m.name || look.name || 'You').slice(0, 20);
     you.lifeStart = m.born || Date.now();
     you.dead = false;
@@ -201,6 +201,8 @@ function applyMe(m, spawn = false) {
     player.rotation.y = Number(m.ry) || 0;
     creating = false;
   }
+  // a birthday while you're playing: a year older (once a real year, on the day you made your person)
+  if (you.look && Number(m.age) > you.look.age) { you.look.age = Math.round(Number(m.age)); drawHud(); if (player) showTag(`Happy birthday! ${you.look.age} today`, headTop(), 4); }
   you.stats = { ...freshStats(), ...(m.stats || {}) };
   you.statsAt = m.statsAt || Date.now();
   // what you carry: the server's word, plus anything you're picking up that it hasn't confirmed yet

@@ -313,9 +313,10 @@ function autopilot() {
   }
   if (busy() || now < auto.nextAt) return;
   const st = you.stats;
-  // tired: lie down until rested
-  if (you.sleeping) { if (st.rest != null && st.rest >= 99) setSleeping(false); return; }
-  if (st.rest != null && st.rest < (AWAY.sleepBelow || 35)) { setSleeping(true); return; }
+  // night: off to bed until morning. Tired: lie down until rested
+  const night = nightNow();
+  if (you.sleeping) { if (!night && st.rest != null && st.rest >= 99) setSleeping(false); return; }
+  if (night || (st.rest != null && st.rest < (AWAY.sleepBelow || 35))) { setSleeping(true); return; }
   // eat what you carry when hungry
   for (let n = 0; n < 6 && st.hunger < AWAY.eatBelow; n++) {
     const food = Object.keys(you.carry).find((k) => ITEMS[k] && ITEMS[k].eat);

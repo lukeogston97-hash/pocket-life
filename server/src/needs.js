@@ -15,15 +15,63 @@ export function freshStats(G) {
   for (const s of G.needs) st[s.id] = clampStat(s.start ?? 100);
   return st;
 }
+// The world's clock (G.timeZone, Darwin time): the hour of the day at time t, and night (G.night: from, to)
+const G_TZ = { tz: 'Australia/Darwin' };
+let tzFormat = null;
+const offsets = new Map(); // the time zone's offset from UTC, worked out once per hour
+function offsetAt(t) {
+  const key = Math.floor(t / HOUR);
+  if (offsets.has(key)) return offsets.get(key);
+  let off = 9.5 * HOUR; // Darwin is UTC+9:30 all year
+  try {
+    tzFormat = tzFormat || new Intl.DateTimeFormat('en-US', { timeZone: G_TZ.tz, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' });
+    const p = Object.fromEntries(tzFormat.formatToParts(new Date(t)).map((x) => [x.type, x.value]));
+    off = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute) - Math.floor(t / MINUTE) * MINUTE;
+  } catch (err) { /* no time zone data: Darwin */ }
+  if (offsets.size > 200) offsets.clear();
+  offsets.set(key, off);
+  return off;
+}
+export function useTimeZone(tz) { if (tz && tz !== G_TZ.tz) { G_TZ.tz = tz; tzFormat = null; offsets.clear(); } }
+// a Date whose UTC fields read as the world's local time at t
+export const localDate = (t) => new Date(t + offsetAt(t));
+export const hourAt = (t) => { const d = localDate(t); return d.getUTCHours() + d.getUTCMinutes() / 60; };
+export function isNight(t, G) {
+  const n = G.night;
+  if (!n) return false;
+  const h = hourAt(t);
+  return n.from > n.to ? h >= n.from || h < n.to : h >= n.from && h < n.to;
+}
+// the next morning (night.to) after t
+export function morningAfter(t, G) {
+  let dh = G.night.to - hourAt(t);
+  if (dh <= 0) dh += 24;
+  return t + dh * HOUR;
+}
+// how old a person is now: the age they started at, plus a year on each birthday (the day they were made)
+export function ageOf(p, now = Date.now()) {
+  if (!p.born) return p.age;
+  const b = localDate(p.born), n = localDate(now);
+  let years = n.getUTCFullYear() - b.getUTCFullYear();
+  if (n.getUTCMonth() < b.getUTCMonth() || (n.getUTCMonth() === b.getUTCMonth() && n.getUTCDate() < b.getUTCDate())) years--;
+  return p.age + Math.max(0, years);
+}
 // one slice of time, the same as in the game: every need moves by perHour, an empty need (atZero)
 // drags others down, and needs marked onlyWhenFine (health) only recover while nothing is empty
-// (asleep: needs with whileAsleep, like Rest, change by that instead)
-function step(st, hours, G, asleep) {
-  const empty = G.needs.filter((s) => s.atZero && st[s.id] <= 0);
-  const change = {};
-  for (const s of G.needs) change[s.id] = s.onlyWhenFine && empty.length ? 0 : asleep && s.whileAsleep != null ? s.whileAsleep : s.perHour;
+// (asleep: needs with whileAsleep, like Rest, change by that instead, and by whileAsleepAtNight at night)
+// floor (asleep while away): needs that can empty stop at the floor (or where they were, if lower), and nothing hurts
+function step(st, hours, G, asleep, night, floor) {
+  const empty = floor != null ? [] : G.needs.filter((s) => s.atZero && st[s.id] <= 0);
+  const change = {}, before = floor != null ? { ...st } : null;
+  for (const s of G.needs) {
+    const sleepRate = night && s.whileAsleepAtNight != null ? s.whileAsleepAtNight : s.whileAsleep;
+    change[s.id] = s.onlyWhenFine && empty.length ? 0 : asleep && sleepRate != null ? sleepRate : s.perHour;
+  }
   for (const s of empty) for (const [k, v] of Object.entries(s.atZero)) if (k in change) change[k] += v;
-  for (const s of G.needs) st[s.id] = clampStat((st[s.id] ?? 0) + change[s.id] * hours);
+  for (const s of G.needs) {
+    st[s.id] = clampStat((st[s.id] ?? 0) + change[s.id] * hours);
+    if (before && s.atZero) st[s.id] = Math.max(st[s.id], Math.min(before[s.id] ?? 0, floor));
+  }
 }
 // what they died of: the empty need that hurts most
 function causeOf(st, G) {
@@ -31,15 +79,16 @@ function causeOf(st, G) {
   return c ? c.name.toLowerCase() : 'weakness';
 }
 // Move a person's needs on to time `to`, a minute at a time. speed: the admin's "speed up time" ({ x, until }).
-// Returns { at, cause } if they died on the way.
-export function advanceStats(p, to, G, speed) {
+// floor: asleep while away (needs stop at the floor and they can't die). Returns { at, cause } if they died on the way.
+export function advanceStats(p, to, G, speed, floor = null) {
   let t = p.statsAt || to;
+  const asleep = floor != null || !!p.sleeping;
   while (t < to) {
     const next = Math.min(to, t + MINUTE);
     const fast = speed && t < speed.until ? speed.x : 1;
-    step(p.stats, ((next - t) / HOUR) * fast, G, !!p.sleeping);
+    step(p.stats, ((next - t) / HOUR) * fast, G, asleep, asleep && isNight(t, G), floor);
     t = next;
-    if (G.needs.some((s) => s.deadAtZero && p.stats[s.id] <= 0)) { p.statsAt = t; return { at: t, cause: causeOf(p.stats, G) }; }
+    if (floor == null && G.needs.some((s) => s.deadAtZero && p.stats[s.id] <= 0)) { p.statsAt = t; return { at: t, cause: causeOf(p.stats, G) }; }
   }
   p.statsAt = Math.max(p.statsAt || 0, to);
   return null;

@@ -1,29 +1,29 @@
 // People: what everyone is told about a person, what the player is told about their own, catching their needs up, collapsing, dying.
 // These are methods of the World (index.js adds them to it), so `this` is the world.
-import { G, HOUR, advanceStats, posAt, num, AWAY, REST } from './shared.js';
+import { G, HOUR, advanceStats, posAt, num, AWAY, REST, ageOf } from './shared.js';
 
 export const personsMethods = {
   alive(p) { return p && p.state === 'alive'; },
   isOnline(who) { return !!who && !!this.sockets().find(({ p }) => p.who === who && p.alive); },
-  // online, away, asleep (a day away, needs paused) or sleeping (resting, by choice or when tired)
+  // online, away, asleep (a day away: needs drop slowly to a floor) or sleeping (resting, by choice or when tired)
   stateOf(p) { return p.asleep && !this.isOnline(p.who) ? 'asleep' : p.sleeping ? 'sleeping' : this.isOnline(p.who) ? 'online' : 'away'; },
   // what everyone else is told about a person
   pub(p, now = Date.now()) {
     const s = this.socketOf(p.who), state = this.stateOf(p);
     const [x, z] = state === 'away' ? posAt(p, now) : [p.x, p.z];
-    const out = { id: p.who, name: p.name, look: p.look, x: num(x), z: num(z), ry: num(p.ry), state, badge: !!(s && s.p.admin && s.p.tag) };
+    const out = { id: p.who, name: p.name, look: { ...p.look, age: ageOf(p, now) }, x: num(x), z: num(z), ry: num(p.ry), state, badge: !!(s && s.p.admin && s.p.tag) };
     if (state === 'away' && p.plan && p.plan.kind === 'walk' && p.plan.arrive > now) Object.assign(out, { tx: p.plan.to[0], tz: p.plan.to[1], speed: AWAY.strollSpeed, ms: Math.round(p.plan.arrive - now) });
     return out;
   },
   people(except) { return [...this.persons.values()].filter((p) => this.alive(p) && p.who !== except).map((p) => this.pub(p)); },
   // what the player is told about their own person
   mine(p) {
-    return { t: 'me', name: p.name, look: p.look, age: p.age, born: p.born, x: num(p.x), z: num(p.z), ry: num(p.ry),
+    return { t: 'me', name: p.name, look: p.look, age: ageOf(p), born: p.born, x: num(p.x), z: num(p.z), ry: num(p.ry),
       stats: p.stats, statsAt: p.statsAt, carry: p.carry, wear: p.wear || {}, lastKind: p.lastKind, sleeping: !!p.sleeping, collapsed: !!p.collapsed };
   },
   catchUp(p, now = Date.now()) {
     if (!this.alive(p)) return;
-    if (p.asleep && !this.isOnline(p.who)) { p.statsAt = now; return; }
+    if (p.asleep && !this.isOnline(p.who)) { advanceStats(p, now, G, this.speed, AWAY.asleepFloor); return; } // asleep away: slowly down to the floor, can't die
     if (this.isOnline(p.who) || !p.leftAt) { const d = advanceStats(p, now, G, this.speed); if (d) this.die(p, d.cause, false); else this.collapse(p); }
     else this.advanceAway(p, now);
   },
@@ -55,7 +55,7 @@ export const personsMethods = {
     const s = this.socketOf(p.who);
     if (s) {
       s.p.alive = false; s.ws.serializeAttachment(s.p);
-      try { s.ws.send(JSON.stringify({ t: 'died', name: p.name, age: p.age, cause, away: false, had: false })); } catch (err) { /* gone */ }
+      try { s.ws.send(JSON.stringify({ t: 'died', name: p.name, age: ageOf(p), cause, away: false, had: false })); } catch (err) { /* gone */ }
     }
   },
   // everything they carried goes on the ground round where they are

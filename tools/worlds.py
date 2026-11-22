@@ -27,6 +27,8 @@ if cmd == 'test-build':
         'maxPlaying': data['settings'].get('maxPlaying', 20),
         'age': {'min': data['looks']['age']['min'], 'max': data['looks']['age']['max']},
         'away': data.get('away', {}),
+        'night': data.get('night'),
+        'timeZone': data['settings'].get('worldTimeZone', 'Australia/Darwin'),
         'energyCosts': data.get('energyCosts', {}),
         'chopping': data.get('chopping', {}),
         'start': {'x': 0.6, 'z': 1.9},
