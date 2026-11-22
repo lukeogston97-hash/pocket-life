@@ -237,7 +237,7 @@ function menuActions(t) {
   }
   if (t.kind === 'self') {
     const rest = you.stats && you.stats.rest != null ? Math.round(you.stats.rest) : null;
-    if (you.sit) return [{ label: 'Stand up', note: `${timeLeft(you.sit.until - Date.now())} left`, run: () => endSit(true) }];
+    if (you.sit) return [{ label: 'Stand up', run: () => endSit(true) }];
     return [you.sleeping ? { label: 'Wake up', note: tooTiredToWake() ? `Rest ${Math.floor(you.stats.rest)} of ${REST.wakeAt}` : '', run: wakeUp } : { label: 'Sleep', note: rest != null ? `Rest ${rest}` : '', run: () => setSleeping(true) },
       ...adminMore(admin.on ? [{ label: 'Fill my needs', run: () => adminSend({ t: 'a.fill', id: net.myId }) }] : [])];
   }

@@ -39,6 +39,13 @@ export const placedMethods = {
     if (th.fuel <= 0) { th.lit = false; th.fuel = 0; }
     return th;
   },
+  // when a placed thing's fire goes out (ms): Infinity if it isn't a fire or is gone; now (or earlier) if it's already out
+  fireOutAt(id, now = Date.now()) {
+    const th = this.placedById(id);
+    if (!th || !fireRule(th.kind)) return Infinity;
+    if (!th.lit) return now - 1;
+    return (th.at || now) + (th.fuel || 0);
+  },
   // why a built one can't be packed up or taken apart ('' if it can): only by who built it (or the admin; ones from
   // before 0.2.6 have no builder, so anyone), a fire has to be out, and nobody else can be sitting by it
   whyNotTakeDown(th, p, admin) {

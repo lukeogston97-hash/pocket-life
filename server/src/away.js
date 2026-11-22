@@ -58,8 +58,9 @@ export const awayMethods = {
   decide(p, t, now, L) {
     while (p.stats.hunger != null && p.stats.hunger < AWAY.eatBelow && eatOne(p, G)) p.log.ate++;
     const at = [p.x, p.z];
-    // sitting by a fire (a task they left running): they stay sat there until it's done, even if the fire goes out
-    if (p.sit && p.sit.until > t) { p.plan = { kind: 'sit', start: t, arrive: p.sit.until }; return; }
+    // sitting by a fire (a task they left running): they stay sat there while the fire is lit
+    const out = p.sit ? this.fireOutAt(p.sit.fire, t) : 0;
+    if (p.sit && p.sit.until > t && out > t) { p.plan = { kind: 'sit', start: t, arrive: Math.min(p.sit.until, out) }; return; }
     if (p.sit) this.standUp(p, false);
     // night: off to bed until morning. Tired (or already lying down): sleep where they are until rest is full
     const night = isNight(t, G);

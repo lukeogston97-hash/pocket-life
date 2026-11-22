@@ -266,13 +266,7 @@
       },
       "seats": {
         "count": 6,
-        "distance": 1.7,
-        "minutes": [
-          5,
-          15,
-          30,
-          60
-        ]
+        "distance": 1.7
       }
     }
   },

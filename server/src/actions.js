@@ -5,6 +5,7 @@
 // world (index.js), so this.send() tells everyone. Remember a spam limit in LIMITS (shared.js) for anything new.
 import { PLACEABLES, fireRule, seatAt } from './placed.js';
 import { FILTER, G, starText, badName, freshStats, addCarry, takeCarry, wearList, applyGives, eatOne, craft, spend, clean, num, kindOk, START, REST, BERRY_SRC, cleanLook, REPORTS_KEEP } from './shared.js';
+const SIT_OPEN = 365 * 24 * 3600000; // sitting has no set time: `until` is far off, and ends when they stand up, do something else, or the fire goes out
 
 export const ACTIONS = {
   // feedback from the Send feedback screen
@@ -292,18 +293,18 @@ export const ACTIONS = {
     this.sendPlaced(th, null);
     reply(this.mine(p));
   } },
-  // sitting by a fire for a while (it carries on while they're away), or standing up (off)
+  // sitting by a fire (no set time: until they stand up, do something else or the fire goes out; it carries on while they're away), or standing up (off)
   sit: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
     if (m.off) { this.standUp(p); save(); return; }
     const th = this.placedById(m.id), seats = th && (PLACEABLES[th.kind] || {}).seats, k = Math.floor(m.seat);
     const no = (why) => { reply({ t: 'sitNo', why }); reply(this.mine(p)); };
     if (!th || !th.built || !seats || !(k >= 0 && k < (seats.count || 6))) return no("Can't sit there");
     if (this.sitterAt(th.id, k, Date.now(), p.who)) return no('Someone is sitting there');
-    const ms = Math.max(60000, Math.min(3 * 3600000, Number(m.ms) || 0)), at = seatAt(th, k);
+    const at = seatAt(th, k);
     if (Math.hypot(at[0] - p.x, at[1] - p.z) > 3) return no('Too far away');
     [p.x, p.z] = at;
     p.sleeping = false;
-    p.sit = { fire: th.id, seat: k, until: Date.now() + ms };
+    p.sit = { fire: th.id, seat: k, until: Date.now() + SIT_OPEN };
     save();
     this.send({ t: 'sit', id: me.id, fire: th.id, seat: k }, me.id);
     reply(this.mine(p));
