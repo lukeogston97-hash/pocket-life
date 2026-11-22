@@ -4,8 +4,6 @@ A "life in your pocket" mobile game. Make your own person, then live a real-time
 
 **Play:** https://pocketlife.pages.dev/
 
-**Try the next version (test):** https://pocketlife.pages.dev/test/
-
 (The old GitHub Pages address still works and sends you to the new one.)
 
 ## What's here
