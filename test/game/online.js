@@ -93,6 +93,9 @@ function goOnline() {
     else if (m.t === 'broke') { showTag(`Your ${(ITEMS[m.kind] || { name: 'tool' }).name.toLowerCase()} broke`, headTop(), 3); drawHeld(); }
     else if (m.t === 'graves') drawGraves(m.graves);
     else if (m.t === 'speed') setSpeed(m.speed);
+    else if (m.t === 'live') applyLive(m.live);
+    else if (m.t === 'moved') moveLayoutThing(m.what, m.idx, m.x, m.z);
+    else if (m.t === 'removed') removeLayoutThing(m.what, m.idx);
     else if (m.t === 'world') useSharedWorld(m.world);
     else if (m.t === 'gone') removeWorldItem(m.id);
     else if (m.t === 'placed') { setPlaced(m.thing); if (m.mine && m.thing && !m.thing.built) { tasks.list.unshift({ type: 'build', id: m.thing.id }); if (!tasks.current && !action) nextTask(); else drawQueue(); } } // put it down: build it next
@@ -153,6 +156,7 @@ function welcome(m) {
   showJoining(false);
   setNet('online', m.count);
   setSpeed(m.speed);
+  applyLive(m.live);
   for (const id of [...others.keys()]) removeOther(id);
   for (const p of m.people || []) addOther(p);
   if (m.watch) { // watching from the main menu (or waiting in line because the world is full)
@@ -264,6 +268,7 @@ function useSharedWorld(w) {
     b.userData.growFrom = s && s[1] != null ? s[1] : null;
     drawBerries(b);
   });
+  useWorldEdits(w); // what the admin moved or took out
   for (const t of allTasks()) if (t.type === 'pickup' && !getItem(t.id)) t.gone = true; // queued things that aren't there any more get skipped
 }
 // the first player into a brand new world lays it out: the starting sticks and stones, plus where new ones can turn up
@@ -331,7 +336,7 @@ function showMaintenance(text, title = 'Back soon', note = 'Your person is safe.
   showJoining(false);
   $('maintTitle').textContent = title;
   $('maintNote').textContent = note;
-  $('adminPanel').hidden = true; $('adminList').hidden = true;
+  $('adminPanel').hidden = true; $('adminPick').hidden = true;
   closeFeedback(); closeReport(); closeSay(); closeMenu(); $('pause').hidden = true;
   paused = true; // needs don't drain while the world is closed
   $('maintText').textContent = text || 'Pocket Life is being updated. It will be back in a few minutes.';

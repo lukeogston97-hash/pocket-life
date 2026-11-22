@@ -47,7 +47,6 @@ export const TICK_MS = 20000; // how often the world moves on (needs, people awa
 // at most every SAVE_EVERY. If the world is shut down in between, people away are simply played forward again.
 export const SAVE_EVERY = 5 * MINUTE;
 export const FREE = { writes: 100000, requests: 100000 };
-export const MAX_PLAYING = Math.max(1, Number(G.maxPlaying) || 20); // more than this wait in line on the main menu
 export const TURN_MS = 60000; // how long someone at the front of the line has to take their spot
 export function allowed(ws, me, t) {
   const lim = LIMITS[t];

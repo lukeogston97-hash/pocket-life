@@ -166,8 +166,11 @@ async def screens():
             await pg.fill('#sayInput', '/admin secret123456'); await pg.press('#sayInput', 'Enter'); await pg.wait_for_timeout(800)
             await pg.mouse.click(w // 2, int(h * 0.3)); await pg.wait_for_timeout(300)
             await pg.click('#menuBtn'); await shot(pg, f'{tag}_07_pause')
-            await pg.click('#pauseAdminBtn'); await shot(pg, f'{tag}_08_admin')
-            await pg.click('#adminListBtn'); await shot(pg, f'{tag}_09_admin_list'); await pg.click('#adminListClose'); await pg.click('#adminClose')
+            await pg.click('#pauseAdminBtn'); await pg.wait_for_timeout(300); await shot(pg, f'{tag}_08_admin')
+            for k, t in enumerate(['players', 'inbox', 'world', 'settings']):
+                await pg.click(f'[data-admin-tab="{t}"]'); await pg.wait_for_timeout(400); await shot(pg, f'{tag}_09{"abcd"[k]}_admin_{t}')
+            await pg.click('[data-admin-tab="players"]'); await pg.wait_for_timeout(400); await pg.click('#adminPlayers .admin-entry'); await pg.wait_for_timeout(500); await shot(pg, f'{tag}_09e_admin_player')
+            await pg.click('#adminClose')
             await pg.evaluate("__pl.showWelcomeBack({ ms: 5 * 3600000, ate: 3, drank: 2, picked: 4, slept: true })"); await shot(pg, f'{tag}_10_welcome_back'); await pg.click('#backBtn')
             await pg.evaluate("__pl.die({ name: __pl.you.look.name, age: 25, cause: 'thirst' })"); await shot(pg, f'{tag}_11_death')
         expect(not W.errors, f'no errors {W.errors[:3]}')
@@ -397,7 +400,63 @@ async def mining():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining}
+async def admin_tools():
+    """The Admin panel: tabs, finding someone and giving them things, live settings, moving and removing things, the Inbox."""
+    async with world() as W:
+        b = await W.page('playerB'); await join(b)
+        a = await W.page('adminA'); await join(a)
+        await a.click('#sayBtn'); await a.fill('#sayInput', '/admin secret123456'); await a.press('#sayInput', 'Enter'); await a.wait_for_timeout(800)
+        await a.mouse.click(195, 300); await a.wait_for_timeout(300)
+        expect(await a.evaluate('__pl.admin.on'), 'admin on')
+        await a.click('#menuBtn'); await a.click('#pauseAdminBtn'); await a.wait_for_timeout(400)
+        for t in ['players', 'inbox', 'world', 'settings', 'server']:
+            await a.click(f'[data-admin-tab="{t}"]'); await a.wait_for_timeout(400)
+            expect(await a.evaluate(f"!document.querySelector('[data-admin-page=\"{t}\"]').hidden"), f'{t} tab shows')
+        # find B by name and open their page
+        name = await b.evaluate('__pl.you.look.name')
+        await a.click('[data-admin-tab="players"]'); await a.fill('#adminFind', name[:4]); await a.wait_for_timeout(900)
+        expect(name in await text(a, '#adminPlayers'), 'search finds them')
+        await a.click('#adminPlayers .admin-entry.tap'); await a.wait_for_timeout(700)
+        expect(name in await text(a, '#adminPlayer'), 'their page opens')
+        sticks = await b.evaluate('__pl.you.carry.stick || 0')
+        await a.click('#adminPlayer >> text=Give items'); await a.click('#adminPickCount >> text=5'); await a.fill('#adminPickFind', 'stick')
+        await a.click('#adminPickList >> text=Stick'); await a.wait_for_timeout(900)
+        expect(await b.evaluate('__pl.you.carry.stick || 0') == sticks + 5, 'gave them 5 sticks')
+        await a.click('#adminPlayer >> text=Take all'); await a.wait_for_timeout(900)
+        expect(not await b.evaluate('__pl.you.carry.stick'), 'took them back')
+        # live settings reach everyone, and Reset puts them back
+        send = "(m) => window.__sock.send(JSON.stringify(m))"
+        await a.evaluate(f"({send})({{ t: 'a.live', id: 'hungerPerHour', value: 10 }})"); await a.wait_for_timeout(800)
+        expect(await b.evaluate('__pl.STAT.hunger.perHour') == -10, 'live need rate reaches players')
+        await a.click('[data-admin-tab="settings"]'); await a.wait_for_timeout(300)
+        expect('Changed' in await text(a, '#adminSettings'), 'Settings shows it changed')
+        await a.evaluate(f"({send})({{ t: 'a.live', id: 'hungerPerHour', value: null }})"); await a.wait_for_timeout(800)
+        expect(await b.evaluate('__pl.STAT.hunger.perHour') < 0 and await b.evaluate('__pl.STAT.hunger.perHour') != -10, 'Reset puts it back')
+        # move a tree, remove a rock and a berry bush
+        i = await a.evaluate("__pl.trees.findIndex((t) => t.state === 'tree')")
+        x0 = await a.evaluate(f'__pl.trees[{i}].x')
+        await a.evaluate(f"({send})({{ t: 'a.move', what: 'tree', idx: {i}, x: __pl.trees[{i}].x + 3, z: __pl.trees[{i}].z }})")
+        r = await a.evaluate("__pl.rocks.findIndex((r) => r.state === 'whole')")
+        await a.evaluate(f"({send})({{ t: 'a.remove', what: 'rock', idx: {r} }})")
+        await a.evaluate(f"({send})({{ t: 'a.remove', what: 'bush', idx: 1 }})"); await a.wait_for_timeout(900)
+        expect(abs(await b.evaluate(f'__pl.trees[{i}].x') - (x0 + 3)) < 0.05, 'the tree moved for everyone')
+        expect(await b.evaluate(f'__pl.rocks[{r}].state') == 'gone', 'the rock is gone')
+        expect(await b.evaluate('!!__pl.berryBushes[1].userData.removed'), 'the bush is gone')
+        await a.evaluate(f"({send})({{ t: 'a.regrowAll' }})"); await a.wait_for_timeout(900)
+        expect(await b.evaluate(f'__pl.rocks[{r}].state') == 'gone', 'a removed rock stays gone after Regrow everything')
+        # a fresh join sees the same
+        c = await W.page('playerC'); await join(c); await c.wait_for_timeout(500)
+        expect(abs(await c.evaluate(f'__pl.trees[{i}].x') - (x0 + 3)) < 0.05 and await c.evaluate('!!__pl.berryBushes[1].userData.removed'), 'moves and removals kept')
+        # the Inbox: feedback marked Done
+        await b.evaluate(f"({send})({{ t: 'feedback', text: 'test note', v: '0' }})"); await b.wait_for_timeout(500)
+        await a.click('[data-admin-tab="inbox"]'); await a.evaluate(f"({send})({{ t: 'a.list' }})"); await a.wait_for_timeout(600)
+        expect('test note' in await text(a, '#adminInbox'), 'feedback in the Inbox')
+        await a.click('#adminInbox >> text=Done'); await a.wait_for_timeout(600)
+        expect('test note' not in await text(a, '#adminInbox'), 'Done hides it')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

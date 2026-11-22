@@ -8,13 +8,14 @@
 // - what players do, one small handler each (actions.js); chat, reports, feedback; the admin player's tools (admin.js)
 // What every part shares (the game's rules from game.json, limits, helpers) is in shared.js.
 import { DurableObject } from 'cloudflare:workers';
-import { WORLDS, G, HOUR, PROTOCOL, CORS, clean, num, AWAY, tooOld, FEEDBACK_KEEP, lastHeard, QUIET_MS, TICK_MS, SAVE_EVERY, FREE, MAX_PLAYING, allowed, tagOf, ageOf } from './shared.js';
+import { WORLDS, G, HOUR, PROTOCOL, CORS, clean, num, AWAY, tooOld, FEEDBACK_KEEP, lastHeard, QUIET_MS, TICK_MS, SAVE_EVERY, FREE, allowed, tagOf, ageOf } from './shared.js';
 import { lineMethods } from './line.js';
 import { personsMethods } from './persons.js';
 import { awayMethods } from './away.js';
 import { natureMethods } from './nature.js';
 import { adminMethods } from './admin.js';
 import { placedMethods } from './placed.js';
+import { liveMethods, maxPlaying } from './live.js';
 import { ACTIONS } from './actions.js';
 
 export class World extends DurableObject {
@@ -27,10 +28,13 @@ export class World extends DurableObject {
     this.usage = { day: '', messages: 0, connections: 0, writes: 0, alarms: 0 }; // today's use of the free plan (UTC days)
     this.speed = null; // the admin's "speed up time": { x, until }
     this.admin = { maintenance: false, message: '', banned: [], muted: [] }; // set by the admin player in the game
+    this.live = {}; // live settings the admin changed (live.js)
     ctx.blockConcurrencyWhile(async () => {
       this.world = (await ctx.storage.get('world')) || null;
       Object.assign(this.admin, (await ctx.storage.get('admin')) || {});
       this.speed = (await ctx.storage.get('speed')) || null;
+      this.live = (await ctx.storage.get('live')) || {};
+      this.applyLive();
       Object.assign(this.usage, (await ctx.storage.get('usage')) || {});
       for (const [k, p] of await ctx.storage.list({ prefix: 'p:' })) this.persons.set(k.slice(2), p);
       if (!(await ctx.storage.getAlarm())) await ctx.storage.setAlarm(Date.now() + TICK_MS);
@@ -68,7 +72,7 @@ export class World extends DurableObject {
   usageNow() {
     const u = this.usage, requests = u.connections + u.alarms + Math.ceil(u.messages / 20);
     const pct = (n, of) => Math.round((n / of) * 100);
-    return { requests: pct(requests, FREE.requests), writes: pct(u.writes, FREE.writes), messages: u.messages, playing: this.playing(), max: MAX_PLAYING, waiting: this.line().length };
+    return { requests: pct(requests, FREE.requests), writes: pct(u.writes, FREE.writes), messages: u.messages, playing: this.playing(), max: maxPlaying(), waiting: this.line().length };
   }
   sockets() { return this.ctx.getWebSockets().map((ws) => ({ ws, p: ws.deserializeAttachment() })).filter(({ p }) => p && p.id); }
   socketOf(who) { return who ? this.sockets().find(({ p }) => p.who === who) : undefined; }
@@ -172,7 +176,7 @@ export class World extends DurableObject {
       Object.assign(me, { id: me.watch && me.id ? me.id : `w:${crypto.randomUUID().slice(0, 8)}`, who: null, watch: true, queued, turnAt: 0, admin: isAdmin, tag: m.adminTag !== false, v: clean(m.v, 20), link, alive: false });
       ws.serializeAttachment(me);
       const p = this.persons.get(who);
-      reply({ t: 'welcome', watch: true, id: me.id, people: this.people(null), world: this.view(), count: this.playing(), speed: this.speed,
+      reply({ t: 'welcome', watch: true, id: me.id, people: this.people(null), world: this.view(), count: this.playing(), speed: this.speed, live: this.live,
         yours: this.alive(p) ? { name: p.name, age: ageOf(p) } : null, line: full ? this.placeOf(ws) : 0 });
       if (full) this.callLine();
       return;
@@ -196,6 +200,7 @@ export class World extends DurableObject {
     }
     if (p && !this.alive(p)) {
       dead = { name: p.name, age: ageOf(p, p.diedAt || Date.now()), cause: p.cause, away: p.diedAway, gone: p.state === 'gone', had: !!p.hadThings };
+      await this.rememberPast(p);
       this.persons.delete(who);
       await this.ctx.storage.delete(`p:${who}`);
     }
@@ -205,7 +210,7 @@ export class World extends DurableObject {
     if (isAdmin) reply(this.adminState(me));
     const w = this.world;
     reply({ t: 'welcome', id: who, people: this.people(who), world: this.view(), needSeed: !w, needLayout: !!w && !w.layout,
-      count: this.playing(), me: me.alive ? this.mine(p) : null, away, dead, speed: this.speed });
+      count: this.playing(), me: me.alive ? this.mine(p) : null, away, dead, speed: this.speed, live: this.live });
     if (me.alive) this.send({ t: 'join', person: this.pub(p) }, who);
     this.sendCount();
   }
@@ -222,7 +227,7 @@ export class World extends DurableObject {
       }
       for (const p of [...this.persons.values()]) {
         if (!this.alive(p)) {
-          if (p.diedAt && now - p.diedAt > 30 * 24 * HOUR) { this.persons.delete(p.who); await this.ctx.storage.delete(`p:${p.who}`); }
+          if (p.diedAt && now - p.diedAt > 30 * 24 * HOUR) { await this.rememberPast(p); this.persons.delete(p.who); await this.ctx.storage.delete(`p:${p.who}`); }
           continue;
         }
         if (this.isOnline(p.who)) {
@@ -256,7 +261,7 @@ export class World extends DurableObject {
         // mined boulders can be mined again after the same time; one broken rock comes back every rockBackHours
         const R = G.mining || {}, again = (R.regrowDays || 3) * 24 * HOUR;
         for (const [i, st] of Object.entries(w.rocks || {})) if (st[0] === 'mined' && now - st[1] > again) { delete w.rocks[i]; this.send({ t: 'rock', idx: Number(i), state: 'whole' }, null); grew = true; }
-        const broken = Object.keys(w.rocks || {}).filter((i) => w.rocks[i][0] === 'gone');
+        const broken = Object.keys(w.rocks || {}).filter((i) => w.rocks[i][0] === 'gone' && !(w.removed || {})[`rock:${i}`]); // ones the admin removed stay gone
         if (!broken.length) w.nextRockBack = 0;
         else if (!w.nextRockBack) { w.nextRockBack = now + (R.rockBackHours || 4) * HOUR; grew = true; }
         else if (now >= w.nextRockBack) {
@@ -300,7 +305,7 @@ export class World extends DurableObject {
 
 }
 // the rest of the world's methods, kept in their own files by topic
-Object.assign(World.prototype, lineMethods, personsMethods, awayMethods, natureMethods, adminMethods, placedMethods);
+Object.assign(World.prototype, lineMethods, personsMethods, awayMethods, natureMethods, adminMethods, placedMethods, liveMethods);
 
 export default {
   async fetch(request, env) {

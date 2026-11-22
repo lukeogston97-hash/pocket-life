@@ -469,7 +469,7 @@ function forgetSit() {
 function placedActions(th) {
   const P = PLACEABLES[th.kind], name = P.name.toLowerCase();
   const walkHere = { label: 'Walk here', foot: true, run: () => walkFirst(V(th.x + P.solid + 0.8, 0, th.z)) };
-  const adminRemove = adminMore(admin.on ? [{ label: 'Remove', run: () => adminSend({ t: 'a.remove', id: th.id }) }] : []);
+  const adminRemove = adminMore(adminPlacedActions(th));
   if (!th.built) {
     return [{ label: `Build ${name}`, note: `${P.buildSeconds} s`, run: () => queueTask({ type: 'build', id: th.id }) },
       { label: `Pick up ${name}`, note: 'Not built yet', run: () => queueTask({ type: 'unplace', id: th.id }) }, ...adminRemove, walkHere];

@@ -20,7 +20,7 @@ if cmd == 'test-build':
         'needs': data['stats'],
         'items': {k: {'weight': v.get('weight', 1), 'eat': v.get('eat'), 'uses': (v.get('tool') or {}).get('uses', 0), 'places': v.get('places')} for k, v in data['items'].items()},
         'recipes': {r['id']: {'needs': r['needs'], 'makes': r['makes'], **({'near': r['near']} if r.get('near') else {})} for r in data.get('recipes', [])},
-        'sources': {k: {'gives': v.get('gives'), 'harvest': v.get('harvest'), 'water': bool(v.get('water')), 'tool': v.get('tool'), 'toolHarvest': v.get('toolHarvest')} for k, v in srcs.items()},
+        'sources': {k: {'gives': v.get('gives'), 'harvest': v.get('harvest'), 'water': bool(v.get('water')), 'tool': v.get('tool'), 'toolHarvest': v.get('toolHarvest'), 'regrowHours': v.get('regrowHours', 0)} for k, v in srcs.items()},
         'plants': {k: {'gives': v.get('gives', {}), 'count': v.get('count', 40), 'regrowHours': v.get('regrowHours', 2), 'tool': v.get('tool')} for k, v in data.get('plants', {}).items()},
         'berryKind': berry,
         'carryCapacity': data['settings']['carryCapacity'],
@@ -36,6 +36,8 @@ if cmd == 'test-build':
         # things you place and build (the campfire): which item places them, how they burn, where people sit
         'placeables': {k: {'item': next((i for i, it in data['items'].items() if it.get('places') == k), k), 'buildSeconds': v.get('buildSeconds', 10),
                            'solid': v.get('solid', 0.5), 'fire': v.get('fire'), 'seats': v.get('seats')} for k, v in data.get('placeables', {}).items()},
+        # numbers the admin can change live (Admin > Settings); wired up in server/src/live.js
+        'liveSettings': data.get('liveSettings', []),
         'start': {'x': 0.6, 'z': 1.9},
         'pond': {'x': -5.6, 'z': -0.9},  # the main pond's middle (POND in game.js)
     }

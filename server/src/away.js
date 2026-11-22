@@ -88,9 +88,10 @@ export const awayMethods = {
       return;
     }
     if (p.stats.hunger != null && p.stats.hunger < AWAY.eatBelow && L.bushes.length) {
-      const near = L.bushes.map((b, i) => ({ i, b, d: dist(at, b) })).sort((a, b) => a.d - b.d);
+      const near = L.bushes.map((b, i) => ({ i, b, d: dist(at, b) })).filter((n) => !(this.world.removed || {})[`bush:${n.i}`]).sort((a, b) => a.d - b.d);
       const ripe = near.find((n) => this.berriesOn(n.i, t) > 0);
       const go = ripe || near[0];
+      if (!go) { idle(15 * MINUTE); return; } // every bush taken out
       const d = Math.max(0.01, go.d), stand = [go.b[0] + ((at[0] - go.b[0]) / d) * 1.0, go.b[1] + ((at[1] - go.b[1]) / d) * 1.0];
       if (go.d < 1.6) { if (ripe) { this.arrive(p, { then: 'pick', bush: go.i }, t); idle(20000); } else idle(15 * MINUTE); return; }
       walk(stand, ripe ? { then: 'pick', bush: go.i } : {});

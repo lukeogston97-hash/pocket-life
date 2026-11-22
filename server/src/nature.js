@@ -17,6 +17,7 @@ export const natureMethods = {
   },
   berriesOn(i, t = Date.now()) {
     const w = this.world, b = w.bushes[i] || [null, null];
+    if ((w.removed || {})[`bush:${i}`]) return 0; // the admin took this bush out
     if (b[0] == null || !w.regrowMs) return w.holds;
     const every = w.regrowMs / w.holds;
     return Math.min(w.holds, b[0] + Math.floor((t - b[1]) / every));
@@ -37,7 +38,7 @@ export const natureMethods = {
   },
   view() {
     const w = this.world;
-    return w ? { items: w.items, bushes: w.bushes, graves: w.graves || [], trees: w.trees || {}, oldStumps: w.oldStumps || {}, rocks: w.rocks || {}, plants: w.plants || {}, placed: this.placedList().map((th) => this.placedView(th)) } : null;
+    return w ? { items: w.items, bushes: w.bushes, graves: w.graves || [], trees: w.trees || {}, oldStumps: w.oldStumps || {}, rocks: w.rocks || {}, plants: w.plants || {}, moved: w.moved || {}, removed: w.removed || {}, placed: this.placedList().map((th) => this.placedView(th)) } : null;
   },
   cleanLayout(m) {
     const pts = (list, n) => (Array.isArray(list) ? list : []).slice(0, n).filter((a) => Array.isArray(a)).map(([x, z]) => [num(x), num(z)]);
@@ -59,6 +60,7 @@ export const natureMethods = {
       layout: this.cleanLayout(m.layout || {}),
     };
     for (const it of items) this.world.items.push({ id: this.world.nextId++, kind: it.kind, x: num(it.x), z: num(it.z), rot: num(it.rot) });
+    this.applyLive(); // a live berry regrow time wins
     await this.save();
     this.send({ t: 'world', world: this.view() }, null);
   },

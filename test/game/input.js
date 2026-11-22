@@ -175,6 +175,7 @@ function fadeTapRing(dt) {
 function handleTap(px, py) {
   if (ui.mode !== 'world' || !player || you.dead || paused) return;
   if (!online()) { showTag('Reconnecting…', headTop(), 1.5); return; }
+  if (adminMoving) { adminMoveTap(); return; } // the admin moving something: this tap says where it goes
   if (placing.on) { // choosing where to put something: a tap moves it there
     ray.setFromCamera(ndc, camera);
     const g = ray.intersectObject(terrain, false)[0];
@@ -236,15 +237,17 @@ function menuActions(t) {
     return [{ label: what === 'tree' ? 'Chop tree' : 'Remove stump', note: has ? `${rule.seconds || 15} s` : `Needs a ${tool.name.toLowerCase()}`, disabled: !has,
       run: () => queueTask({ type: 'chop', what, idx: t.idx, x: t.x, z: t.z }) },
       ...(what === 'stump' && trees[t.idx] ? [{ label: `Grows back in ${stumpGrowsIn(trees[t.idx])}`, disabled: true }] : []),
-      { label: 'Walk here', foot: true, run: () => walkFirst(V(t.x + 1.2, 0, t.z)) }];
+      { label: 'Walk here', foot: true, run: () => walkFirst(V(t.x + 1.2, 0, t.z)) },
+      ...(what !== 'oldStump' ? adminMore(adminThingActions('tree', t.idx, what === 'stump')) : [])];
   }
   if (t.kind === 'rock') {
     const r = rocks[t.idx], rule = MINE[r.boulder ? 'boulder' : 'rock'] || {}, tool = MINE.tool && ITEMS[MINE.tool];
     const has = !tool || you.carry[MINE.tool];
     const walk = { label: 'Walk here', foot: true, run: () => walkFirst(V(r.x + r.r + 0.6, 0, r.z)) };
-    if (r.state === 'mined') return [{ label: `Mine again in ${growsBackIn(r.since, MINE.regrowDays || 3)}`, disabled: true }, walk];
+    const adm = adminMore(adminThingActions('rock', t.idx, r.state === 'mined'));
+    if (r.state === 'mined') return [{ label: `Mine again in ${growsBackIn(r.since, MINE.regrowDays || 3)}`, disabled: true }, walk, ...adm];
     return [{ label: r.boulder ? 'Mine boulder' : 'Break rock', note: has ? `${rule.seconds || 10} s` : `Needs a ${tool.name.toLowerCase()}`, disabled: !has,
-      run: () => queueTask({ type: 'mine', idx: t.idx, x: r.x, z: r.z }) }, walk];
+      run: () => queueTask({ type: 'mine', idx: t.idx, x: r.x, z: r.z }) }, walk, ...adm];
   }
   if (t.kind === 'self') {
     const rest = you.stats && you.stats.rest != null ? Math.round(you.stats.rest) : null;
@@ -282,7 +285,7 @@ function menuActions(t) {
       const b = berryBushes[task.bush];
       const ready = !b || ripe(b);
       return [{ label: `Harvest ${ITEMS[Object.keys(src.harvest)[0]].plural}`, note: ready ? (b ? `${berriesOn(b)} left` : '') : `Next in ${readyIn(b)}`,
-        disabled: !ready, run: () => queueTask(task) }, walkHere];
+        disabled: !ready, run: () => queueTask(task) }, walkHere, ...(b ? adminMore(adminThingActions('bush', task.bush, berriesOn(b) < bushHolds(src))) : [])];
     }
     return [{ label: src.action || `Use ${src.name.toLowerCase()}`, run: () => queueTask(task) }, walkHere];
   }
@@ -375,8 +378,8 @@ document.addEventListener('keydown', (e) => {
   if (placing.on) stopPlacing();
   else if (!$('news').hidden) closeNews();
   else if (!$('back').hidden) $('back').hidden = true;
-  else if (!$('adminList').hidden) $('adminListClose').click(); // back to the Admin panel
-  else if (!$('adminPanel').hidden) closeAdminPanel();
+  else if (!$('adminPick').hidden) closePicker();
+  else if (!$('adminPanel').hidden) adminEscape(); // the player page goes back to Players, else the panel closes
   else if (!$('report').hidden) closeReport();
   else if (!$('feedback').hidden) closeFeedback();
   else if (!$('chat').hidden) closeSay();

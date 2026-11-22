@@ -183,37 +183,75 @@
   </div>
 
   <div id="adminPanel" class="modal" hidden>
-    <div class="modal-card admin-card" role="dialog" aria-modal="true" aria-labelledby="adminTitle">
-      <h2 id="adminTitle">Admin</h2>
-      <p id="adminUsage" class="admin-usage"></p>
-      <button id="adminListBtn" type="button" class="action-btn admin-wide">Feedback, reports, players</button>
-      <div class="admin-sec">
-        <div class="admin-row"><span class="lbl">Maintenance</span><span id="adminMaintState" class="admin-state">Off</span></div>
-        <div class="admin-inline"><input id="adminMaintText" class="admin-input" maxlength="200" placeholder="Message (optional)"><button id="adminMaintBtn" type="button" class="small-btn">Turn on</button></div>
+    <div class="modal-card admin-card" role="dialog" aria-modal="true" aria-label="Admin">
+      <div class="seg admin-tabs" role="group" aria-label="Admin">
+        <button type="button" class="seg-btn" data-admin-tab="server" data-label="Server">Server</button>
+        <button type="button" class="seg-btn" data-admin-tab="players" data-label="Players">Players</button>
+        <button type="button" class="seg-btn" data-admin-tab="inbox" data-label="Inbox">Inbox</button>
+        <button type="button" class="seg-btn" data-admin-tab="world" data-label="World">World</button>
+        <button type="button" class="seg-btn" data-admin-tab="settings" data-label="Settings">Settings</button>
       </div>
-      <form id="adminAnnounceForm" class="admin-sec">
-        <span class="lbl">Message everyone</span>
-        <div class="admin-inline"><input id="adminAnnounceText" class="admin-input" maxlength="140" placeholder="Everyone sees this"><button type="submit" class="small-btn">Send</button></div>
-      </form>
-      <div class="admin-grid">
-        <button id="adminSpeedBtn" type="button" class="small-btn">Speed up time</button>
-        <button id="adminTagBtn" type="button" class="small-btn">Admin tag: on</button>
-        <button id="adminResetBtn" type="button" class="small-btn admin-danger">Reset the world</button>
-        <button id="adminClose" type="button" class="small-btn">Done</button>
+      <div class="admin-page" data-admin-page="server">
+        <p id="adminUsage" class="admin-usage"></p>
+        <div class="admin-sec">
+          <div class="admin-row"><span class="lbl">Maintenance</span><span id="adminMaintState" class="admin-state">Off</span></div>
+          <div class="admin-inline"><input id="adminMaintText" class="admin-input" maxlength="200" placeholder="Message (optional)"><button id="adminMaintBtn" type="button" class="small-btn">Turn on</button></div>
+        </div>
+        <form id="adminAnnounceForm" class="admin-sec">
+          <span class="lbl">Message everyone</span>
+          <div class="admin-inline"><input id="adminAnnounceText" class="admin-input" maxlength="140" placeholder="Everyone sees this"><button type="submit" class="small-btn">Send</button></div>
+        </form>
+        <div class="admin-sec">
+          <div class="admin-row"><span class="lbl">Speed up time</span><span id="adminSpeedState" class="admin-state">Normal</span></div>
+          <div class="admin-chips" id="adminSpeedX"></div>
+          <div class="admin-chips" id="adminSpeedMins"></div>
+          <button id="adminSpeedBtn" type="button" class="small-btn">Start</button>
+        </div>
+        <button id="adminTagBtn" type="button" class="small-btn admin-wide">Admin tag: on</button>
       </div>
+      <div class="admin-page" data-admin-page="players" hidden>
+        <input id="adminFind" class="admin-input" maxlength="30" placeholder="Search by name" autocomplete="off">
+        <div class="admin-chips" id="adminShow"></div>
+        <div id="adminPlayers" class="admin-list"></div>
+      </div>
+      <div class="admin-page" data-admin-page="player" hidden>
+        <button id="adminPlayerBack" type="button" class="text-btn admin-back">‹ Players</button>
+        <div id="adminPlayer" class="admin-list"></div>
+      </div>
+      <div class="admin-page" data-admin-page="inbox" hidden>
+        <div class="admin-chips" id="adminInboxShow"></div>
+        <div id="adminInbox" class="admin-list"></div>
+      </div>
+      <div class="admin-page" data-admin-page="world" hidden>
+        <div id="adminCounts" class="admin-counts"></div>
+        <button id="adminRegrowBtn" type="button" class="small-btn admin-wide">Regrow everything</button>
+        <div class="admin-sec">
+          <span class="lbl">Clear loose items</span>
+          <div class="admin-grid">
+            <button id="adminClearNearBtn" type="button" class="small-btn">Near me (10 m)</button>
+            <button id="adminClearAllBtn" type="button" class="small-btn">Whole world</button>
+          </div>
+        </div>
+        <div class="admin-sec admin-danger-zone">
+          <span class="lbl">Danger zone</span>
+          <button id="adminResetBtn" type="button" class="small-btn admin-danger">Reset the world</button>
+        </div>
+      </div>
+      <div class="admin-page" data-admin-page="settings" hidden>
+        <div id="adminSettings" class="admin-list"></div>
+      </div>
+      <div class="modal-actions"><button id="adminClose" type="button" class="action-btn">Done</button></div>
     </div>
   </div>
 
-  <div id="adminList" class="modal" hidden>
-    <div class="modal-card admin-card" role="dialog" aria-modal="true" aria-label="Feedback, reports, players">
-      <div class="seg admin-tabs" role="group">
-        <button type="button" class="seg-btn" data-admin-tab="feedback" data-label="Feedback">Feedback</button>
-        <button type="button" class="seg-btn" data-admin-tab="reports" data-label="Reports">Reports</button>
-        <button type="button" class="seg-btn" data-admin-tab="online" data-label="Online">Online</button>
-        <button type="button" class="seg-btn" data-admin-tab="banned" data-label="Banned">Banned</button>
-      </div>
-      <div id="adminListBody" class="admin-list"></div>
-      <div class="modal-actions"><button id="adminListClose" type="button" class="action-btn">Close</button></div>
+  <div id="adminPick" class="modal" hidden>
+    <div class="modal-card admin-card" role="dialog" aria-modal="true" aria-labelledby="adminPickTitle">
+      <h2 id="adminPickTitle">Add item</h2>
+      <input id="adminPickFind" class="admin-input" maxlength="30" placeholder="Search" autocomplete="off">
+      <div class="admin-chips" id="adminPickKinds"></div>
+      <div class="admin-row"><span class="lbl">How many</span><div class="admin-chips" id="adminPickCount"></div></div>
+      <div id="adminPickList" class="admin-list admin-pick-list"></div>
+      <div class="modal-actions"><button id="adminPickClose" type="button" class="action-btn">Cancel</button></div>
     </div>
   </div>
 
