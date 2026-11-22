@@ -1,6 +1,6 @@
 {
   "version": "0.1.6",
-  "build": 2,
+  "build": 3,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,
@@ -96,7 +96,7 @@
     },
     {
       "id": "energy",
-      "name": "Energy",
+      "name": "Stamina",
       "colour": "#e8c547",
       "icon": "bolt",
       "start": 100,
@@ -104,7 +104,7 @@
       "whileAsleep": 400,
       "lowAt": 20,
       "lowLabel": "Out of breath",
-      "fullLabel": "Full of energy",
+      "fullLabel": "Full of stamina",
       "slowBelow": 20,
       "slowBy": 1.5
     }
@@ -282,8 +282,8 @@
     },
     "berryBush": {
       "name": "Berry bush",
-      "action": "Harvest Berries",
-      "verb": "Picking a berry",
+      "action": "Pick berries",
+      "verb": "Picking berries",
       "seconds": 2,
       "harvest": {
         "berry": 1
@@ -607,7 +607,7 @@
     "away": "How a person looks after themselves while their player is away (the server does this). near: 'pond' keeps them strolling round the main pond (anything else: round where you left them). wanderMin and wanderMax: how far in metres from there they stroll. strollSpeed in metres per second. They eat what they carry when hunger is under eatBelow, go for berries if they have none, and drink at the pond when thirst is under drinkBelow. After sleepAfterHours away they lie down asleep (needs pause); after goneAfterDays asleep they leave the world and their things stay where they slept. A grave marks where someone died for graveHours. idleMinutes: if you're in the game but don't touch anything for this long, your person goes on autopilot and does the same, until you tap. sleepBelow: someone on autopilot or away lies down to sleep when Rest is under this, and gets up when it's full.",
     "berryBushes": "extra: how many more berry bushes grow out in the wider world, besides the ones by the start. seed: their own random numbers, so they're in the same places on every phone (change it to move them all).",
     "devlog": "What's new, shown in the Menu. Newest first: version, date and a short list of changes, written for players.",
-    "energyCosts": "Energy (the yellow ring) is short-term stamina: every task takes these amounts and walking takes walkPerMetre for each metre. It comes back by itself quickly (perHour in its need: 400 an hour, so empty to full in about 15 minutes). Below slowBelow (20) your person is out of breath: walking and tasks take slowBy (1.5) times as long. It never stops you and it's not deadly. The server uses the same numbers.",
+    "energyCosts": "Stamina (the yellow ring, id energy) is short-term: every task takes these amounts and walking takes walkPerMetre for each metre. It comes back by itself quickly (perHour in its need: 400 an hour, so empty to full in about 15 minutes). Below slowBelow (20) your person is out of breath: walking and tasks take slowBy (1.5) times as long. It never stops you and it's not deadly. The server uses the same numbers.",
     "chopping": "Chopping with a tool (tool: the item you need). tree: chopping a standing tree (seconds, and what falls: gives); it leaves a stump that grows back into a tree after regrowDays real days. stump: digging out a stump (then the tree is gone for good). log: chopping a log (an item) into sticks. Each chop wears the tool by one use, and takes energyCosts.chop energy. The server uses the same rules.",
     "plants": "Plants you cut, like tall grass. Each kind is laid out by itself: count clumps (nearStart of them near the start), on its own random numbers (seed) so nothing else moves. action is the tap menu button, verb what shows while doing it. gives goes into your inventory each cut. seconds is how long by hand, toolSeconds with the tool (each use wears the tool). regrowHours [lo, hi]: a cut clump grows back at a random time in between. look: blades per clump, height, colour and tips (the seed heads). Run tools/worlds.py test-build after changing plants."
   },
@@ -706,7 +706,9 @@
         "Health heals faster when you're fed, watered and rested: about a day from low to full, quicker asleep.",
         "New: tall grass. Cut it for twine (6 s by hand, 2 s with a knife); it grows back in 1 to 4 hours.",
         "New: Stone knife (1 stick, 1 stone, 1 twine). It cuts grass fast and picks 2 berries at a time, and wears out after 10 uses.",
-        "The stone axe now needs 1 twine too, to lash the head on."
+        "The stone axe now needs 1 twine too, to lash the head on.",
+        "The stone axe looks like an axe now: a flat stone head with a curved cutting edge, lashed on with twine.",
+        "Energy is now called Stamina, the berry bush button says Pick berries, and people away for over a day show 'away · fast asleep'."
       ]
     },
     {

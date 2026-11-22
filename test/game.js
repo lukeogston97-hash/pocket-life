@@ -1145,13 +1145,23 @@ function stickGeo(len, t, twig) {
 // a stone: a smooth, slightly flat pebble
 const pebbleGeos = [1, 2, 3].map((k) => jitterGeo(new THREE.IcosahedronGeometry(1, 1), 0.16, 40 + k));
 // the stone axe: a handle that's thicker at the grip, a wedge of stone with a sharp edge, and a lashing where they meet
+// A stone axe head seen from the side: a narrow neck where it's lashed to the handle, flaring out to a wide curved
+// cutting edge, with a short stub (the poll) behind the handle. It's flat and thins to a sharp edge.
+// Built along x (the handle), out along +z (the blade) and thin in y.
 const axeHeadGeo = (() => {
-  const g = new THREE.BoxGeometry(0.085, 0.095, 0.25, 1, 1, 2).toNonIndexed();
+  const sh = new THREE.Shape();
+  sh.moveTo(-0.028, -0.05); sh.lineTo(0.028, -0.05); // the poll, behind the handle
+  sh.lineTo(0.032, 0.035);
+  sh.quadraticCurveTo(0.05, 0.1, 0.085, 0.16); // flaring out to the edge
+  sh.quadraticCurveTo(0, 0.205, -0.085, 0.16); // the curved cutting edge
+  sh.quadraticCurveTo(-0.05, 0.1, -0.032, 0.035);
+  sh.closePath();
+  const depth = 0.05;
+  const g = new THREE.ExtrudeGeometry(sh, { depth, bevelEnabled: false, curveSegments: 5 }).translate(0, 0, -depth / 2).rotateX(Math.PI / 2);
   const p = g.attributes.position;
-  for (let i = 0; i < p.count; i++) { // taper to a blade along z, rounded back
-    const z = p.getZ(i), k = (z + 0.125) / 0.25;
-    p.setX(i, p.getX(i) * (1 - k * 0.82));
-    p.setY(i, p.getY(i) * (1 + k * 0.35));
+  for (let i = 0; i < p.count; i++) { // thinner towards the edge
+    const k = Math.min(1, Math.max(0, (p.getZ(i) - 0.02) / 0.17));
+    p.setY(i, p.getY(i) * (1 - 0.85 * k));
   }
   g.computeVertexNormals();
   return g;
@@ -1160,14 +1170,25 @@ const SHAPES = {
   axe(look) {
     const len = look.length ?? 0.55, t = look.thickness ?? 0.025;
     const g = new THREE.Group();
-    const handle = new THREE.Mesh(new THREE.CylinderGeometry(t * 0.85, t * 1.15, len, 6).rotateZ(Math.PI / 2), tinted(look.colour || '#8a6847', 0.04));
-    g.add(handle);
+    const wood = tinted(look.colour || '#8a6847', 0.04);
+    g.add(new THREE.Mesh(new THREE.CylinderGeometry(t * 0.9, t * 1.1, len, 6).rotateZ(Math.PI / 2), wood)); // the handle
+    const knob = new THREE.Mesh(new THREE.CylinderGeometry(t * 1.35, t * 1.1, 0.03, 6).rotateZ(Math.PI / 2), wood); // a little flare at the end you hold
+    knob.position.x = -len / 2 + 0.015;
+    g.add(knob);
+    const hx = len / 2 - 0.05;
     const head = new THREE.Mesh(axeHeadGeo, tinted(look.head || '#8f8a80', 0.06));
-    head.position.set(len / 2 - 0.06, 0.004, 0.065);
+    head.position.set(hx, 0, 0);
     g.add(head);
-    const lash = new THREE.Mesh(new THREE.CylinderGeometry(t * 1.45, t * 1.45, 0.05, 7).rotateZ(Math.PI / 2), matFor(look.lashing || '#5b4330'));
-    lash.position.set(len / 2 - 0.055, 0, 0);
-    g.add(lash);
+    const twine = matFor(look.lashing || '#c9b77a');
+    for (const dx of [-0.042, 0.042]) { // twine wrapped round the handle either side of the head
+      const lash = new THREE.Mesh(new THREE.CylinderGeometry(t * 1.5, t * 1.5, 0.026, 7).rotateZ(Math.PI / 2), twine);
+      lash.position.set(hx + dx, 0, 0);
+      g.add(lash);
+    }
+    const cross = new THREE.Mesh(new THREE.BoxGeometry(0.1, t * 2.6, 0.012), twine); // and across the neck
+    cross.position.set(hx, 0, 0.022);
+    cross.rotation.y = 0.5;
+    g.add(cross);
     return { model: g, rest: 0.04, hold: 'axe', grip: len / 2 - 0.06, hit: [len + 0.3, 0.3, 0.42] };
   },
   // a knife: a short stick handle with a sharp stone flake lashed into the end
@@ -4190,7 +4211,7 @@ function drawTag(o) {
   if (o.state === 'away' || o.state === 'asleep' || o.state === 'sleeping') {
     const sub = document.createElement('small');
     sub.className = 'tag-sub';
-    sub.textContent = o.state === 'asleep' ? 'asleep · zz' : o.state === 'sleeping' ? 'sleeping · zz' : 'away';
+    sub.textContent = o.state === 'asleep' ? 'away · fast asleep' : o.state === 'sleeping' ? 'sleeping · zz' : 'away';
     el.appendChild(sub);
   }
 }
@@ -4387,4 +4408,4 @@ enterMenu();
 goOnline();
 requestAnimationFrame(frame);
 // for automated checks only: open the page with ?debug to reach the game's state from the browser console
-if (location.search.includes('debug')) window.__pl = { walk, tasks, trees, you, others, net, plants, queueTask, camera, berryBushes, get player() { return player; }, findPath, freeAt, die, showWelcomeBack, showGoneCard, showMaintenance, hideMaintenance };
+if (location.search.includes('debug')) window.__pl = { walk, tasks, trees, you, others, net, plants, queueTask, camera, berryBushes, buildItem, get player() { return player; }, findPath, freeAt, die, showWelcomeBack, showGoneCard, showMaintenance, hideMaintenance };
