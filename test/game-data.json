@@ -1,5 +1,5 @@
 {
-  "version": "0.2.2",
+  "version": "0.2.3",
   "build": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -139,7 +139,7 @@
     "log": {
       "seconds": 8,
       "gives": {
-        "stick": 4
+        "stick": 5
       }
     },
     "regrowDays": 3
@@ -174,7 +174,7 @@
     "twine": {
       "name": "Twine",
       "plural": "Twine",
-      "weight": 0.2,
+      "weight": 1,
       "look": {
         "shape": "coil",
         "size": 0.05,
@@ -185,7 +185,7 @@
     "berry": {
       "name": "Berry",
       "plural": "Berries",
-      "weight": 0.1,
+      "weight": 1,
       "look": {
         "shape": "ball",
         "size": 0.045,
@@ -233,7 +233,7 @@
     "log": {
       "name": "Log",
       "plural": "Logs",
-      "weight": 10,
+      "weight": 5,
       "look": {
         "shape": "log",
         "length": 0.9,
@@ -246,7 +246,7 @@
     "campfire": {
       "name": "Campfire",
       "plural": "Campfires",
-      "weight": 17,
+      "weight": 15,
       "look": {
         "shape": "campfire",
         "size": 0.36,
@@ -760,6 +760,14 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.2.3",
+      "date": "2026-11-22",
+      "notes": [
+        "New weights: logs 5 (was 10), campfires 15 (was 17), twine and berries 1 each.",
+        "Chopping a log into sticks gives 5 sticks (was 4)."
+      ]
+    },
     {
       "version": "0.2.2",
       "date": "2026-11-22",

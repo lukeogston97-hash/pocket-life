@@ -85,13 +85,13 @@
       "places": null
     },
     "twine": {
-      "weight": 0.2,
+      "weight": 1,
       "eat": null,
       "uses": 0,
       "places": null
     },
     "berry": {
-      "weight": 0.1,
+      "weight": 1,
       "eat": {
         "hunger": 10
       },
@@ -111,13 +111,13 @@
       "places": null
     },
     "log": {
-      "weight": 10,
+      "weight": 5,
       "eat": null,
       "uses": 0,
       "places": null
     },
     "campfire": {
-      "weight": 17,
+      "weight": 15,
       "eat": null,
       "uses": 0,
       "places": "campfire"
@@ -244,7 +244,7 @@
     "log": {
       "seconds": 8,
       "gives": {
-        "stick": 4
+        "stick": 5
       }
     },
     "regrowDays": 3
