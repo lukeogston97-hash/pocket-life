@@ -114,6 +114,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .hint[hidden] { display: none; }
 .auto-chip { position: absolute; left: 50%; top: var(--below-hud, 90px); transform: translateX(-50%); z-index: 20; padding: 6px 13px; border-radius: 999px; font: 700 12.5px var(--font-ui); white-space: nowrap; pointer-events: none; }
 .auto-chip[hidden] { display: none; }
+/* choosing where to put a campfire: a bar along the bottom with Cancel and Place */
+.place-bar { position: absolute; z-index: 4; left: 50%; bottom: calc(68px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: flex; align-items: center; gap: 8px;
+  max-width: calc(100% - 24px); padding: 6px 6px 6px 15px; border-radius: 999px; font: 700 13px var(--font-ui); white-space: nowrap; }
+.place-bar span { overflow: hidden; text-overflow: ellipsis; margin-right: 4px; }
+.place-bar[hidden], .placing .queue, .is-menu .place-bar, .is-creating .place-bar { display: none; }
 
 /* things over the world: name tags, speech bubbles, little notes, "+1 Stick" */
 #labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 1; }

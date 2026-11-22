@@ -36,7 +36,7 @@ export const natureMethods = {
   },
   view() {
     const w = this.world;
-    return w ? { items: w.items, bushes: w.bushes, graves: w.graves || [], trees: w.trees || {}, oldStumps: w.oldStumps || {}, plants: w.plants || {} } : null;
+    return w ? { items: w.items, bushes: w.bushes, graves: w.graves || [], trees: w.trees || {}, oldStumps: w.oldStumps || {}, plants: w.plants || {}, placed: this.placedList().map((th) => this.placedView(th)) } : null;
   },
   cleanLayout(m) {
     const pts = (list, n) => (Array.isArray(list) ? list : []).slice(0, n).filter((a) => Array.isArray(a)).map(([x, z]) => [num(x), num(z)]);

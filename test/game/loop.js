@@ -35,6 +35,7 @@ function frame() {
 // the world as the camera sees it (playing, and behind the main menu)
 function renderWorld(w, h, raw) {
   updateDetails(controls.target.x, controls.target.z);
+  animatePlaced(raw); // campfires flicker and burn down
   sun.position.copy(controls.target).add(SUN_OFFSET);
   sun.target.position.copy(controls.target);
   sun.target.updateMatrixWorld();

@@ -16,7 +16,7 @@ export const awayMethods = {
       p.simAt = until;
       if (d) { this.die(p, d.cause, true); return; }
       if (until >= sleepAt) { // a day away: lie down and sleep (hunger and thirst drop slowly to a floor)
-        p.plan = null; p.asleep = true; p.sleepAt = sleepAt; p.log.slept = true;
+        p.plan = null; p.sit = null; p.asleep = true; p.sleepAt = sleepAt; p.log.slept = true;
         this.touch(p);
         this.send({ t: 'state', id: p.who, state: 'asleep', x: num(p.x), z: num(p.z) }, null);
         return;
@@ -31,6 +31,10 @@ export const awayMethods = {
     }
   },
   arrive(p, plan, t) {
+    if (plan.kind === 'sit') { // sat by the fire for as long as they were asked to: up again
+      this.standUp(p, plan.arrive > Date.now() - 30000);
+      return;
+    }
     if (plan.kind === 'sleep') { // rested: up again
       p.sleeping = false;
       if (plan.arrive > Date.now() - 30000) this.send({ t: 'state', id: p.who, state: 'away', x: num(p.x), z: num(p.z) }, null);
@@ -54,6 +58,9 @@ export const awayMethods = {
   decide(p, t, now, L) {
     while (p.stats.hunger != null && p.stats.hunger < AWAY.eatBelow && eatOne(p, G)) p.log.ate++;
     const at = [p.x, p.z];
+    // sitting by a fire (a task they left running): they stay sat there until it's done, even if the fire goes out
+    if (p.sit && p.sit.until > t) { p.plan = { kind: 'sit', start: t, arrive: p.sit.until }; return; }
+    if (p.sit) this.standUp(p, false);
     // night: off to bed until morning. Tired (or already lying down): sleep where they are until rest is full
     const night = isNight(t, G);
     if (night || p.sleeping || (p.stats.rest != null && p.stats.rest < AWAY.sleepBelow)) {

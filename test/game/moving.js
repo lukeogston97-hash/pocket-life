@@ -199,6 +199,10 @@ function animateAct(m, P, ground, act, dt) {
 /* ---------- your queue: tap several things and your person does them in turn ---------- */
 const tasks = { current: null, list: [] }; // { type: 'pickup', id } | { type: 'use', source, ... } | { type: 'drop', kind, n }
 const MAX_QUEUE = 30;
+// More kinds of task, added by other parts (placeables.js: place, build, tend a fire, sit). Each is
+// { start(t), name(t, now), spot(t), stop(t) }: start does it (and calls nextTask when done), name is how it shows
+// in the queue, spot is where its number goes, and stop (optional) is called when it's stopped part way.
+const TASK_KINDS = {};
 const allTasks = () => (tasks.current ? [tasks.current, ...tasks.list] : [...tasks.list]);
 const shownTasks = () => allTasks().filter((t) => t.type !== 'drop');
 // the weight you'll be carrying once everything queued is picked up or harvested
@@ -242,11 +246,14 @@ function queueTask(t) {
   else drawQueue();
 }
 function stopQueue() {
+  const cur = tasks.current;
+  if (cur && TASK_KINDS[cur.type] && TASK_KINDS[cur.type].stop) TASK_KINDS[cur.type].stop(cur);
   tasks.list = [];
   tasks.current = null;
   walk.target = null;
   walk.onArrive = walk.onFail = null;
   if (action) {
+    if (action.cancel) action.cancel();
     action = null;
     resetPose();
     if (tagLabel && tagLabel.busy) { removeLabel(tagLabel); tagLabel = null; }
@@ -283,6 +290,7 @@ function nextTask() {
     approach(t.x, t.z, 0.55, 0.9, () => doCut(t));
   } else if (t.type === 'drop') doDrop(t);
   else if (t.type === 'walk') walkTo(V(t.x, 0, t.z), nextTask, nextTask);
+  else if (TASK_KINDS[t.type]) TASK_KINDS[t.type].start(t);
   else nextTask();
 }
 /* ---------- autopilot: here but idle ----------
@@ -547,6 +555,7 @@ function taskSpot(t) {
   if (t.type === 'pickup') { const v = itemViews.get(t.id); return v ? V(v.position.x, v.position.y + 0.22, v.position.z) : null; }
   if (t.type === 'use') return t.water ? V(POND.x, WATER_Y + 0.5, POND.z) : V(t.x, t.top + 0.15, t.z);
   if (t.type === 'walk') return V(t.x, groundY(t.x, t.z) + 0.3, t.z);
+  if (TASK_KINDS[t.type]) return TASK_KINDS[t.type].spot(t);
   return null;
 }
 // what a task is called in the queue list: "Pick up Stick" next, "Picking up Stick" now
@@ -562,6 +571,7 @@ function taskName(t, now) {
   if (t.type === 'cut') return now ? `${(PLANTS[t.plant] || {}).verb || 'Cutting'}` : (PLANTS[t.plant] || {}).action || 'Cut';
   if (t.type === 'chop') return t.what === 'tree' ? (now ? 'Chopping a tree' : 'Chop tree') : t.what === 'stump' || t.what === 'oldStump' ? (now ? 'Removing a stump' : 'Remove stump') : (now ? 'Chopping a log' : 'Chop log');
   if (t.type === 'walk') return now ? 'Walking' : 'Walk there';
+  if (TASK_KINDS[t.type]) return TASK_KINDS[t.type].name(t, now);
   return '';
 }
 // the list above the bottom bar: what your person is doing now, then what's next

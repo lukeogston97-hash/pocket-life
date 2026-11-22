@@ -12,6 +12,7 @@ export const personsMethods = {
     const s = this.socketOf(p.who), state = this.stateOf(p);
     const [x, z] = state === 'away' ? posAt(p, now) : [p.x, p.z];
     const out = { id: p.who, name: p.name, look: { ...p.look, age: ageOf(p, now) }, x: num(x), z: num(z), ry: num(p.ry), state, badge: !!(s && s.p.admin && s.p.tag) };
+    if (p.sit && p.sit.until > now) out.sit = [p.sit.fire, p.sit.seat]; // sitting by a fire
     if (state === 'away' && p.plan && p.plan.kind === 'walk' && p.plan.arrive > now) Object.assign(out, { tx: p.plan.to[0], tz: p.plan.to[1], speed: AWAY.strollSpeed, ms: Math.round(p.plan.arrive - now) });
     return out;
   },
@@ -19,7 +20,8 @@ export const personsMethods = {
   // what the player is told about their own person
   mine(p) {
     return { t: 'me', name: p.name, look: p.look, age: ageOf(p), born: p.born, x: num(p.x), z: num(p.z), ry: num(p.ry),
-      stats: p.stats, statsAt: p.statsAt, carry: p.carry, wear: p.wear || {}, lastKind: p.lastKind, sleeping: !!p.sleeping, collapsed: !!p.collapsed };
+      stats: p.stats, statsAt: p.statsAt, carry: p.carry, wear: p.wear || {}, lastKind: p.lastKind, sleeping: !!p.sleeping, collapsed: !!p.collapsed,
+      sit: p.sit && p.sit.until > Date.now() ? { fire: p.sit.fire, seat: p.sit.seat, ms: p.sit.until - Date.now() } : null };
   },
   catchUp(p, now = Date.now()) {
     if (!this.alive(p)) return;
@@ -43,6 +45,7 @@ export const personsMethods = {
     p.diedAt = Date.now();
     p.diedAway = !!away;
     p.plan = null;
+    p.sit = null;
     this.spill(p);
     if (w) {
       w.graves = (w.graves || []).filter((g) => g.at > Date.now() - AWAY.graveHours * HOUR);

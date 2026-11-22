@@ -94,6 +94,10 @@ function goOnline() {
     else if (m.t === 'speed') setSpeed(m.speed);
     else if (m.t === 'world') useSharedWorld(m.world);
     else if (m.t === 'gone') removeWorldItem(m.id);
+    else if (m.t === 'placed') { setPlaced(m.thing); if (m.mine && m.thing && !m.thing.built) { tasks.list.unshift({ type: 'build', id: m.thing.id }); if (!tasks.current && !action) nextTask(); else drawQueue(); } } // put it down: build it next
+    else if (m.t === 'unplaced') removePlaced(m.id);
+    else if (m.t === 'placeNo' || m.t === 'sitNo') { showTag(m.why || "Can't do that", headTop(), 2.5); if (m.t === 'sitNo') endSit(false); }
+    else if (m.t === 'sit') setOtherSit(m);
     else if (m.t === 'added') for (const it of m.items || []) { if (ITEMS[it.kind]) addWorldItem(it.kind, it.x, it.z, it.rot, it.id); }
     else if (m.t === 'took') tookBack(m);
     else if (m.t === 'bush') { const b = berryBushes[m.bush]; if (b) { b.userData.count = m.count; b.userData.growFrom = m.growFrom; drawBerries(b); } }
@@ -164,6 +168,7 @@ function welcome(m) {
   if (m.world) { useSharedWorld(m.world); if (m.needLayout) sendLayout(); }
   else if (m.needSeed) seedWorld();
   if (m.me) {
+    forgetSit(); // the server says whether you're still sitting (below)
     if (!player) { applyMe(m.me, true); enterWorld(); }
     else {
       applyMe(m.me);
@@ -177,6 +182,8 @@ function welcome(m) {
         net.last = null;
       }
     }
+    if (m.me.sit) resumeSit(m.me.sit); // left sitting by the fire, and the time isn't up yet
+    else if (!tasks.current && tasks.list.length && !action) nextTask();
     if (m.away) showWelcomeBack(m.away);
   } else if (!(player && you.dead)) {
     // no person yet (or the world was reset): make one
@@ -242,6 +249,7 @@ function useSharedWorld(w) {
   for (const it of [...world.items]) removeWorldItem(it.id);
   for (const it of w.items || []) if (ITEMS[it.kind]) addWorldItem(it.kind, it.x, it.z, it.rot, it.id);
   drawGraves(w.graves || []);
+  usePlaced(w.placed || []);
   const ts = w.trees || {};
   trees.forEach((t, i) => setTreeState(i, ts[i] ? ts[i][0] : 'tree'));
   for (const i of Object.keys(w.oldStumps || {})) removeOldStump(Number(i));

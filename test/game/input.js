@@ -105,7 +105,7 @@ function pickTarget(px, py) {
     const o = labelOf(h.object);
     if (o) hits.push({ h, o });
   }
-  const useful = hits.find(({ o }) => o === player || o.userData.itemId || o.userData.source);
+  const useful = hits.find(({ o }) => o === player || o.userData.itemId || o.userData.source || o.userData.placedId != null);
   const { h: hit = null, o: owner = null } = useful || hits[0] || {};
   if (owner === player) return { kind: 'you' };
   const gp = groundHit && groundHit.point;
@@ -114,6 +114,7 @@ function pickTarget(px, py) {
     || (useful ? null : itemNear(px, py, lastPointer === 'mouse' ? 34 : 46))
     || (useful || !gp ? null : itemCloseTo(gp.x, gp.z, 0.9));
   if (item) return { kind: 'item', item, name: ITEMS[item.kind].name };
+  if (owner && owner.userData.placedId != null && placed.has(owner.userData.placedId)) { const th = placed.get(owner.userData.placedId); return { kind: 'placed', th, name: placedName(th) }; }
   const isWater = owner === water || (!hit && gp && (pondShape(gp.x, gp.z) < 0.86 || gp.y < WATER_Y + 0.1));
   const srcId = isWater ? water.userData.source : owner && owner.userData.source;
   if (srcId && SOURCES[srcId]) {
@@ -172,11 +173,17 @@ function fadeTapRing(dt) {
 function handleTap(px, py) {
   if (ui.mode !== 'world' || !player || you.dead || paused) return;
   if (!online()) { showTag('Reconnecting…', headTop(), 1.5); return; }
+  if (placing.on) { // choosing where to put something: a tap moves it there
+    ray.setFromCamera(ndc, camera);
+    const g = ray.intersectObject(terrain, false)[0];
+    if (g) movePlacing(g.point.x, g.point.z);
+    return;
+  }
   const t = pickTarget(px, py);
   if (!t) return;
   if (t.kind === 'you') { firstTap = null; openMenuAt(px, py, { kind: 'self', name: 'You' }); return; }
   // a stick, stone, berry bush or the pond: open the menu of what you can do with it
-  if (['item', 'use', 'person', 'grave', 'tree', 'stump', 'oldStump', 'plant'].includes(t.kind)) { firstTap = null; openMenuAt(px, py, t); return; }
+  if (['item', 'use', 'person', 'grave', 'tree', 'stump', 'oldStump', 'plant', 'placed'].includes(t.kind)) { firstTap = null; openMenuAt(px, py, t); return; }
   // the ground (or a rock, tree or log): one tap opens Walk here, a quick double-tap walks straight there
   const now = performance.now();
   if (!firstTap || now - firstTap.t > DOUBLE_MS || Math.hypot(px - firstTap.px, py - firstTap.py) > DOUBLE_PX) {
@@ -230,9 +237,11 @@ function menuActions(t) {
   }
   if (t.kind === 'self') {
     const rest = you.stats && you.stats.rest != null ? Math.round(you.stats.rest) : null;
+    if (you.sit) return [{ label: 'Stand up', note: `${timeLeft(you.sit.until - Date.now())} left`, run: () => endSit(true) }];
     return [you.sleeping ? { label: 'Wake up', note: tooTiredToWake() ? `Rest ${Math.floor(you.stats.rest)} of ${REST.wakeAt}` : '', run: wakeUp } : { label: 'Sleep', note: rest != null ? `Rest ${rest}` : '', run: () => setSleeping(true) },
       ...adminMore(admin.on ? [{ label: 'Fill my needs', run: () => adminSend({ t: 'a.fill', id: net.myId }) }] : [])];
   }
+  if (t.kind === 'placed') return placedActions(t.th);
   if (t.kind === 'grave') return [{ label: 'Walk here', run: () => walkFirst(V(t.x + 0.8, 0, t.z)) }];
   if (t.kind === 'plant') {
     const def = PLANTS[t.plant], c = plants[t.plant].clumps[t.i], fast = def.tool && you.carry[def.tool];
@@ -269,7 +278,7 @@ function menuActions(t) {
   return [];
 }
 function openMenuAt(px, py, known) {
-  if (ui.mode !== 'world' || !player || you.dead || paused) return false;
+  if (ui.mode !== 'world' || !player || you.dead || paused || placing.on) return false;
   const t = known || pickTarget(px, py);
   const acts = menuActions(t);
   hideHint(); // the tip has done its job once you've tapped something
@@ -337,7 +346,8 @@ document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape' || ui.mode !== 'world') return;
   e.preventDefault();
   if (maint.on) return;
-  if (!$('news').hidden) closeNews();
+  if (placing.on) stopPlacing();
+  else if (!$('news').hidden) closeNews();
   else if (!$('back').hidden) $('back').hidden = true;
   else if (!$('adminList').hidden) $('adminListClose').click(); // back to the Admin panel
   else if (!$('adminPanel').hidden) closeAdminPanel();
@@ -415,6 +425,7 @@ function updatePlayer(dt) {
   const stoop = P.body.userData.stoop;
   if (action) {
     const t = elapsed - action.t0, dur = action.seconds, k = clamp01(t / dur);
+    if (action.tick) action.tick(k); // building shows its progress
     setLegs(P, 0);
     if (action.pose === 'chop') {
       const sw = (Math.sin(t * 5.5) + 1) / 2, env = clamp01(Math.min(t, dur - t) / 0.3);
@@ -450,7 +461,8 @@ function updatePlayer(dt) {
       if (a.end) a.end();
       nextTask();
     }
-  } else if (walk.target) {
+  } else if (you.sit) holdSit(P); // sitting by a fire until the time's up (placeables.js)
+  else if (walk.target) {
     const dx = walk.target.x - player.position.x, dz = walk.target.z - player.position.z;
     const d = Math.hypot(dx, dz);
     const stop = (message) => {

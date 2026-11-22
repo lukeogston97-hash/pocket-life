@@ -117,7 +117,14 @@ export const adminMethods = {
       case 'a.remove': {
         if (!w) return;
         const i = w.items.findIndex((it) => it.id === m.id);
-        if (i < 0) return;
+        if (i < 0) { // not an item: a placed thing (a campfire)
+          const list = this.placedList(), j = list.findIndex((th) => th.id === m.id);
+          if (j < 0) return;
+          list.splice(j, 1);
+          await this.save();
+          this.send({ t: 'unplaced', id: m.id }, null);
+          return;
+        }
         w.items.splice(i, 1);
         await this.save();
         this.send({ t: 'gone', id: m.id }, null);

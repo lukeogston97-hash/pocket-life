@@ -67,7 +67,53 @@ const axeHeadGeo = (() => {
   g.computeVertexNormals();
   return g;
 })();
+// A campfire: a ring of stones round a bed of ash, a log and a few sticks laid in the middle, and a little teepee of
+// sticks stood up over them (the fuel: more sticks, more teepee). Each building piece knows where it sits when the
+// campfire is built (to) and where it lies in a loose pile before then (from), so building can move them into place.
+// Only Math.random here, never the world's random numbers, so the world's layout never shifts.
+const fireStoneGeo = jitterGeo(new THREE.IcosahedronGeometry(1, 1), 0.2, 91);
+const FUEL_STICKS = 5; // the teepee: how many sticks it shows when the fire is full
+function campfireModel(look = {}) {
+  const R = look.size ?? 0.36, g = new THREE.Group(), pieces = [], fuel = [];
+  const wood = look.colour || '#8a6847';
+  const piece = (obj, to, from) => { obj.position.set(...to.p); obj.quaternion.copy(to.q); g.add(obj); pieces.push({ obj, to, from }); };
+  const Q = (x, y, z) => new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, z));
+  const ash = new THREE.Mesh(new THREE.CylinderGeometry(R * 0.78, R * 0.84, 0.02, 14), matFor(look.ash || '#4a443d'));
+  ash.position.y = 0.01;
+  g.add(ash);
+  const N = 9;
+  for (let i = 0; i < N; i++) { // the stone ring
+    const a = (i / N) * Math.PI * 2 + (Math.random() - 0.5) * 0.2, s = R * 0.27 * (0.85 + Math.random() * 0.35);
+    const m = new THREE.Mesh(fireStoneGeo, tinted(look.stone || '#8f8a80', 0.1));
+    m.scale.set(s * 1.15, s * 0.72, s);
+    const pa = Math.random() * Math.PI * 2, pr = Math.random() * 0.22;
+    piece(m, { p: [Math.cos(a) * R, s * 0.45, Math.sin(a) * R], q: Q(0, -a, 0) },
+      { p: [-0.55 + Math.cos(pa) * pr, s * 0.45, 0.3 + Math.sin(pa) * pr], q: Q(0, pa, 0) });
+  }
+  const log = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.06, R * 1.15, 7).rotateZ(Math.PI / 2), tinted(look.log || '#7a5c40', 0.05));
+  piece(log, { p: [0, 0.06, 0], q: Q(0, 0.5, 0) }, { p: [0.5, 0.06, -0.25], q: Q(0, 1.2, 0) });
+  for (let i = 0; i < 3; i++) { // the recipe's sticks, laid across the ash
+    const m = new THREE.Mesh(stickGeo(R * 1.2, 0.02, false), tinted(wood, 0.07));
+    piece(m, { p: [Math.cos(i * 2.1) * 0.06, 0.03, Math.sin(i * 2.1) * 0.06], q: Q(0, 2 + i * 1.05, 0) },
+      { p: [0.42 + i * 0.05, 0.03 + i * 0.03, 0.1 + i * 0.04], q: Q(0, 0.3 + i * 0.25, 0) });
+  }
+  const top = V(0, R * 1.05, 0), X = V(1, 0, 0);
+  for (let i = 0; i < FUEL_STICKS; i++) { // the teepee of fuel
+    const a = (i / FUEL_STICKS) * Math.PI * 2 + 0.3, base = V(Math.cos(a) * R * 0.55, 0.02, Math.sin(a) * R * 0.55);
+    const d = top.clone().sub(base), m = new THREE.Mesh(stickGeo(d.length() * 1.08, 0.02, i % 2 === 0), tinted(wood, 0.08));
+    m.position.copy(base).add(top).multiplyScalar(0.5);
+    m.quaternion.setFromUnitVectors(X, d.normalize());
+    g.add(m);
+    fuel.push(m);
+  }
+  return { model: g, pieces, fuel, ash, R };
+}
 const SHAPES = {
+  // the campfire you carry (and see in the Inventory): built-looking, with a full teepee
+  campfire(look) {
+    const { model, R } = campfireModel(look);
+    return { model, rest: 0, hold: 'none', hit: [R * 2 + 0.4, 0.6, R * 2 + 0.4] };
+  },
   axe(look) {
     const len = look.length ?? 0.55, t = look.thickness ?? 0.025;
     const g = new THREE.Group();

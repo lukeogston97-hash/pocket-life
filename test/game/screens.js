@@ -104,6 +104,8 @@ function die(m) {
   you.dead = true;
   closeMenu();
   closePause();
+  forgetSit();
+  stopPlacing();
   stopQueue();
   closeBag();
   closeCraft();
@@ -224,6 +226,8 @@ function toMenu() {
 // your person is no longer shown here (the server looks after them now)
 function dropPlayer() {
   if (!player) return;
+  forgetSit(); // a sit carries on while you're away (the server keeps it)
+  stopPlacing();
   stopQueue();
   action = null;
   auto.on = false; $('autoChip').hidden = true;

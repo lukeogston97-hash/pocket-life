@@ -3,6 +3,7 @@
 // person, with their needs caught up to now) or 'world' (also needs the shared world). run gets the message (m), your
 // person (p), the world (w), reply() to answer just you, and save() to save your person straight away; `this` is the
 // world (index.js), so this.send() tells everyone. Remember a spam limit in LIMITS (shared.js) for anything new.
+import { PLACEABLES, fireRule, seatAt } from './placed.js';
 import { FILTER, G, starText, badName, freshStats, addCarry, takeCarry, applyGives, eatOne, craft, spend, clean, num, kindOk, START, REST, BERRY_SRC, cleanLook, REPORTS_KEEP } from './shared.js';
 
 export const ACTIONS = {
@@ -75,6 +76,7 @@ export const ACTIONS = {
   // walking: once with where the walk ends, and now and then on the way
   move: { when: 'alive', async run({ ws, me, m, p, w, reply, save }) {
     const nx = num(m.x), nz = num(m.z), moved = Math.hypot(nx - p.x, nz - p.z);
+    if (p.sit && moved > 0.4) this.standUp(p); // walked off: no longer sitting
     if (moved < 30) spend(p, 'walkPerMetre', G, moved); // walking takes a little energy
     p.x = nx; p.z = nz; p.ry = num(m.ry);
     this.touch(p);
@@ -86,6 +88,7 @@ export const ACTIONS = {
   sleep: { when: 'alive', async run({ ws, me, m, p, w, reply, save }) {
     if (!m.on && p.collapsed && p.stats.rest < (REST.wakeAt || 0)) { reply(this.mine(p)); return; } // too tired to get up yet
     p.sleeping = !!m.on;
+    if (p.sleeping) this.standUp(p);
     if (!p.sleeping) p.collapsed = false;
     save();
     reply(this.mine(p));
@@ -188,6 +191,81 @@ export const ACTIONS = {
     spend(p, 'harvest', G);
     if (n > 1) { this.wearTool(p, BERRY_SRC.tool, reply); reply(this.mine(p)); }
     save();
+  } },
+  // putting a placeable down (a campfire): it starts as an unbuilt site
+  place: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
+    const item = G.items[m.kind], kind = item && item.places, rule = PLACEABLES[kind];
+    const x = num(m.x), z = num(m.z);
+    const no = (why) => { reply({ t: 'placeNo', why }); reply(this.mine(p)); };
+    if (!rule || !p.carry[m.kind]) return no('You need to carry it');
+    if (Math.hypot(x - p.x, z - p.z) > 4) return no('Too far away');
+    if (this.placedList().some((th) => Math.hypot(th.x - x, th.z - z) < (rule.solid || 0.5) + 1)) return no('Too close to something else');
+    takeCarry(p, m.kind, 1);
+    const th = { id: w.nextId++, kind, x, z, rot: num(m.rot), built: false, fuel: 0, lit: false, at: Date.now() };
+    this.placedList().push(th);
+    spend(p, 'craft', G);
+    await this.save();
+    save();
+    this.sendPlaced(th, reply, { mine: true });
+    reply(this.mine(p));
+  } },
+  // building a site (it took buildSeconds in the game)
+  build: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
+    const th = this.placedById(m.id);
+    if (!th || th.built || Math.hypot(th.x - p.x, th.z - p.z) > 3) { if (th) this.sendPlaced(th, reply, {}); return; }
+    th.built = true;
+    th.at = Date.now();
+    spend(p, 'build', G);
+    await this.save();
+    save();
+    this.sendPlaced(th, null);
+    reply(this.mine(p));
+  } },
+  // picking an unbuilt site back up (put it in the wrong place)
+  unplace: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
+    const list = this.placedList(), i = list.findIndex((th) => th.id === m.id);
+    const th = list[i], item = th && PLACEABLES[th.kind] && PLACEABLES[th.kind].item;
+    if (!th || th.built || Math.hypot(th.x - p.x, th.z - p.z) > 3 || !addCarry(p, item, 1, G)) { reply(this.mine(p)); return; }
+    list.splice(i, 1);
+    await this.save();
+    save();
+    this.send({ t: 'unplaced', id: th.id }, null);
+    reply(this.mine(p));
+  } },
+  // a fire: light it, put it out, or add fuel (n sticks, as many as fit)
+  fire: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
+    const th = this.placedById(m.id), f = th && fireRule(th.kind);
+    if (!th || !f || !th.built || Math.hypot(th.x - p.x, th.z - p.z) > 3) { if (th) this.sendPlaced(th, reply, {}); reply(this.mine(p)); return; }
+    this.burn(th);
+    if (m.do === 'add') {
+      const room = Math.ceil((f.max - th.fuel) / f.each - 0.05); // a stick that only part fits still goes on
+      const n = Math.min(Math.max(1, Math.floor(m.n) || 1), room, p.carry[f.fuel] || 0);
+      if (n > 0) { takeCarry(p, f.fuel, n); th.fuel = Math.min(f.max, th.fuel + n * f.each); }
+    } else if (m.do === 'light') {
+      if (!th.lit && th.fuel > 0) { th.lit = true; th.at = Date.now(); }
+    } else if (m.do === 'out') th.lit = false;
+    th.at = Date.now();
+    spend(p, 'tend', G);
+    await this.save();
+    save();
+    this.sendPlaced(th, null);
+    reply(this.mine(p));
+  } },
+  // sitting by a fire for a while (it carries on while they're away), or standing up (off)
+  sit: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
+    if (m.off) { this.standUp(p); save(); return; }
+    const th = this.placedById(m.id), seats = th && (PLACEABLES[th.kind] || {}).seats, k = Math.floor(m.seat);
+    const no = (why) => { reply({ t: 'sitNo', why }); reply(this.mine(p)); };
+    if (!th || !th.built || !seats || !(k >= 0 && k < (seats.count || 6))) return no("Can't sit there");
+    if (this.sitterAt(th.id, k, Date.now(), p.who)) return no('Someone is sitting there');
+    const ms = Math.max(60000, Math.min(3 * 3600000, Number(m.ms) || 0)), at = seatAt(th, k);
+    if (Math.hypot(at[0] - p.x, at[1] - p.z) > 3) return no('Too far away');
+    [p.x, p.z] = at;
+    p.sleeping = false;
+    p.sit = { fire: th.id, seat: k, until: Date.now() + ms };
+    save();
+    this.send({ t: 'sit', id: me.id, fire: th.id, seat: k }, me.id);
+    reply(this.mine(p));
   } },
   // cutting tall grass: it gives twine and grows back at a random time
   cut: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {

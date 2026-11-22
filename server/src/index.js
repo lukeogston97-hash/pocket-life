@@ -4,6 +4,7 @@
 // - while a player is away their person looks after themselves; after a day away they lie down asleep (needs
 //   pause), and after another day asleep they're gone (away.js)
 // - at most G.maxPlaying people play at once; anyone else waits in line on the main menu (line.js)
+// - things people place and build, like campfires (placed.js)
 // - what players do, one small handler each (actions.js); chat, reports, feedback; the admin player's tools (admin.js)
 // What every part shares (the game's rules from game.json, limits, helpers) is in shared.js.
 import { DurableObject } from 'cloudflare:workers';
@@ -13,6 +14,7 @@ import { personsMethods } from './persons.js';
 import { awayMethods } from './away.js';
 import { natureMethods } from './nature.js';
 import { adminMethods } from './admin.js';
+import { placedMethods } from './placed.js';
 import { ACTIONS } from './actions.js';
 
 export class World extends DurableObject {
@@ -285,7 +287,7 @@ export class World extends DurableObject {
 
 }
 // the rest of the world's methods, kept in their own files by topic
-Object.assign(World.prototype, lineMethods, personsMethods, awayMethods, natureMethods, adminMethods);
+Object.assign(World.prototype, lineMethods, personsMethods, awayMethods, natureMethods, adminMethods, placedMethods);
 
 export default {
   async fetch(request, env) {

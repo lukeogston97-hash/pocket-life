@@ -266,7 +266,66 @@ async def smoke():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond}
+async def campfire():
+    """Craft a campfire, place it, build it, add sticks, light it, sit by it (it carries on while away), put it out."""
+    async with world(CAMPKIT=1) as W:
+        a = await W.page('fireA'); await join(a)
+        b = await W.page('fireB'); await join(b)
+        await a.click('#craftBtn'); await a.wait_for_timeout(500)
+        await a.evaluate("[...document.querySelectorAll('#craftList .craft-card')].find((c) => c.innerText.includes('Campfire')).querySelector('button').click()")
+        await a.wait_for_timeout(1500); await a.click('#craftClose')
+        expect(await a.evaluate('__pl.you.carry.campfire === 1 && !__pl.you.carry.log && __pl.you.carry.stick === 6'), 'crafting a campfire uses 1 log and 3 sticks')
+        await a.click('#bagBtn'); await a.wait_for_timeout(400); await shot(a, 'campfire-bag')
+        await a.evaluate("[...document.querySelectorAll('#bagList .bag-row')].find((r) => r.innerText.includes('Campfire')).querySelector('button.go').click()")
+        await a.wait_for_timeout(400)
+        expect(await a.evaluate('__pl.placing.on') and await shown(a, '#placeBar'), 'Place opens the place bar')
+        spot = await a.evaluate("""(() => { const p = __pl.player.position;
+          for (let r = 2; r < 8; r += 0.5) for (let k = 0; k < 16; k++) { const x = p.x + Math.cos(k / 16 * 6.28) * r, z = p.z + Math.sin(k / 16 * 6.28) * r;
+            if (!__pl.cantPlaceAt(x, z, 'campfire')) { __pl.movePlacing(x, z); return [x, z]; } } return null; })()""")
+        expect(spot is not None, f'found a spot to put it ({spot})')
+        await shot(a, 'campfire-placing')
+        await a.evaluate('__pl.finishPlacing()')
+        await idle(a, 40); await a.wait_for_timeout(1500)
+        built = await a.evaluate('[...__pl.placed.values()].map((t) => t.built)')
+        expect(built == [True], f'it was put down and built ({built})')
+        expect(not await a.evaluate('__pl.you.carry.campfire'), 'the campfire left the inventory')
+        expect(await b.evaluate('[...__pl.placed.values()].map((t) => t.built)') == [True], 'the other phone sees it built')
+        fid = await a.evaluate('[...__pl.placed.keys()][0]')
+        await a.evaluate(f"__pl.queueTask({{ type: 'tend', id: {fid}, do: 'light' }})"); await idle(a, 10)
+        expect(not await a.evaluate(f'__pl.isLit(__pl.placed.get({fid}))'), "it won't light with no fuel")
+        await a.evaluate(f"__pl.queueTask({{ type: 'tend', id: {fid}, do: 'add', n: 5 }})"); await idle(a, 15); await a.wait_for_timeout(800)
+        fuel = await a.evaluate(f'__pl.fuelLeft(__pl.placed.get({fid}))')
+        expect(abs(fuel - 5 * 300000) < 2000 and await a.evaluate('__pl.you.carry.stick') == 1, f'5 sticks give 25 minutes of fuel ({fuel})')
+        fuel_b = await b.evaluate(f'__pl.fuelLeft(__pl.placed.get({fid}))')
+        expect(abs(fuel_b - fuel) < 3000, 'the other phone sees the same fuel')
+        await a.evaluate(f"__pl.queueTask({{ type: 'tend', id: {fid}, do: 'light' }})"); await idle(a, 15); await a.wait_for_timeout(800)
+        expect(await a.evaluate(f'__pl.isLit(__pl.placed.get({fid}))') and await b.evaluate(f'__pl.isLit(__pl.placed.get({fid}))'), 'lit, on both phones')
+        f1 = await a.evaluate(f'__pl.fuelLeft(__pl.placed.get({fid}))'); await a.wait_for_timeout(3000)
+        f2 = await a.evaluate(f'__pl.fuelLeft(__pl.placed.get({fid}))')
+        expect(2000 < f1 - f2 < 4500, f'it burns fuel while lit ({f1 - f2} ms in 3 s)')
+        await a.evaluate(f"__pl.queueTask({{ type: 'sit', id: {fid}, ms: 300000 }})")
+        for _ in range(30):
+            await a.wait_for_timeout(500)
+            if await a.evaluate('!!__pl.you.sit'): break
+        expect(await a.evaluate('!!__pl.you.sit'), 'sitting by the fire')
+        await a.wait_for_timeout(1500); await shot(a, 'campfire-sitting')
+        expect(await b.evaluate('[...__pl.others.values()].some((o) => o.sit)'), 'the other phone sees them sitting')
+        await shot(b, 'campfire-sitting-other')
+        await a.click('#menuBtn'); await a.wait_for_timeout(300); await a.click('#exitBtn'); await a.wait_for_timeout(2500)
+        expect(await b.evaluate("[...__pl.others.values()].some((o) => o.sit && o.state === 'away')"), 'still sitting while away')
+        await a.click('#playBtn'); await a.wait_for_timeout(2500)
+        left = await a.evaluate('__pl.you.sit ? __pl.you.sit.until - Date.now() : 0')
+        expect(200000 < left < 300000 and await a.evaluate("__pl.tasks.current && __pl.tasks.current.type === 'sit'"), f'back in the game: still sitting ({left} ms left)')
+        await a.evaluate('__pl.endSit(true)'); await a.wait_for_timeout(1500)
+        expect(not await b.evaluate('[...__pl.others.values()].some((o) => o.sit)'), 'stood up, on both phones')
+        await a.evaluate(f"__pl.queueTask({{ type: 'tend', id: {fid}, do: 'out' }})"); await idle(a, 15); await a.wait_for_timeout(800)
+        f3 = await b.evaluate(f'__pl.fuelLeft(__pl.placed.get({fid}))'); await b.wait_for_timeout(2000)
+        f4 = await b.evaluate(f'__pl.fuelLeft(__pl.placed.get({fid}))')
+        expect(not await b.evaluate(f'__pl.isLit(__pl.placed.get({fid}))') and f3 == f4 and f3 > 0, 'put out: no fuel used while out')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}
