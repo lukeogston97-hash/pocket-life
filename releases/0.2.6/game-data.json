@@ -1,6 +1,6 @@
 {
-  "version": "0.2.3",
-  "build": 1,
+  "version": "0.2.6",
+  "build": 3,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,
@@ -8,7 +8,7 @@
     "worldSize": 100,
     "needsSpeed": 1,
     "autoName": true,
-    "respawnMinutes": 10,
+    "respawnMinutes": 5,
     "maxPlaying": 20,
     "worldTimeZone": "Australia/Darwin"
   },
@@ -147,6 +147,7 @@
   "items": {
     "stick": {
       "name": "Stick",
+      "about": "For crafting, and fuel for a campfire.",
       "plural": "Sticks",
       "weight": 1,
       "look": {
@@ -161,6 +162,7 @@
     },
     "stone": {
       "name": "Stone",
+      "about": "For stone tools and building campfires.",
       "plural": "Stones",
       "weight": 1,
       "look": {
@@ -173,6 +175,7 @@
     },
     "twine": {
       "name": "Twine",
+      "about": "Cut from tall grass. Ties tools together.",
       "plural": "Twine",
       "weight": 1,
       "look": {
@@ -184,6 +187,7 @@
     },
     "berry": {
       "name": "Berry",
+      "about": "Picked from berry bushes. Eat one at a time to fill hunger.",
       "plural": "Berries",
       "weight": 1,
       "look": {
@@ -232,6 +236,7 @@
     },
     "log": {
       "name": "Log",
+      "about": "Chop it into sticks with an axe, or burn it on a campfire.",
       "plural": "Logs",
       "weight": 5,
       "look": {
@@ -304,6 +309,7 @@
       "name": "Campfire",
       "buildSeconds": 10,
       "buildVerb": "Building the campfire",
+      "craftLabel": "Cook",
       "solid": 0.55,
       "fire": {
         "fuel": "stick",
@@ -657,8 +663,8 @@
   },
   "help": {
     "settings": "carryCapacity is the most weight a person can carry. walkSpeed is in metres per second. worldSize is how wide the square world is in metres (100 makes it 100 m x 100 m, with the clearing in the middle); it can be 40 to 300, and the bigger it is the more your phone has to draw. needsSpeed is 1 for real time; set it higher to test, for example 60 makes an hour of hunger and thirst pass in a minute. autoName fills in a name from testNames on the Make your person screen (handy while testing; set it to false for the real game). respawnMinutes is how often (online) the world adds one stick and one stone, if there are fewer on the ground than startInWorld: sticks under trees, stones by boulders. maxPlaying is how many people can play at once (20 for now, to stay inside Cloudflare's free plan); anyone else waits in line on the main menu and joins by themselves when a spot opens. Run tools/worlds.py test-build after changing it. worldTimeZone is the one clock the whole world runs on (date, time, day and night), the same for every player: Australia/Darwin for the Oceania world.",
-    "items": "To add an item, copy one of the items above, give it a new id (lower case, no spaces) and set its name, plural, weight and look. It then shows up by itself in the Inventory, in Craft (if a recipe makes it) and in the admin's Add list, with a picture drawn from its look. Shapes and their looks: rod (length, thickness, colour, twig), rock (size, colour), ball (size, colour, leaf: a colour or false), axe (length, thickness, colour, head, lashing), log (length, radius, colour, end), knife (length, thickness, colour, blade, lashing), coil (size, colour), campfire (size, colour, stone, ash), box (width, height, depth, colour). An unknown shape is drawn as a rock. eat is what eating one gives (a berry gives hunger 10), which adds an Eat button in the inventory. tool: {\"uses\": 20} makes it a tool that wears out after that many uses (a wear bar in the inventory); a tool shows in your hand only while you use it (chopping, cutting). startInWorld is how many lie around when the world starts (0 for things you can only make), and startNear is how many of those start close to where you appear. After changing items, run python3 tools/worlds.py test-build so the server knows about them.",
-    "recipes": "To add a recipe, put it in the recipes list like this: {\"id\": \"stone-axe\", \"name\": \"Stone axe\", \"needs\": {\"stick\": 2, \"stone\": 3}, \"makes\": {\"stone-axe\": 1}, \"about\": \"Chops trees\"}. Every item in needs and makes must exist in items. Recipes show up in the Craft sheet (the hammer button) automatically. about is a short line on the recipe card (optional). The server checks crafting too, so run python3 tools/worlds.py test-build after changing recipes.",
+    "items": "To add an item, copy one of the items above, give it a new id (lower case, no spaces) and set its name, plural, weight and look. It then shows up by itself in the Inventory, in Craft (if a recipe makes it) and in the admin's Add list, with a picture drawn from its look. Shapes and their looks: rod (length, thickness, colour, twig), rock (size, colour), ball (size, colour, leaf: a colour or false), axe (length, thickness, colour, head, lashing), log (length, radius, colour, end), knife (length, thickness, colour, blade, lashing), coil (size, colour), campfire (size, colour, stone, ash), box (width, height, depth, colour). An unknown shape is drawn as a rock. eat is what eating one gives (a berry gives hunger 10), which adds an Eat button in the inventory. tool: {\"uses\": 20} makes it a tool that wears out after that many uses (a wear bar in the inventory); a tool shows in your hand only while you use it (chopping, cutting). startInWorld is how many lie around when the world starts (0 for things you can only make), and startNear is how many of those start close to where you appear. After changing items, run python3 tools/worlds.py test-build so the server knows about them. about (optional) is a short line shown when you tap it in the Inventory; without it, the about of the recipe that makes it is used.",
+    "recipes": "To add a recipe, put it in the recipes list like this: {\"id\": \"stone-axe\", \"name\": \"Stone axe\", \"needs\": {\"stick\": 2, \"stone\": 3}, \"makes\": {\"stone-axe\": 1}, \"about\": \"Chops trees\"}. Every item in needs and makes must exist in items. Recipes show up in the Craft sheet (the hammer button) automatically. about is a short line on the recipe card (optional). The server checks crafting too, so run python3 tools/worlds.py test-build after changing recipes. near (optional) is a placeable id, like campfire: the recipe can then only be made close to a built one (a fire has to be lit), Craft shows a 'By a lit campfire' chip, and it's listed in that thing's tap menu under its craftLabel (Cook). Use it for cooking.",
     "looks": "Each list here is a set of choices on the Make your person screen. Add an entry to add a choice.",
     "stats": "Stats run in real time. Every stat goes from 0 to 100. perHour is how much it changes each real hour, and whileAsleep is used instead while sleeping. lowAt shows the warning (the ring pulses red, and under 10 it flashes). atZero is what happens to other stats each hour while this one is empty. Health heals (4 an hour, 8 asleep, so about a day to full) when nothing is empty, and the person dies when health reaches 0. fullLabel is shown when you try to eat or drink but don't need to. Hunger lasts about a day (a berry fills 10), thirst about 16 hours awake (a drink fills 15), Rest about 16 hours awake and 8 asleep (whileAsleepAtNight: faster at night, about 6 hours). With no water you die in about 3 days, with no food in about a week. collapseAtZero (Rest): when it runs out your person collapses asleep where they stand and can't be woken until it's back to wakeAt (25). Energy is not deadly. icon: heart, food, drop, moon or bolt. The server uses the same numbers (copied by tools/worlds.py).",
     "sources": "Things in the world you can use, matched by name (\"Pond\", \"Berry bush\"). action is the button in the tap menu, like \"Drink\". gives adds to stats each time (one drink at the pond gives 15 thirst). harvest is what one pick puts in your inventory (1 berry), holds is how many a full bush has (up to 15), and regrowHours is how long a picked-bare bush takes to grow them all back; picked berries grow back one at a time. seconds is how long it takes. pose is kneel, pick or bend. tool and toolHarvest: with that tool you get toolHarvest per pick instead (a knife picks 2 berries), and the tool wears.",
@@ -675,7 +681,7 @@
     "plants": "Plants you cut, like tall grass. Each kind is laid out by itself: count clumps (nearStart of them near the start), on its own random numbers (seed) so nothing else moves. action is the tap menu button, verb what shows while doing it. gives goes into your inventory each cut. seconds is how long by hand, toolSeconds with the tool (each use wears the tool). regrowHours [lo, hi]: a cut clump grows back at a random time in between. look: blades per clump, height, colour and tips (the seed heads). Run tools/worlds.py test-build after changing plants.",
     "regions": "The worlds (regions) on the main menu, under Play. Each is its own world on its own clock (timeZone). open: false shows it as Coming soon; tapping it shows this world's view at that region's time of day. For now only one world exists, so only one region can be open, and its timeZone should match settings.worldTimeZone.",
     "night": "Night in the world's clock (settings.worldTimeZone), from the hour 'from' to the hour 'to'. Sleeping at night fills Rest at whileAsleepAtNight instead of whileAsleep. People away or on autopilot go to sleep when night starts and get up in the morning. The server uses the same numbers.",
-    "placeables": "Things you place in the world and build, like the campfire. An item with places (the id of an entry here) gets a Place button in the Inventory: you pick a spot, your person puts it down as an unbuilt site, then builds it (buildSeconds; buildVerb shows while building). solid is how big it is for walking round (metres). fire makes it a fire you can light and put out: fuel is the item you add (sticks), secondsEach is how long one burns (300 = 5 minutes), otherFuels are more items it burns with their seconds each (log: 1800), maxFuel is the most it holds (in fuel items, 24 sticks = 2 hours), lightSeconds how long lighting takes. It only burns while lit, keeps burning while players are away, and goes out by itself when the fuel runs out. seats: people can sit round it (count places, distance metres from the middle); minutes are the choices for how long to sit. Sitting is a task: it carries on while you're away, and finishes normally if the fire goes out. Run tools/worlds.py test-build after changing placeables."
+    "placeables": "Things you place in the world and build, like the campfire. An item with places (the id of an entry here) gets a Place button in the Inventory: you pick a spot, your person puts it down as an unbuilt site, then builds it (buildSeconds; buildVerb shows while building). solid is how big it is for walking round (metres). fire makes it a fire you can light and put out: fuel is the item you add (sticks), secondsEach is how long one burns (300 = 5 minutes), otherFuels are more items it burns with their seconds each (log: 1800), maxFuel is the most it holds (in fuel items, 24 sticks = 2 hours), lightSeconds how long lighting takes. It only burns while lit, keeps burning while players are away, and goes out by itself when the fuel runs out. seats: people can sit round it (count places, distance metres from the middle); minutes are the choices for how long to sit. Sitting is a task: it carries on while you're away, and finishes normally if the fire goes out. Run tools/worlds.py test-build after changing placeables. craftLabel names the tap menu list of recipes made there (recipes with near), like Cook."
   },
   "chatFilter": {
     "anywhere": [
@@ -763,6 +769,33 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.2.6",
+      "date": "2026-11-22",
+      "notes": [
+        "You can drop any tool, including the one you're using.",
+        "Campfires can be packed up into your inventory or taken apart once they're out. Only the person who built one can do that, and once a fire has been lit, taking it apart gives back just the stones.",
+        "Each tool keeps its own wear, and a worn tool stays worn when you drop it and pick it up again (it used to come back as new). Tap one on the ground to see its uses left."
+      ]
+    },
+    {
+      "version": "0.2.5",
+      "date": "2026-11-22",
+      "notes": [
+        "New inventory: your things are tiles in a grid, and each tool gets its own. Tap one to see what it is and what you can do with it, and tap it again to hide that.",
+        "Craft with, on an item in your inventory, shows only the recipes that use it.",
+        "Craft shows what you can make right now first.",
+        "Tidier campfire menu: the time left shows at the top, Add fuel has its own list, and Inspect and Walk here sit small along the bottom (the same in every tap menu)."
+      ]
+    },
+    {
+      "version": "0.2.4",
+      "date": "2026-11-22",
+      "notes": [
+        "Sticks and stones turn up on the ground every 5 minutes (was 10), up to the usual amount, so it never gets cluttered.",
+        "The sticks in a campfire look full again at about 50 minutes of fuel."
+      ]
+    },
     {
       "version": "0.2.3",
       "date": "2026-11-22",

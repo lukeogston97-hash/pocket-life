@@ -1,7 +1,7 @@
 {
   "help": "minVersion sends older games on each link to the newest version (a 4th number is the test build, like 0.0.6.8). Maintenance is switched on and off by the admin player in the game. tools/worlds.py and tools/release.sh edit this for you.",
   "minVersion": {
-    "release": "0.2.5.2",
+    "release": "0.2.6.3",
     "test": "0.2.6.3"
   }
 }

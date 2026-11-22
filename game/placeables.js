@@ -169,7 +169,7 @@ function setPlaced(v) {
   }
   const wasBuilt = th.built;
   Object.assign(th, { built: !!v.built, fuel: Math.max(0, Number(v.fuel) || 0), lit: !!v.lit, at: Date.now() });
-  if (th.lit) th.burnt = true;
+  if (th.lit || v.burnt) th.burnt = true;
   if (th.built && !wasBuilt && !th.progress) th.progress = 0.999; // built by someone else: pieces just settle
   drawPlaced(th);
 }
@@ -332,18 +332,32 @@ Object.assign(TASK_KINDS, {
     spot: placedSpot,
   },
   // picking an unbuilt site back up
+  // picking up an unbuilt site, or packing up a built one (it has to be out)
   unplace: {
     start(t) {
       const th = placed.get(t.id);
-      if (!th || th.built) { nextTask(); return; }
+      if (!th || (th.built && PLACEABLES[th.kind].fire && isLit(th))) { nextTask(); return; }
       const P = PLACEABLES[th.kind];
       if (carried() + ITEMS[P.item].weight > SETTINGS.carryCapacity) { showTag('Inventory full', headTop(), 2); nextTask(); return; }
       goNear(th, () => {
         face(th.x, th.z);
-        startAction({ pose: 'bend', seconds: 0.9, mid: () => sendNow({ t: 'unplace', id: th.id }) });
+        startAction({ pose: 'bend', seconds: th.built ? 2 : 0.9, mid: () => sendNow({ t: 'unplace', id: th.id }) });
       });
     },
-    name: (t, now) => (now ? 'Picking it up' : 'Pick it up'),
+    name: (t, now) => { const th = placed.get(t.id); return th && th.built ? (now ? 'Packing it up' : 'Pack it up') : (now ? 'Picking it up' : 'Pick it up'); },
+    spot: placedSpot,
+  },
+  // taking a built one apart: its parts land on the ground round it (the server says what)
+  apart: {
+    start(t) {
+      const th = placed.get(t.id);
+      if (!th || !th.built) { nextTask(); return; }
+      goNear(th, () => {
+        face(th.x, th.z);
+        startAction({ pose: 'kneel', seconds: 3, mid: () => sendNow({ t: 'apart', id: th.id }) });
+      });
+    },
+    name: (t, now) => (now ? 'Taking it apart' : 'Take it apart'),
     spot: placedSpot,
   },
   // a fire: add sticks, light it, put it out
@@ -488,9 +502,22 @@ function placedActions(th) {
   }
   if (P.seats && (!F || lit)) out.push({ label: `Sit by ${name}`, sub: P.seats.minutes.map((n) => ({ label: minutesLabel(n), run: () => queueTask({ type: 'sit', id: th.id, ms: n * 60000 }) })) });
   if (lit) out.push({ label: 'Put out fire', run: () => queueTask({ type: 'tend', id: th.id, do: 'out' }) });
+  else { // once it's out: pack it into your inventory, or take it apart for what it's made of (only who built it; the server checks)
+    const heavy = carried() + ITEMS[P.item].weight > SETTINGS.carryCapacity;
+    out.push({ label: 'Pack up', disabled: heavy, note: heavy ? 'Too heavy' : F && fuelLeft(th) > 0 ? 'Fuel left is lost' : 'Into your inventory', run: () => queueTask({ type: 'unplace', id: th.id }) });
+    out.push({ label: 'Take apart', note: takeApartNote(th), run: () => queueTask({ type: 'apart', id: th.id }) });
+  }
   out.push(...adminRemove);
   out.push({ label: 'Inspect', foot: true, run: () => showTag(fireState(th) || P.name, V(th.x, groundY(th.x, th.z) + 1.1, th.z), 2, 5) }, walkHere);
   return out;
+}
+// what taking it apart gives back: its recipe's parts, less what burns once a fire has been lit
+function takeApartNote(th) {
+  const P = PLACEABLES[th.kind], r = RECIPES.find((x) => x.makes[P.item]);
+  if (!r) return '';
+  const back = Object.entries(r.needs).filter(([k]) => !(th.burnt && P.fire && P.fire.fuels[k]));
+  if (!back.length) return 'Nothing left to keep';
+  return back.length === Object.keys(r.needs).length ? 'Get back its parts' : `Get back ${back.map(([k, n]) => countLabel(k, n).toLowerCase()).join(', ')}`;
 }
 /* ---------- stations: recipes that need a placed thing close by ----------
    A recipe with "near": "campfire" can only be made by a built one (a fire has to be lit), so cooking is just recipes.

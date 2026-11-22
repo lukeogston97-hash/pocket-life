@@ -243,6 +243,7 @@ for (const [id, raw] of Object.entries(DATA.items || {})) {
     startInWorld: Math.max(0, Math.floor(raw.startInWorld || 0)),
     startNear: Math.max(0, Math.floor(raw.startNear ?? 4)),
     uses: raw.tool && Number.isFinite(raw.tool.uses) ? Math.max(1, Math.floor(raw.tool.uses)) : 0, // a tool wears out after this many uses
+    about: typeof raw.about === 'string' ? raw.about : '', // a short line shown when you tap it in the inventory
   };
   ITEMS[id].startNear = Math.min(ITEMS[id].startNear, ITEMS[id].startInWorld);
 }
