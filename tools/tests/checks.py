@@ -116,6 +116,7 @@ async def grass_and_tools():
           __pl.queueTask({ type: 'cut', plant: 'tallGrass', i: c.i, x: c.x, z: c.z }); })()""")
         await idle(a, 60); await a.wait_for_timeout(1500)
         expect(await a.evaluate('(__pl.you.wear || {}).knife') == 9, 'the knife wears with each cut')
+        expect(await a.evaluate('!__pl.heldView'), 'hands empty when not using a tool')
         await a.evaluate("""(() => { const p = __pl.player.position; const [i, b] = __pl.berryBushes.map((b, i) => [i, b]).sort((x, y) => x[1].position.distanceTo(p) - y[1].position.distanceTo(p))[0];
           __pl.queueTask({ type: 'use', source: b.userData.source, bush: i, x: b.position.x, z: b.position.z, stop: 1.1, top: b.position.y + 1 }); })()""")
         await idle(a, 60); await a.wait_for_timeout(1500)
@@ -229,12 +230,14 @@ async def regions():
         names = await a.evaluate("[...document.querySelectorAll('#regions .region')].map((b) => b.innerText.split('\\n')[0])")
         expect(names == ['Oceania', 'Europe', 'Americas'], f'three worlds under Play ({names})')
         await a.evaluate("document.querySelectorAll('#regions .region')[1].click()"); await a.wait_for_timeout(600)
+        expect(await a.evaluate("__pl.freshLook && [...__pl.itemViews.values()].every((v) => !v.visible) && __pl.trees.every((t) => t.state === 'tree' || !t.stump || !t.stump.visible)"), 'it looks fresh: nothing on the ground')
         expect(await text(a, '#playText') == 'Europe is coming soon' and await a.evaluate("document.getElementById('playBtn').disabled"), 'Europe is coming soon and Play is off')
         await a.wait_for_timeout(800)
         expect(await a.evaluate("[...__pl.others.values()].every((o) => !o.mesh.visible)"), 'its world shows empty')
         await shot(a, 'regions_europe')
         await a.evaluate("document.querySelectorAll('#regions .region')[0].click()"); await a.wait_for_timeout(600)
         expect(await text(a, '#playText') == 'Play' and not await a.evaluate("document.getElementById('playBtn').disabled"), 'back on Oceania, Play works')
+        expect(await a.evaluate("!__pl.freshLook && [...__pl.itemViews.values()].every((v) => v.visible)"), 'back on Oceania, its things show again')
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
@@ -274,7 +277,7 @@ async def campfire():
         await a.click('#craftBtn'); await a.wait_for_timeout(500)
         await a.evaluate("[...document.querySelectorAll('#craftList .craft-card')].find((c) => c.innerText.includes('Campfire')).querySelector('button').click()")
         await a.wait_for_timeout(1500); await a.click('#craftClose')
-        expect(await a.evaluate('__pl.you.carry.campfire === 1 && !__pl.you.carry.log && __pl.you.carry.stick === 6'), 'crafting a campfire uses 1 log and 3 sticks')
+        expect(await a.evaluate('__pl.you.carry.campfire === 1 && !__pl.you.carry.log && __pl.you.carry.stick === 6 && !__pl.you.carry.stone'), 'crafting a campfire uses 1 log, 3 sticks and 4 stones')
         await a.click('#bagBtn'); await a.wait_for_timeout(400); await shot(a, 'campfire-bag')
         await a.evaluate("[...document.querySelectorAll('#bagList .bag-row')].find((r) => r.innerText.includes('Campfire')).querySelector('button.go').click()")
         await a.wait_for_timeout(400)
@@ -309,6 +312,10 @@ async def campfire():
             if await a.evaluate('!!__pl.you.sit'): break
         expect(await a.evaluate('!!__pl.you.sit'), 'sitting by the fire')
         await a.wait_for_timeout(1500); await shot(a, 'campfire-sitting')
+        feet = await a.evaluate(f"""(() => {{ const th = __pl.placed.get({fid}), P = __pl.player.userData.parts, v = new __pl.player.position.constructor();
+          return Math.min(...[P.legL, P.legR].map((l) => {{ l.children.forEach((c) => c.updateMatrixWorld(true)); let m = 9;
+            l.traverse((c) => {{ if (c.isMesh) {{ c.getWorldPosition(v); m = Math.min(m, Math.hypot(v.x - th.x, v.z - th.z)); }} }}); return m; }})); }})()""")
+        expect(feet > 0.6, f'feet stay out of the fire ({feet:.2f} m from the middle)')
         expect(await b.evaluate('[...__pl.others.values()].some((o) => o.sit)'), 'the other phone sees them sitting')
         await shot(b, 'campfire-sitting-other')
         await a.click('#menuBtn'); await a.wait_for_timeout(300); await a.click('#exitBtn'); await a.wait_for_timeout(2500)

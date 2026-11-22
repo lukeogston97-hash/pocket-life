@@ -116,7 +116,7 @@
       "places": null
     },
     "campfire": {
-      "weight": 13,
+      "weight": 17,
       "eat": null,
       "uses": 0,
       "places": "campfire"
@@ -146,7 +146,8 @@
     "campfire": {
       "needs": {
         "log": 1,
-        "stick": 3
+        "stick": 3,
+        "stone": 4
       },
       "makes": {
         "campfire": 1
@@ -260,7 +261,7 @@
       },
       "seats": {
         "count": 6,
-        "distance": 1.25,
+        "distance": 1.7,
         "minutes": [
           5,
           15,

@@ -26,9 +26,8 @@ function takeFromCarry(kind, n = 1) {
   if (!you.carry[you.lastKind]) you.lastKind = Object.keys(you.carry)[0] || null;
   return taken;
 }
-// the thing you picked up last is shown in your hand
-// what's in your hand: the tool you used last (if you still have it), any tool, or the last thing you picked up
-const heldKind = () => (you.tool && you.carry[you.tool] ? you.tool : null) || Object.keys(you.carry).find((k) => ITEMS[k] && ITEMS[k].uses) || (you.carry[you.lastKind] ? you.lastKind : null);
+// your hands are empty unless you're using a tool right now (chopping with the axe, cutting with the knife) (Luke, 0.2.1)
+const heldKind = () => (you.using && you.carry[you.using] ? you.using : null);
 function drawHeld() {
   if (heldView) { if (heldView.parent) heldView.parent.remove(heldView); heldView = null; }
   const kind = player && heldKind();

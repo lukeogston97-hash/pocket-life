@@ -20,6 +20,7 @@ function addWorldItem(kind, x, z, rot, id) {
   view.rotation.y = rot;
   view.userData.label = ITEMS[kind].name;
   view.userData.itemId = item.id;
+  view.visible = !freshLook;
   scene.add(view);
   interactive.push(view);
   itemViews.set(item.id, view);

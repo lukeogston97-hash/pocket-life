@@ -152,6 +152,7 @@ function walkTo(p, onArrive, onFail) {
 const face = (x, z) => { player.rotation.y = Math.atan2(x - player.position.x, z - player.position.z); };
 function resetPose() {
   if (!player) return;
+  if (you.using) { you.using = null; drawHeld(); } // done with the tool: put it away
   const P = player.userData.parts;
   player.rotation.x = 0;
   player.position.y = playerGround;
@@ -162,6 +163,8 @@ function startAction(a) {
   walk.target = null;
   action = { t0: elapsed, done: false, seconds: 0.5, pose: 'bend', ...a };
   action.seconds *= slowness(); // out of breath: it takes longer
+  const tool = a.tool && you.carry[a.tool] ? a.tool : null; // the tool comes out only while it's being used
+  if (tool !== (you.using || null)) { you.using = tool; drawHeld(); }
   if (online()) net.sock.send(JSON.stringify({ t: 'act', pose: action.pose, seconds: action.seconds }));
 }
 // other people's actions, shown the same way as yours: a bend to pick something up, picking berries, kneeling to drink
@@ -430,7 +433,7 @@ function doUse(t) {
   if (t.water) face(POND.x, POND.z); else face(t.x, t.z);
   showTag(`${src.verb}…`, headTop(), 2, src.seconds + 0.3);
   tagLabel.busy = true;
-  startAction({ pose: src.pose, seconds: src.seconds, end: () => {
+  startAction({ pose: src.pose, seconds: src.seconds, tool: harvests(src) && src.tool && src.toolHarvest ? src.tool : null, end: () => {
     if (harvests(src)) harvestFrom(src, t);
     else {
       applyGives(src.gives);
@@ -490,7 +493,7 @@ function doCut(t) {
   face(t.x, t.z);
   showTag(`${def.verb || 'Cutting'}…`, headTop(), 2, secs * slowness() + 0.3);
   tagLabel.busy = true;
-  startAction({ pose: def.pose || 'pick', seconds: secs, end: () => {
+  startAction({ pose: def.pose || 'pick', seconds: secs, tool, end: () => {
     if (!plantReady(c)) { showTag('Someone cut it first', headTop(), 2); return; }
     for (const [k, n] of Object.entries(def.gives || {})) addToCarry(k, n);
     setPlant(t.plant, t.i, Date.now() + 2 * 3600000); // the server sends the real time it grows back
@@ -511,7 +514,7 @@ function doChop(t) {
   face(t.x, t.z);
   showTag(t.what === 'tree' ? 'Chopping…' : t.what === 'stump' || t.what === 'oldStump' ? 'Digging out the stump…' : 'Chopping…', headTop(), 2, (rule.seconds || 10) + 0.3);
   tagLabel.busy = true;
-  startAction({ pose: 'chop', seconds: rule.seconds || 10, end: () => {
+  startAction({ pose: 'chop', seconds: rule.seconds || 10, tool: CHOP.tool, end: () => {
     spendEnergy('chop');
     if (online()) net.sock.send(JSON.stringify({ t: 'chop', what: t.what, idx: t.idx, id: t.id, x: t.x, z: t.z }));
   } });

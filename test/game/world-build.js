@@ -39,7 +39,7 @@ function readyIn(b) {
 function drawBerries(b) {
   const { start, n } = b.userData.berries;
   const src = SOURCES[b.userData.source];
-  const shown = Math.min(n, src && harvests(src) ? berriesOn(b) : n);
+  const shown = freshLook ? n : Math.min(n, src && harvests(src) ? berriesOn(b) : n);
   if (b.userData.shown === shown) return;
   b.userData.shown = shown;
   const a = berries.instanceMatrix.array;
@@ -90,7 +90,7 @@ function setTreeState(i, state) {
   const t = trees[i];
   if (!t || t.state === state) return;
   const standing = state === 'tree';
-  showParts(t, standing);
+  showParts(t, standing || freshLook);
   if (t.stump) { scene.remove(t.stump); const j = interactive.indexOf(t.stump); if (j >= 0) interactive.splice(j, 1); t.stump = null; }
   if (state === 'stump') { // a fresh stump where the tree was
     const g = new THREE.Group();
@@ -105,6 +105,7 @@ function setTreeState(i, state) {
     g.position.set(t.x, groundY(t.x, t.z) - 0.05, t.z);
     g.userData.label = 'Tree stump';
     g.userData.stump = i;
+    g.visible = !freshLook;
     shadowsOn(g);
     scene.add(g);
     interactive.push(g);

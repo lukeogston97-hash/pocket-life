@@ -152,6 +152,7 @@ function setPlaced(v) {
   if (!th) {
     th = { id: v.id, kind: v.kind, x: Number(v.x) || 0, z: Number(v.z) || 0, rot: Number(v.rot) || 0, progress: 0 };
     th.view = makePlacedView(th);
+    th.view.visible = !freshLook;
     scene.add(th.view);
     interactive.push(th.view);
     placed.set(th.id, th);
