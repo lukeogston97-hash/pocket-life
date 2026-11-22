@@ -55,10 +55,9 @@ export const adminMethods = {
   // sticks and stones back up to their normal amount, round the spots they turn up at
   topUp() {
     const w = this.world;
-    for (const [kind, cap] of Object.entries(w.caps || {})) {
-      const spots = (w.spots || {})[kind] || [];
+    for (const [kind, [cap, spots]] of Object.entries(this.respawnPlan())) {
       let have = w.items.filter((it) => it.kind === kind).length;
-      for (; have < cap && spots.length; have++) {
+      for (; have < cap; have++) {
         const [x, z] = pickRandom(spots);
         w.items.push({ id: w.nextId++, kind, x: num(x + (Math.random() - 0.5) * 0.8), z: num(z + (Math.random() - 0.5) * 0.8), rot: num(Math.random() * Math.PI) });
       }

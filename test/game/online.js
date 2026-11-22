@@ -106,7 +106,7 @@ function goOnline() {
     else if (m.t === 'took') tookBack(m);
     else if (m.t === 'bush') { const b = berryBushes[m.bush]; if (b) { b.userData.count = m.count; b.userData.growFrom = m.growFrom; drawBerries(b); } }
     else if (m.t === 'picked' && !m.ok) {
-      if (takeFromCarry('berry', you.lastPick || 1)) { drawHeld(); drawCarry(); }
+      if (takeFromCarry(Object.keys((BERRY_SOURCE() || {}).harvest || {})[0], you.lastPick || 1)) { drawHeld(); drawCarry(); }
       showTag('Someone picked it first', headTop(), 2);
     }
     else if (m.t === 'join') addOther(m.person);
@@ -273,18 +273,20 @@ function useSharedWorld(w) {
 }
 // the first player into a brand new world lays it out: the starting sticks and stones, plus where new ones can turn up
 function seedWorld() {
-  const caps = {}, spotsFor = { stick: [], stone: [] };
+  const caps = {}, spotsFor = {};
   for (const it of Object.values(ITEMS)) if (it.startInWorld) caps[it.id] = it.startInWorld;
+  const near = (place) => Object.keys(DATA.items).filter((k) => DATA.items[k].spawnsNear === place); // items that turn up by trees or boulders
+  for (const k of [...near('trees'), ...near('boulders')]) spotsFor[k] = [];
   let n = 0;
   for (const a of spots.values()) {
     for (let k = 0; k < a.length; k += 4, n++) {
       const tree = a[k + 3], r = a[k + 2];
-      const kind = tree ? 'stick' : r > 0.45 ? 'stone' : null; // sticks fall under trees, stones turn up by boulders
-      if (!kind || !spotsFor[kind] || spotsFor[kind].length >= 400) continue;
+      const kinds = near(tree ? 'trees' : r > 0.45 ? 'boulders' : '').filter((kind) => spotsFor[kind].length < 400); // sticks fall under trees, stones turn up by boulders
+      if (!kinds.length) continue;
       const ang = hash(n, 77) * Math.PI * 2, d = tree ? r + 0.4 : r + 0.35;
       const x = a[k] + Math.cos(ang) * d, z = a[k + 1] + Math.sin(ang) * d;
       if (squareDist(x, z) > WALK_LIMIT - 1 || pondShape(x, z) < 1.3 || solidAt(x, z)) continue;
-      spotsFor[kind].push([x, z]);
+      for (const kind of kinds) spotsFor[kind].push([x, z]);
     }
   }
   const src = Object.values(SOURCES).find(harvests);

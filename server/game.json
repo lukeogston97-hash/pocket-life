@@ -76,19 +76,25 @@
       "weight": 1,
       "eat": null,
       "uses": 0,
-      "places": null
+      "places": null,
+      "startInWorld": 60,
+      "spawnsNear": "trees"
     },
     "stone": {
       "weight": 1,
       "eat": null,
       "uses": 0,
-      "places": null
+      "places": null,
+      "startInWorld": 45,
+      "spawnsNear": "boulders"
     },
     "twine": {
       "weight": 1,
       "eat": null,
       "uses": 0,
-      "places": null
+      "places": null,
+      "startInWorld": 0,
+      "spawnsNear": null
     },
     "berry": {
       "weight": 1,
@@ -96,37 +102,49 @@
         "hunger": 10
       },
       "uses": 0,
-      "places": null
+      "places": null,
+      "startInWorld": 0,
+      "spawnsNear": null
     },
     "knife": {
       "weight": 1,
       "eat": null,
       "uses": 20,
-      "places": null
+      "places": null,
+      "startInWorld": 0,
+      "spawnsNear": null
     },
     "stone-axe": {
       "weight": 2,
       "eat": null,
       "uses": 30,
-      "places": null
+      "places": null,
+      "startInWorld": 0,
+      "spawnsNear": null
     },
     "stone-pickaxe": {
       "weight": 2,
       "eat": null,
       "uses": 30,
-      "places": null
+      "places": null,
+      "startInWorld": 0,
+      "spawnsNear": null
     },
     "log": {
       "weight": 5,
       "eat": null,
       "uses": 0,
-      "places": null
+      "places": null,
+      "startInWorld": 0,
+      "spawnsNear": null
     },
     "campfire": {
       "weight": 12,
       "eat": null,
       "uses": 0,
-      "places": "campfire"
+      "places": "campfire",
+      "startInWorld": 0,
+      "spawnsNear": null
     }
   },
   "recipes": {

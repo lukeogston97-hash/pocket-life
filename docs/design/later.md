@@ -1,0 +1,6 @@
+# Planned and not built yet: sign-in, buildings, later ideas, stone
+
+- Sign-in (decided 21 Nov 2026, not built yet): Google sign-in later, optional, so the same person works on phone and PC; signing in keeps the person you already have. The server's whoFor(m) in index.js is where it plugs in (map 'acct:<google id>' to the phone's who). Luke makes the Google Cloud web client ID when we build it.
+- Buildings: not built yet; use the placeables system.
+- Later: everything saved on the server, day planner, skills, more stats, regions and time zones, app store wrapper.
+- Stone (0.2.9, Luke): loose stones are picked up by hand and still top up as a safety net. Rocks need the stone pickaxe: Break rock gives 5 stones and the rock is gone, but one broken rock comes back (same spot, beside its boulder) every mining.rockBackHours (4). Boulders are permanent and can't be removed: Mine boulder gives 3-5 stones, then it looks worn down and can be mined again after regrowDays (3, same as trees). Later: better pickaxes, ore, quarries; maybe slow the loose-stone top-up once mining is the main source.

@@ -64,15 +64,28 @@ export const natureMethods = {
     await this.save();
     this.send({ t: 'world', world: this.view() }, null);
   },
+  // what tops up and where: { kind: [cap, spots] }. The amount is the item's startInWorld (game-data.json) if it has one,
+  // else what the world was made with; the spots are its own, or another item's that turns up in the same place (spawnsNear)
+  respawnPlan() {
+    const w = this.world, out = {}, spots = w.spots || {};
+    const kinds = new Set([...Object.keys(w.caps || {}), ...Object.keys(G.items).filter((k) => G.items[k].startInWorld > 0)]);
+    for (const kind of kinds) {
+      const it = G.items[kind];
+      if (!it) continue;
+      const cap = it.startInWorld != null ? it.startInWorld : w.caps[kind];
+      const same = spots[kind] || Object.entries(spots).find(([k]) => G.items[k] && it.spawnsNear && G.items[k].spawnsNear === it.spawnsNear)?.[1] || [];
+      if (cap > 0 && same.length) out[kind] = [cap, same];
+    }
+    return out;
+  },
   // nature tops up: one of each kind that's below its normal amount, at a spot near a tree or boulder
   async respawn(now) {
     const w = this.world;
     w.nextRespawn = now + (G.respawnMinutes > 0 ? G.respawnMinutes * MINUTE : w.respawnMs || 10 * MINUTE); // settings.respawnMinutes wins, so it can change after the world is made
     const added = [];
-    for (const [kind, cap] of Object.entries(w.caps || {})) {
+    for (const [kind, [cap, spots]] of Object.entries(this.respawnPlan())) {
       const have = w.items.filter((it) => it.kind === kind).length;
-      const spots = (w.spots || {})[kind] || [];
-      if (have >= cap || !spots.length) continue;
+      if (have >= cap) continue;
       const [x, z] = pickRandom(spots);
       const item = { id: w.nextId++, kind, x: num(x + (Math.random() - 0.5) * 0.8), z: num(z + (Math.random() - 0.5) * 0.8), rot: num(Math.random() * Math.PI) };
       w.items.push(item);

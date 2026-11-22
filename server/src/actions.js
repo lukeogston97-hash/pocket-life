@@ -123,6 +123,7 @@ export const ACTIONS = {
     await this.save();
     save();
     reply({ t: 'took', id: m.id, ok: true });
+    if (got.uses != null) reply(this.mine(p)); // a worn tool: the game shows how worn straight away
     this.send({ t: 'gone', id: m.id }, me.id);
   } },
   // putting things down

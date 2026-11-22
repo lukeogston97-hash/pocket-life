@@ -2,7 +2,7 @@
 
 Luke's mobile "life in your pocket" game (SEED meets One Hour One Life): a persistent online world you check in on every couple of days. Built step by step with Claude.
 
-**Details live in docs/design.md** (every decision so far, by area). Read the section for the area you're changing; don't re-read it all.
+**How to add things: docs/adding.md.** Every decision so far is in docs/design/, one file per area (docs/design.md lists them). Read only the file for the area you're changing.
 
 ## Rules that always apply
 - Look: soft low-poly 3D like SEED, dark glass UI, icons only, as little on screen as possible. Luke is very particular about the look: don't restyle without asking.
@@ -26,4 +26,4 @@ Luke's mobile "life in your pocket" game (SEED meets One Hour One Life): a persi
 - Release only when Luke says ("release", "publish"): `sh tools/release.sh`, commit, push. Cloudflare Pages (project pocketlife) and the server both deploy from main within a minute or two.
 - Run `python3 tools/worlds.py test-build` after changing game-data.json needs, items, recipes, sources, plants, away, chatFilter or settings the server uses.
 - Admin is all in the game on Luke's phone (/admin + code in the Say box; the code is a Cloudflare secret, never in the repo). Never handle Luke's passwords or keys.
-- When a decision is made, add it to docs/design.md (and here only if it's a rule that always applies).
+- When a decision is made, add it to its file in docs/design/ (and here only if it's a rule that always applies).
