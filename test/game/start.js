@@ -2,6 +2,8 @@
    The game joins the world first; the server says whether you have a person (and how they got on while you were away),
    or whether you're making a new one. Old saves from before 0.0.7 are cleared. */
 try { localStorage.removeItem('pocket-life:test'); localStorage.removeItem('pocket-life:release'); } catch (err) { /* none */ }
+// the old stumps and fallen logs that were taken out (nature.js): free their spots now the layout is done, so you can walk there
+for (const [x, z] of noLongerHere) { removeSpotNear(x, z); clearCellsNear(x, z, 1.5); }
 applyGraphics(gfx);
 setNet('connecting');
 enterMenu();

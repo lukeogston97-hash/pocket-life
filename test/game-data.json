@@ -1,6 +1,6 @@
 {
   "version": "0.2.8",
-  "build": 4,
+  "build": 5,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,
@@ -801,7 +801,8 @@
         "Sit by campfire is one tap now, with no time to pick. Your person sits until you tap Stand up, give them something else to do, or the fire goes out.",
         "New: the stone pickaxe, made from 2 sticks, 3 stones and 1 twine. What it's for is coming soon.",
         "Giving your person a task while they're sitting by the fire makes them stand up and do it.",
-        "The stone knife and stone pickaxe have new looks to match the stone axe: shaped stone heads, a grip at the end and twine lashing."
+        "The stone knife and stone pickaxe have new looks to match the stone axe: shaped stone heads, a grip at the end and twine lashing.",
+        "The old tree stumps and fallen logs are gone from the world. Stumps now only come from trees that have been chopped down, and they grow back into trees."
       ]
     },
     {
