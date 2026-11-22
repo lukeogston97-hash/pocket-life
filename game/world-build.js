@@ -54,11 +54,12 @@ for (const set of [...Object.values(far), drawnTogether.bushes, ...drawnTogether
 for (const set of [...Object.values(near), wild.bush, ...wild.boulders, wild.rock, wild.stump, wild.stumpTop, wild.log, wild.logEnd]) {
   interactive.push(...buildSet(set));
 }
-for (const t of [...trees, ...oldStumps]) t.parts = t.parts.map(([m, key, idx]) => ({ ...(m.byKey.get(key) || {}), idx }));
+for (const t of [...trees, ...oldStumps, ...rocks]) t.parts = t.parts.map(([m, key, idx]) => ({ ...(m.byKey.get(key) || {}), idx }));
 // which tree or old stump a tapped copy belongs to (the drawn mesh and its copy number)
 const copyOwner = new Map();
 trees.forEach((t, i) => { for (const p of t.parts) for (const mesh of [p.full, p.simple]) if (mesh) copyOwner.set(`${mesh.uuid}:${p.idx}`, { kind: 'tree', i }); });
 oldStumps.forEach((t, i) => { for (const p of t.parts) if (p.full) copyOwner.set(`${p.full.uuid}:${p.idx}`, { kind: 'oldStump', i }); });
+rocks.forEach((t, i) => { for (const p of t.parts) if (p.full) copyOwner.set(`${p.full.uuid}:${p.idx}`, { kind: 'rock', i }); });
 // hide (or show again) the drawn copies a tree or stump is made of
 function showParts(t, show) {
   for (const p of t.parts) for (const mesh of [p.full, p.simple]) {
@@ -117,13 +118,42 @@ function setTreeState(i, state, since) {
   t.state = state;
 }
 // how long until a stump grows back into a tree, like "2 days 5 h" or "40 min"
-function stumpGrowsIn(t) {
-  const mins = Math.max(1, Math.ceil(((t.since || Date.now()) + (CHOP.regrowDays || 3) * 86400000 - Date.now()) / 60000));
+const stumpGrowsIn = (t) => growsBackIn(t.since, CHOP.regrowDays || 3);
+function growsBackIn(since, days) {
+  const mins = Math.max(1, Math.ceil(((since || Date.now()) + days * 86400000 - Date.now()) / 60000));
   if (mins < 90) return `${mins} min`;
   const h = Math.round(mins / 60);
   if (h < 24) return `${h} h`;
   const d = Math.floor(h / 24), rh = h % 24;
   return `${d} ${d === 1 ? 'day' : 'days'}${rh ? ` ${rh} h` : ''}`;
+}
+/* ---------- mining rocks and boulders (0.2.9): a rock breaks and is gone (one comes back now and then), a boulder stays and can be mined again ---------- */
+const MINE = DATA.mining || {};
+const MINED_SQUASH = new THREE.Matrix4().makeScale(0.92, 0.6, 0.92); // a mined boulder looks worn down
+function drawRock(r) {
+  const look = freshLook ? 'whole' : r.state;
+  for (const p of r.parts) for (const mesh of [p.full, p.simple]) {
+    if (!mesh) continue;
+    p.saved = p.saved || {};
+    if (!p.saved[mesh.uuid]) { const m4 = new THREE.Matrix4(); mesh.getMatrixAt(p.idx, m4); p.saved[mesh.uuid] = m4; }
+    const m4 = look === 'gone' ? NO_TREE : look === 'mined' ? p.saved[mesh.uuid].clone().multiply(MINED_SQUASH) : p.saved[mesh.uuid];
+    mesh.setMatrixAt(p.idx, m4);
+    mesh.instanceMatrix.needsUpdate = true;
+  }
+}
+function setRockState(i, state, since) {
+  const r = rocks[i];
+  if (!r) return;
+  if (state === 'mined') r.since = since || r.since || Date.now();
+  if (r.state === state) return;
+  const was = r.state;
+  r.state = state;
+  drawRock(r);
+  if (state === 'gone' || was === 'gone') {
+    if (state === 'gone') removeSpotNear(r.x, r.z); else addSpot(r.x, r.z, r.r);
+    if (r.proxy) { const j = interactive.indexOf(r.proxy); if (state === 'gone' && j >= 0) interactive.splice(j, 1); if (state !== 'gone' && j < 0) interactive.push(r.proxy); }
+    clearCellsNear(r.x, r.z, r.r + 1);
+  }
 }
 // the tree nearest a tap (on its trunk or crown)
 function treeNear(p, maxD = 3) {

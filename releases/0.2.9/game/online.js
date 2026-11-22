@@ -79,7 +79,7 @@ function goOnline() {
     else if (m.t === 'state') setOtherState(m);
     else if (m.t === 'stroll') { const o = others.get(m.id); if (o) Object.assign(o, { tx: m.x, tz: m.z, speed: m.speed || null, due: m.ms ? elapsed + m.ms / 1000 : null, then: m.then || null, act: null }); }
     else if (m.t === 'act') { const o = others.get(m.id); if (o && ['bend', 'kneel', 'pick', 'chop'].includes(m.pose)) o.act = { pose: m.pose, seconds: Math.min(25, Number(m.seconds) || 0.5), t0: elapsed }; }
-    else if (m.t === 'tree') setTreeState(m.idx, m.state || 'tree');
+    else if (m.t === 'tree') setTreeState(m.idx, m.state || 'tree', m.at);
     else if (m.t === 'plant') setPlant(m.plant, m.i, m.readyAt);
     else if (m.t === 'cutNo') { // someone cut it first: what you got is taken back
       setPlant(m.plant, m.i, m.readyAt);
@@ -89,6 +89,7 @@ function goOnline() {
       showTag('Someone cut it first', headTop(), 2);
     }
     else if (m.t === 'oldStump') removeOldStump(m.idx);
+    else if (m.t === 'rock') setRockState(m.idx, m.state || 'whole', m.at);
     else if (m.t === 'broke') { showTag(`Your ${(ITEMS[m.kind] || { name: 'tool' }).name.toLowerCase()} broke`, headTop(), 3); drawHeld(); }
     else if (m.t === 'graves') drawGraves(m.graves);
     else if (m.t === 'speed') setSpeed(m.speed);
@@ -217,6 +218,7 @@ function applyMe(m, spawn = false) {
   for (const kind of shared.taking.values()) carry[kind] = (carry[kind] || 0) + 1;
   you.carry = carry;
   you.wear = m.wear || {};
+  you.seen = m.seen || you.seen || [];
   if (!!m.sleeping !== !!you.sleeping) setSleeping(m.sleeping, true);
   you.collapsed = !!m.collapsed;
   you.lastKind = carry[you.lastKind] ? you.lastKind : (ITEMS[m.lastKind] && carry[m.lastKind] ? m.lastKind : Object.keys(carry)[0] || null);
@@ -251,8 +253,10 @@ function useSharedWorld(w) {
   drawGraves(w.graves || []);
   usePlaced(w.placed || []);
   const ts = w.trees || {};
-  trees.forEach((t, i) => setTreeState(i, ts[i] ? ts[i][0] : 'tree'));
+  trees.forEach((t, i) => setTreeState(i, ts[i] ? ts[i][0] : 'tree', ts[i] && ts[i][1]));
   for (const i of Object.keys(w.oldStumps || {})) removeOldStump(Number(i));
+  const rs = w.rocks || {};
+  rocks.forEach((r, i) => setRockState(i, rs[i] ? rs[i][0] : 'whole', rs[i] && rs[i][1]));
   for (const [kind, P] of Object.entries(plants)) for (const c of P.clumps) setPlant(kind, c.i, ((w.plants || {})[kind] || {})[c.i] || 0);
   berryBushes.forEach((b, i) => {
     const s = (w.bushes || [])[i];

@@ -521,6 +521,32 @@ function doChop(t) {
     if (online()) net.sock.send(JSON.stringify({ t: 'chop', what: t.what, idx: t.idx, id: t.id, x: t.x, z: t.z }));
   } });
 }
+// mining (0.2.9): swing the pickaxe at a rock or boulder, then the server drops the stones round it
+function doMine(t) {
+  const r = rocks[t.idx];
+  if (!r || r.state !== 'whole') { nextTask(); return; }
+  const rule = MINE[r.boulder ? 'boulder' : 'rock'] || {};
+  if (MINE.tool && !you.carry[MINE.tool]) { showTag(`You need a ${ITEMS[MINE.tool].name.toLowerCase()}`, headTop(), 2); nextTask(); return; }
+  face(r.x, r.z);
+  showTag(r.boulder ? 'Mining the boulder…' : 'Breaking the rock…', headTop(), 2, (rule.seconds || 10) + 0.3);
+  tagLabel.busy = true;
+  startAction({ pose: 'chop', seconds: rule.seconds || 10, tool: MINE.tool, end: () => {
+    spendEnergy('chop');
+    if (online()) net.sock.send(JSON.stringify({ t: 'quarry', what: r.boulder ? 'boulder' : 'rock', idx: t.idx, x: Math.round(player.position.x * 100) / 100, z: Math.round(player.position.z * 100) / 100 }));
+  } });
+}
+Object.assign(TASK_KINDS, {
+  mine: {
+    start(t) {
+      const r = rocks[t.idx];
+      if (!r || r.state !== 'whole') { nextTask(); return; }
+      const stop = r.r * 0.8 + 0.45;
+      approach(r.x, r.z, stop, stop + 0.35, () => doMine(t));
+    },
+    name(t, now) { const b = rocks[t.idx] && rocks[t.idx].boulder; return b ? (now ? 'Mining a boulder' : 'Mine boulder') : (now ? 'Breaking a rock' : 'Break rock'); },
+    spot(t) { const r = rocks[t.idx]; return r ? V(r.x, groundY(r.x, r.z) + r.r * 0.6 + 0.3, r.z) : null; },
+  },
+});
 // where dropped things land: one in front of you, more in a small pile around it
 function dropSpot(i) {
   const fx = Math.sin(player.rotation.y), fz = Math.cos(player.rotation.y);
