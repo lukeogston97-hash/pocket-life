@@ -23,6 +23,14 @@ export function seatAt(th, k) {
 export const placedMethods = {
   placedList() { const w = this.world; if (w && !w.placed) w.placed = []; return w ? w.placed : []; },
   placedById(id) { return this.placedList().find((th) => th.id === id); },
+  // a built one of this kind near the person (a fire has to be lit): recipes with "near" need one, like cooking.
+  // A little more room than the game allows (stationNear in game/placeables.js), as walks end a bit apart.
+  stationFor(p, kind) {
+    const P = PLACEABLES[kind];
+    if (!P) return null;
+    return this.placedList().find((th) => th.kind === kind && th.built && (!fireRule(kind) || this.burn(th).lit)
+      && Math.hypot(th.x - p.x, th.z - p.z) <= 4 + (P.solid || 0.5)) || null;
+  },
   // bring a fire up to now: burnt fuel is gone, and with none left it's out
   burn(th, now = Date.now()) {
     if (!th.lit) return th;

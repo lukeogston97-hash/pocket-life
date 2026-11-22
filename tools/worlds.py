@@ -19,7 +19,7 @@ if cmd == 'test-build':
     game = {
         'needs': data['stats'],
         'items': {k: {'weight': v.get('weight', 1), 'eat': v.get('eat'), 'uses': (v.get('tool') or {}).get('uses', 0), 'places': v.get('places')} for k, v in data['items'].items()},
-        'recipes': {r['id']: {'needs': r['needs'], 'makes': r['makes']} for r in data.get('recipes', [])},
+        'recipes': {r['id']: {'needs': r['needs'], 'makes': r['makes'], **({'near': r['near']} if r.get('near') else {})} for r in data.get('recipes', [])},
         'sources': {k: {'gives': v.get('gives'), 'harvest': v.get('harvest'), 'water': bool(v.get('water')), 'tool': v.get('tool'), 'toolHarvest': v.get('toolHarvest')} for k, v in srcs.items()},
         'plants': {k: {'gives': v.get('gives', {}), 'count': v.get('count', 40), 'regrowHours': v.get('regrowHours', 2), 'tool': v.get('tool')} for k, v in data.get('plants', {}).items()},
         'berryKind': berry,

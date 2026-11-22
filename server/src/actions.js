@@ -94,9 +94,10 @@ export const ACTIONS = {
     reply(this.mine(p));
     this.send({ t: 'state', id: me.id, state: p.sleeping ? 'sleeping' : 'online', x: num(p.x), z: num(p.z) }, me.id);
   } },
-  // making something from a recipe
+  // making something from a recipe; one with "near" (cooking) needs a built one of that close by, a fire lit
   craft: { when: 'alive', async run({ ws, me, m, p, w, reply, save }) {
-    if (craft(p, (G.recipes || {})[m.id], G)) { spend(p, 'craft', G); save(); }
+    const r = (G.recipes || {})[m.id];
+    if (r && (!r.near || this.stationFor(p, r.near)) && craft(p, r, G)) { spend(p, 'craft', G); save(); }
     reply(this.mine(p));
   } },
   // eating one thing from your inventory

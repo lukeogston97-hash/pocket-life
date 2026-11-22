@@ -13,6 +13,7 @@ for (const [kind, raw] of Object.entries(DATA.placeables || {})) {
     kind, item, name: raw.name || ITEMS[item].name, buildSeconds: Math.max(1, Number(raw.buildSeconds) || 10), buildVerb: raw.buildVerb || 'Building', solid: Number(raw.solid) || 0.5,
     fire: f ? { fuel: ITEMS[f.fuel] ? f.fuel : 'stick', each, fuels: { [ITEMS[f.fuel] ? f.fuel : 'stick']: each, ...Object.fromEntries(Object.entries(f.otherFuels || {}).filter(([k, s]) => ITEMS[k] && s > 0).map(([k, s]) => [k, s * 1000])) }, maxFuel: Math.max(1, Math.floor(f.maxFuel) || 10), max: each * Math.max(1, Math.floor(f.maxFuel) || 10), lightSeconds: Math.max(0.5, Number(f.lightSeconds) || 3) } : null,
     seats: s ? { count: Math.max(1, Math.floor(s.count) || 6), distance: Number(s.distance) || 1.2, minutes: (s.minutes || [15]).filter((n) => n > 0) } : null,
+    craftLabel: raw.craftLabel || 'Make', // the tap menu's list of recipes made here (Cook on a campfire)
   };
   ITEMS[item].places = kind;
 }
@@ -44,7 +45,14 @@ function fireState(th) {
   const left = fuelLeft(th);
   return `${isLit(th) ? 'Burning' : 'Out'} · ${left > 0 ? `${timeLeft(left)} of fuel (holds ${timeLeft(f.max)})` : 'no fuel'}`;
 }
-const placedName = (th) => { const P = PLACEABLES[th.kind]; return !th.built ? `${P.name} (not built)` : P.fire && isLit(th) ? `${P.name} · lit` : P.name; };
+// the tap menu's title: what it is and, for a fire, whether it's lit and how much fuel it has
+const placedName = (th) => {
+  const P = PLACEABLES[th.kind];
+  if (!th.built) return `${P.name} (not built)`;
+  if (!P.fire) return P.name;
+  const left = fuelLeft(th);
+  return isLit(th) ? `${P.name} · lit · ${timeLeft(left)} left` : `${P.name} · ${left > 0 ? `${timeLeft(left)} of fuel` : 'no fuel'}`;
+};
 
 /* ---------- seats round it ---------- */
 function seatSpot(th, k) {
@@ -445,32 +453,71 @@ function forgetSit() {
 }
 
 /* ---------- the tap menu for a placed thing ---------- */
+// the tap menu: what you'll most likely want first, putting the fire out last, Inspect and Walk here small along the bottom
 function placedActions(th) {
   const P = PLACEABLES[th.kind], name = P.name.toLowerCase();
-  const walkHere = { label: 'Walk here', run: () => walkFirst(V(th.x + P.solid + 0.8, 0, th.z)) };
+  const walkHere = { label: 'Walk here', foot: true, run: () => walkFirst(V(th.x + P.solid + 0.8, 0, th.z)) };
   const adminRemove = adminMore(admin.on ? [{ label: 'Remove', run: () => adminSend({ t: 'a.remove', id: th.id }) }] : []);
   if (!th.built) {
     return [{ label: `Build ${name}`, note: `${P.buildSeconds} s`, run: () => queueTask({ type: 'build', id: th.id }) },
-      { label: `Pick up ${name}`, note: 'Not built yet', run: () => queueTask({ type: 'unplace', id: th.id }) }, walkHere, ...adminRemove];
+      { label: `Pick up ${name}`, note: 'Not built yet', run: () => queueTask({ type: 'unplace', id: th.id }) }, ...adminRemove, walkHere];
   }
   const out = [];
-  const F = P.fire;
-  if (F) {
-    const lit = isLit(th);
-    if (lit) out.push({ label: 'Put out fire', run: () => queueTask({ type: 'tend', id: th.id, do: 'out' }) });
-    else out.push({ label: 'Light fire', disabled: fuelLeft(th) <= 0, note: fuelLeft(th) > 0 ? `${F.lightSeconds} s` : `Add ${ITEMS[F.fuel].plural.toLowerCase()} first`, run: () => queueTask({ type: 'tend', id: th.id, do: 'light' }) });
-    const inIt = `${timeLeft(fuelLeft(th))} in`;
-    for (const [kind, each] of Object.entries(F.fuels)) { // each fuel it takes (sticks, logs)
-      const have = you.carry[kind] || 0, room = roomFor(th, kind), fuel = ITEMS[kind];
-      if (have && room) out.push({ label: `Add ${fuel.name.toLowerCase()}`, note: `${inIt} · ${timeLeft(each)} each`, run: () => queueTask({ type: 'tend', id: th.id, do: 'add', n: 1, fuel: kind }) });
-      if (have > 1 && room > 1) out.push({ label: `Add ${Math.min(have, room)} ${fuel.plural.toLowerCase()}`, note: `+${timeLeft(Math.min(have, room) * each)}`, run: () => queueTask({ type: 'tend', id: th.id, do: 'add', n: Math.min(have, room), fuel: kind }) });
-      else if (have && !room) out.push({ label: `Add ${fuel.plural.toLowerCase()}`, note: 'The fire is full', disabled: true, run: () => {} });
+  const F = P.fire, lit = !!F && isLit(th);
+  if (F && !lit) out.push({ label: 'Light fire', disabled: fuelLeft(th) <= 0, note: fuelLeft(th) > 0 ? `${F.lightSeconds} s` : `Add ${ITEMS[F.fuel].plural.toLowerCase()} first`, run: () => queueTask({ type: 'tend', id: th.id, do: 'light' }) });
+  if (F) { // Add fuel: one list of every fuel it takes that you carry (sticks, logs), one or as many as fit
+    const fuels = [];
+    let carrying = false;
+    for (const [kind, each] of Object.entries(F.fuels)) {
+      const have = you.carry[kind] || 0, n = Math.min(have, roomFor(th, kind));
+      if (have) carrying = true;
+      if (n < 1) continue;
+      fuels.push({ label: `Add ${countLabel(kind, 1).toLowerCase()}`, note: `+${timeLeft(each)}`, run: () => queueTask({ type: 'tend', id: th.id, do: 'add', n: 1, fuel: kind }) });
+      if (n > 1) fuels.push({ label: `Add ${countLabel(kind, n).toLowerCase()}`, note: `+${timeLeft(n * each)}`, run: () => queueTask({ type: 'tend', id: th.id, do: 'add', n, fuel: kind }) });
     }
+    if (fuels.length) out.push({ label: 'Add fuel', sub: fuels });
+    else if (carrying) out.push({ label: 'Add fuel', note: 'Full', disabled: true, run: () => {} });
   }
-  if (P.seats && (!F || isLit(th))) {
-    out.push({ label: `Sit by ${name}`, sub: P.seats.minutes.map((n) => ({ label: minutesLabel(n), run: () => queueTask({ type: 'sit', id: th.id, ms: n * 60000 }) })) });
+  // recipes made here ("near" in a recipe), like cooking on a fire: craftLabel names the list (Cook)
+  const here = RECIPES.filter((r) => r.near === th.kind);
+  if (here.length && (!F || lit)) {
+    out.push({ label: P.craftLabel, sub: here.map((r) => {
+      const why = cantMake(r) === 'Not here' ? '' : cantMake(r); // not here yet is fine: you walk over first
+      return { label: recipeName(r), note: why, disabled: !!why, run: () => queueTask({ type: 'make', id: th.id, recipe: r.id }) };
+    }) });
   }
-  out.push({ label: 'Inspect', run: () => showTag(fireState(th) || P.name, V(th.x, groundY(th.x, th.z) + 1.1, th.z), 2, 5) });
-  out.push(walkHere, ...adminRemove);
+  if (P.seats && (!F || lit)) out.push({ label: `Sit by ${name}`, sub: P.seats.minutes.map((n) => ({ label: minutesLabel(n), run: () => queueTask({ type: 'sit', id: th.id, ms: n * 60000 }) })) });
+  if (lit) out.push({ label: 'Put out fire', run: () => queueTask({ type: 'tend', id: th.id, do: 'out' }) });
+  out.push(...adminRemove);
+  out.push({ label: 'Inspect', foot: true, run: () => showTag(fireState(th) || P.name, V(th.x, groundY(th.x, th.z) + 1.1, th.z), 2, 5) }, walkHere);
   return out;
 }
+/* ---------- stations: recipes that need a placed thing close by ----------
+   A recipe with "near": "campfire" can only be made by a built one (a fire has to be lit), so cooking is just recipes.
+   The server checks the same with a little more room (stationFor in server/src/placed.js). */
+const STATION_REACH = 3; // metres from its edge
+function stationNear(kind) {
+  const P = PLACEABLES[kind];
+  if (!P || !player) return null;
+  for (const th of placed.values()) {
+    if (th.kind === kind && th.built && (!P.fire || isLit(th)) && Math.hypot(th.x - player.position.x, th.z - player.position.z) <= STATION_REACH + P.solid) return th;
+  }
+  return null;
+}
+Object.assign(TASK_KINDS, {
+  // making a recipe here, like cooking on the fire: walk over, then make it
+  make: {
+    start(t) {
+      const th = placed.get(t.id), r = RECIPES.find((x) => x.id === t.recipe);
+      if (!th || !r) { nextTask(); return; }
+      goNear(th, () => {
+        const why = cantMake(r);
+        if (why) { showTag(why === 'Not here' ? `The ${PLACEABLES[th.kind].name.toLowerCase()} has to be lit` : why, headTop(), 2); nextTask(); return; }
+        face(th.x, th.z);
+        make(r);
+      });
+    },
+    name: (t, now) => { const r = RECIPES.find((x) => x.id === t.recipe), n = r ? recipeName(r).toLowerCase() : 'it'; return now ? `Making ${n}` : `Make ${n}`; },
+    spot: placedSpot,
+  },
+});

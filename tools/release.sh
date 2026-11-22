@@ -14,4 +14,10 @@ cp -r test/game game
 cp -r test/game "releases/$VERSION/game"
 rm -f game.js "releases/$VERSION/game.js" # from before the code was split up (0.1.7)
 python3 tools/worlds.py release
+# keep only the newest few release copies (enough to roll back), so the project stays light
+python3 -c "
+import os, shutil
+vs = sorted((d for d in os.listdir('releases') if os.path.isdir('releases/' + d)), key=lambda v: [int(x) for x in v.split('.') if x.isdigit()])
+for v in vs[:-3]: shutil.rmtree('releases/' + v)
+"
 echo "Released $VERSION (copy kept in releases/$VERSION): https://pocketlife.pages.dev/"
