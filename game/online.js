@@ -79,7 +79,7 @@ function goOnline() {
     else if (m.t === 'state') setOtherState(m);
     else if (m.t === 'stroll') { const o = others.get(m.id); if (o) Object.assign(o, { tx: m.x, tz: m.z, speed: m.speed || null, due: m.ms ? elapsed + m.ms / 1000 : null, then: m.then || null, act: null }); }
     else if (m.t === 'act') { const o = others.get(m.id); if (o && ['bend', 'kneel', 'pick', 'chop'].includes(m.pose)) o.act = { pose: m.pose, seconds: Math.min(25, Number(m.seconds) || 0.5), t0: elapsed }; }
-    else if (m.t === 'tree') setTreeState(m.idx, m.state || 'tree');
+    else if (m.t === 'tree') setTreeState(m.idx, m.state || 'tree', m.at);
     else if (m.t === 'plant') setPlant(m.plant, m.i, m.readyAt);
     else if (m.t === 'cutNo') { // someone cut it first: what you got is taken back
       setPlant(m.plant, m.i, m.readyAt);
@@ -252,7 +252,7 @@ function useSharedWorld(w) {
   drawGraves(w.graves || []);
   usePlaced(w.placed || []);
   const ts = w.trees || {};
-  trees.forEach((t, i) => setTreeState(i, ts[i] ? ts[i][0] : 'tree'));
+  trees.forEach((t, i) => setTreeState(i, ts[i] ? ts[i][0] : 'tree', ts[i] && ts[i][1]));
   for (const i of Object.keys(w.oldStumps || {})) removeOldStump(Number(i));
   for (const [kind, P] of Object.entries(plants)) for (const c of P.clumps) setPlant(kind, c.i, ((w.plants || {})[kind] || {})[c.i] || 0);
   berryBushes.forEach((b, i) => {

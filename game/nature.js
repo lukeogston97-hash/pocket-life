@@ -4,6 +4,10 @@
 // - a set can split its copies into chunks of the map, so the parts you can't see aren't drawn
 // - a detail set (grass, flowers, pebbles) only draws the copies near you, refilled as you walk
 const dummy = new THREE.Object3D();
+// Old stumps and fallen logs were taken out of the world (0.2.8, Luke: only real stumps, from chopped trees). They're
+// still worked out the same way so nothing else in the layout moves, then their spots are freed in start.js.
+const noLongerHere = [];
+const skipPut = () => {};
 let DRY = false; // while true, put() works a copy out but doesn't keep it (so the clearing's layout never changes)
 let recording = null; // while a tree is being placed: [set, chunk, index] of every copy it's made of (so it can be chopped down)
 const trees = []; // every tree you can walk up to: { x, z, s, parts, state }
@@ -475,46 +479,10 @@ for (let i = 0; i < 90; i++) {
   const s = rr(0.06, 0.15);
   put(pebbles, x, heightAt(x, z) + s * 0.25, z, rand(), rand() * 6, rand(), s, s * 0.7, s, tint(pick(PEBBLE_COLOURS)));
 }
-{
-  const g = new THREE.Group();
-  const x = -3.6, z = 4.6;
-  g.position.set(x, groundY(x, z), z);
-  const body = new THREE.Mesh(wild.stump.geo, mat('#7a5c40'));
-  body.position.y = 0.17;
-  const top = new THREE.Mesh(wild.stumpTop.geo, mat('#cfb48a'));
-  top.position.y = 0.39;
-  g.add(body, top);
-  g.userData.label = 'Tree stump';
-  g.userData.oldStump = oldStumps.length;
-  scene.add(g);
-  recording = [];
-  drawAlong(wild.stump, body);
-  drawAlong(wild.stumpTop, top);
-  oldStumps.push({ x, z, parts: recording, proxy: g });
-  recording = null;
-  addSpot(x, z, 0.5);
-  interactive.push(g);
-}
-{
-  const g = new THREE.Group();
-  const x = 7.6, z = -6.8;
-  g.position.set(x, groundY(x, z) + 0.24, z);
-  const log = new THREE.Mesh(wild.log.geo, mat('#76583d'));
-  const endM = mat('#cdb085');
-  const e1 = new THREE.Mesh(wild.logEnd.geo, endM);
-  e1.position.x = 1.71;
-  const e2 = e1.clone(); e2.position.x = -1.71;
-  g.add(log, e1, e2);
-  g.rotation.y = 0.5;
-  g.userData.label = 'Fallen log';
-  scene.add(g);
-  drawAlong(wild.log, log);
-  for (const k of [-1, 0, 1]) addSpot(x + Math.cos(0.5) * 1.2 * k, z - Math.sin(0.5) * 1.2 * k, 0.6);
-  drawAlong(wild.logEnd, e1);
-  drawAlong(wild.logEnd, e2);
-  interactive.push(g);
-}
-
+// the old stump and fallen log by the clearing are gone too; their spots stay until start.js so nothing moves
+addSpot(-3.6, 4.6, 0.5);
+noLongerHere.push([-3.6, 4.6]);
+for (const k of [-1, 0, 1]) { const x = 7.6 + Math.cos(0.5) * 1.2 * k, z = -6.8 - Math.sin(0.5) * 1.2 * k; addSpot(x, z, 0.6); noLongerHere.push([x, z]); }
 /* ---------- the rest of the world: grass, flowers, pebbles, bushes, boulders, stumps and logs ---------- */
 withWorldRand(() => {
   const L = WALK_LIMIT, area = 4 * L * L;
@@ -598,11 +566,10 @@ withWorldRand(() => {
     const at = findRoom(14, 0.55 * k + 0.3, 0.5);
     if (!at) continue;
     const [x, z] = at, y = groundY(x, z);
-    if (!DRY) recording = [];
-    put(wild.stump, x, y + 0.17 * k, z, 0, rand() * 6, 0, k, k, k, tint('#7a5c40', 0.01, 0.04, 0.03));
-    put(wild.stumpTop, x, y + 0.39 * k, z, 0, 0, 0, k, k, k, tint('#cfb48a', 0.005, 0.03, 0.03));
-    if (recording) { oldStumps.push({ x, z, parts: recording }); recording = null; }
+    skipPut(wild.stump, x, y + 0.17 * k, z, 0, rand() * 6, 0, k, k, k, tint('#7a5c40', 0.01, 0.04, 0.03));
+    skipPut(wild.stumpTop, x, y + 0.39 * k, z, 0, 0, 0, k, k, k, tint('#cfb48a', 0.005, 0.03, 0.03));
     addSpot(x, z, 0.55 * k);
+    noLongerHere.push([x, z]);
   }
   // fallen logs, on fairly flat ground
   for (let i = 0, n = Math.round(area / 2300); i < n; i++) {
@@ -614,11 +581,11 @@ withWorldRand(() => {
       const gs = pts.map(([px, pz]) => groundY(px, pz));
       if (Math.max(...gs) - Math.min(...gs) > 0.35) continue;
       const y = Math.max(...gs) - 0.04 + 0.24 * k;
-      put(wild.log, x, y, z, 0, a, 0, k, k, k, tint('#76583d', 0.01, 0.04, 0.03));
+      skipPut(wild.log, x, y, z, 0, a, 0, k, k, k, tint('#76583d', 0.01, 0.04, 0.03));
       const endC = tint('#cdb085', 0.005, 0.03, 0.03);
-      put(wild.logEnd, x + ex, y, z + ez, 0, a, 0, k, k, k, endC);
-      put(wild.logEnd, x - ex, y, z - ez, 0, a, 0, k, k, k, endC);
-      for (const [px, pz] of pts) addSpot(px, pz, 0.6);
+      skipPut(wild.logEnd, x + ex, y, z + ez, 0, a, 0, k, k, k, endC);
+      skipPut(wild.logEnd, x - ex, y, z - ez, 0, a, 0, k, k, k, endC);
+      for (const [px, pz] of pts) { addSpot(px, pz, 0.6); noLongerHere.push([px, pz]); }
       break;
     }
   }

@@ -233,11 +233,12 @@ function menuActions(t) {
     const has = !tool || you.carry[CHOP.tool];
     return [{ label: what === 'tree' ? 'Chop tree' : 'Remove stump', note: has ? `${rule.seconds || 15} s` : `Needs a ${tool.name.toLowerCase()}`, disabled: !has,
       run: () => queueTask({ type: 'chop', what, idx: t.idx, x: t.x, z: t.z }) },
+      ...(what === 'stump' && trees[t.idx] ? [{ label: `Grows back in ${stumpGrowsIn(trees[t.idx])}`, disabled: true }] : []),
       { label: 'Walk here', foot: true, run: () => walkFirst(V(t.x + 1.2, 0, t.z)) }];
   }
   if (t.kind === 'self') {
     const rest = you.stats && you.stats.rest != null ? Math.round(you.stats.rest) : null;
-    if (you.sit) return [{ label: 'Stand up', note: `${timeLeft(you.sit.until - Date.now())} left`, run: () => endSit(true) }];
+    if (you.sit) return [{ label: 'Stand up', run: () => endSit(true) }];
     return [you.sleeping ? { label: 'Wake up', note: tooTiredToWake() ? `Rest ${Math.floor(you.stats.rest)} of ${REST.wakeAt}` : '', run: wakeUp } : { label: 'Sleep', note: rest != null ? `Rest ${rest}` : '', run: () => setSleeping(true) },
       ...adminMore(admin.on ? [{ label: 'Fill my needs', run: () => adminSend({ t: 'a.fill', id: net.myId }) }] : [])];
   }
@@ -254,7 +255,7 @@ function menuActions(t) {
   if (t.kind === 'item') {
     const it = t.item;
     const chopIt = CHOP[it.kind] && CHOP.tool;
-    return [{ label: `Pick up ${ITEMS[it.kind].name}`, run: () => queueTask({ type: 'pickup', id: it.id }) },
+    return [{ label: `Pick up ${ITEMS[it.kind].name}`, note: it.uses != null ? `${it.uses} ${it.uses === 1 ? 'use' : 'uses'} left` : '', run: () => queueTask({ type: 'pickup', id: it.id }) },
       ...(chopIt ? [{ label: 'Chop into sticks', note: you.carry[CHOP.tool] ? `${CHOP[it.kind].seconds || 8} s` : `Needs a ${ITEMS[CHOP.tool].name.toLowerCase()}`, disabled: !you.carry[CHOP.tool],
         run: () => queueTask({ type: 'chop', what: it.kind, id: it.id, x: it.x, z: it.z }) }] : []),
       { label: 'Walk here', foot: true, run: () => walkFirst(V(it.x, 0, it.z)) },

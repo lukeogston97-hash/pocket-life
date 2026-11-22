@@ -86,8 +86,9 @@ function removeOldStump(i) {
 const CHOP = DATA.chopping || {};
 const NO_TREE = new THREE.Matrix4().makeScale(0, 0, 0);
 const stumpMat = mat('#7a5c40'), stumpTopMat = mat('#cfb48a');
-function setTreeState(i, state) {
+function setTreeState(i, state, since) {
   const t = trees[i];
+  if (t && state === 'stump') t.since = since || t.since || Date.now(); // when it was chopped (it grows back regrowDays after)
   if (!t || t.state === state) return;
   const standing = state === 'tree';
   showParts(t, standing || freshLook);
@@ -114,6 +115,15 @@ function setTreeState(i, state) {
   if (state === 'gone' || (t.state === 'gone' && standing)) clearCellsNear(t.x, t.z, 2.5);
   if (state === 'gone') removeSpotNear(t.x, t.z);
   t.state = state;
+}
+// how long until a stump grows back into a tree, like "2 days 5 h" or "40 min"
+function stumpGrowsIn(t) {
+  const mins = Math.max(1, Math.ceil(((t.since || Date.now()) + (CHOP.regrowDays || 3) * 86400000 - Date.now()) / 60000));
+  if (mins < 90) return `${mins} min`;
+  const h = Math.round(mins / 60);
+  if (h < 24) return `${h} h`;
+  const d = Math.floor(h / 24), rh = h % 24;
+  return `${d} ${d === 1 ? 'day' : 'days'}${rh ? ` ${rh} h` : ''}`;
 }
 // the tree nearest a tap (on its trunk or crown)
 function treeNear(p, maxD = 3) {

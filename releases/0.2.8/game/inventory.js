@@ -65,15 +65,22 @@ const bagKinds = () => Object.keys(you.carry).filter((k) => ITEMS[k] && you.carr
   .sort((a, b) => bagGroup(ITEMS[a]) - bagGroup(ITEMS[b]) || ITEM_ORDER.indexOf(a) - ITEM_ORDER.indexOf(b));
 // a line about it: its own "about" in game-data.json, else the about of the recipe that makes it
 const itemAbout = (kind) => ITEMS[kind].about || (RECIPES.find((r) => r.makes[kind]) || {}).about || '';
-const usesLeft = (kind) => (ITEMS[kind].uses ? (you.wear[kind] ?? ITEMS[kind].uses) : 0);
-// what the grid shows: a tile for each kind, but each tool gets its own (Luke's pick). The game keeps wear for the
-// tool in use, so the first of a kind has its wear and the rest are spares, full; dropping one drops a spare.
+// a tool's uses left, one per tool you carry, the one in use first (the server sends a list; before 0.2.6 one number)
+function wearList(kind) {
+  const n = you.carry[kind] || 0, w = you.wear[kind];
+  const list = (Array.isArray(w) ? w : w != null ? [w] : []).slice(0, n);
+  while (list.length < n) list.push(ITEMS[kind].uses);
+  return list;
+}
+// what the grid shows: a tile for each kind, but each tool gets its own (Luke's pick), with its own wear: the first
+// of a kind is the one in use, the rest are spares. Each can be dropped, and keeps its wear on the ground.
 function bagSlots() {
   const out = [];
   for (const kind of bagKinds()) {
     const n = you.carry[kind], it = ITEMS[kind];
     if (!it.uses) { out.push({ kind, key: `${kind}:0`, n }); continue; }
-    for (let i = 0; i < n; i++) out.push({ kind, key: `${kind}:${i}`, n: 1, spare: i > 0, spares: n - 1, left: i > 0 ? it.uses : usesLeft(kind) });
+    const worn = wearList(kind);
+    for (let i = 0; i < n; i++) out.push({ kind, key: `${kind}:${i}`, n: 1, i, spare: i > 0, spares: n - 1, left: worn[i] });
   }
   return out;
 }
@@ -120,10 +127,8 @@ function drawBagInfo(s) {
   if (about) { const p = document.createElement('p'); p.className = 'info-about'; p.textContent = about; parts.push(p); }
   const acts = document.createElement('div');
   acts.className = 'info-acts';
-  if (!it.uses || s.spare || !s.spares) { // the tool in use can't be dropped while you carry spares (a spare would go)
-    acts.appendChild(smallButton(n > 1 ? 'Drop 1' : 'Drop', () => dropItems(kind, 1)));
-    if (n > 1) acts.appendChild(smallButton('Drop all', () => dropItems(kind, n)));
-  }
+  acts.appendChild(smallButton(n > 1 ? 'Drop 1' : 'Drop', () => dropItems(kind, 1, it.uses ? s.i : undefined))); // a tool: this one
+  if (n > 1) acts.appendChild(smallButton('Drop all', () => dropItems(kind, n)));
   if (RECIPES.some((r) => r.needs[kind])) acts.appendChild(smallButton('Craft with ›', () => openCraft(kind)));
   parts.push(acts);
   box.replaceChildren(...parts);
@@ -152,6 +157,17 @@ function drawBag() {
 const craftOpen = () => $('craft').classList.contains('open');
 let craftWith = null; // Craft with in the inventory: only the recipes that use this item
 const recipeName = (r) => r.name || ITEMS[Object.keys(r.makes)[0]].name;
+// discovery: a recipe shows once you've had all but one of the things it needs (at least one), so the next step shows
+// without giving away what's further on. you.seen is everything you've ever carried (the server keeps it).
+function recipeKnown(r) {
+  const kinds = Object.keys(r.needs), had = kinds.filter((k) => you.carry[k] || (you.seen || []).includes(k)).length;
+  return had >= Math.max(1, kinds.length - 1);
+}
+// the buttons along the top (Tools, Food, Building...): a recipe's "group", else what it makes says
+const CRAFT_GROUPS = ['Tools', 'Food', 'Building', 'Clothes', 'Materials'];
+const recipeGroup = (r) => { const it = ITEMS[Object.keys(r.makes)[0]]; return r.group || (it.uses ? 'Tools' : Object.keys(it.eat || {}).length ? 'Food' : it.places ? 'Building' : 'Materials'); };
+const groupOrder = (g) => (CRAFT_GROUPS.includes(g) ? CRAFT_GROUPS.indexOf(g) : CRAFT_GROUPS.length);
+let craftGroup = null, craftQuery = '', craftPick = null; // the button picked (null: All), what's typed in search, the card tapped open
 // why a recipe can't be made right now ('' if it can): things missing, too heavy, or not by what it needs
 function cantMake(r) {
   for (const [k, n] of Object.entries(r.needs)) if ((you.carry[k] || 0) < n) return 'Need more';
@@ -176,16 +192,22 @@ function recipeCard(r) {
   const makes = Object.keys(r.makes)[0], it = ITEMS[makes];
   const li = document.createElement('li');
   li.className = 'craft-card';
-  const head = document.createElement('div');
+  const head = document.createElement('button'); // tap the name to see more about it
+  head.type = 'button';
   head.className = 'craft-head';
+  head.setAttribute('aria-expanded', String(craftPick === r.id));
+  head.addEventListener('click', () => { craftPick = craftPick === r.id ? null : r.id; drawCraft(); });
   const dot = itemPic(makes);
   const title = document.createElement('strong');
   title.textContent = recipeName(r);
-  const info = document.createElement('small');
-  info.textContent = [`Weight ${fmt(it.weight)}`, it.uses ? `${it.uses} uses` : '', r.about || ''].filter(Boolean).join(' · ');
   const words = document.createElement('span');
   words.className = 'craft-words';
-  words.append(title, info);
+  words.appendChild(title);
+  if (craftPick === r.id) {
+    const info = document.createElement('small');
+    info.textContent = [`Weight ${fmt(it.weight)}`, it.uses ? `${it.uses} uses` : '', r.about || ''].filter(Boolean).join(' · ');
+    words.appendChild(info);
+  }
   head.append(dot, words);
   const needs = document.createElement('div');
   needs.className = 'craft-needs';
@@ -210,10 +232,36 @@ function recipeCard(r) {
 }
 let craftDrawn = ''; // the same for the craft list
 function drawCraft() {
-  const list = RECIPES.filter((r) => !craftWith || r.needs[craftWith]);
-  const shows = JSON.stringify([craftWith, list.map((r) => [r.id, cantMake(r), Object.keys(r.needs).map((k) => you.carry[k] || 0), r.near ? !!stationNear(r.near) : 0])]);
+  const known = RECIPES.filter(recipeKnown), base = known.filter((r) => !craftWith || r.needs[craftWith]);
+  // the buttons show once what you know covers 2 or more kinds of thing; search once you know craftSearchFrom recipes
+  const groups = [...new Set(base.map(recipeGroup))].sort((a, b) => groupOrder(a) - groupOrder(b));
+  const chips = !craftWith && groups.length > 1, search = !craftWith && known.length >= (SETTINGS.craftSearchFrom || 15);
+  if (!chips || !groups.includes(craftGroup)) craftGroup = null;
+  if (!search) craftQuery = '';
+  const q = craftQuery.trim().toLowerCase();
+  const list = base.filter((r) => (!craftGroup || recipeGroup(r) === craftGroup)
+    && (!q || [recipeName(r), ...Object.keys(r.needs).map((k) => ITEMS[k].plural)].some((s) => s.toLowerCase().includes(q))));
+  const unknown = RECIPES.length - known.length;
+  const shows = JSON.stringify([craftWith, craftGroup, q, craftPick, unknown, chips, search, list.map((r) => [r.id, cantMake(r), Object.keys(r.needs).map((k) => you.carry[k] || 0), r.near ? !!stationNear(r.near) : 0])]);
   if (shows === craftDrawn) return;
   craftDrawn = shows;
+  $('craftSearch').hidden = !search;
+  if (search) $('craftQuery').placeholder = `Search your ${known.length} recipes`;
+  $('craftChips').hidden = !chips;
+  if (chips) {
+    const chip = (label, g, n) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'craft-chip' + (craftGroup === g ? ' on' : '');
+      b.setAttribute('aria-pressed', String(craftGroup === g));
+      b.textContent = `${label} ${n}`;
+      b.addEventListener('click', () => { craftGroup = g; drawCraft(); });
+      return b;
+    };
+    $('craftChips').replaceChildren(chip('All', null, base.length), ...groups.map((g) => chip(g, g, base.filter((r) => recipeGroup(r) === g).length)));
+  } else $('craftChips').replaceChildren();
+  $('craftMore').hidden = !!craftWith || (known.length > 0 && !unknown);
+  $('craftMore').textContent = !known.length ? 'Find new things to unlock recipes' : `${unknown} more to discover as you find new things`;
   const note = $('craftNote');
   note.hidden = !craftWith;
   if (craftWith) {
@@ -226,6 +274,7 @@ function drawCraft() {
     all.addEventListener('click', () => { craftWith = null; drawCraft(); });
     note.replaceChildren(words, all);
   }
+  if (q && !list.length) { const li = document.createElement('li'); li.className = 'craft-group'; li.textContent = 'Nothing found'; $('craftList').replaceChildren(li); return; }
   const group = (text, rs) => {
     if (!rs.length) return [];
     const li = document.createElement('li');
@@ -242,7 +291,8 @@ function openCraft(withKind) {
   drawCraft();
   $('craft').classList.add('open'); $('craftBtn').setAttribute('aria-expanded', 'true'); hideHint();
 }
-function closeCraft() { craftWith = null; $('craft').classList.remove('open'); $('craftBtn').setAttribute('aria-expanded', 'false'); }
+$('craftQuery').addEventListener('input', (e) => { craftQuery = e.target.value; drawCraft(); });
+function closeCraft() { craftWith = null; craftGroup = null; craftQuery = ''; craftPick = null; $('craftQuery').value = ''; $('craft').classList.remove('open'); $('craftBtn').setAttribute('aria-expanded', 'false'); }
 $('craftBtn').addEventListener('click', () => (craftOpen() ? closeCraft() : openCraft()));
 $('craftClose').addEventListener('click', closeCraft);
 function openBag() { closeCraft(); bagPick = null; bagDrawn = ''; drawBag(); $('bag').classList.add('open'); $('bagBtn').setAttribute('aria-expanded', 'true'); hideHint(); }

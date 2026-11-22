@@ -12,7 +12,7 @@ for (const [kind, raw] of Object.entries(DATA.placeables || {})) {
   PLACEABLES[kind] = {
     kind, item, name: raw.name || ITEMS[item].name, buildSeconds: Math.max(1, Number(raw.buildSeconds) || 10), buildVerb: raw.buildVerb || 'Building', solid: Number(raw.solid) || 0.5,
     fire: f ? { fuel: ITEMS[f.fuel] ? f.fuel : 'stick', each, fuels: { [ITEMS[f.fuel] ? f.fuel : 'stick']: each, ...Object.fromEntries(Object.entries(f.otherFuels || {}).filter(([k, s]) => ITEMS[k] && s > 0).map(([k, s]) => [k, s * 1000])) }, maxFuel: Math.max(1, Math.floor(f.maxFuel) || 10), max: each * Math.max(1, Math.floor(f.maxFuel) || 10), lightSeconds: Math.max(0.5, Number(f.lightSeconds) || 3) } : null,
-    seats: s ? { count: Math.max(1, Math.floor(s.count) || 6), distance: Number(s.distance) || 1.2, minutes: (s.minutes || [15]).filter((n) => n > 0) } : null,
+    seats: s ? { count: Math.max(1, Math.floor(s.count) || 6), distance: Number(s.distance) || 1.2 } : null,
     craftLabel: raw.craftLabel || 'Make', // the tap menu's list of recipes made here (Cook on a campfire)
   };
   ITEMS[item].places = kind;
@@ -37,7 +37,6 @@ function timeLeft(ms) {
   if (m < 60) return `${m} min`;
   return `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}`;
 }
-const minutesLabel = (n) => (n < 60 ? `${n} minutes` : n === 60 ? '1 hour' : `${Math.round((n / 60) * 10) / 10} hours`);
 function fireState(th) {
   const f = PLACEABLES[th.kind].fire;
   if (!th.built) return 'Not built yet';
@@ -169,7 +168,7 @@ function setPlaced(v) {
   }
   const wasBuilt = th.built;
   Object.assign(th, { built: !!v.built, fuel: Math.max(0, Number(v.fuel) || 0), lit: !!v.lit, at: Date.now() });
-  if (th.lit) th.burnt = true;
+  if (th.lit || v.burnt) th.burnt = true;
   if (th.built && !wasBuilt && !th.progress) th.progress = 0.999; // built by someone else: pieces just settle
   drawPlaced(th);
 }
@@ -220,7 +219,6 @@ function animatePlaced(dt) {
     fireLight.position.set(near.x, groundY(near.x, near.z) + 0.6, near.z);
     fireLight.intensity = (5 + (reduceMotion ? 0 : Math.sin(elapsed * 11) * 0.6 + Math.sin(elapsed * 27) * 0.4)) * dark * (0.7 + 0.3 * Math.min(1, fuelIn(near) / 4));
   } else fireLight.intensity = 0;
-  if (second && you.sit && tasks.current && tasks.current.type === 'sit') $('queueNow').textContent = taskName(tasks.current, true); // minutes left
 }
 
 /* ---------- placing: pick a spot, then your person goes and puts it down ---------- */
@@ -332,18 +330,32 @@ Object.assign(TASK_KINDS, {
     spot: placedSpot,
   },
   // picking an unbuilt site back up
+  // picking up an unbuilt site, or packing up a built one (it has to be out)
   unplace: {
     start(t) {
       const th = placed.get(t.id);
-      if (!th || th.built) { nextTask(); return; }
+      if (!th || (th.built && PLACEABLES[th.kind].fire && isLit(th))) { nextTask(); return; }
       const P = PLACEABLES[th.kind];
       if (carried() + ITEMS[P.item].weight > SETTINGS.carryCapacity) { showTag('Inventory full', headTop(), 2); nextTask(); return; }
       goNear(th, () => {
         face(th.x, th.z);
-        startAction({ pose: 'bend', seconds: 0.9, mid: () => sendNow({ t: 'unplace', id: th.id }) });
+        startAction({ pose: 'bend', seconds: th.built ? 2 : 0.9, mid: () => sendNow({ t: 'unplace', id: th.id }) });
       });
     },
-    name: (t, now) => (now ? 'Picking it up' : 'Pick it up'),
+    name: (t, now) => { const th = placed.get(t.id); return th && th.built ? (now ? 'Packing it up' : 'Pack it up') : (now ? 'Picking it up' : 'Pick it up'); },
+    spot: placedSpot,
+  },
+  // taking a built one apart: its parts land on the ground round it (the server says what)
+  apart: {
+    start(t) {
+      const th = placed.get(t.id);
+      if (!th || !th.built) { nextTask(); return; }
+      goNear(th, () => {
+        face(th.x, th.z);
+        startAction({ pose: 'kneel', seconds: 3, mid: () => sendNow({ t: 'apart', id: th.id }) });
+      });
+    },
+    name: (t, now) => (now ? 'Taking it apart' : 'Take it apart'),
     spot: placedSpot,
   },
   // a fire: add sticks, light it, put it out
@@ -389,7 +401,7 @@ Object.assign(TASK_KINDS, {
     },
     spot: placedSpot,
   },
-  // sitting by the fire: walk to a free seat, sit for the time chosen (it carries on while you're away)
+  // sitting by the fire: walk to a free seat and sit until you stand up, do something else or the fire goes out (it carries on while you're away)
   sit: {
     start(t) {
       const th = placed.get(t.id);
@@ -405,8 +417,8 @@ Object.assign(TASK_KINDS, {
         playerGround = groundY(sx, sz);
         player.position.set(sx, playerGround, sz);
         face(th.x, th.z);
-        you.sit = { fire: th.id, seat: k, until: Date.now() + t.ms };
-        sendNow({ t: 'sit', id: th.id, seat: k, ms: t.ms });
+        you.sit = { fire: th.id, seat: k };
+        sendNow({ t: 'sit', id: th.id, seat: k });
         showTag('Sitting by the fire', headTop(), 2);
         drawQueue();
       };
@@ -414,16 +426,16 @@ Object.assign(TASK_KINDS, {
       else walkTo(V(x, 0, z), sitDown, nextTask);
     },
     stop() { endSit(true, false); },
-    name: (t, now) => (now ? `Sitting by the fire${you.sit ? ` · ${timeLeft(you.sit.until - Date.now())} left` : ''}` : `Sit for ${minutesLabel(Math.round(t.ms / 60000))}`),
+    name: (t, now) => (now ? 'Sitting by the fire' : 'Sit by the fire'),
     spot: placedSpot,
   },
 });
-// while sitting (called each frame instead of walking): stay put, stand up when the time's up
+// while sitting (called each frame instead of walking): stay put, stand up if the fire has gone out
 function holdSit(P) {
   const th = placed.get(you.sit.fire);
   if (th) player.rotation.y = Math.atan2(th.x - player.position.x, th.z - player.position.z);
   sitPose(player, P, playerGround);
-  if (Date.now() >= you.sit.until) endSit(true);
+  if (!th || (PLACEABLES[th.kind].fire && !isLit(th))) endSit(true);
 }
 // standing up: tell the server (unless it already knows), and move on to the next thing in the queue
 function endSit(tell = true, next = true) {
@@ -436,12 +448,12 @@ function endSit(tell = true, next = true) {
 // back in the game while still sitting (you left the task running): carry on sitting
 function resumeSit(s) {
   const th = s && placed.get(s.fire);
-  if (!th || !player || !(s.ms > 0)) return;
+  if (!th || !player) return;
   const [x, z] = seatSpot(th, s.seat);
   playerGround = groundY(x, z);
   player.position.set(x, playerGround, z);
-  tasks.current = { type: 'sit', id: th.id, ms: s.ms };
-  you.sit = { fire: th.id, seat: s.seat, until: Date.now() + s.ms };
+  tasks.current = { type: 'sit', id: th.id };
+  you.sit = { fire: th.id, seat: s.seat };
   drawQueue();
 }
 // leaving the world (Exit, or your person died): forget the sit here; the server still has it while you're away
@@ -479,18 +491,31 @@ function placedActions(th) {
     else if (carrying) out.push({ label: 'Add fuel', note: 'Full', disabled: true, run: () => {} });
   }
   // recipes made here ("near" in a recipe), like cooking on a fire: craftLabel names the list (Cook)
-  const here = RECIPES.filter((r) => r.near === th.kind);
+  const here = RECIPES.filter((r) => r.near === th.kind && recipeKnown(r));
   if (here.length && (!F || lit)) {
     out.push({ label: P.craftLabel, sub: here.map((r) => {
       const why = cantMake(r) === 'Not here' ? '' : cantMake(r); // not here yet is fine: you walk over first
       return { label: recipeName(r), note: why, disabled: !!why, run: () => queueTask({ type: 'make', id: th.id, recipe: r.id }) };
     }) });
   }
-  if (P.seats && (!F || lit)) out.push({ label: `Sit by ${name}`, sub: P.seats.minutes.map((n) => ({ label: minutesLabel(n), run: () => queueTask({ type: 'sit', id: th.id, ms: n * 60000 }) })) });
+  if (P.seats && (!F || lit)) out.push({ label: `Sit by ${name}`, run: () => queueTask({ type: 'sit', id: th.id }) });
   if (lit) out.push({ label: 'Put out fire', run: () => queueTask({ type: 'tend', id: th.id, do: 'out' }) });
+  else { // once it's out: pack it into your inventory, or take it apart for what it's made of (only who built it; the server checks)
+    const heavy = carried() + ITEMS[P.item].weight > SETTINGS.carryCapacity;
+    out.push({ label: 'Pack up', disabled: heavy, note: heavy ? 'Too heavy' : F && fuelLeft(th) > 0 ? 'Fuel left is lost' : 'Into your inventory', run: () => queueTask({ type: 'unplace', id: th.id }) });
+    out.push({ label: 'Take apart', note: takeApartNote(th), run: () => queueTask({ type: 'apart', id: th.id }) });
+  }
   out.push(...adminRemove);
   out.push({ label: 'Inspect', foot: true, run: () => showTag(fireState(th) || P.name, V(th.x, groundY(th.x, th.z) + 1.1, th.z), 2, 5) }, walkHere);
   return out;
+}
+// what taking it apart gives back: its recipe's parts, less what burns once a fire has been lit
+function takeApartNote(th) {
+  const P = PLACEABLES[th.kind], r = RECIPES.find((x) => x.makes[P.item]);
+  if (!r) return '';
+  const back = Object.entries(r.needs).filter(([k]) => !(th.burnt && P.fire && P.fire.fuels[k]));
+  if (!back.length) return 'Nothing left to keep';
+  return back.length === Object.keys(r.needs).length ? 'Get back its parts' : `Get back ${back.map(([k, n]) => countLabel(k, n).toLowerCase()).join(', ')}`;
 }
 /* ---------- stations: recipes that need a placed thing close by ----------
    A recipe with "near": "campfire" can only be made by a built one (a fire has to be lit), so cooking is just recipes.
