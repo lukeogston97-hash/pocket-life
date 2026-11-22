@@ -1,5 +1,5 @@
 {
-  "version": "0.2.2",
+  "version": "0.2.3",
   "build": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -139,7 +139,7 @@
     "log": {
       "seconds": 8,
       "gives": {
-        "stick": 4
+        "stick": 5
       }
     },
     "regrowDays": 3
@@ -174,7 +174,7 @@
     "twine": {
       "name": "Twine",
       "plural": "Twine",
-      "weight": 0.2,
+      "weight": 1,
       "look": {
         "shape": "coil",
         "size": 0.05,
@@ -185,7 +185,7 @@
     "berry": {
       "name": "Berry",
       "plural": "Berries",
-      "weight": 0.1,
+      "weight": 1,
       "look": {
         "shape": "ball",
         "size": 0.045,
@@ -199,7 +199,7 @@
     "knife": {
       "name": "Stone knife",
       "plural": "Stone knives",
-      "weight": 0.5,
+      "weight": 1,
       "look": {
         "shape": "knife",
         "length": 0.26,
@@ -209,7 +209,7 @@
         "lashing": "#c9b77a"
       },
       "tool": {
-        "uses": 10
+        "uses": 20
       },
       "startInWorld": 0
     },
@@ -226,14 +226,14 @@
         "lashing": "#c9b77a"
       },
       "tool": {
-        "uses": 20
+        "uses": 30
       },
       "startInWorld": 0
     },
     "log": {
       "name": "Log",
       "plural": "Logs",
-      "weight": 10,
+      "weight": 5,
       "look": {
         "shape": "log",
         "length": 0.9,
@@ -246,7 +246,7 @@
     "campfire": {
       "name": "Campfire",
       "plural": "Campfires",
-      "weight": 17,
+      "weight": 12,
       "look": {
         "shape": "campfire",
         "size": 0.36,
@@ -308,7 +308,10 @@
       "fire": {
         "fuel": "stick",
         "secondsEach": 300,
-        "maxFuel": 10,
+        "maxFuel": 24,
+        "otherFuels": {
+          "log": 1800
+        },
         "lightSeconds": 3
       },
       "seats": {
@@ -672,7 +675,7 @@
     "plants": "Plants you cut, like tall grass. Each kind is laid out by itself: count clumps (nearStart of them near the start), on its own random numbers (seed) so nothing else moves. action is the tap menu button, verb what shows while doing it. gives goes into your inventory each cut. seconds is how long by hand, toolSeconds with the tool (each use wears the tool). regrowHours [lo, hi]: a cut clump grows back at a random time in between. look: blades per clump, height, colour and tips (the seed heads). Run tools/worlds.py test-build after changing plants.",
     "regions": "The worlds (regions) on the main menu, under Play. Each is its own world on its own clock (timeZone). open: false shows it as Coming soon; tapping it shows this world's view at that region's time of day. For now only one world exists, so only one region can be open, and its timeZone should match settings.worldTimeZone.",
     "night": "Night in the world's clock (settings.worldTimeZone), from the hour 'from' to the hour 'to'. Sleeping at night fills Rest at whileAsleepAtNight instead of whileAsleep. People away or on autopilot go to sleep when night starts and get up in the morning. The server uses the same numbers.",
-    "placeables": "Things you place in the world and build, like the campfire. An item with places (the id of an entry here) gets a Place button in the Inventory: you pick a spot, your person puts it down as an unbuilt site, then builds it (buildSeconds; buildVerb shows while building). solid is how big it is for walking round (metres). fire makes it a fire you can light and put out: fuel is the item you add (sticks), secondsEach is how long one burns (300 = 5 minutes), maxFuel is the most it holds, lightSeconds how long lighting takes. It only burns while lit, keeps burning while players are away, and goes out by itself when the fuel runs out. seats: people can sit round it (count places, distance metres from the middle); minutes are the choices for how long to sit. Sitting is a task: it carries on while you're away, and finishes normally if the fire goes out. Run tools/worlds.py test-build after changing placeables."
+    "placeables": "Things you place in the world and build, like the campfire. An item with places (the id of an entry here) gets a Place button in the Inventory: you pick a spot, your person puts it down as an unbuilt site, then builds it (buildSeconds; buildVerb shows while building). solid is how big it is for walking round (metres). fire makes it a fire you can light and put out: fuel is the item you add (sticks), secondsEach is how long one burns (300 = 5 minutes), otherFuels are more items it burns with their seconds each (log: 1800), maxFuel is the most it holds (in fuel items, 24 sticks = 2 hours), lightSeconds how long lighting takes. It only burns while lit, keeps burning while players are away, and goes out by itself when the fuel runs out. seats: people can sit round it (count places, distance metres from the middle); minutes are the choices for how long to sit. Sitting is a task: it carries on while you're away, and finishes normally if the fire goes out. Run tools/worlds.py test-build after changing placeables."
   },
   "chatFilter": {
     "anywhere": [
@@ -760,6 +763,16 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.2.3",
+      "date": "2026-11-22",
+      "notes": [
+        "New weights: logs 5 (was 10), campfires 12 (was 17), twine, berries and the stone knife 1 each.",
+        "Tools last longer: the stone knife 20 uses (was 10), the stone axe 30 (was 20).",
+        "Logs burn on a campfire: 30 minutes each (a stick is 5). A fire now holds up to 2 hours of fuel.",
+        "Chopping a log into sticks gives 5 sticks (was 4)."
+      ]
+    },
     {
       "version": "0.2.2",
       "date": "2026-11-22",

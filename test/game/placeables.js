@@ -11,7 +11,7 @@ for (const [kind, raw] of Object.entries(DATA.placeables || {})) {
   const f = raw.fire, s = raw.seats, each = Math.max(1, Number(f && f.secondsEach) || 300) * 1000;
   PLACEABLES[kind] = {
     kind, item, name: raw.name || ITEMS[item].name, buildSeconds: Math.max(1, Number(raw.buildSeconds) || 10), buildVerb: raw.buildVerb || 'Building', solid: Number(raw.solid) || 0.5,
-    fire: f ? { fuel: ITEMS[f.fuel] ? f.fuel : 'stick', each, maxFuel: Math.max(1, Math.floor(f.maxFuel) || 10), max: each * Math.max(1, Math.floor(f.maxFuel) || 10), lightSeconds: Math.max(0.5, Number(f.lightSeconds) || 3) } : null,
+    fire: f ? { fuel: ITEMS[f.fuel] ? f.fuel : 'stick', each, fuels: { [ITEMS[f.fuel] ? f.fuel : 'stick']: each, ...Object.fromEntries(Object.entries(f.otherFuels || {}).filter(([k, s]) => ITEMS[k] && s > 0).map(([k, s]) => [k, s * 1000])) }, maxFuel: Math.max(1, Math.floor(f.maxFuel) || 10), max: each * Math.max(1, Math.floor(f.maxFuel) || 10), lightSeconds: Math.max(0.5, Number(f.lightSeconds) || 3) } : null,
     seats: s ? { count: Math.max(1, Math.floor(s.count) || 6), distance: Number(s.distance) || 1.2, minutes: (s.minutes || [15]).filter((n) => n > 0) } : null,
   };
   ITEMS[item].places = kind;
@@ -23,7 +23,7 @@ const fuelLeft = (th, now = Date.now()) => (th.lit ? Math.max(0, th.fuel - (now 
 const isLit = (th) => !!th.lit && fuelLeft(th) > 0;
 const fuelIn = (th) => (PLACEABLES[th.kind].fire ? fuelLeft(th) / PLACEABLES[th.kind].fire.each : 0); // in sticks (can be part of one)
 // how many more sticks fit (one that only part fits still goes on; the server works it out the same way)
-const roomFor = (th) => { const f = PLACEABLES[th.kind].fire; return f ? Math.max(0, Math.ceil((f.max - fuelLeft(th)) / f.each - 0.05)) : 0; };
+const roomFor = (th, kind) => { const f = PLACEABLES[th.kind].fire; const each = f && (f.fuels[kind] || f.each); return f ? Math.max(0, Math.ceil((f.max - fuelLeft(th)) / each - 0.05)) : 0; };
 function burnNow(th) { // bring it up to now
   if (!th.lit) return;
   th.fuel = fuelLeft(th);
@@ -41,8 +41,8 @@ function fireState(th) {
   const f = PLACEABLES[th.kind].fire;
   if (!th.built) return 'Not built yet';
   if (!f) return '';
-  const left = fuelLeft(th), sticks = Math.ceil(fuelIn(th) - 0.001);
-  return `${isLit(th) ? 'Burning' : 'Out'} · ${left > 0 ? `${timeLeft(left)} of fuel (${sticks} of ${f.maxFuel} ${ITEMS[f.fuel].plural.toLowerCase()})` : 'no fuel'}`;
+  const left = fuelLeft(th);
+  return `${isLit(th) ? 'Burning' : 'Out'} · ${left > 0 ? `${timeLeft(left)} of fuel (holds ${timeLeft(f.max)})` : 'no fuel'}`;
 }
 const placedName = (th) => { const P = PLACEABLES[th.kind]; return !th.built ? `${P.name} (not built)` : P.fire && isLit(th) ? `${P.name} · lit` : P.name; };
 
@@ -346,9 +346,10 @@ Object.assign(TASK_KINDS, {
       goNear(th, () => {
         burnNow(th);
         let n = 0;
+        const kind = t.fuel && F.fuels[t.fuel] ? t.fuel : F.fuel, each = F.fuels[kind]; // sticks, or another fuel like logs
         if (t.do === 'add') {
-          n = Math.min(t.n || 1, you.carry[F.fuel] || 0, roomFor(th));
-          if (n < 1) { showTag(you.carry[F.fuel] ? 'The fire is full' : `You have no ${ITEMS[F.fuel].plural.toLowerCase()}`, headTop(), 2); nextTask(); return; }
+          n = Math.min(t.n || 1, you.carry[kind] || 0, roomFor(th, kind));
+          if (n < 1) { showTag(you.carry[kind] ? 'The fire is full' : `You have no ${ITEMS[kind].plural.toLowerCase()}`, headTop(), 2); nextTask(); return; }
         }
         if (t.do === 'light' && (isLit(th) || fuelLeft(th) <= 0)) { showTag(isLit(th) ? "It's already lit" : `Add ${ITEMS[F.fuel].plural.toLowerCase()} first`, headTop(), 2); nextTask(); return; }
         if (t.do === 'out' && !isLit(th)) { nextTask(); return; }
@@ -358,22 +359,22 @@ Object.assign(TASK_KINDS, {
         startAction({ pose: t.do === 'out' ? 'bend' : 'kneel', seconds: secs, end: () => {
           burnNow(th);
           if (t.do === 'add') {
-            n = Math.min(n, you.carry[F.fuel] || 0, roomFor(th));
+            n = Math.min(n, you.carry[kind] || 0, roomFor(th, kind));
             if (n < 1) return;
-            takeFromCarry(F.fuel, n);
-            th.fuel = Math.min(F.max, fuelLeft(th) + n * F.each);
-            showGain(`+${timeLeft(n * F.each)} of fuel`);
+            takeFromCarry(kind, n);
+            th.fuel = Math.min(F.max, fuelLeft(th) + n * each);
+            showGain(`+${timeLeft(n * each)} of fuel`);
             drawHeld(); drawCarry();
           } else if (t.do === 'light') { if (fuelLeft(th) <= 0) return; th.lit = true; th.burnt = true; th.at = Date.now(); showGain('The fire is lit'); }
           else { th.lit = false; showGain('Fire put out'); }
           spendEnergy('tend');
           drawPlaced(th);
-          sendNow({ t: 'fire', id: th.id, do: t.do, n });
+          sendNow({ t: 'fire', id: th.id, do: t.do, n, fuel: kind });
         } });
       });
     },
     name: (t, now) => {
-      const th = placed.get(t.id), F = th && PLACEABLES[th.kind].fire, fuel = F ? ITEMS[F.fuel] : ITEMS.stick;
+      const th = placed.get(t.id), F = th && PLACEABLES[th.kind].fire, fuel = ITEMS[t.fuel] || (F ? ITEMS[F.fuel] : ITEMS.stick);
       if (t.do === 'light') return now ? 'Lighting the fire' : 'Light fire';
       if (t.do === 'out') return now ? 'Putting out the fire' : 'Put out fire';
       return now ? `Adding ${fuel.plural.toLowerCase()}` : `Add ${t.n > 1 ? `${t.n} ${fuel.plural.toLowerCase()}` : fuel.name.toLowerCase()}`;
@@ -455,13 +456,16 @@ function placedActions(th) {
   const out = [];
   const F = P.fire;
   if (F) {
-    const lit = isLit(th), have = you.carry[F.fuel] || 0, room = roomFor(th), fuel = ITEMS[F.fuel];
+    const lit = isLit(th);
     if (lit) out.push({ label: 'Put out fire', run: () => queueTask({ type: 'tend', id: th.id, do: 'out' }) });
     else out.push({ label: 'Light fire', disabled: fuelLeft(th) <= 0, note: fuelLeft(th) > 0 ? `${F.lightSeconds} s` : `Add ${fuel.plural.toLowerCase()} first`, run: () => queueTask({ type: 'tend', id: th.id, do: 'light' }) });
-    const inIt = `${Math.ceil(fuelIn(th) - 0.001)} of ${F.maxFuel} in`;
-    if (have && room) out.push({ label: `Add ${fuel.name.toLowerCase()}`, note: `${inIt} · ${timeLeft(F.each)} each`, run: () => queueTask({ type: 'tend', id: th.id, do: 'add', n: 1 }) });
-    if (have > 1 && room > 1) out.push({ label: `Add ${Math.min(have, room)} ${fuel.plural.toLowerCase()}`, note: `+${timeLeft(Math.min(have, room) * F.each)}`, run: () => queueTask({ type: 'tend', id: th.id, do: 'add', n: Math.min(have, room) }) });
-    else if (have && !room) out.push({ label: `Add ${fuel.plural.toLowerCase()}`, note: 'The fire is full', disabled: true, run: () => {} });
+    const inIt = `${timeLeft(fuelLeft(th))} in`;
+    for (const [kind, each] of Object.entries(F.fuels)) { // each fuel it takes (sticks, logs)
+      const have = you.carry[kind] || 0, room = roomFor(th, kind), fuel = ITEMS[kind];
+      if (have && room) out.push({ label: `Add ${fuel.name.toLowerCase()}`, note: `${inIt} · ${timeLeft(each)} each`, run: () => queueTask({ type: 'tend', id: th.id, do: 'add', n: 1, fuel: kind }) });
+      if (have > 1 && room > 1) out.push({ label: `Add ${Math.min(have, room)} ${fuel.plural.toLowerCase()}`, note: `+${timeLeft(Math.min(have, room) * each)}`, run: () => queueTask({ type: 'tend', id: th.id, do: 'add', n: Math.min(have, room), fuel: kind }) });
+      else if (have && !room) out.push({ label: `Add ${fuel.plural.toLowerCase()}`, note: 'The fire is full', disabled: true, run: () => {} });
+    }
   }
   if (P.seats && (!F || isLit(th))) {
     out.push({ label: `Sit by ${name}`, sub: P.seats.minutes.map((n) => ({ label: minutesLabel(n), run: () => queueTask({ type: 'sit', id: th.id, ms: n * 60000 }) })) });

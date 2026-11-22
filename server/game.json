@@ -257,7 +257,10 @@
       "fire": {
         "fuel": "stick",
         "secondsEach": 300,
-        "maxFuel": 10,
+        "maxFuel": 24,
+        "otherFuels": {
+          "log": 1800
+        },
         "lightSeconds": 3
       },
       "seats": {

@@ -9,7 +9,10 @@ export const PLACEABLES = G.placeables || {};
 // the fire's rules in ms: one piece of fuel, and the most it holds
 export const fireRule = (kind) => {
   const f = (PLACEABLES[kind] || {}).fire;
-  return f ? { fuel: f.fuel, each: (f.secondsEach || 300) * 1000, max: (f.secondsEach || 300) * 1000 * (f.maxFuel || 10) } : null;
+  if (!f) return null;
+  const each = (f.secondsEach || 300) * 1000, fuels = { [f.fuel]: each }; // every fuel it takes, in ms each (otherFuels: { log: 1800 })
+  for (const [k, s] of Object.entries(f.otherFuels || {})) if (G.items[k] && s > 0) fuels[k] = s * 1000;
+  return { fuel: f.fuel, each, fuels, max: each * (f.maxFuel || 10) };
 };
 // where seat k round a placed thing is (the game works it out the same way)
 export function seatAt(th, k) {

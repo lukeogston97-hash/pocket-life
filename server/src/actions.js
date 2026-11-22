@@ -238,9 +238,10 @@ export const ACTIONS = {
     if (!th || !f || !th.built || Math.hypot(th.x - p.x, th.z - p.z) > 3) { if (th) this.sendPlaced(th, reply, {}); reply(this.mine(p)); return; }
     this.burn(th);
     if (m.do === 'add') {
-      const room = Math.ceil((f.max - th.fuel) / f.each - 0.05); // a stick that only part fits still goes on
-      const n = Math.min(Math.max(1, Math.floor(m.n) || 1), room, p.carry[f.fuel] || 0);
-      if (n > 0) { takeCarry(p, f.fuel, n); th.fuel = Math.min(f.max, th.fuel + n * f.each); }
+      const kind = m.fuel && f.fuels[m.fuel] ? m.fuel : f.fuel, each = f.fuels[kind]; // sticks, or another fuel like logs
+      const room = Math.ceil((f.max - th.fuel) / each - 0.05); // one that only part fits still goes on
+      const n = Math.min(Math.max(1, Math.floor(m.n) || 1), room, p.carry[kind] || 0);
+      if (n > 0) { takeCarry(p, kind, n); th.fuel = Math.min(f.max, th.fuel + n * each); }
     } else if (m.do === 'light') {
       if (!th.lit && th.fuel > 0) { th.lit = true; th.at = Date.now(); }
     } else if (m.do === 'out') th.lit = false;
