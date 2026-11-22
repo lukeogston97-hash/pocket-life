@@ -2,6 +2,8 @@
 import json, os
 from lib import world, join, idle, text, shown, shot, expect, HERE
 
+KNIFE_USES = json.load(open(os.path.join(HERE, '..', '..', 'test', 'game-data.json')))['items']['knife']['tool']['uses']
+
 FINGERPRINT = """(() => {
   const r = (v) => Math.round(v * 100) / 100, h = (s) => { let x = 2166136261; for (let i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = Math.imul(x, 16777619) >>> 0; } return x.toString(16); };
   const P = __pl;
@@ -46,7 +48,9 @@ async def menu():
         name = await text(a, '#hudName')
         expect(bool(name), f'in the world as {name}')
         b = await W.page('menuB')
-        expect('1 person' in (await text(b, '#menuNetText') or ''), 'another phone on the menu sees 1 person')
+        await b.wait_for_timeout(1500)
+        seen = await b.evaluate("document.getElementById('regions').textContent")
+        expect('1 person' in seen, f'another phone on the menu sees 1 person in the world picker ({seen})')
         await a.click('#menuBtn'); await a.wait_for_timeout(300); await shot(a, 'pause')
         await a.click('#exitBtn'); await a.wait_for_timeout(2500)
         expect(await shown(a, '#mainMenu'), 'Exit goes back to the menu')
@@ -115,7 +119,7 @@ async def grass_and_tools():
           const c = P.clumps.filter((c) => !c.readyAt).sort((x, y) => Math.hypot(x.x - p.x, x.z - p.z) - Math.hypot(y.x - p.x, y.z - p.z))[0];
           __pl.queueTask({ type: 'cut', plant: 'tallGrass', i: c.i, x: c.x, z: c.z }); })()""")
         await idle(a, 60); await a.wait_for_timeout(1500)
-        expect(await a.evaluate('(__pl.you.wear || {}).knife') == 9, 'the knife wears with each cut')
+        expect(await a.evaluate('(__pl.you.wear || {}).knife') == KNIFE_USES - 1, 'the knife wears with each cut')
         expect(await a.evaluate('!__pl.heldView'), 'hands empty when not using a tool')
         await a.evaluate("""(() => { const p = __pl.player.position; const [i, b] = __pl.berryBushes.map((b, i) => [i, b]).sort((x, y) => x[1].position.distanceTo(p) - y[1].position.distanceTo(p))[0];
           __pl.queueTask({ type: 'use', source: b.userData.source, bush: i, x: b.position.x, z: b.position.z, stop: 1.1, top: b.position.y + 1 }); })()""")
@@ -263,6 +267,10 @@ async def smoke():
         await a.click('#bagBtn'); expect(await shown(a, '#bag'), 'inventory opens')
         expect(await a.evaluate("document.querySelectorAll('#bagList > li').length >= 10 && document.getElementById('bagInfo').hidden"), 'inventory shows the grid, no info until a tap')
         await a.click('#bagClose')
+        tools = await a.evaluate("""(() => { __pl.you.carry.knife = 2; __pl.you.wear.knife = 5; document.getElementById('bagBtn').click();
+          const t = [...document.querySelectorAll('#bagList .bag-tile[data-kind="knife"]')].map((b) => b.getAttribute('aria-label'));
+          document.getElementById('bagClose').click(); return t; })()""")
+        expect(tools == ['Stone knife, 5 uses left', f'Stone knife, spare, {KNIFE_USES} uses'], f'each tool gets its own tile: the one in use, then a spare ({tools})')
         await a.click('#craftBtn'); expect(await a.evaluate("document.querySelectorAll('#craftList .craft-card').length") > 0, 'craft shows recipes'); await a.click('#craftClose')
         await a.evaluate("(() => { const p = __pl.player.position; __pl.queueTask({ type: 'walk', x: p.x + 1.5, z: p.z + 1 }); })()")
         await idle(a, 20)

@@ -222,7 +222,7 @@ function menuActions(t) {
         showTag(isMuted ? `${o.title} unmuted` : `${o.title} muted`, headTop(), 2);
       } },
       { label: 'Report', run: () => openReport(o) },
-      { label: 'Walk here', run: () => walkFirst(V(o.mesh.position.x, 0, o.mesh.position.z)) }, ...adminMore(adminPersonActions(o))];
+      { label: 'Walk here', foot: true, run: () => walkFirst(V(o.mesh.position.x, 0, o.mesh.position.z)) }, ...adminMore(adminPersonActions(o))];
   }
   if (t.kind === 'ground' || t.kind === 'thing' || t.kind === 'shore') {
     return [{ label: 'Walk here', run: () => walkToTarget(t) }, ...adminMore(adminGroundActions(t.point || (t.hit && t.hit.point)))];
@@ -233,7 +233,7 @@ function menuActions(t) {
     const has = !tool || you.carry[CHOP.tool];
     return [{ label: what === 'tree' ? 'Chop tree' : 'Remove stump', note: has ? `${rule.seconds || 15} s` : `Needs a ${tool.name.toLowerCase()}`, disabled: !has,
       run: () => queueTask({ type: 'chop', what, idx: t.idx, x: t.x, z: t.z }) },
-      { label: 'Walk here', run: () => walkFirst(V(t.x + 1.2, 0, t.z)) }];
+      { label: 'Walk here', foot: true, run: () => walkFirst(V(t.x + 1.2, 0, t.z)) }];
   }
   if (t.kind === 'self') {
     const rest = you.stats && you.stats.rest != null ? Math.round(you.stats.rest) : null;
@@ -249,7 +249,7 @@ function menuActions(t) {
     return [{ label: def.action || 'Cut', disabled: !ready,
       note: !ready ? `Grows back in ${growsIn(c)}` : fast ? `${def.toolSeconds || def.seconds} s` : `${def.seconds} s${def.tool ? ` · faster with a ${ITEMS[def.tool].name.toLowerCase()}` : ''}`,
       run: () => queueTask({ type: 'cut', plant: t.plant, i: t.i, x: t.x, z: t.z }) },
-      { label: 'Walk here', run: () => walkFirst(V(t.x + 0.7, 0, t.z)) }];
+      { label: 'Walk here', foot: true, run: () => walkFirst(V(t.x + 0.7, 0, t.z)) }];
   }
   if (t.kind === 'item') {
     const it = t.item;
@@ -257,12 +257,12 @@ function menuActions(t) {
     return [{ label: `Pick up ${ITEMS[it.kind].name}`, run: () => queueTask({ type: 'pickup', id: it.id }) },
       ...(chopIt ? [{ label: 'Chop into sticks', note: you.carry[CHOP.tool] ? `${CHOP[it.kind].seconds || 8} s` : `Needs a ${ITEMS[CHOP.tool].name.toLowerCase()}`, disabled: !you.carry[CHOP.tool],
         run: () => queueTask({ type: 'chop', what: it.kind, id: it.id, x: it.x, z: it.z }) }] : []),
-      { label: 'Walk here', run: () => walkFirst(V(it.x, 0, it.z)) },
+      { label: 'Walk here', foot: true, run: () => walkFirst(V(it.x, 0, it.z)) },
       ...adminMore(admin.on ? [{ label: 'Remove', run: () => adminSend({ t: 'a.remove', id: it.id }) }] : [])];
   }
   if (t.kind === 'use') {
     const src = SOURCES[t.task.source], task = t.task;
-    const walkHere = { label: 'Walk here', run: () => {
+    const walkHere = { label: 'Walk here', foot: true, run: () => {
       if (task.water) { walkFirst(shorePointToward(player.position)); return; }
       const dx = task.x - player.position.x, dz = task.z - player.position.z, d = Math.hypot(dx, dz) || 1;
       walkFirst(V(task.x - (dx / d) * task.stop, 0, task.z - (dz / d) * task.stop));
@@ -294,10 +294,12 @@ function openMenuAt(px, py, known) {
   menu.style.top = `${Math.round(Math.max(lo, Math.min(hi, py + 8)))}px`;
   return true;
 }
-// a list of buttons in the small menu; an item with a "sub" list opens it in place, with Back
+// a list of buttons in the small menu; an item with a "sub" list opens it in place, with Back.
+// Ones marked foot (Inspect, Walk here) sit small along the bottom. Past MENU_MAX others, the rest go under More,
+// so a menu never gets long as things are added; Admin always shows.
+const MENU_MAX = 5;
 function showActs(acts, back) {
-  const list = back ? [{ label: '‹ Back', back: true, run: back }, ...acts] : acts;
-  $('actList').replaceChildren(...list.map((a) => {
+  const actBtn = (a) => {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'act-btn';
@@ -313,7 +315,20 @@ function showActs(acts, back) {
       closeMenu(); a.run();
     });
     return b;
-  }));
+  };
+  let foot = acts.filter((a) => a.foot), main = acts.filter((a) => !a.foot && !a.admin);
+  if (!main.length) { main = foot; foot = []; } // only Walk here: then it's the menu
+  if (main.length > MENU_MAX) main = [...main.slice(0, MENU_MAX - 1), { label: 'More', sub: main.slice(MENU_MAX - 1) }];
+  const list = [...(back ? [{ label: '‹ Back', back: true, run: back }] : []), ...main, ...acts.filter((a) => a.admin)];
+  const rows = list.map(actBtn);
+  if (foot.length) {
+    const row = document.createElement('div');
+    row.className = 'act-foot';
+    row.setAttribute('role', 'group');
+    row.append(...foot.map(actBtn));
+    rows.push(row);
+  }
+  $('actList').replaceChildren(...rows);
 }
 function closeMenu() { $('actMenu').hidden = true; }
 // pressing anywhere else closes the menu (and that press doesn't also walk)

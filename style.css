@@ -140,6 +140,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .act-btn:disabled { cursor: default; color: var(--ink-faint); }
 .act-more::after { content: "›"; color: var(--ink-faint); font-size: 17px; }
 .act-back { color: var(--ink-soft); }
+.act-foot { display: flex; gap: 4px; margin-top: 3px; padding-top: 3px; border-top: 1px solid var(--line); }
+.act-foot .act-btn { flex: 1 1 0; justify-content: center; min-height: 36px; padding: 0 8px; font-size: 12.5px; color: var(--ink-soft); }
 
 /* chat: a bar along the bottom (just above the keyboard) with the last few lines above it */
 .chat { position: absolute; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); z-index: 30; max-width: 520px; margin: 0 auto; display: grid; gap: 6px; }
@@ -171,21 +173,35 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .carry-bar i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 4px; transition: width 0.3s ease; }
 .carry-bar.full i { background: var(--warn); }
 .carry-bar.wide { width: 100%; }
-.bag-list { list-style: none; margin: 0; padding: 0; display: grid; }
-.bag-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
-.bag-row:first-child { border-top: 0; }
+/* the inventory: a grid of tiles (two rows at least), and a bar about the one you tap */
+.bag-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.bag-grid li { display: flex; }
+.bag-slot { aspect-ratio: 1; border: 1.5px dashed var(--line); border-radius: 12px; }
+.bag-tile { position: relative; flex: 1; aspect-ratio: 1; display: grid; place-items: center; padding: 0; border: 1.5px solid var(--line); border-radius: 12px; background: var(--hover); color: var(--ink); cursor: pointer; }
+.bag-tile.on { border-color: var(--accent); background: rgba(143, 212, 158, 0.12); }
+.bag-tile .pic { width: 70%; height: 70%; border: 0; background: none; }
+.bag-tile .dot { width: 18px; height: 18px; }
+.bag-tile .count { position: absolute; right: 5px; bottom: 3px; font: 800 12px/1 var(--font-ui); font-variant-numeric: tabular-nums; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7); }
+.bag-tile .wear { position: absolute; left: 8px; right: 8px; bottom: 5px; width: auto; margin: 0; }
+.bag-info { margin-top: 10px; padding: 10px 12px 12px; border-radius: 14px; background: var(--hover); border: 1px solid var(--line); display: grid; gap: 8px; }
+.bag-info[hidden] { display: none; }
+.info-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 40px; }
+.info-head strong { display: block; font-size: 15px; }
+.info-head small { display: block; font-size: 11.5px; font-weight: 600; color: var(--ink-soft); }
+.info-about { margin: 0; font-size: 12.5px; font-weight: 600; line-height: 1.35; color: var(--ink-soft); }
+.info-acts { display: flex; flex-wrap: wrap; gap: 6px; }
 .dot { width: 14px; height: 14px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2); }
-.what { font-size: 14px; font-weight: 700; min-width: 0; }
-.what small { display: block; font-size: 11.5px; font-weight: 600; color: var(--ink-soft); }
-.row-actions { display: flex; gap: 6px; }
 .bag-empty { margin: 2px 0 4px; font-size: 13px; font-weight: 600; color: var(--ink-soft); }
 .bag-empty[hidden] { display: none; }
 .wear { display: block; height: 3px; width: 64px; margin-top: 4px; border-radius: 3px; background: rgba(255, 255, 255, 0.14); overflow: hidden; }
 .wear::after { content: ""; display: block; height: 100%; width: calc(var(--w, 1) * 100%); background: var(--accent); }
-.craft-note { margin: 0 0 8px; font-size: 12.5px; color: var(--ink-soft); font-weight: 600; }
+.craft-note { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 2px; font-size: 12.5px; color: var(--ink-soft); font-weight: 600; }
+.craft-note[hidden] { display: none; }
+.craft-note .text-btn { min-height: 36px; padding: 0 4px; font-size: 13px; }
+.craft-group { padding: 8px 0 2px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-faint); }
 .craft-list { list-style: none; margin: 0; padding: 0; display: grid; }
 .craft-card { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px 10px; padding: 10px 0; border-top: 1px solid var(--line); }
-.craft-card:first-child { border-top: 0; }
+.craft-card:first-child, .craft-group + .craft-card { border-top: 0; }
 .craft-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .craft-head .dot { flex: none; }
 .craft-words { display: grid; min-width: 0; }

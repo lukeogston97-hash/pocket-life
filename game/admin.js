@@ -60,7 +60,7 @@ function teleportTo(x, z) {
   player.position.set(x, groundY(x, z), z);
   net.last = null;
 }
-const adminMore = (acts) => (acts.length ? [{ label: 'Admin', sub: acts }] : []);
+const adminMore = (acts) => (acts.length ? [{ label: 'Admin', admin: true, sub: acts }] : []); // admin: always shown (showActs)
 function adminPersonActions(o) {
   if (!admin.on) return [];
   return [{ label: 'Mute for everyone', note: 'Unmute in the Online list', run: () => adminSend({ t: 'a.mute', id: o.id, on: true }) },

@@ -1,6 +1,6 @@
 {
   "version": "0.2.5",
-  "build": 1,
+  "build": 2,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,
@@ -773,7 +773,7 @@
       "version": "0.2.5",
       "date": "2026-11-22",
       "notes": [
-        "New inventory: your things are tiles in a grid. Tap one to see what it is and what you can do with it, and tap it again to hide that.",
+        "New inventory: your things are tiles in a grid, and each tool gets its own. Tap one to see what it is and what you can do with it, and tap it again to hide that.",
         "Craft with, on an item in your inventory, shows only the recipes that use it.",
         "Craft shows what you can make right now first.",
         "Tidier campfire menu: the time left shows at the top, Add fuel has its own list, and Inspect and Walk here sit small along the bottom (the same in every tap menu)."

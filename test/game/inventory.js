@@ -49,7 +49,7 @@ function itemPic(kind) {
 /* ---------- your inventory: a grid of what you carry; tap one to see what it is and what you can do with it ---------- */
 const bagOpen = () => $('bag').classList.contains('open');
 const BAG_COLS = 5, BAG_MIN = 10; // at least two rows of slots, so the sheet keeps its size
-let bagPick = null; // the kind tapped in the grid (its info shows under it), or null
+let bagPick = null; // the tile tapped in the grid (kind:number; its info shows under it), or null
 function smallButton(text, onClick, primary) {
   const b = document.createElement('button');
   b.type = 'button';
@@ -66,35 +66,48 @@ const bagKinds = () => Object.keys(you.carry).filter((k) => ITEMS[k] && you.carr
 // a line about it: its own "about" in game-data.json, else the about of the recipe that makes it
 const itemAbout = (kind) => ITEMS[kind].about || (RECIPES.find((r) => r.makes[kind]) || {}).about || '';
 const usesLeft = (kind) => (ITEMS[kind].uses ? (you.wear[kind] ?? ITEMS[kind].uses) : 0);
-function bagTile(kind) {
-  const it = ITEMS[kind], n = you.carry[kind], left = usesLeft(kind);
+// what the grid shows: a tile for each kind, but each tool gets its own (Luke's pick). The game keeps wear for the
+// tool in use, so the first of a kind has its wear and the rest are spares, full; dropping one drops a spare.
+function bagSlots() {
+  const out = [];
+  for (const kind of bagKinds()) {
+    const n = you.carry[kind], it = ITEMS[kind];
+    if (!it.uses) { out.push({ kind, key: `${kind}:0`, n }); continue; }
+    for (let i = 0; i < n; i++) out.push({ kind, key: `${kind}:${i}`, n: 1, spare: i > 0, spares: n - 1, left: i > 0 ? it.uses : usesLeft(kind) });
+  }
+  return out;
+}
+const usesText = (s) => (s.spare ? `spare · ${s.left} uses` : `${s.spares ? 'in use · ' : ''}${s.left} ${s.left === 1 ? 'use' : 'uses'} left`);
+function bagTile(s) {
+  const it = ITEMS[s.kind];
   const b = document.createElement('button');
   b.type = 'button';
-  b.className = 'bag-tile' + (bagPick === kind ? ' on' : '');
-  b.dataset.kind = kind;
-  b.setAttribute('aria-pressed', String(bagPick === kind));
-  b.setAttribute('aria-label', countLabel(kind, n) + (it.uses ? `, ${left} ${left === 1 ? 'use' : 'uses'} left` : ''));
-  b.appendChild(itemPic(kind));
-  if (n > 1) { const c = document.createElement('span'); c.className = 'count'; c.textContent = n; b.appendChild(c); }
-  if (it.uses) { const w = document.createElement('span'); w.className = 'wear'; w.style.setProperty('--w', (left / it.uses).toFixed(2)); b.appendChild(w); }
+  b.className = 'bag-tile' + (bagPick === s.key ? ' on' : '');
+  b.dataset.kind = s.kind;
+  b.dataset.key = s.key;
+  b.setAttribute('aria-pressed', String(bagPick === s.key));
+  b.setAttribute('aria-label', it.uses ? `${it.name}, ${s.spare ? `spare, ${s.left} uses` : `${s.left} ${s.left === 1 ? 'use' : 'uses'} left`}` : countLabel(s.kind, s.n));
+  b.appendChild(itemPic(s.kind));
+  if (s.n > 1) { const c = document.createElement('span'); c.className = 'count'; c.textContent = s.n; b.appendChild(c); }
+  if (it.uses) { const w = document.createElement('span'); w.className = 'wear'; w.style.setProperty('--w', (s.left / it.uses).toFixed(2)); b.appendChild(w); }
   b.addEventListener('click', () => { // tap to show its info, tap again to hide it
-    bagPick = bagPick === kind ? null : kind;
+    bagPick = bagPick === s.key ? null : s.key;
     drawBag();
-    const again = $('bagList').querySelector(`[data-kind="${kind}"]`);
+    const again = $('bagList').querySelector(`[data-key="${s.key}"]`);
     if (again) again.focus({ preventScroll: true });
   });
   return b;
 }
 // the bar under the grid: what it is, and what you can do with it (the main thing in green)
-function drawBagInfo() {
-  const box = $('bagInfo'), kind = bagPick;
-  box.hidden = !kind;
-  if (!kind) { box.replaceChildren(); return; }
-  const it = ITEMS[kind], n = you.carry[kind], left = usesLeft(kind);
+function drawBagInfo(s) {
+  const box = $('bagInfo');
+  box.hidden = !s;
+  if (!s) { box.replaceChildren(); return; }
+  const kind = s.kind, it = ITEMS[kind], n = s.n;
   const title = document.createElement('strong');
-  title.textContent = countLabel(kind, n);
+  title.textContent = it.uses ? it.name : countLabel(kind, n);
   const detail = document.createElement('small');
-  detail.textContent = `Weight ${fmt(it.weight * n)}${it.uses ? ` · ${left} ${left === 1 ? 'use' : 'uses'} left` : ''}`;
+  detail.textContent = `Weight ${fmt(it.weight * n)}${it.uses ? ` · ${usesText(s)}` : ''}`;
   const words = document.createElement('div');
   words.append(title, detail);
   const head = document.createElement('div');
@@ -107,8 +120,10 @@ function drawBagInfo() {
   if (about) { const p = document.createElement('p'); p.className = 'info-about'; p.textContent = about; parts.push(p); }
   const acts = document.createElement('div');
   acts.className = 'info-acts';
-  acts.appendChild(smallButton(n > 1 ? 'Drop 1' : 'Drop', () => dropItems(kind, 1)));
-  if (n > 1) acts.appendChild(smallButton('Drop all', () => dropItems(kind, n)));
+  if (!it.uses || s.spare || !s.spares) { // the tool in use can't be dropped while you carry spares (a spare would go)
+    acts.appendChild(smallButton(n > 1 ? 'Drop 1' : 'Drop', () => dropItems(kind, 1)));
+    if (n > 1) acts.appendChild(smallButton('Drop all', () => dropItems(kind, n)));
+  }
   if (RECIPES.some((r) => r.needs[kind])) acts.appendChild(smallButton('Craft with ›', () => openCraft(kind)));
   parts.push(acts);
   box.replaceChildren(...parts);
@@ -118,17 +133,18 @@ function drawBag() {
   const w = carried();
   $('bagWeight').textContent = `${fmt(w)} / ${fmt(SETTINGS.carryCapacity)}`;
   drawWeightBar($('bagBar'), w);
-  const kinds = bagKinds();
-  if (!kinds.includes(bagPick)) bagPick = null;
-  const shows = JSON.stringify([kinds.map((k) => [k, you.carry[k], usesLeft(k)]), bagPick]);
+  const slots = bagSlots();
+  const picked = slots.find((s) => s.key === bagPick) || null;
+  if (!picked) bagPick = null;
+  const shows = JSON.stringify([slots.map((s) => [s.key, s.n, s.left || 0, s.spares || 0]), bagPick]);
   if (shows === bagDrawn) return;
   bagDrawn = shows;
-  $('bagEmpty').hidden = kinds.length > 0;
-  const cells = kinds.map((kind) => { const li = document.createElement('li'); li.appendChild(bagTile(kind)); return li; });
-  const slots = Math.max(BAG_MIN, Math.ceil(kinds.length / BAG_COLS) * BAG_COLS);
-  while (cells.length < slots) { const li = document.createElement('li'); li.className = 'bag-slot'; li.setAttribute('aria-hidden', 'true'); cells.push(li); }
+  $('bagEmpty').hidden = slots.length > 0;
+  const cells = slots.map((s) => { const li = document.createElement('li'); li.appendChild(bagTile(s)); return li; });
+  const total = Math.max(BAG_MIN, Math.ceil(slots.length / BAG_COLS) * BAG_COLS);
+  while (cells.length < total) { const li = document.createElement('li'); li.className = 'bag-slot'; li.setAttribute('aria-hidden', 'true'); cells.push(li); }
   $('bagList').replaceChildren(...cells);
-  drawBagInfo();
+  drawBagInfo(picked);
 }
 /* ---------- crafting: its own sheet (the hammer button) ----------
    Each recipe is a card: what it makes, what it needs (with how many you have), and Make. Ones you can make now come first.
