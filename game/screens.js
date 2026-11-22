@@ -273,7 +273,8 @@ function showWelcomeBack(a) {
   const hrs = a.ms / 3600000;
   const long = hrs >= 1 ? `${Math.round(hrs)} hour${Math.round(hrs) === 1 ? '' : 's'}` : `${Math.max(1, Math.round(a.ms / 60000))} minutes`;
   const bits = [];
-  if (a.ate) bits.push(`ate ${a.ate} ${a.ate === 1 ? 'berry' : 'berries'}`);
+  const fruit = ITEMS[Object.keys((BERRY_SOURCE() || {}).harvest || {})[0]] || { name: 'berry', plural: 'berries' }; // what people away pick and eat
+  if (a.ate) bits.push(`ate ${a.ate} ${(a.ate === 1 ? fruit.name : fruit.plural).toLowerCase()}`);
   if (a.picked) bits.push(`picked ${a.picked}`);
   if (a.drank) bits.push(`drank ${a.drank} time${a.drank === 1 ? '' : 's'}`);
   if (a.slept) bits.push('slept');
