@@ -876,6 +876,82 @@ withOwnRand(BB.seed || 7331, () => {
   }
 });
 
+/* ---------- plants you cut (plants in game-data.json): tall grass for twine ----------
+   Each kind is laid out on its own random numbers (so nothing else in the world moves), some near the start and the
+   rest through the wider world. A cut clump drops to stubble and grows back by itself at a random time (the server
+   keeps when each one is ready again: world.plants). Blades are one InstancedMesh, so forty clumps cost very little. */
+const PLANTS = DATA.plants || {};
+const plants = {}; // kind -> { def, clumps: [{ i, x, z, readyAt }], per, blades, heads, bladeM, headM }
+const bladeGeo = new THREE.ConeGeometry(0.02, 1, 3, 1, true).translate(0, 0.5, 0);
+const seedGeo = new THREE.IcosahedronGeometry(1, 0);
+for (const [kind, def] of Object.entries(PLANTS)) {
+  const look = def.look || {}, per = Math.max(3, Math.min(16, look.blades || 9)), count = Math.min(200, def.count || 40);
+  const P = plants[kind] = { def, clumps: [], per,
+    blades: IM(bladeGeo, mat('#ffffff', { roughness: 1, side: THREE.DoubleSide }), count * per, false),
+    heads: IM(seedGeo, mat('#ffffff'), count * per, false) };
+  P.blades.userData.plant = kind;
+  P.blades.userData.label = def.name || 'Plant'; // so taps find it
+  withOwnRand(def.seed || 4127, () => {
+    const L = WALK_LIMIT - 2;
+    for (let t = 0; t < 6000 && P.clumps.length < count; t++) {
+      const near = P.clumps.length < (def.nearStart || 0);
+      const a = rand() * Math.PI * 2, d = near ? rr(4, 15) : 0;
+      const x = near ? CLEAR.x + Math.cos(a) * d : rr(-L, L), z = near ? CLEAR.z + Math.sin(a) * d : rr(-L, L);
+      if (Math.hypot(x - CLEAR.x, z - CLEAR.z) < 2.5 || pondShape(x, z) < 1.4 || !roomAt(x, z, 0.7, 0.7)) continue;
+      if (P.clumps.some((c) => Math.hypot(c.x - x, c.z - z) < (near ? 2.2 : 5))) continue;
+      const y = groundY(x, z), c = { i: P.clumps.length, x, z, readyAt: 0 };
+      for (let k = 0; k < per; k++) {
+        const h = (look.height || 0.75) * rr(0.65, 1.15), lx = rr(-0.3, 0.3), lz = rr(-0.3, 0.3);
+        const ox = rr(-0.18, 0.18), oz = rr(-0.18, 0.18);
+        const wd = (look.width || 0.02) / 0.02;
+        put(P.blades, x + ox, y, z + oz, lx, rand() * 6, lz, wd, h, wd, tint(look.colour || '#b7b26a', 0.02, 0.08, 0.06));
+        dummy.position.set(0, h, 0); dummy.position.applyEuler(new THREE.Euler(lx, 0, lz)); // the tip of the leaning blade
+        put(P.heads, x + ox + dummy.position.x, y + dummy.position.y, z + oz + dummy.position.z, lx, 0, lz, 0.026, 0.08, 0.026, tint(look.tips || '#d8cf8e', 0.02, 0.05, 0.05));
+      }
+      P.clumps.push(c);
+    }
+  });
+  for (const m of [P.blades, P.heads]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+  P.bladeM = P.blades.instanceMatrix.array.slice();
+  P.headM = P.heads.instanceMatrix.array.slice();
+  interactive.push(P.blades);
+}
+const plantReady = (c) => !c.readyAt || Date.now() >= c.readyAt;
+// a cut clump is short stubble with no seed heads; a grown one is as it was laid out
+const STUB = new THREE.Matrix4().makeScale(1, 0.22, 1), NONE = new THREE.Matrix4().makeScale(0, 0, 0), tmpM = new THREE.Matrix4();
+function drawPlant(kind, c) {
+  const P = plants[kind], up = plantReady(c);
+  if (c.shown === up) return;
+  c.shown = up;
+  for (let k = 0; k < P.per; k++) {
+    const o = (c.i * P.per + k) * 16;
+    if (up) { P.blades.instanceMatrix.array.set(P.bladeM.subarray(o, o + 16), o); P.heads.instanceMatrix.array.set(P.headM.subarray(o, o + 16), o); }
+    else {
+      tmpM.fromArray(P.bladeM, o);
+      const base = V().setFromMatrixPosition(tmpM);
+      tmpM.setPosition(0, 0, 0).premultiply(STUB).setPosition(base); // squash the blade towards the ground where it stands
+      tmpM.toArray(P.blades.instanceMatrix.array, o);
+      NONE.toArray(P.heads.instanceMatrix.array, o);
+    }
+  }
+  P.blades.instanceMatrix.needsUpdate = P.heads.instanceMatrix.needsUpdate = true;
+}
+function setPlant(kind, i, readyAt) {
+  const c = plants[kind] && plants[kind].clumps[i];
+  if (!c) return;
+  c.readyAt = readyAt || 0;
+  drawPlant(kind, c);
+}
+const drawPlants = () => { for (const [kind, P] of Object.entries(plants)) for (const c of P.clumps) drawPlant(kind, c); };
+// the clump nearest a ground point (thin blades are hard to tap exactly)
+function plantNear(gp, within = 0.8) {
+  let best = null, bd = within;
+  for (const [kind, P] of Object.entries(plants)) for (const c of P.clumps) { const d = Math.hypot(c.x - gp.x, c.z - gp.z); if (d < bd) { bd = d; best = { kind, c }; } }
+  return best;
+}
+const plantTarget = (kind, c) => ({ kind: 'plant', plant: kind, i: c.i, x: c.x, z: c.z, name: PLANTS[kind].name });
+const growsIn = (c) => { const mins = Math.max(1, Math.ceil((c.readyAt - Date.now()) / 60000)); return mins >= 90 ? `${Math.round(mins / 60)} h` : `${mins} min`; };
+
 /* ---------- build everything collected above ---------- */
 const woodMat = mat('#8a6847');
 for (const m of [reeds, cattails, pads, berries]) {
@@ -1069,13 +1145,23 @@ function stickGeo(len, t, twig) {
 // a stone: a smooth, slightly flat pebble
 const pebbleGeos = [1, 2, 3].map((k) => jitterGeo(new THREE.IcosahedronGeometry(1, 1), 0.16, 40 + k));
 // the stone axe: a handle that's thicker at the grip, a wedge of stone with a sharp edge, and a lashing where they meet
+// A stone axe head seen from the side: a narrow neck where it's lashed to the handle, flaring out to a wide curved
+// cutting edge, with a short stub (the poll) behind the handle. It's flat and thins to a sharp edge.
+// Built along x (the handle), out along +z (the blade) and thin in y.
 const axeHeadGeo = (() => {
-  const g = new THREE.BoxGeometry(0.085, 0.095, 0.25, 1, 1, 2).toNonIndexed();
+  const sh = new THREE.Shape();
+  sh.moveTo(-0.028, -0.05); sh.lineTo(0.028, -0.05); // the poll, behind the handle
+  sh.lineTo(0.032, 0.035);
+  sh.quadraticCurveTo(0.05, 0.1, 0.085, 0.16); // flaring out to the edge
+  sh.quadraticCurveTo(0, 0.205, -0.085, 0.16); // the curved cutting edge
+  sh.quadraticCurveTo(-0.05, 0.1, -0.032, 0.035);
+  sh.closePath();
+  const depth = 0.05;
+  const g = new THREE.ExtrudeGeometry(sh, { depth, bevelEnabled: false, curveSegments: 5 }).translate(0, 0, -depth / 2).rotateX(Math.PI / 2);
   const p = g.attributes.position;
-  for (let i = 0; i < p.count; i++) { // taper to a blade along z, rounded back
-    const z = p.getZ(i), k = (z + 0.125) / 0.25;
-    p.setX(i, p.getX(i) * (1 - k * 0.82));
-    p.setY(i, p.getY(i) * (1 + k * 0.35));
+  for (let i = 0; i < p.count; i++) { // thinner towards the edge
+    const k = Math.min(1, Math.max(0, (p.getZ(i) - 0.02) / 0.17));
+    p.setY(i, p.getY(i) * (1 - 0.85 * k));
   }
   g.computeVertexNormals();
   return g;
@@ -1084,15 +1170,55 @@ const SHAPES = {
   axe(look) {
     const len = look.length ?? 0.55, t = look.thickness ?? 0.025;
     const g = new THREE.Group();
-    const handle = new THREE.Mesh(new THREE.CylinderGeometry(t * 0.85, t * 1.15, len, 6).rotateZ(Math.PI / 2), tinted(look.colour || '#8a6847', 0.04));
-    g.add(handle);
+    const wood = tinted(look.colour || '#8a6847', 0.04);
+    g.add(new THREE.Mesh(new THREE.CylinderGeometry(t * 0.9, t * 1.1, len, 6).rotateZ(Math.PI / 2), wood)); // the handle
+    const knob = new THREE.Mesh(new THREE.CylinderGeometry(t * 1.35, t * 1.1, 0.03, 6).rotateZ(Math.PI / 2), wood); // a little flare at the end you hold
+    knob.position.x = -len / 2 + 0.015;
+    g.add(knob);
+    const hx = len / 2 - 0.05;
     const head = new THREE.Mesh(axeHeadGeo, tinted(look.head || '#8f8a80', 0.06));
-    head.position.set(len / 2 - 0.06, 0.004, 0.065);
+    head.position.set(hx, 0, 0);
     g.add(head);
-    const lash = new THREE.Mesh(new THREE.CylinderGeometry(t * 1.45, t * 1.45, 0.05, 7).rotateZ(Math.PI / 2), matFor(look.lashing || '#5b4330'));
-    lash.position.set(len / 2 - 0.055, 0, 0);
-    g.add(lash);
+    const twine = matFor(look.lashing || '#c9b77a');
+    for (const dx of [-0.042, 0.042]) { // twine wrapped round the handle either side of the head
+      const lash = new THREE.Mesh(new THREE.CylinderGeometry(t * 1.5, t * 1.5, 0.026, 7).rotateZ(Math.PI / 2), twine);
+      lash.position.set(hx + dx, 0, 0);
+      g.add(lash);
+    }
+    const cross = new THREE.Mesh(new THREE.BoxGeometry(0.1, t * 2.6, 0.012), twine); // and across the neck
+    cross.position.set(hx, 0, 0.022);
+    cross.rotation.y = 0.5;
+    g.add(cross);
     return { model: g, rest: 0.04, hold: 'axe', grip: len / 2 - 0.06, hit: [len + 0.3, 0.3, 0.42] };
+  },
+  // a knife: a short stick handle with a sharp stone flake lashed into the end
+  knife(look) {
+    const len = look.length ?? 0.26, t = look.thickness ?? 0.016;
+    const g = new THREE.Group();
+    const hl = len * 0.55;
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(t * 0.9, t * 1.1, hl, 6).rotateZ(Math.PI / 2), tinted(look.colour || '#8a6847', 0.04));
+    handle.position.x = -len / 2 + hl / 2;
+    g.add(handle);
+    const bl = len - hl + 0.02;
+    const blade = new THREE.Mesh(new THREE.ConeGeometry(0.026, bl, 4).rotateZ(-Math.PI / 2).scale(1, 1, 0.35), tinted(look.blade || '#8f8a80', 0.06));
+    blade.position.x = len / 2 - bl / 2;
+    g.add(blade);
+    const lash = new THREE.Mesh(new THREE.CylinderGeometry(t * 1.5, t * 1.5, 0.035, 7).rotateZ(Math.PI / 2), matFor(look.lashing || '#c9b77a'));
+    lash.position.x = -len / 2 + hl;
+    g.add(lash);
+    return { model: g, rest: 0.02, hold: 'axe', grip: len / 2 - 0.035, hit: [len + 0.3, 0.25, 0.3] };
+  },
+  // a coil of twine: a couple of loose loops
+  coil(look) {
+    const r = look.size ?? 0.05, g = new THREE.Group();
+    const m = matFor(look.colour || '#c9b77a');
+    for (const [k, y] of [[1, 0], [0.8, 0.012]]) {
+      const loop = new THREE.Mesh(new THREE.TorusGeometry(r * k, r * 0.22, 4, 10).rotateX(Math.PI / 2), m);
+      loop.position.y = y;
+      loop.rotation.y = k * 2;
+      g.add(loop);
+    }
+    return { model: g, rest: r * 0.22, hit: [r * 2 + 0.3, 0.25, r * 2 + 0.3] };
   },
   // a log: a short length of trunk with pale cut ends
   log(look) {
@@ -1499,7 +1625,8 @@ function takeFromCarry(kind, n = 1) {
   return taken;
 }
 // the thing you picked up last is shown in your hand
-const heldKind = () => Object.keys(you.carry).find((k) => ITEMS[k] && ITEMS[k].uses) || (you.carry[you.lastKind] ? you.lastKind : null);
+// what's in your hand: the tool you used last (if you still have it), any tool, or the last thing you picked up
+const heldKind = () => (you.tool && you.carry[you.tool] ? you.tool : null) || Object.keys(you.carry).find((k) => ITEMS[k] && ITEMS[k].uses) || (you.carry[you.lastKind] ? you.lastKind : null);
 function drawHeld() {
   if (heldView) { if (heldView.parent) heldView.parent.remove(heldView); heldView = null; }
   const kind = player && heldKind();
@@ -1525,6 +1652,7 @@ function drawHeld() {
     const want = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(along, side, blade));
     wrap.quaternion.copy(handInMe.invert().multiply(want));
     model.position.x = grip || 0.2;
+    model.rotation.x = Math.PI; // turned over on the handle so the cutting edge faces the other way (Luke, 0.1.6)
     wrap.add(model);
     wrap.position.set(0, -0.05, 0);
   } else {
@@ -1619,13 +1747,24 @@ function updateLabels() {
 /* ---------- the clock and the info at the edges ---------- */
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const formatDate = (d) => `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
-const formatTime = (d) => `${((d.getHours() + 11) % 12) + 1}:${String(d.getMinutes()).padStart(2, '0')} ${d.getHours() < 12 ? 'am' : 'pm'}`;
+// The world has one clock for everyone: settings.worldTimeZone (Darwin time for the Oceania world). worldNow() gives
+// a Date whose UTC fields read as the time there, so the date, the time and day and night are the same on every phone.
+const WORLD_TZ = SETTINGS.worldTimeZone || 'Australia/Darwin';
+let tzParts = null;
+try { tzParts = new Intl.DateTimeFormat('en-US', { timeZone: WORLD_TZ, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' }); } catch (err) { /* very old browser */ }
+function worldNow() {
+  const now = new Date();
+  if (!tzParts) return new Date(now.getTime() + 9.5 * 3600000); // Darwin is UTC+9:30 all year
+  const p = Object.fromEntries(tzParts.formatToParts(now).map((x) => [x.type, x.value]));
+  return new Date(Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second));
+}
+const formatDate = (d) => `${DAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+const formatTime = (d) => `${((d.getUTCHours() + 11) % 12) + 1}:${String(d.getUTCMinutes()).padStart(2, '0')} ${d.getUTCHours() < 12 ? 'am' : 'pm'}`;
 function drawHud() {
   if (!you.look) return;
   $('hudName').textContent = you.look.name;
   $('hudAge').textContent = String(you.look.age);
-  const now = new Date(); // the world runs on real time
+  const now = worldNow(); // the world runs on real time, on its own clock
   $('hudTime').textContent = `${formatDate(now)} · ${formatTime(now)}`;
   measureHud();
 }
@@ -1657,14 +1796,15 @@ const NEED_ICONS = {
   bolt: '<path d="M13 3 5 14h6l-1 7 8-11h-6z"/>',
 };
 const iconFor = (s) => NEED_ICONS[s.icon] || NEED_ICONS[{ health: 'heart', hunger: 'food', thirst: 'drop', rest: 'moon', energy: 'bolt' }[s.id]] || NEED_ICONS.heart;
-// Energy: every task takes a little (energyCosts in game-data.json), and it comes back while you take it easy
+// Energy is short-term stamina: every task and every metre walked takes a little (energyCosts in game-data.json),
+// and it comes back quickly by itself. Below slowBelow your person slows down (slowBy) instead of stopping.
 const COSTS = DATA.energyCosts || {};
+const ENERGY = STATS.find((s) => s.id === 'energy');
+const slowness = () => (ENERGY && you.stats && you.stats.energy != null && you.stats.energy < (ENERGY.slowBelow || 0) ? ENERGY.slowBy || 1 : 1);
 function spendEnergy(what, amount = 1) {
   const c = (COSTS[what] || 0) * amount;
   if (c && you.stats && you.stats.energy != null) { you.stats.energy = Math.max(0, you.stats.energy - c); }
 }
-const costOf = (t) => (t.type === 'pickup' ? COSTS.pickup : t.type === 'use' ? (t.water ? COSTS.drink : COSTS.harvest) : t.type === 'chop' ? COSTS.chop : 0) || 0;
-const tooTired = (cost) => you.stats && you.stats.energy != null && cost > 0 && you.stats.energy < cost;
 function buildNeeds() {
   $('needs').replaceChildren(...STATS.map((s) => {
     const row = document.createElement('div');
@@ -1745,8 +1885,8 @@ const lerpNum = (a, b, t) => (Number.isFinite(a) && Number.isFinite(b) ? a + (b 
 let hourOverride = null; // lets a test pick the time of day
 function localHour() {
   if (hourOverride != null) return hourOverride;
-  const d = new Date();
-  return d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600;
+  const d = worldNow();
+  return d.getUTCHours() + d.getUTCMinutes() / 60 + d.getUTCSeconds() / 3600;
 }
 function applyDaylight() {
   const n = DAYLIGHT.length;
@@ -1858,7 +1998,6 @@ function canMake(r) {
 }
 function make(r) {
   if (!canMake(r)) return;
-  if (tooTired(COSTS.craft || 0)) { showTag('Too tired. I need a breather', headTop(), 2.5); return; }
   spendEnergy('craft');
   for (const [k, n] of Object.entries(r.needs)) takeFromCarry(k, n);
   for (const [k, n] of Object.entries(r.makes)) addToCarry(k, n);
@@ -2181,6 +2320,7 @@ function resetPose() {
 function startAction(a) {
   walk.target = null;
   action = { t0: elapsed, done: false, seconds: 0.5, pose: 'bend', ...a };
+  action.seconds *= slowness(); // out of breath: it takes longer
   if (online()) net.sock.send(JSON.stringify({ t: 'act', pose: action.pose, seconds: action.seconds }));
 }
 // other people's actions, shown the same way as yours: a bend to pick something up, picking berries, kneeling to drink
@@ -2283,11 +2423,6 @@ function nextTask() {
   drawQueue();
   const t = tasks.current;
   if (!t || !player || you.dead) return;
-  if (tooTired(costOf(t)) || (t.type === 'walk' && you.stats && you.stats.energy <= 0)) {
-    showTag('Too tired. I need a breather', headTop(), 2.5);
-    stopQueue();
-    return;
-  }
   if (t.type === 'pickup') {
     const item = getItem(t.id);
     if (!item) { nextTask(); return; }
@@ -2303,6 +2438,8 @@ function nextTask() {
     if (!['tree', 'stump', 'oldStump'].includes(t.what) && !getItem(t.id)) { nextTask(); return; }
     const stop = t.what === 'tree' ? 0.95 : t.what === 'log' ? 0.6 : 0.85;
     approach(t.x, t.z, stop, stop + 0.35, () => doChop(t));
+  } else if (t.type === 'cut') {
+    approach(t.x, t.z, 0.55, 0.9, () => doCut(t));
   } else if (t.type === 'drop') doDrop(t);
   else if (t.type === 'walk') walkTo(V(t.x, 0, t.z), nextTask, nextTask);
   else nextTask();
@@ -2464,15 +2601,20 @@ function applyGives(gives) {
   drawNeeds();
 }
 // picking a berry bush: one berry into your inventory, and that berry starts growing back
+// With the source's tool (a knife) you cut a few at once (toolHarvest); the server works it out the same way.
 function harvestFrom(src, t) {
   const b = berryBushes[t.bush];
-  if ((b && !ripe(b)) || carried() + weightOf(src.harvest) > SETTINGS.carryCapacity) return;
-  for (const [k, n] of Object.entries(src.harvest)) addToCarry(k, n);
+  const many = src.tool && src.toolHarvest && you.carry[src.tool] && b && berriesOn(b) >= Object.values(src.toolHarvest).reduce((a, n) => a + n, 0);
+  const got = many ? src.toolHarvest : src.harvest;
+  if ((b && !ripe(b)) || carried() + weightOf(got) > SETTINGS.carryCapacity) return;
+  for (const [k, n] of Object.entries(got)) addToCarry(k, n);
+  you.lastPick = Object.values(got).reduce((a, n) => a + n, 0);
+  if (many) you.tool = src.tool;
   spendEnergy('harvest');
-  if (b) { pickBerry(b); drawBerries(b); sharePick(t.bush); }
+  if (b) { for (let k = 0; k < you.lastPick; k++) pickBerry(b); drawBerries(b); sharePick(t.bush); }
   drawHeld();
   drawCarry();
-  showGain(Object.entries(src.harvest).map(([k, n]) => `+${countLabel(k, n)}`).join(', '));
+  showGain(Object.entries(got).map(([k, n]) => `+${countLabel(k, n)}`).join(', '));
 }
 // eating food you carry happens straight away, one at a time
 function eatOne(kind) {
@@ -2485,11 +2627,36 @@ function eatOne(kind) {
   drawHeld();
   drawCarry();
 }
+// cutting a plant (tall grass): by hand it takes a while, with the right tool (a knife) it's quick. What it gives goes
+// straight into your inventory; the server has the final say (if someone cut it first, it's taken back)
+function doCut(t) {
+  const def = PLANTS[t.plant], c = plants[t.plant] && plants[t.plant].clumps[t.i];
+  if (!def || !c) { nextTask(); return; }
+  if (!plantReady(c)) { showTag(`Grows back in ${growsIn(c)}`, headTop(), 2); nextTask(); return; }
+  if (carried() + weightOf(def.gives) > SETTINGS.carryCapacity) { showTag('Inventory full', headTop(), 2); stopQueue(); return; }
+  const tool = def.tool && you.carry[def.tool] ? def.tool : null;
+  if (tool) { you.tool = tool; drawHeld(); }
+  const secs = tool ? def.toolSeconds || def.seconds : def.seconds || 6;
+  face(t.x, t.z);
+  showTag(`${def.verb || 'Cutting'}…`, headTop(), 2, secs * slowness() + 0.3);
+  tagLabel.busy = true;
+  startAction({ pose: def.pose || 'pick', seconds: secs, end: () => {
+    if (!plantReady(c)) { showTag('Someone cut it first', headTop(), 2); return; }
+    for (const [k, n] of Object.entries(def.gives || {})) addToCarry(k, n);
+    setPlant(t.plant, t.i, Date.now() + 2 * 3600000); // the server sends the real time it grows back
+    spendEnergy('harvest');
+    if (online()) net.sock.send(JSON.stringify({ t: 'cut', plant: t.plant, i: t.i }));
+    drawHeld();
+    drawCarry();
+    showGain(Object.entries(def.gives || {}).map(([k, n]) => `+${countLabel(k, n)}`).join(', '));
+  } });
+}
 // chopping: swing the axe for a while, then the server says what came of it
 function doChop(t) {
   const rule = CHOP[t.what === 'oldStump' ? 'stump' : t.what] || {};
   if (t.what === 'oldStump' && oldStumps[t.idx] && oldStumps[t.idx].gone) { nextTask(); return; }
   if (CHOP.tool && !you.carry[CHOP.tool]) { showTag(`You need a ${ITEMS[CHOP.tool].name.toLowerCase()}`, headTop(), 2); nextTask(); return; }
+  if (CHOP.tool) { you.tool = CHOP.tool; drawHeld(); }
   if ((t.what === 'tree' && trees[t.idx] && trees[t.idx].state !== 'tree') || (t.what === 'stump' && trees[t.idx] && trees[t.idx].state !== 'stump')) { nextTask(); return; }
   face(t.x, t.z);
   showTag(t.what === 'tree' ? 'Chopping…' : t.what === 'stump' || t.what === 'oldStump' ? 'Digging out the stump…' : 'Chopping…', headTop(), 2, (rule.seconds || 10) + 0.3);
@@ -2550,6 +2717,7 @@ function taskName(t, now) {
     return harvests(src) ? `Harvest ${ITEMS[Object.keys(src.harvest)[0]].name}` : src.action || `Use ${src.name.toLowerCase()}`;
   }
   if (t.type === 'drop') return now ? 'Putting down' : `Drop ${countLabel(t.kind, t.n)}`;
+  if (t.type === 'cut') return now ? `${(PLANTS[t.plant] || {}).verb || 'Cutting'}` : (PLANTS[t.plant] || {}).action || 'Cut';
   if (t.type === 'chop') return t.what === 'tree' ? (now ? 'Chopping a tree' : 'Chop tree') : t.what === 'stump' || t.what === 'oldStump' ? (now ? 'Removing a stump' : 'Remove stump') : (now ? 'Chopping a log' : 'Chop log');
   if (t.type === 'walk') return now ? 'Walking' : 'Walk there';
   return '';
@@ -2753,7 +2921,13 @@ function pickTarget(px, py) {
     const i = treeNear(hit.point);
     if (i >= 0) return { kind: 'tree', idx: i, name: owner.userData.label, x: trees[i].x, z: trees[i].z, hit };
   }
+  if (hit && hit.object && hit.object.userData.plant && hit.instanceId != null) {
+    const P = plants[hit.object.userData.plant], c = P && P.clumps[Math.floor(hit.instanceId / P.per)];
+    if (c) return plantTarget(hit.object.userData.plant, c);
+  }
   if (owner) return { kind: 'thing', owner, hit, name: owner.userData.label || '' };
+  const pl = gp && plantNear(gp);
+  if (pl) return plantTarget(pl.kind, pl.c);
   if (gp) return { kind: 'ground', point: gp, name: '' };
   return null;
 }
@@ -2785,7 +2959,7 @@ function handleTap(px, py) {
   if (!t) return;
   if (t.kind === 'you') { firstTap = null; openMenuAt(px, py, { kind: 'self', name: 'You' }); return; }
   // a stick, stone, berry bush or the pond: open the menu of what you can do with it
-  if (['item', 'use', 'person', 'grave', 'tree', 'stump', 'oldStump'].includes(t.kind)) { firstTap = null; openMenuAt(px, py, t); return; }
+  if (['item', 'use', 'person', 'grave', 'tree', 'stump', 'oldStump', 'plant'].includes(t.kind)) { firstTap = null; openMenuAt(px, py, t); return; }
   // the ground (or a rock, tree or log): one tap opens Walk here, a quick double-tap walks straight there
   const now = performance.now();
   if (!firstTap || now - firstTap.t > DOUBLE_MS || Math.hypot(px - firstTap.px, py - firstTap.py) > DOUBLE_PX) {
@@ -2843,6 +3017,14 @@ function menuActions(t) {
       ...adminMore(admin.on ? [{ label: 'Fill my needs', run: () => adminSend({ t: 'a.fill', id: net.myId }) }] : [])];
   }
   if (t.kind === 'grave') return [{ label: 'Walk here', run: () => walkFirst(V(t.x + 0.8, 0, t.z)) }];
+  if (t.kind === 'plant') {
+    const def = PLANTS[t.plant], c = plants[t.plant].clumps[t.i], fast = def.tool && you.carry[def.tool];
+    const ready = plantReady(c);
+    return [{ label: def.action || 'Cut', disabled: !ready,
+      note: !ready ? `Grows back in ${growsIn(c)}` : fast ? `${def.toolSeconds || def.seconds} s` : `${def.seconds} s${def.tool ? ` · faster with a ${ITEMS[def.tool].name.toLowerCase()}` : ''}`,
+      run: () => queueTask({ type: 'cut', plant: t.plant, i: t.i, x: t.x, z: t.z }) },
+      { label: 'Walk here', run: () => walkFirst(V(t.x + 0.7, 0, t.z)) }];
+  }
   if (t.kind === 'item') {
     const it = t.item;
     const chopIt = CHOP[it.kind] && CHOP.tool;
@@ -3082,7 +3264,7 @@ function updatePlayer(dt) {
     }
     else {
       // head for the next point, stepping round anything small in the way
-      const step = Math.min(ad, SETTINGS.walkSpeed * dt);
+      const step = Math.min(ad, (SETTINGS.walkSpeed / slowness()) * dt); // out of breath: slower
       const base = Math.atan2(ax, az);
       const tries = walk.side < 0 ? [0, -0.5, -1, -1.5, -2, 0.5, 1, 1.5, 2] : [0, 0.5, 1, 1.5, 2, -0.5, -1, -1.5, -2];
       let nx = 0, nz = 0, heading = base, ok = false;
@@ -3379,7 +3561,7 @@ function frame() {
     updateOthers(dt);
     renderWorld(w, h, raw);
     hudTimer += raw;
-    if (hudTimer > 1) { hudTimer = 0; drawMenu(); applyDaylight(); for (const b of berryBushes) drawBerries(b); }
+    if (hudTimer > 1) { hudTimer = 0; drawMenu(); applyDaylight(); for (const b of berryBushes) drawBerries(b); drawPlants(); }
   } else if (player) {
     if (!you.dead && !paused && !you.sleeping) updatePlayer(dt);
     if (!paused) keyCamera(dt);
@@ -3390,7 +3572,7 @@ function frame() {
     controls.update();
     renderWorld(w, h, raw);
     hudTimer += raw;
-    if (hudTimer > 1) { hudTimer = 0; drawHud(); tickStats(); applyDaylight(); for (const b of berryBushes) drawBerries(b); }
+    if (hudTimer > 1) { hudTimer = 0; drawHud(); tickStats(); applyDaylight(); for (const b of berryBushes) drawBerries(b); drawPlants(); }
   }
   window.__frames = (window.__frames || 0) + 1;
   requestAnimationFrame(frame);
@@ -3493,6 +3675,14 @@ function goOnline() {
     else if (m.t === 'stroll') { const o = others.get(m.id); if (o) Object.assign(o, { tx: m.x, tz: m.z, speed: m.speed || null, then: m.then || null, act: null }); }
     else if (m.t === 'act') { const o = others.get(m.id); if (o && ['bend', 'kneel', 'pick', 'chop'].includes(m.pose)) o.act = { pose: m.pose, seconds: Math.min(25, Number(m.seconds) || 0.5), t0: elapsed }; }
     else if (m.t === 'tree') setTreeState(m.idx, m.state || 'tree');
+    else if (m.t === 'plant') setPlant(m.plant, m.i, m.readyAt);
+    else if (m.t === 'cutNo') { // someone cut it first: what you got is taken back
+      setPlant(m.plant, m.i, m.readyAt);
+      let back = false;
+      for (const [k, n] of Object.entries((PLANTS[m.plant] || {}).gives || {})) back = takeFromCarry(k, n) || back;
+      if (back) { drawHeld(); drawCarry(); }
+      showTag('Someone cut it first', headTop(), 2);
+    }
     else if (m.t === 'oldStump') removeOldStump(m.idx);
     else if (m.t === 'broke') { showTag(`Your ${(ITEMS[m.kind] || { name: 'tool' }).name.toLowerCase()} broke`, headTop(), 3); drawHeld(); }
     else if (m.t === 'graves') drawGraves(m.graves);
@@ -3503,7 +3693,7 @@ function goOnline() {
     else if (m.t === 'took') tookBack(m);
     else if (m.t === 'bush') { const b = berryBushes[m.bush]; if (b) { b.userData.count = m.count; b.userData.growFrom = m.growFrom; drawBerries(b); } }
     else if (m.t === 'picked' && !m.ok) {
-      if (takeFromCarry('berry', 1)) { drawHeld(); drawCarry(); }
+      if (takeFromCarry('berry', you.lastPick || 1)) { drawHeld(); drawCarry(); }
       showTag('Someone picked it first', headTop(), 2);
     }
     else if (m.t === 'join') addOther(m.person);
@@ -3648,6 +3838,7 @@ function useSharedWorld(w) {
   const ts = w.trees || {};
   trees.forEach((t, i) => setTreeState(i, ts[i] ? ts[i][0] : 'tree'));
   for (const i of Object.keys(w.oldStumps || {})) removeOldStump(Number(i));
+  for (const [kind, P] of Object.entries(plants)) for (const c of P.clumps) setPlant(kind, c.i, ((w.plants || {})[kind] || {})[c.i] || 0);
   berryBushes.forEach((b, i) => {
     const s = (w.bushes || [])[i];
     b.userData.count = s && s[0] != null ? s[0] : null;
@@ -4021,7 +4212,7 @@ function drawTag(o) {
   if (o.state === 'away' || o.state === 'asleep' || o.state === 'sleeping') {
     const sub = document.createElement('small');
     sub.className = 'tag-sub';
-    sub.textContent = o.state === 'asleep' ? 'asleep · zz' : o.state === 'sleeping' ? 'sleeping · zz' : 'away';
+    sub.textContent = o.state === 'asleep' ? 'away · fast asleep' : o.state === 'sleeping' ? 'sleeping · zz' : 'away';
     el.appendChild(sub);
   }
 }
@@ -4128,22 +4319,22 @@ function sendMove() {
   const x = player.position.x, z = player.position.z, ry = player.rotation.y;
   const goal = walk.target ? [Math.round(walk.target.x * 100) / 100, Math.round(walk.target.z * 100) / 100] : null;
   const l = net.last;
-  const newGoal = goal && (!l || !l.goal || l.goal[0] !== goal[0] || l.goal[1] !== goal[1]);
+  const newGoal = goal && (!l || !l.goal || l.goal[0] !== goal[0] || l.goal[1] !== goal[1] || l.slow !== slowness());
   const stopped = !goal && l && l.goal;
   if (!newGoal && !stopped) {
     if (goal) { if (elapsed - net.sentAt < 2.5) return; } // walking: now and then, where you've got to
     else if (elapsed - net.sentAt < 0.5 || (l && Math.hypot(x - l.x, z - l.z) < 0.05 && Math.abs(ry - l.ry) < 0.15)) return; // standing: only when moved or turned
   }
   net.sentAt = elapsed;
-  net.last = { x, z, ry, goal };
-  net.sock.send(JSON.stringify({ t: 'move', x, z, ry, ...(goal ? { tx: goal[0], tz: goal[1] } : {}) }));
+  net.last = { x, z, ry, goal, slow: slowness() };
+  net.sock.send(JSON.stringify({ t: 'move', x, z, ry, ...(goal ? { tx: goal[0], tz: goal[1], sp: Math.round(100 / slowness()) / 100 } : {}) }));
 }
 // Someone else moved. A walk comes with where they're going (tx, tz) and their game walks them there along the
 // same kind of route; if they've drifted far from where they really are, they jump there.
 function heardMove(o, m) {
   const p = o.mesh.position;
   if (Math.hypot(p.x - m.x, p.z - m.z) > 3) { p.x = m.x; p.z = m.z; o.pathKey = null; }
-  if (m.tx != null) Object.assign(o, { tx: m.tx, tz: m.tz, speed: SETTINGS.walkSpeed, then: null, act: null });
+  if (m.tx != null) Object.assign(o, { tx: m.tx, tz: m.tz, speed: SETTINGS.walkSpeed * (m.sp > 0 && m.sp <= 1 ? m.sp : 1), then: null, act: null });
   else Object.assign(o, { tx: m.x, tz: m.z, tr: m.ry, speed: null });
 }
 // speech bubbles: what you say shows over your head for everyone nearby
@@ -4218,4 +4409,4 @@ enterMenu();
 goOnline();
 requestAnimationFrame(frame);
 // for automated checks only: open the page with ?debug to reach the game's state from the browser console
-if (location.search.includes('debug')) window.__pl = { walk, tasks, trees, you, others, net, get player() { return player; }, findPath, freeAt, die, showWelcomeBack, showGoneCard, showMaintenance, hideMaintenance };
+if (location.search.includes('debug')) window.__pl = { walk, tasks, trees, you, others, net, plants, queueTask, camera, berryBushes, buildItem, get player() { return player; }, findPath, freeAt, die, showWelcomeBack, showGoneCard, showMaintenance, hideMaintenance };
