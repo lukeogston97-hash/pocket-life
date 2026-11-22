@@ -209,7 +209,7 @@
         "lashing": "#c9b77a"
       },
       "tool": {
-        "uses": 10
+        "uses": 20
       },
       "startInWorld": 0
     },
@@ -226,7 +226,7 @@
         "lashing": "#c9b77a"
       },
       "tool": {
-        "uses": 20
+        "uses": 30
       },
       "startInWorld": 0
     },
@@ -246,7 +246,7 @@
     "campfire": {
       "name": "Campfire",
       "plural": "Campfires",
-      "weight": 15,
+      "weight": 12,
       "look": {
         "shape": "campfire",
         "size": 0.36,
@@ -764,7 +764,8 @@
       "version": "0.2.3",
       "date": "2026-11-22",
       "notes": [
-        "New weights: logs 5 (was 10), campfires 15 (was 17), twine, berries and the stone knife 1 each.",
+        "New weights: logs 5 (was 10), campfires 12 (was 17), twine, berries and the stone knife 1 each.",
+        "Tools last longer: the stone knife 20 uses (was 10), the stone axe 30 (was 20).",
         "Chopping a log into sticks gives 5 sticks (was 4)."
       ]
     },
