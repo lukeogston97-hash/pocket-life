@@ -60,12 +60,12 @@ export function ageOf(p, now = Date.now()) {
 // drags others down, and needs marked onlyWhenFine (health) only recover while nothing is empty
 // (asleep: needs with whileAsleep, like Rest, change by that instead, and by whileAsleepAtNight at night)
 // floor (asleep while away): needs that can empty stop at the floor (or where they were, if lower), and nothing hurts
-function step(st, hours, G, asleep, night, floor) {
+function step(st, hours, G, asleep, night, floor, sitting = false) {
   const empty = floor != null ? [] : G.needs.filter((s) => s.atZero && st[s.id] <= 0);
   const change = {}, before = floor != null ? { ...st } : null;
   for (const s of G.needs) {
     const sleepRate = night && s.whileAsleepAtNight != null ? s.whileAsleepAtNight : s.whileAsleep;
-    change[s.id] = s.onlyWhenFine && empty.length ? 0 : asleep && sleepRate != null ? sleepRate : s.perHour;
+    change[s.id] = s.onlyWhenFine && empty.length ? 0 : asleep && sleepRate != null ? sleepRate : sitting && s.whileSitting != null ? s.whileSitting : s.perHour;
   }
   for (const s of empty) for (const [k, v] of Object.entries(s.atZero)) if (k in change) change[k] += v;
   for (const s of G.needs) {
@@ -86,7 +86,7 @@ export function advanceStats(p, to, G, speed, floor = null) {
   while (t < to) {
     const next = Math.min(to, t + MINUTE);
     const fast = speed && t < speed.until ? speed.x : 1;
-    step(p.stats, ((next - t) / HOUR) * fast, G, asleep, asleep && isNight(t, G), floor);
+    step(p.stats, ((next - t) / HOUR) * fast, G, asleep, asleep && isNight(t, G), floor, !asleep && !!p.sit && t < p.sit.until); // sitting by a fire: whileSitting
     t = next;
     if (floor == null && G.needs.some((s) => s.deadAtZero && p.stats[s.id] <= 0)) { p.statsAt = t; return { at: t, cause: causeOf(p.stats, G) }; }
   }

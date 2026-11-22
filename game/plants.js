@@ -42,7 +42,7 @@ const plantReady = (c) => !c.readyAt || Date.now() >= c.readyAt;
 // a cut clump is short stubble with no seed heads; a grown one is as it was laid out
 const STUB = new THREE.Matrix4().makeScale(1, 0.22, 1), NONE = new THREE.Matrix4().makeScale(0, 0, 0), tmpM = new THREE.Matrix4();
 function drawPlant(kind, c) {
-  const P = plants[kind], up = plantReady(c);
+  const P = plants[kind], up = freshLook || plantReady(c);
   if (c.shown === up) return;
   c.shown = up;
   for (let k = 0; k < P.per; k++) {

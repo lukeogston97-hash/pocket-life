@@ -8,4 +8,4 @@ enterMenu();
 goOnline();
 requestAnimationFrame(frame);
 // for automated checks only: open the page with ?debug to reach the game's state from the browser console
-if (location.search.includes('debug')) window.__pl = { solidAt, walk, tasks, trees, you, others, net, plants, queueTask, camera, berryBushes, buildItem, layoutData, oldStumps, get player() { return player; }, findPath, freeAt, die, showWelcomeBack, showGoneCard, showMaintenance, hideMaintenance };
+if (location.search.includes('debug')) window.__pl = { solidAt, walk, tasks, trees, you, others, net, plants, queueTask, camera, berryBushes, buildItem, layoutData, oldStumps, placed, placing, movePlacing, finishPlacing, cantPlaceAt, fuelLeft, isLit, endSit, get player() { return player; }, get heldView() { return heldView; }, get freshLook() { return freshLook; }, itemViews, findPath, freeAt, die, showWelcomeBack, showGoneCard, showMaintenance, hideMaintenance };

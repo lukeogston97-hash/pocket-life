@@ -104,6 +104,8 @@ function die(m) {
   you.dead = true;
   closeMenu();
   closePause();
+  forgetSit();
+  stopPlacing();
   stopQueue();
   closeBag();
   closeCraft();
@@ -173,7 +175,21 @@ function drawRegions() {
     return b;
   }));
 }
+// A world nobody has played yet looks untouched: every tree standing, bushes full, grass grown, nothing on the ground,
+// no campfires and nobody there. Only how it's drawn changes; going back to the open world shows it as it really is.
+function setFresh(on) {
+  if (freshLook === on) return;
+  freshLook = on;
+  trees.forEach((t) => { showParts(t, on || t.state === 'tree'); if (t.stump) t.stump.visible = !on; });
+  oldStumps.forEach((t) => showParts(t, on || !t.gone));
+  for (const v of itemViews.values()) v.visible = !on;
+  for (const th of placed.values()) if (th.view) th.view.visible = !on;
+  fireLight.visible = !on;
+  for (const b of berryBushes) drawBerries(b);
+  drawPlants();
+}
 function drawMenu() {
+  setFresh(ui.mode === 'menu' && !!menuRegion && !menuRegion.open);
   drawRegions();
   if (menuRegion && !menuRegion.open) { // looking at a world that isn't open yet
     $('playText').textContent = `${menuRegion.name} is coming soon`;
@@ -207,6 +223,7 @@ function sendHello() {
 // Play: the same connection now plays your person (or makes a new one)
 function play() {
   if (ui.mode !== 'menu' || (menuRegion && !menuRegion.open)) return;
+  setFresh(false);
   net.mode = 'play';
   menuJoining = true; // until the server answers
   drawMenu();
@@ -224,6 +241,8 @@ function toMenu() {
 // your person is no longer shown here (the server looks after them now)
 function dropPlayer() {
   if (!player) return;
+  forgetSit(); // a sit carries on while you're away (the server keeps it)
+  stopPlacing();
   stopQueue();
   action = null;
   auto.on = false; $('autoChip').hidden = true;

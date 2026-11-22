@@ -1,5 +1,5 @@
 {
-  "version": "0.1.9",
+  "version": "0.2.2",
   "build": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -101,8 +101,9 @@
       "colour": "#e8c547",
       "icon": "bolt",
       "start": 100,
-      "perHour": 400,
-      "whileAsleep": 400,
+      "perHour": 600,
+      "whileAsleep": 1500,
+      "whileSitting": 2400,
       "lowAt": 20,
       "lowLabel": "Out of breath",
       "fullLabel": "Full of stamina",
@@ -115,8 +116,10 @@
     "harvest": 2,
     "drink": 1,
     "craft": 5,
-    "chop": 15,
-    "walkPerMetre": 0.15
+    "chop": 10,
+    "walkPerMetre": 0.15,
+    "build": 8,
+    "tend": 1
   },
   "chopping": {
     "tool": "stone-axe",
@@ -239,6 +242,20 @@
         "end": "#cdb085"
       },
       "startInWorld": 0
+    },
+    "campfire": {
+      "name": "Campfire",
+      "plural": "Campfires",
+      "weight": 17,
+      "look": {
+        "shape": "campfire",
+        "size": 0.36,
+        "colour": "#8a6847",
+        "stone": "#8f8a80",
+        "ash": "#4a443d"
+      },
+      "places": "campfire",
+      "startInWorld": 0
     }
   },
   "recipes": [
@@ -267,8 +284,45 @@
         "stone-axe": 1
       },
       "about": "Chops trees, stumps and logs"
+    },
+    {
+      "id": "campfire",
+      "name": "Campfire",
+      "needs": {
+        "log": 1,
+        "stick": 3,
+        "stone": 4
+      },
+      "makes": {
+        "campfire": 1
+      },
+      "about": "Place it, build it, then light it"
     }
   ],
+  "placeables": {
+    "campfire": {
+      "name": "Campfire",
+      "buildSeconds": 10,
+      "buildVerb": "Building the campfire",
+      "solid": 0.55,
+      "fire": {
+        "fuel": "stick",
+        "secondsEach": 300,
+        "maxFuel": 10,
+        "lightSeconds": 3
+      },
+      "seats": {
+        "count": 6,
+        "distance": 1.7,
+        "minutes": [
+          5,
+          15,
+          30,
+          60
+        ]
+      }
+    }
+  },
   "sources": {
     "pond": {
       "name": "Pond",
@@ -600,7 +654,7 @@
   },
   "help": {
     "settings": "carryCapacity is the most weight a person can carry. walkSpeed is in metres per second. worldSize is how wide the square world is in metres (100 makes it 100 m x 100 m, with the clearing in the middle); it can be 40 to 300, and the bigger it is the more your phone has to draw. needsSpeed is 1 for real time; set it higher to test, for example 60 makes an hour of hunger and thirst pass in a minute. autoName fills in a name from testNames on the Make your person screen (handy while testing; set it to false for the real game). respawnMinutes is how often (online) the world adds one stick and one stone, if there are fewer on the ground than startInWorld: sticks under trees, stones by boulders. maxPlaying is how many people can play at once (20 for now, to stay inside Cloudflare's free plan); anyone else waits in line on the main menu and joins by themselves when a spot opens. Run tools/worlds.py test-build after changing it. worldTimeZone is the one clock the whole world runs on (date, time, day and night), the same for every player: Australia/Darwin for the Oceania world.",
-    "items": "To add an item, copy one of the items above, give it a new id (lower case, no spaces) and set its name, plural, weight and look. It then shows up by itself in the Inventory, in Craft (if a recipe makes it) and in the admin's Add list, with a picture drawn from its look. Shapes and their looks: rod (length, thickness, colour, twig), rock (size, colour), ball (size, colour, leaf: a colour or false), axe (length, thickness, colour, head, lashing), log (length, radius, colour, end), knife (length, thickness, colour, blade, lashing), coil (size, colour), box (width, height, depth, colour). An unknown shape is drawn as a rock. eat is what eating one gives (a berry gives hunger 10), which adds an Eat button in the inventory. tool: {\"uses\": 20} makes it a tool that wears out after that many uses (a wear bar in the inventory); a tool you carry shows in your hand. startInWorld is how many lie around when the world starts (0 for things you can only make), and startNear is how many of those start close to where you appear. After changing items, run python3 tools/worlds.py test-build so the server knows about them.",
+    "items": "To add an item, copy one of the items above, give it a new id (lower case, no spaces) and set its name, plural, weight and look. It then shows up by itself in the Inventory, in Craft (if a recipe makes it) and in the admin's Add list, with a picture drawn from its look. Shapes and their looks: rod (length, thickness, colour, twig), rock (size, colour), ball (size, colour, leaf: a colour or false), axe (length, thickness, colour, head, lashing), log (length, radius, colour, end), knife (length, thickness, colour, blade, lashing), coil (size, colour), campfire (size, colour, stone, ash), box (width, height, depth, colour). An unknown shape is drawn as a rock. eat is what eating one gives (a berry gives hunger 10), which adds an Eat button in the inventory. tool: {\"uses\": 20} makes it a tool that wears out after that many uses (a wear bar in the inventory); a tool shows in your hand only while you use it (chopping, cutting). startInWorld is how many lie around when the world starts (0 for things you can only make), and startNear is how many of those start close to where you appear. After changing items, run python3 tools/worlds.py test-build so the server knows about them.",
     "recipes": "To add a recipe, put it in the recipes list like this: {\"id\": \"stone-axe\", \"name\": \"Stone axe\", \"needs\": {\"stick\": 2, \"stone\": 3}, \"makes\": {\"stone-axe\": 1}, \"about\": \"Chops trees\"}. Every item in needs and makes must exist in items. Recipes show up in the Craft sheet (the hammer button) automatically. about is a short line on the recipe card (optional). The server checks crafting too, so run python3 tools/worlds.py test-build after changing recipes.",
     "looks": "Each list here is a set of choices on the Make your person screen. Add an entry to add a choice.",
     "stats": "Stats run in real time. Every stat goes from 0 to 100. perHour is how much it changes each real hour, and whileAsleep is used instead while sleeping. lowAt shows the warning (the ring pulses red, and under 10 it flashes). atZero is what happens to other stats each hour while this one is empty. Health heals (4 an hour, 8 asleep, so about a day to full) when nothing is empty, and the person dies when health reaches 0. fullLabel is shown when you try to eat or drink but don't need to. Hunger lasts about a day (a berry fills 10), thirst about 16 hours awake (a drink fills 15), Rest about 16 hours awake and 8 asleep (whileAsleepAtNight: faster at night, about 6 hours). With no water you die in about 3 days, with no food in about a week. collapseAtZero (Rest): when it runs out your person collapses asleep where they stand and can't be woken until it's back to wakeAt (25). Energy is not deadly. icon: heart, food, drop, moon or bolt. The server uses the same numbers (copied by tools/worlds.py).",
@@ -613,11 +667,12 @@
     "away": "How a person looks after themselves while their player is away (the server does this). near: 'pond' keeps them strolling round the main pond (anything else: round where you left them). wanderMin and wanderMax: how far in metres from there they stroll. strollSpeed in metres per second. They eat what they carry when hunger is under eatBelow, go for berries if they have none, and drink at the pond when thirst is under drinkBelow. After sleepAfterHours away they lie down asleep: hunger and thirst keep dropping slowly (the asleep rates) but stop at asleepFloor, so they can't die; after goneAfterDays asleep (3 days away in all) they leave the world and their things stay where they slept. A grave marks where someone died for graveHours. idleMinutes: if you're in the game but don't touch anything for this long, your person goes on autopilot and does the same, until you tap. sleepBelow: someone on autopilot or away lies down to sleep when Rest is under this, and gets up when it's full. At night (see night) they go to sleep until morning.",
     "berryBushes": "extra: how many more berry bushes grow out in the wider world, besides the ones by the start. seed: their own random numbers, so they're in the same places on every phone (change it to move them all).",
     "devlog": "What's new, shown in the Menu. Newest first: version, date and a short list of changes, written for players.",
-    "energyCosts": "Stamina (the yellow ring, id energy) is short-term: every task takes these amounts and walking takes walkPerMetre for each metre. It comes back by itself quickly (perHour in its need: 400 an hour, so empty to full in about 15 minutes). Below slowBelow (20) your person is out of breath: walking and tasks take slowBy (1.5) times as long. It never stops you and it's not deadly. The server uses the same numbers.",
+    "energyCosts": "Stamina (the yellow ring, id energy) is short-term: every task takes these amounts and walking takes walkPerMetre for each metre. It comes back by itself quickly (perHour in its need: 600 an hour, so empty to full in about 10 minutes; whileAsleep 1500 when sleeping, whileSitting 2400 when sitting by a fire). Below slowBelow (20) your person is out of breath: walking and tasks take slowBy (1.5) times as long. It never stops you and it's not deadly. The server uses the same numbers.",
     "chopping": "Chopping with a tool (tool: the item you need). tree: chopping a standing tree (seconds, and what falls: gives); it leaves a stump that grows back into a tree after regrowDays real days. stump: digging out a stump (then the tree is gone for good). log: chopping a log (an item) into sticks. Each chop wears the tool by one use, and takes energyCosts.chop energy. The server uses the same rules.",
     "plants": "Plants you cut, like tall grass. Each kind is laid out by itself: count clumps (nearStart of them near the start), on its own random numbers (seed) so nothing else moves. action is the tap menu button, verb what shows while doing it. gives goes into your inventory each cut. seconds is how long by hand, toolSeconds with the tool (each use wears the tool). regrowHours [lo, hi]: a cut clump grows back at a random time in between. look: blades per clump, height, colour and tips (the seed heads). Run tools/worlds.py test-build after changing plants.",
     "regions": "The worlds (regions) on the main menu, under Play. Each is its own world on its own clock (timeZone). open: false shows it as Coming soon; tapping it shows this world's view at that region's time of day. For now only one world exists, so only one region can be open, and its timeZone should match settings.worldTimeZone.",
-    "night": "Night in the world's clock (settings.worldTimeZone), from the hour 'from' to the hour 'to'. Sleeping at night fills Rest at whileAsleepAtNight instead of whileAsleep. People away or on autopilot go to sleep when night starts and get up in the morning. The server uses the same numbers."
+    "night": "Night in the world's clock (settings.worldTimeZone), from the hour 'from' to the hour 'to'. Sleeping at night fills Rest at whileAsleepAtNight instead of whileAsleep. People away or on autopilot go to sleep when night starts and get up in the morning. The server uses the same numbers.",
+    "placeables": "Things you place in the world and build, like the campfire. An item with places (the id of an entry here) gets a Place button in the Inventory: you pick a spot, your person puts it down as an unbuilt site, then builds it (buildSeconds; buildVerb shows while building). solid is how big it is for walking round (metres). fire makes it a fire you can light and put out: fuel is the item you add (sticks), secondsEach is how long one burns (300 = 5 minutes), maxFuel is the most it holds, lightSeconds how long lighting takes. It only burns while lit, keeps burning while players are away, and goes out by itself when the fuel runs out. seats: people can sit round it (count places, distance metres from the middle); minutes are the choices for how long to sit. Sitting is a task: it carries on while you're away, and finishes normally if the fire goes out. Run tools/worlds.py test-build after changing placeables."
   },
   "chatFilter": {
     "anywhere": [
@@ -705,6 +760,36 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.2.2",
+      "date": "2026-11-22",
+      "notes": [
+        "Stamina comes back faster: full again in about 10 minutes (was 15).",
+        "Sitting by a campfire fills Stamina in about 2 to 3 minutes, and sleeping in about 4.",
+        "Chopping takes a bit less Stamina (10, was 15)."
+      ]
+    },
+    {
+      "version": "0.2.1",
+      "date": "2026-11-22",
+      "notes": [
+        "A campfire now takes 4 stones too (1 log, 3 sticks and 4 stones), for the ring round the fire.",
+        "Sitting by the fire, your feet stay out of the flames (seats are a bit further back).",
+        "Your hands are empty unless you're using a tool: the axe comes out to chop and the knife to cut, then they're put away.",
+        "On the main menu, worlds that aren't open yet look fresh and untouched: every tree standing, nothing on the ground and nobody there."
+      ]
+    },
+    {
+      "version": "0.2.0",
+      "date": "2026-11-22",
+      "notes": [
+        "Campfires! Craft one from 1 log and 3 sticks (the hammer button).",
+        "Place it from your Inventory: tap the ground to pick a spot, then Place. Your person puts it down and builds it.",
+        "Tap a campfire to add sticks, light it, put it out or check how much fuel is left. Each stick burns for 5 minutes and it holds up to 10.",
+        "The fire keeps burning while you're away and goes out by itself when the sticks run out.",
+        "Sit by a lit campfire for 5 minutes up to an hour. Your person keeps sitting even if you close the game, and others can sit round it too."
+      ]
+    },
     {
       "version": "0.1.9",
       "date": "2026-11-22",

@@ -98,6 +98,7 @@ function drawBag() {
   $('bagList').replaceChildren(...kinds.map((kind) => {
     const n = you.carry[kind];
     const buttons = [];
+    if (ITEMS[kind].places) buttons.push(smallButton('Place', () => startPlacing(kind), true)); // a campfire: choose where it goes
     if (Object.keys(ITEMS[kind].eat || {}).length) buttons.push(smallButton('Eat', () => eatOne(kind), true));
     buttons.push(smallButton(n > 1 ? 'Drop 1' : 'Drop', () => dropItems(kind, 1)));
     if (n > 1) buttons.push(smallButton('Drop all', () => dropItems(kind, n)));

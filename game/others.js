@@ -27,7 +27,7 @@ function addOther(p) {
   scene.add(mesh);
   const name = addLabel({ cls: 'name-tag', text: '', anchor: mesh.position, offset: V(0, 2.0, 0), gap: 0 });
   const o = { id: p.id, who: p.who || p.id, title: p.name || 'Someone', badge: !!p.badge, state: p.state || 'online', mesh, tx: x, tz: z, tr: mesh.rotation.y, phase: 0, name, bubble: null,
-    speed: p.speed || null, due: p.ms ? elapsed + p.ms / 1000 : null, shown: true };
+    speed: p.speed || null, due: p.ms ? elapsed + p.ms / 1000 : null, shown: true, sit: Array.isArray(p.sit) ? p.sit : null };
   shownAt = -1; // work out again who's drawn
   if (p.tx != null) Object.assign(o, { tx: p.tx, tz: p.tz });
   others.set(p.id, o);
@@ -55,11 +55,25 @@ function roundThePond(x, z, ux, uz, step) {
   for (let k = 0; k < 30 && heightAt(nx, nz) < WATER_Y + 0.1; k++) { nx += (rx / rd) * 0.1; nz += (rz / rd) * 0.1; }
   return [nx, nz];
 }
-// sleepers lie on the ground
+// sleepers lie on the ground; people sitting by a fire sit (updateOthers holds them there)
 function poseOther(o) {
   const lying = o.state === 'asleep' || o.state === 'sleeping';
   o.mesh.rotation.x = lying ? -Math.PI / 2 : 0;
-  o.name.offset.y = lying ? 0.7 : 2.0;
+  o.name.offset.y = lying ? 0.7 : o.sit ? 1.35 : 2.0;
+}
+// someone sat down by a fire, or got up
+function setOtherSit(m) {
+  const o = others.get(m.id);
+  if (!o) return;
+  if (m.off) {
+    if (o.sit && o.mesh.userData.parts) unsitPose(o.mesh, o.mesh.userData.parts, groundY(o.mesh.position.x, o.mesh.position.z));
+    o.sit = null;
+    o.tx = o.mesh.position.x; o.tz = o.mesh.position.z;
+  } else {
+    o.sit = [m.fire, m.seat];
+    o.speed = null; o.act = null; o.path = null;
+  }
+  poseOther(o);
 }
 function setOtherState(m) {
   const o = others.get(m.id);
@@ -117,6 +131,13 @@ function updateOthers(dt) {
     }
     const dx = gx - m.position.x, dz = gz - m.position.z, d = Math.hypot(dx, dz);
     const P = m.userData.parts;
+    if (o.sit && placed.has(o.sit[0]) && o.state !== 'asleep' && o.state !== 'sleeping') { // sitting by a fire
+      const th = placed.get(o.sit[0]), [sx, sz] = seatSpot(th, o.sit[1]);
+      m.position.x = o.tx = sx; m.position.z = o.tz = sz;
+      m.rotation.y = Math.atan2(th.x - sx, th.z - sz);
+      if (P) sitPose(m, P, groundY(sx, sz));
+      continue;
+    }
     if (o.state === 'asleep' || o.state === 'sleeping') { m.position.x = o.tx; m.position.z = o.tz; m.position.y = groundY(m.position.x, m.position.z) + 0.2; continue; }
     if (d > (o.speed ? 120 : 8)) { m.position.x = o.tx; m.position.z = o.tz; } // too far behind: jump there
     else if (d > 0.02) {

@@ -1,5 +1,5 @@
 {
-  "version": "0.2.1",
+  "version": "0.2.2",
   "build": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -101,8 +101,9 @@
       "colour": "#e8c547",
       "icon": "bolt",
       "start": 100,
-      "perHour": 400,
-      "whileAsleep": 400,
+      "perHour": 600,
+      "whileAsleep": 1500,
+      "whileSitting": 2400,
       "lowAt": 20,
       "lowLabel": "Out of breath",
       "fullLabel": "Full of stamina",
@@ -115,7 +116,7 @@
     "harvest": 2,
     "drink": 1,
     "craft": 5,
-    "chop": 15,
+    "chop": 10,
     "walkPerMetre": 0.15,
     "build": 8,
     "tend": 1
@@ -666,7 +667,7 @@
     "away": "How a person looks after themselves while their player is away (the server does this). near: 'pond' keeps them strolling round the main pond (anything else: round where you left them). wanderMin and wanderMax: how far in metres from there they stroll. strollSpeed in metres per second. They eat what they carry when hunger is under eatBelow, go for berries if they have none, and drink at the pond when thirst is under drinkBelow. After sleepAfterHours away they lie down asleep: hunger and thirst keep dropping slowly (the asleep rates) but stop at asleepFloor, so they can't die; after goneAfterDays asleep (3 days away in all) they leave the world and their things stay where they slept. A grave marks where someone died for graveHours. idleMinutes: if you're in the game but don't touch anything for this long, your person goes on autopilot and does the same, until you tap. sleepBelow: someone on autopilot or away lies down to sleep when Rest is under this, and gets up when it's full. At night (see night) they go to sleep until morning.",
     "berryBushes": "extra: how many more berry bushes grow out in the wider world, besides the ones by the start. seed: their own random numbers, so they're in the same places on every phone (change it to move them all).",
     "devlog": "What's new, shown in the Menu. Newest first: version, date and a short list of changes, written for players.",
-    "energyCosts": "Stamina (the yellow ring, id energy) is short-term: every task takes these amounts and walking takes walkPerMetre for each metre. It comes back by itself quickly (perHour in its need: 400 an hour, so empty to full in about 15 minutes). Below slowBelow (20) your person is out of breath: walking and tasks take slowBy (1.5) times as long. It never stops you and it's not deadly. The server uses the same numbers.",
+    "energyCosts": "Stamina (the yellow ring, id energy) is short-term: every task takes these amounts and walking takes walkPerMetre for each metre. It comes back by itself quickly (perHour in its need: 600 an hour, so empty to full in about 10 minutes; whileAsleep 1500 when sleeping, whileSitting 2400 when sitting by a fire). Below slowBelow (20) your person is out of breath: walking and tasks take slowBy (1.5) times as long. It never stops you and it's not deadly. The server uses the same numbers.",
     "chopping": "Chopping with a tool (tool: the item you need). tree: chopping a standing tree (seconds, and what falls: gives); it leaves a stump that grows back into a tree after regrowDays real days. stump: digging out a stump (then the tree is gone for good). log: chopping a log (an item) into sticks. Each chop wears the tool by one use, and takes energyCosts.chop energy. The server uses the same rules.",
     "plants": "Plants you cut, like tall grass. Each kind is laid out by itself: count clumps (nearStart of them near the start), on its own random numbers (seed) so nothing else moves. action is the tap menu button, verb what shows while doing it. gives goes into your inventory each cut. seconds is how long by hand, toolSeconds with the tool (each use wears the tool). regrowHours [lo, hi]: a cut clump grows back at a random time in between. look: blades per clump, height, colour and tips (the seed heads). Run tools/worlds.py test-build after changing plants.",
     "regions": "The worlds (regions) on the main menu, under Play. Each is its own world on its own clock (timeZone). open: false shows it as Coming soon; tapping it shows this world's view at that region's time of day. For now only one world exists, so only one region can be open, and its timeZone should match settings.worldTimeZone.",
@@ -759,6 +760,15 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.2.2",
+      "date": "2026-11-22",
+      "notes": [
+        "Stamina comes back faster: full again in about 10 minutes (was 15).",
+        "Sitting by a campfire fills Stamina in about 2 to 3 minutes, and sleeping in about 4.",
+        "Chopping takes a bit less Stamina (10, was 15)."
+      ]
+    },
     {
       "version": "0.2.1",
       "date": "2026-11-22",

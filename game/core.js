@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
+// true while the main menu shows a world that isn't open yet: it's drawn fresh, as nobody has touched it (screens.js)
+let freshLook = false;
 const app = document.getElementById('app');
 const canvas = document.getElementById('world');
 const labelsEl = document.getElementById('labels');

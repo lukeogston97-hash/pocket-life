@@ -37,6 +37,7 @@
   <p id="hint" class="hint" hidden>Double-tap the ground to walk. Tap anything to see what you can do.</p>
 
   <div id="autoChip" class="auto-chip" hidden>On autopilot · tap to take over</div>
+  <div id="placeBar" class="place-bar glass" hidden aria-live="polite"><span id="placeText">Tap the ground to move it</span><button id="placeCancel" class="small-btn" type="button">Cancel</button><button id="placeGo" class="small-btn go" type="button">Place</button></div>
 
   <div id="queue" class="queue" hidden aria-live="polite">
     <div id="queueNowRow" class="q-now"><small>Now</small><span id="queueNow">Waiting for something to do</span></div>
@@ -299,7 +300,7 @@ document.documentElement.style.visibility = '';
 // The game's code is kept in small files by topic (game/*.js, in this order). They share one scope, so they're
 // joined into one module here and run together, exactly as if they were one file.
 const PARTS = ['core', 'land', 'nature', 'plants', 'world-build', 'items', 'people', 'world-items', 'you', 'needs',
-  'inventory', 'camera', 'moving', 'input', 'screens', 'loop', 'online', 'admin', 'others', 'start'];
+  'inventory', 'camera', 'moving', 'placeables', 'input', 'screens', 'loop', 'online', 'admin', 'others', 'start'];
 let code;
 try {
   code = await Promise.all(PARTS.map(async (p) => {
