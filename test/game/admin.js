@@ -56,6 +56,7 @@ function teleportTo(x, z) {
   stopQueue();
   const L = WALK_LIMIT - 0.5;
   x = Math.max(-L, Math.min(L, x)); z = Math.max(-L, Math.min(L, z));
+  [x, z] = onDryLand(x, z);
   player.position.set(x, groundY(x, z), z);
   net.last = null;
 }

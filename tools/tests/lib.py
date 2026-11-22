@@ -53,6 +53,7 @@ async def world(game_changes=None, **env):
                 await browser.close()
     finally:
         http.kill(); srv.kill()
+        http.wait(); srv.wait()  # so the next check finds the ports free
 
 
 class World:

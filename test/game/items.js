@@ -109,17 +109,28 @@ const SHAPES = {
     g.add(lash);
     return { model: g, rest: 0.02, hold: 'axe', grip: len / 2 - 0.035, hit: [len + 0.3, 0.25, 0.3] };
   },
-  // a coil of twine: a couple of loose loops
+  // a coil of twine: thin cord wound round in loose loops, tied across with a short wrap and a loose end
   coil(look) {
     const r = look.size ?? 0.05, g = new THREE.Group();
-    const m = matFor(look.colour || '#c9b77a');
-    for (const [k, y] of [[1, 0], [0.8, 0.012]]) {
-      const loop = new THREE.Mesh(new THREE.TorusGeometry(r * k, r * 0.22, 4, 10).rotateX(Math.PI / 2), m);
-      loop.position.y = y;
-      loop.rotation.y = k * 2;
+    const base = new THREE.Color(look.colour || '#c9b77a');
+    const cord = (k) => mat(base.clone().offsetHSL(0, 0, (k % 2 ? -1 : 1) * 0.035));
+    const loops = [[1, 0, 0.05], [0.9, 0.007, -0.04], [1.05, 0.013, 0.03], [0.95, 0.019, -0.03], [1, 0.025, 0.02]];
+    loops.forEach(([k, y, tilt], n) => {
+      const loop = new THREE.Mesh(new THREE.TorusGeometry(r * k, r * 0.11, 4, 16).rotateX(Math.PI / 2), cord(n));
+      loop.position.y = y + r * 0.09;
+      loop.rotation.set(tilt, n * 1.3, tilt * 0.6);
       g.add(loop);
-    }
-    return { model: g, rest: r * 0.22, hit: [r * 2 + 0.3, 0.25, r * 2 + 0.3] };
+    });
+    const wrap = new THREE.Mesh(new THREE.TorusGeometry(r * 0.22, r * 0.08, 4, 10), cord(1)); // tied across the coil
+    wrap.scale.set(1, 1.2, 1);
+    wrap.position.set(r, r * 0.2, 0);
+    wrap.rotation.y = Math.PI / 2;
+    g.add(wrap);
+    const tail = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.07, r * 0.07, r * 0.9, 4).rotateZ(Math.PI / 2), cord(0)); // the loose end
+    tail.position.set(r * 1.35, r * 0.06, r * 0.25);
+    tail.rotation.y = -0.5;
+    g.add(tail);
+    return { model: g, rest: 0.002, hit: [r * 2 + 0.3, 0.25, r * 2 + 0.3] };
   },
   // a log: a short length of trunk with pale cut ends
   log(look) {

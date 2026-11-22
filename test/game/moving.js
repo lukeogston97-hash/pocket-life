@@ -30,6 +30,12 @@ function solidAt(x, z) {
   }
   return best;
 }
+// somewhere you can stand: out of the pond (onto the nearest shore) and out of anything solid
+function onDryLand(x, z) {
+  if (pondShape(x, z) < 0.9) { const s = shorePointToward(V(x, 0, z)); x = s.x; z = s.z; }
+  if (solidAt(x, z)) [x, z] = outsideSolid(x, z);
+  return [x, z];
+}
 // a spot you tapped inside something solid moves to just outside it
 function outsideSolid(x, z) {
   for (let n = 0; n < 3; n++) {

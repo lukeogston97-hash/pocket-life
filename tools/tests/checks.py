@@ -80,7 +80,10 @@ async def walking():
         b = await W.page('walkB'); await join(b)
         await a.evaluate('window.__sent.length = 0')
         p0 = await a.evaluate('[__pl.player.position.x, __pl.player.position.z]')
-        await a.mouse.dblclick(250, 560)
+        for x, y in [(250, 560), (140, 600), (300, 660), (200, 720), (120, 500)]:  # some open ground (not a stick or stone)
+            await a.evaluate("document.getElementById('actMenu').hidden = true"); await a.wait_for_timeout(300)
+            await a.mouse.dblclick(x, y); await a.wait_for_timeout(400)
+            if await a.evaluate('!!__pl.walk.target'): break
         await idle(a); await a.wait_for_timeout(1500)
         p1 = await a.evaluate('[__pl.player.position.x, __pl.player.position.z]')
         moves = await a.evaluate("window.__sent.filter((m) => m.t === 'move').length")
@@ -220,15 +223,31 @@ async def strolling():
 async def regions():
     """The world picker under Play: Oceania is open; Europe and Americas say Coming soon and can't be played."""
     async with world() as W:
+        b = await W.page('regionB'); await join(b)
         a = await W.page('regionA')
+        expect('1 person' in await a.evaluate("document.querySelector('#regions .region small').textContent"), 'Oceania shows 1 person in it')
         names = await a.evaluate("[...document.querySelectorAll('#regions .region')].map((b) => b.innerText.split('\\n')[0])")
         expect(names == ['Oceania', 'Europe', 'Americas'], f'three worlds under Play ({names})')
         await a.evaluate("document.querySelectorAll('#regions .region')[1].click()"); await a.wait_for_timeout(600)
         expect(await text(a, '#playText') == 'Europe is coming soon' and await a.evaluate("document.getElementById('playBtn').disabled"), 'Europe is coming soon and Play is off')
+        await a.wait_for_timeout(800)
+        expect(await a.evaluate("[...__pl.others.values()].every((o) => !o.mesh.visible)"), 'its world shows empty')
         await shot(a, 'regions_europe')
         await a.evaluate("document.querySelectorAll('#regions .region')[0].click()"); await a.wait_for_timeout(600)
         expect(await text(a, '#playText') == 'Play' and not await a.evaluate("document.getElementById('playBtn').disabled"), 'back on Oceania, Play works')
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
-CHECKS = {'layout': layout, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions}
+async def pond():
+    """Someone standing in the pond can always walk out, and others in the water are shown on the shore."""
+    async with world() as W:
+        a = await W.page('pondA'); await join(a)
+        await a.evaluate("__pl.player.position.set(-5.6, __pl.player.position.y, -0.9)")  # the middle of the main pond
+        await a.evaluate("(() => { __pl.queueTask({ type: 'walk', x: 2, z: 4 }); })()")
+        await idle(a, 40); await a.wait_for_timeout(500)
+        p = await a.evaluate("[__pl.player.position.x, __pl.player.position.z]")
+        expect(abs(p[0] - 2) < 0.6 and abs(p[1] - 4) < 0.6, f'walks out of the pond to where they were going ({p[0]:.1f}, {p[1]:.1f})')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
+CHECKS = {'layout': layout, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond}

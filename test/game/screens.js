@@ -166,9 +166,10 @@ function drawRegions() {
     b.classList.toggle('soon', !r.open);
     b.setAttribute('aria-pressed', r === menuRegion ? 'true' : 'false');
     const name = document.createElement('span'); name.textContent = r.name;
-    const sub = document.createElement('small'); sub.textContent = r.open ? formatTime(worldNow(r.timeZone)) : 'Coming soon';
+    const n = others.size; // (one world for now, so the open one has everyone)
+    const sub = document.createElement('small'); sub.textContent = !r.open ? 'Coming soon' : n ? `${n} ${n === 1 ? 'person' : 'people'}` : 'Nobody yet';
     b.append(name, sub);
-    b.addEventListener('click', () => { menuRegion = r; applyDaylight(); drawMenu(); });
+    b.addEventListener('click', () => { menuRegion = r; shownAt = -1; applyDaylight(); drawMenu(); });
     return b;
   }));
 }
@@ -186,9 +187,8 @@ function drawMenu() {
   drawMenuNet();
 }
 function drawMenuNet() {
-  const n = others.size;
   $('menuNet').dataset.state = $('netLine').dataset.state;
-  $('menuNetText').textContent = $('netLine').dataset.state !== 'online' ? $('netText').textContent : n ? `${n} ${n === 1 ? 'person' : 'people'} in the world` : 'Nobody in the world yet';
+  $('menuNetText').textContent = $('netLine').dataset.state !== 'online' ? $('netText').textContent : 'Online'; // how many are in each world shows under its name
 }
 let menuYours; // undefined until the server says; null when you have no person
 let menuLine = 0, menuJoining = false; // your place in line when the world is full; Play was tapped and the server hasn't answered

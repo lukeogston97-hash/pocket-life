@@ -195,7 +195,7 @@ function applyMe(m, spawn = false) {
     you.lifeStart = m.born || Date.now();
     you.dead = false;
     spawnPlayer(look);
-    const px = inWorld(Number(m.x) || START.x), pz = inWorld(Number(m.z) || START.z);
+    const [px, pz] = onDryLand(inWorld(Number(m.x) || START.x), inWorld(Number(m.z) || START.z)); // never back in the pond or a tree
     playerGround = groundY(px, pz);
     player.position.set(px, playerGround, pz);
     player.rotation.y = Number(m.ry) || 0;
