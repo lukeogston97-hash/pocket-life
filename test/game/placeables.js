@@ -458,7 +458,7 @@ function placedActions(th) {
   if (F) {
     const lit = isLit(th);
     if (lit) out.push({ label: 'Put out fire', run: () => queueTask({ type: 'tend', id: th.id, do: 'out' }) });
-    else out.push({ label: 'Light fire', disabled: fuelLeft(th) <= 0, note: fuelLeft(th) > 0 ? `${F.lightSeconds} s` : `Add ${fuel.plural.toLowerCase()} first`, run: () => queueTask({ type: 'tend', id: th.id, do: 'light' }) });
+    else out.push({ label: 'Light fire', disabled: fuelLeft(th) <= 0, note: fuelLeft(th) > 0 ? `${F.lightSeconds} s` : `Add ${ITEMS[F.fuel].plural.toLowerCase()} first`, run: () => queueTask({ type: 'tend', id: th.id, do: 'light' }) });
     const inIt = `${timeLeft(fuelLeft(th))} in`;
     for (const [kind, each] of Object.entries(F.fuels)) { // each fuel it takes (sticks, logs)
       const have = you.carry[kind] || 0, room = roomFor(th, kind), fuel = ITEMS[kind];
