@@ -25,6 +25,7 @@ if cmd == 'test-build':
         'berryKind': berry,
         'carryCapacity': data['settings']['carryCapacity'],
         'maxPlaying': data['settings'].get('maxPlaying', 20),
+        'respawnMinutes': data['settings'].get('respawnMinutes', 10),
         'age': {'min': data['looks']['age']['min'], 'max': data['looks']['age']['max']},
         'away': data.get('away', {}),
         'night': data.get('night'),

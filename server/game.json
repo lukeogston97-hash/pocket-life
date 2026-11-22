@@ -193,6 +193,7 @@
   "berryKind": "berry",
   "carryCapacity": 30,
   "maxPlaying": 20,
+  "respawnMinutes": 5,
   "age": {
     "min": 18,
     "max": 90

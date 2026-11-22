@@ -1,5 +1,5 @@
 {
-  "version": "0.2.3",
+  "version": "0.2.4",
   "build": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -8,7 +8,7 @@
     "worldSize": 100,
     "needsSpeed": 1,
     "autoName": true,
-    "respawnMinutes": 10,
+    "respawnMinutes": 5,
     "maxPlaying": 20,
     "worldTimeZone": "Australia/Darwin"
   },
@@ -763,6 +763,14 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.2.4",
+      "date": "2026-11-22",
+      "notes": [
+        "Sticks and stones turn up on the ground every 5 minutes (was 10), up to the usual amount, so it never gets cluttered.",
+        "The sticks in a campfire look full again at about 50 minutes of fuel."
+      ]
+    },
     {
       "version": "0.2.3",
       "date": "2026-11-22",

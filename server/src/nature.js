@@ -64,7 +64,7 @@ export const natureMethods = {
   // nature tops up: one of each kind that's below its normal amount, at a spot near a tree or boulder
   async respawn(now) {
     const w = this.world;
-    w.nextRespawn = now + (w.respawnMs || 10 * MINUTE);
+    w.nextRespawn = now + (G.respawnMinutes > 0 ? G.respawnMinutes * MINUTE : w.respawnMs || 10 * MINUTE); // settings.respawnMinutes wins, so it can change after the world is made
     const added = [];
     for (const [kind, cap] of Object.entries(w.caps || {})) {
       const have = w.items.filter((it) => it.kind === kind).length;
