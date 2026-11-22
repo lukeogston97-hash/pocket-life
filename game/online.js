@@ -217,6 +217,7 @@ function applyMe(m, spawn = false) {
   for (const kind of shared.taking.values()) carry[kind] = (carry[kind] || 0) + 1;
   you.carry = carry;
   you.wear = m.wear || {};
+  you.seen = m.seen || you.seen || [];
   if (!!m.sleeping !== !!you.sleeping) setSleeping(m.sleeping, true);
   you.collapsed = !!m.collapsed;
   you.lastKind = carry[you.lastKind] ? you.lastKind : (ITEMS[m.lastKind] && carry[m.lastKind] ? m.lastKind : Object.keys(carry)[0] || null);

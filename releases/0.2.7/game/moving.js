@@ -532,18 +532,18 @@ function doDrop(t) {
   startAction({ pose: 'bend', mid: () => {
     const taken = takeFromCarry(t.kind, t.n);
     const out = [];
-    for (let i = 0; i < taken; i++) { const s = dropSpot(i); out.push({ kind: t.kind, x: s.x, z: s.z, rot: rand() * Math.PI }); }
+    for (let i = 0; i < taken; i++) { const s = dropSpot(i); out.push({ kind: t.kind, x: s.x, z: s.z, rot: rand() * Math.PI, ...(i === 0 && t.which != null ? { which: t.which } : {}) }); }
     placeItems(out);
     drawHeld();
     drawCarry();
   } });
 }
 // dropping from your inventory happens straight away, then your person carries on with the queue
-function dropItems(kind, n) {
+function dropItems(kind, n, which) { // which: for a tool, which one (0 is the one in use)
   if (ui.mode !== 'world' || !player || you.dead || !you.carry[kind]) return;
   closeBag();
   closeCraft();
-  const t = { type: 'drop', kind, n };
+  const t = { type: 'drop', kind, n, ...(Number.isInteger(which) ? { which } : {}) };
   if (action) { tasks.list.unshift(t); return; }
   if (tasks.current) tasks.list.unshift(tasks.current);
   walk.target = null;

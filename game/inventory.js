@@ -157,6 +157,17 @@ function drawBag() {
 const craftOpen = () => $('craft').classList.contains('open');
 let craftWith = null; // Craft with in the inventory: only the recipes that use this item
 const recipeName = (r) => r.name || ITEMS[Object.keys(r.makes)[0]].name;
+// discovery: a recipe shows once you've had all but one of the things it needs (at least one), so the next step shows
+// without giving away what's further on. you.seen is everything you've ever carried (the server keeps it).
+function recipeKnown(r) {
+  const kinds = Object.keys(r.needs), had = kinds.filter((k) => you.carry[k] || (you.seen || []).includes(k)).length;
+  return had >= Math.max(1, kinds.length - 1);
+}
+// the buttons along the top (Tools, Food, Building...): a recipe's "group", else what it makes says
+const CRAFT_GROUPS = ['Tools', 'Food', 'Building', 'Clothes', 'Materials'];
+const recipeGroup = (r) => { const it = ITEMS[Object.keys(r.makes)[0]]; return r.group || (it.uses ? 'Tools' : Object.keys(it.eat || {}).length ? 'Food' : it.places ? 'Building' : 'Materials'); };
+const groupOrder = (g) => (CRAFT_GROUPS.includes(g) ? CRAFT_GROUPS.indexOf(g) : CRAFT_GROUPS.length);
+let craftGroup = null, craftQuery = '', craftPick = null; // the button picked (null: All), what's typed in search, the card tapped open
 // why a recipe can't be made right now ('' if it can): things missing, too heavy, or not by what it needs
 function cantMake(r) {
   for (const [k, n] of Object.entries(r.needs)) if ((you.carry[k] || 0) < n) return 'Need more';
@@ -181,16 +192,22 @@ function recipeCard(r) {
   const makes = Object.keys(r.makes)[0], it = ITEMS[makes];
   const li = document.createElement('li');
   li.className = 'craft-card';
-  const head = document.createElement('div');
+  const head = document.createElement('button'); // tap the name to see more about it
+  head.type = 'button';
   head.className = 'craft-head';
+  head.setAttribute('aria-expanded', String(craftPick === r.id));
+  head.addEventListener('click', () => { craftPick = craftPick === r.id ? null : r.id; drawCraft(); });
   const dot = itemPic(makes);
   const title = document.createElement('strong');
   title.textContent = recipeName(r);
-  const info = document.createElement('small');
-  info.textContent = [`Weight ${fmt(it.weight)}`, it.uses ? `${it.uses} uses` : '', r.about || ''].filter(Boolean).join(' · ');
   const words = document.createElement('span');
   words.className = 'craft-words';
-  words.append(title, info);
+  words.appendChild(title);
+  if (craftPick === r.id) {
+    const info = document.createElement('small');
+    info.textContent = [`Weight ${fmt(it.weight)}`, it.uses ? `${it.uses} uses` : '', r.about || ''].filter(Boolean).join(' · ');
+    words.appendChild(info);
+  }
   head.append(dot, words);
   const needs = document.createElement('div');
   needs.className = 'craft-needs';
@@ -215,10 +232,36 @@ function recipeCard(r) {
 }
 let craftDrawn = ''; // the same for the craft list
 function drawCraft() {
-  const list = RECIPES.filter((r) => !craftWith || r.needs[craftWith]);
-  const shows = JSON.stringify([craftWith, list.map((r) => [r.id, cantMake(r), Object.keys(r.needs).map((k) => you.carry[k] || 0), r.near ? !!stationNear(r.near) : 0])]);
+  const known = RECIPES.filter(recipeKnown), base = known.filter((r) => !craftWith || r.needs[craftWith]);
+  // the buttons show once what you know covers 2 or more kinds of thing; search once you know craftSearchFrom recipes
+  const groups = [...new Set(base.map(recipeGroup))].sort((a, b) => groupOrder(a) - groupOrder(b));
+  const chips = !craftWith && groups.length > 1, search = !craftWith && known.length >= (SETTINGS.craftSearchFrom || 15);
+  if (!chips || !groups.includes(craftGroup)) craftGroup = null;
+  if (!search) craftQuery = '';
+  const q = craftQuery.trim().toLowerCase();
+  const list = base.filter((r) => (!craftGroup || recipeGroup(r) === craftGroup)
+    && (!q || [recipeName(r), ...Object.keys(r.needs).map((k) => ITEMS[k].plural)].some((s) => s.toLowerCase().includes(q))));
+  const unknown = RECIPES.length - known.length;
+  const shows = JSON.stringify([craftWith, craftGroup, q, craftPick, unknown, chips, search, list.map((r) => [r.id, cantMake(r), Object.keys(r.needs).map((k) => you.carry[k] || 0), r.near ? !!stationNear(r.near) : 0])]);
   if (shows === craftDrawn) return;
   craftDrawn = shows;
+  $('craftSearch').hidden = !search;
+  if (search) $('craftQuery').placeholder = `Search your ${known.length} recipes`;
+  $('craftChips').hidden = !chips;
+  if (chips) {
+    const chip = (label, g, n) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'craft-chip' + (craftGroup === g ? ' on' : '');
+      b.setAttribute('aria-pressed', String(craftGroup === g));
+      b.textContent = `${label} ${n}`;
+      b.addEventListener('click', () => { craftGroup = g; drawCraft(); });
+      return b;
+    };
+    $('craftChips').replaceChildren(chip('All', null, base.length), ...groups.map((g) => chip(g, g, base.filter((r) => recipeGroup(r) === g).length)));
+  } else $('craftChips').replaceChildren();
+  $('craftMore').hidden = !!craftWith || (known.length > 0 && !unknown);
+  $('craftMore').textContent = !known.length ? 'Find new things to unlock recipes' : `${unknown} more to discover as you find new things`;
   const note = $('craftNote');
   note.hidden = !craftWith;
   if (craftWith) {
@@ -231,6 +274,7 @@ function drawCraft() {
     all.addEventListener('click', () => { craftWith = null; drawCraft(); });
     note.replaceChildren(words, all);
   }
+  if (q && !list.length) { const li = document.createElement('li'); li.className = 'craft-group'; li.textContent = 'Nothing found'; $('craftList').replaceChildren(li); return; }
   const group = (text, rs) => {
     if (!rs.length) return [];
     const li = document.createElement('li');
@@ -247,7 +291,8 @@ function openCraft(withKind) {
   drawCraft();
   $('craft').classList.add('open'); $('craftBtn').setAttribute('aria-expanded', 'true'); hideHint();
 }
-function closeCraft() { craftWith = null; $('craft').classList.remove('open'); $('craftBtn').setAttribute('aria-expanded', 'false'); }
+$('craftQuery').addEventListener('input', (e) => { craftQuery = e.target.value; drawCraft(); });
+function closeCraft() { craftWith = null; craftGroup = null; craftQuery = ''; craftPick = null; $('craftQuery').value = ''; $('craft').classList.remove('open'); $('craftBtn').setAttribute('aria-expanded', 'false'); }
 $('craftBtn').addEventListener('click', () => (craftOpen() ? closeCraft() : openCraft()));
 $('craftClose').addEventListener('click', closeCraft);
 function openBag() { closeCraft(); bagPick = null; bagDrawn = ''; drawBag(); $('bag').classList.add('open'); $('bagBtn').setAttribute('aria-expanded', 'true'); hideHint(); }

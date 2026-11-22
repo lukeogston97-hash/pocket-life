@@ -98,7 +98,7 @@ function goOnline() {
     else if (m.t === 'unplaced') removePlaced(m.id);
     else if (m.t === 'placeNo' || m.t === 'sitNo') { showTag(m.why || "Can't do that", headTop(), 2.5); if (m.t === 'sitNo') endSit(false); }
     else if (m.t === 'sit') setOtherSit(m);
-    else if (m.t === 'added') for (const it of m.items || []) { if (ITEMS[it.kind]) addWorldItem(it.kind, it.x, it.z, it.rot, it.id); }
+    else if (m.t === 'added') for (const it of m.items || []) { if (ITEMS[it.kind]) addWorldItem(it.kind, it.x, it.z, it.rot, it.id, it.uses); }
     else if (m.t === 'took') tookBack(m);
     else if (m.t === 'bush') { const b = berryBushes[m.bush]; if (b) { b.userData.count = m.count; b.userData.growFrom = m.growFrom; drawBerries(b); } }
     else if (m.t === 'picked' && !m.ok) {
@@ -217,6 +217,7 @@ function applyMe(m, spawn = false) {
   for (const kind of shared.taking.values()) carry[kind] = (carry[kind] || 0) + 1;
   you.carry = carry;
   you.wear = m.wear || {};
+  you.seen = m.seen || you.seen || [];
   if (!!m.sleeping !== !!you.sleeping) setSleeping(m.sleeping, true);
   you.collapsed = !!m.collapsed;
   you.lastKind = carry[you.lastKind] ? you.lastKind : (ITEMS[m.lastKind] && carry[m.lastKind] ? m.lastKind : Object.keys(carry)[0] || null);
@@ -247,7 +248,7 @@ const shared = { on: false, taking: new Map() }; // taking: item id -> kind, whi
 function useSharedWorld(w) {
   shared.on = true;
   for (const it of [...world.items]) removeWorldItem(it.id);
-  for (const it of w.items || []) if (ITEMS[it.kind]) addWorldItem(it.kind, it.x, it.z, it.rot, it.id);
+  for (const it of w.items || []) if (ITEMS[it.kind]) addWorldItem(it.kind, it.x, it.z, it.rot, it.id, it.uses);
   drawGraves(w.graves || []);
   usePlaced(w.placed || []);
   const ts = w.trees || {};

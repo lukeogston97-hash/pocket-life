@@ -66,8 +66,9 @@
       <button id="bagClose" class="text-btn" type="button">Close</button>
     </div>
     <div class="bag-weight"><span>Weight <strong id="bagWeight">0 / 30</strong></span><span class="carry-bar wide" aria-hidden="true"><i id="bagBar"></i></span></div>
-    <ul id="bagList" class="bag-list"></ul>
+    <ul id="bagList" class="bag-grid"></ul>
     <p id="bagEmpty" class="bag-empty">Nothing in your inventory yet. Tap a stick or stone to pick it up.</p>
+    <div id="bagInfo" class="bag-info" hidden></div>
   </section>
 
   <section id="craft" class="bag" aria-labelledby="craftTitle">
@@ -76,8 +77,11 @@
       <h2 id="craftTitle">Craft</h2>
       <button id="craftClose" class="text-btn" type="button">Close</button>
     </div>
-    <p class="craft-note">Things you can make from what you carry.</p>
+    <div id="craftNote" class="craft-note" hidden></div>
+    <label id="craftSearch" class="craft-search" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/></svg><input id="craftQuery" type="search" autocomplete="off" aria-label="Search recipes" placeholder="Search recipes"></label>
+    <div id="craftChips" class="craft-chips" role="group" aria-label="Kinds of things" hidden></div>
     <ul id="craftList" class="craft-list"></ul>
+    <p id="craftMore" class="craft-more" hidden></p>
   </section>
 
   <section id="creator" class="creator" aria-labelledby="creatorTitle" hidden>
@@ -189,7 +193,7 @@
       </div>
       <form id="adminAnnounceForm" class="admin-sec">
         <span class="lbl">Message everyone</span>
-        <div class="admin-inline"><input id="adminAnnounceText" class="admin-input" maxlength="140" placeholder="Shows on everyone's screen"><button type="submit" class="small-btn">Send</button></div>
+        <div class="admin-inline"><input id="adminAnnounceText" class="admin-input" maxlength="140" placeholder="Everyone sees this"><button type="submit" class="small-btn">Send</button></div>
       </form>
       <div class="admin-grid">
         <button id="adminSpeedBtn" type="button" class="small-btn">Speed up time</button>

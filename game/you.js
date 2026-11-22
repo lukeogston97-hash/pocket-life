@@ -1,6 +1,6 @@
 /* ---------- you: plain data, plus your 3D person ---------- */
 const START = { x: 0.6, z: 1.9 };
-const you = { look: null, carry: {}, wear: {}, lastKind: null, lifeStart: 0, stats: null, statsAt: 0, dead: false }; // carry: item id -> how many; stats: need -> 0 to 100
+const you = { look: null, carry: {}, wear: {}, seen: [], lastKind: null, lifeStart: 0, stats: null, statsAt: 0, dead: false }; // carry: item id -> how many; stats: need -> 0 to 100
 const ui = { mode: 'menu' }; // menu (the main menu), creator (making your person) or world (playing)
 let player = null, playerGround = 0, heldView = null;
 const ring = new THREE.Mesh(new THREE.RingGeometry(0.44, 0.54, 40).rotateX(-Math.PI / 2),

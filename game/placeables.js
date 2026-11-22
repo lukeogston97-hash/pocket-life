@@ -493,7 +493,7 @@ function placedActions(th) {
     else if (carrying) out.push({ label: 'Add fuel', note: 'Full', disabled: true, run: () => {} });
   }
   // recipes made here ("near" in a recipe), like cooking on a fire: craftLabel names the list (Cook)
-  const here = RECIPES.filter((r) => r.near === th.kind);
+  const here = RECIPES.filter((r) => r.near === th.kind && recipeKnown(r));
   if (here.length && (!F || lit)) {
     out.push({ label: P.craftLabel, sub: here.map((r) => {
       const why = cantMake(r) === 'Not here' ? '' : cantMake(r); // not here yet is fine: you walk over first
