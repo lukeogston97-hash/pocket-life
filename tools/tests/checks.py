@@ -353,6 +353,22 @@ async def campfire():
         f3 = await b.evaluate(f'__pl.fuelLeft(__pl.placed.get({fid}))'); await b.wait_for_timeout(2000)
         f4 = await b.evaluate(f'__pl.fuelLeft(__pl.placed.get({fid}))')
         expect(not await b.evaluate(f'__pl.isLit(__pl.placed.get({fid}))') and f3 == f4 and f3 > 0, 'put out: no fuel used while out')
+        # packing up and taking apart (0.2.6): only who built it; packing puts the campfire back in the inventory
+        await b.evaluate(f"__pl.queueTask({{ type: 'unplace', id: {fid} }})"); await idle(b, 30); await b.wait_for_timeout(1000)
+        expect(await a.evaluate(f'__pl.placed.has({fid})'), "someone else can't pack it up")
+        await a.evaluate(f"__pl.queueTask({{ type: 'unplace', id: {fid} }})"); await idle(a, 30); await a.wait_for_timeout(1000)
+        expect(await a.evaluate('__pl.you.carry.campfire') == 1 and not await b.evaluate(f'__pl.placed.has({fid})'), 'packed up: back in the inventory, gone on the other phone')
+        await a.click('#bagBtn'); await a.wait_for_timeout(300)
+        await a.click('#bagList .bag-tile[data-kind="campfire"]'); await a.click('#bagInfo button.go'); await a.wait_for_timeout(300)
+        await a.evaluate("""(() => { const p = __pl.player.position;
+          for (let r = 2; r < 8; r += 0.5) for (let k = 0; k < 16; k++) { const x = p.x + Math.cos(k / 16 * 6.28) * r, z = p.z + Math.sin(k / 16 * 6.28) * r;
+            if (!__pl.cantPlaceAt(x, z, 'campfire')) { __pl.movePlacing(x, z); return; } } })()""")
+        await a.evaluate('__pl.finishPlacing()'); await idle(a, 40); await a.wait_for_timeout(1500)
+        fid2 = await a.evaluate('[...__pl.placed.keys()][0]')
+        n0 = await a.evaluate('__pl.itemViews.size')
+        await a.evaluate(f"__pl.queueTask({{ type: 'apart', id: {fid2} }})"); await idle(a, 30); await a.wait_for_timeout(1500)
+        n1 = await a.evaluate('__pl.itemViews.size')
+        expect(not await a.evaluate(f'__pl.placed.has({fid2})') and n1 - n0 == 8, f'taken apart (never lit): its 8 parts land round it ({n1 - n0})')
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 

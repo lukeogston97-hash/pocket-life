@@ -1,6 +1,6 @@
 {
   "version": "0.2.6",
-  "build": 2,
+  "build": 3,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,
@@ -774,6 +774,7 @@
       "date": "2026-11-22",
       "notes": [
         "You can drop any tool, including the one you're using.",
+        "Campfires can be packed up into your inventory or taken apart once they're out. Only the person who built one can do that, and once a fire has been lit, taking it apart gives back just the stones.",
         "Each tool keeps its own wear, and a worn tool stays worn when you drop it and pick it up again (it used to come back as new). Tap one on the ground to see its uses left."
       ]
     },

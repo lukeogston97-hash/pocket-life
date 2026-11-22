@@ -4,7 +4,7 @@ First time: cd tools/tests && npm install   (also needs Python Playwright and Ch
 import asyncio, sys, time, traceback
 from checks import CHECKS, GROUPS
 
-names = [n for a in (sys.argv[1:] or list(CHECKS)) for n in GROUPS.get(a, [a])]
+names = [n for a in (sys.argv[1:] or [k for k in CHECKS if k != 'screens']) for n in GROUPS.get(a, [a])]  # screens only when asked
 failed = []
 for n in names:
     print(f'{n}: {CHECKS[n].__doc__}')

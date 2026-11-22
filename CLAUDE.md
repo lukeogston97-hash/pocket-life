@@ -21,7 +21,7 @@ Luke's mobile "life in your pocket" game (SEED meets One Hour One Life): a persi
 
 ## How to work
 - Small updates, a couple of things at a time. Bump version/build in test/game-data.json and add a devlog entry (shown in What's new).
-- Checks: `python3 tools/tests/lint.py` always. Then `python3 tools/tests/run.py quick` (layout plus a fast smoke test) for small changes, plus the one check for the area you touched. Run everything (`run.py`) only before a release or after big changes. Add a check when you add a feature. Only one check run at a time.
+- Checks, kept quick (Luke, 22 Nov 2026: they were taking too long): `python3 tools/tests/lint.py` always. Test builds: only the check for the area you touched (plus `layout` if world layout code changed). Releases: `run.py quick` plus the checks for areas changed since the last release. Everything (`run.py`, which skips `screens`) only after big changes. `screens` (6 minutes of screenshots) only when reviewing the look. Add a check when you add a feature. Only one check run at a time.
 - Test first: push to main, Luke tries https://pocketlife.pages.dev/test/ (never give that link to players). After each change tell Luke in a few short lines what changed and what to try.
 - Release only when Luke says ("release", "publish"): `sh tools/release.sh`, commit, push. Cloudflare Pages (project pocketlife) and the server both deploy from main within a minute or two.
 - Run `python3 tools/worlds.py test-build` after changing game-data.json needs, items, recipes, sources, plants, away, chatFilter or settings the server uses.

@@ -208,7 +208,7 @@ export const ACTIONS = {
     if (Math.hypot(x - p.x, z - p.z) > 4) return no('Too far away');
     if (this.placedList().some((th) => Math.hypot(th.x - x, th.z - z) < (rule.solid || 0.5) + 1)) return no('Too close to something else');
     takeCarry(p, m.kind, 1);
-    const th = { id: w.nextId++, kind, x, z, rot: num(m.rot), built: false, fuel: 0, lit: false, at: Date.now() };
+    const th = { id: w.nextId++, kind, x, z, rot: num(m.rot), built: false, fuel: 0, lit: false, at: Date.now(), by: p.who }; // by: who built it (only they can pack it up or take it apart)
     this.placedList().push(th);
     spend(p, 'craft', G);
     await this.save();
@@ -229,14 +229,47 @@ export const ACTIONS = {
     reply(this.mine(p));
   } },
   // picking an unbuilt site back up (put it in the wrong place)
+  // picking it back up: an unbuilt site, or packing up a built one (out, by who built it, nobody else sitting by it)
   unplace: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
     const list = this.placedList(), i = list.findIndex((th) => th.id === m.id);
     const th = list[i], item = th && PLACEABLES[th.kind] && PLACEABLES[th.kind].item;
-    if (!th || th.built || Math.hypot(th.x - p.x, th.z - p.z) > 3 || !addCarry(p, item, 1, G)) { reply(this.mine(p)); return; }
+    const no = (why) => { reply({ t: 'placeNo', why }); reply(this.mine(p)); };
+    if (!th || Math.hypot(th.x - p.x, th.z - p.z) > 3) { reply(this.mine(p)); return; }
+    const why = th.built ? this.whyNotTakeDown(th, p, me.admin) : '';
+    if (why) return no(why);
+    if (!addCarry(p, item, 1, G)) return no('Too heavy to carry');
+    if (p.sit && p.sit.fire === th.id) this.standUp(p);
     list.splice(i, 1);
     await this.save();
     save();
     this.send({ t: 'unplaced', id: th.id }, null);
+    reply(this.mine(p));
+  } },
+  // taking a built one apart: what it was made from (its recipe) goes on the ground round it; once a fire has been lit,
+  // the parts that burn (sticks, logs) are gone. Same rules as packing it up.
+  apart: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
+    const list = this.placedList(), i = list.findIndex((th) => th.id === m.id), th = list[i];
+    const no = (why) => { reply({ t: 'placeNo', why }); reply(this.mine(p)); };
+    if (!th || !th.built || Math.hypot(th.x - p.x, th.z - p.z) > 3) { reply(this.mine(p)); return; }
+    const why = this.whyNotTakeDown(th, p, me.admin);
+    if (why) return no(why);
+    if (p.sit && p.sit.fire === th.id) this.standUp(p);
+    list.splice(i, 1);
+    const rule = PLACEABLES[th.kind], f = fireRule(th.kind), r = Object.values(G.recipes || {}).find((x) => x.makes[rule.item]);
+    const out = [];
+    for (const [kind, n] of Object.entries((r && r.needs) || {})) {
+      if (th.burnt && f && f.fuels[kind]) continue;
+      for (let k = 0; k < n && out.length < 40; k++) {
+        const a = out.length * 2.39996, rad = (rule.solid || 0.5) + 0.35 + (out.length % 3) * 0.15;
+        out.push({ id: w.nextId++, kind, x: num(th.x + Math.cos(a) * rad), z: num(th.z + Math.sin(a) * rad), rot: num(Math.random() * Math.PI) });
+      }
+    }
+    w.items.push(...out);
+    spend(p, 'tend', G);
+    await this.save();
+    save();
+    this.send({ t: 'unplaced', id: th.id }, null);
+    if (out.length) this.send({ t: 'added', items: out }, null);
     reply(this.mine(p));
   } },
   // a fire: light it, put it out, or add fuel (n sticks, as many as fit)
@@ -250,7 +283,7 @@ export const ACTIONS = {
       const n = Math.min(Math.max(1, Math.floor(m.n) || 1), room, p.carry[kind] || 0);
       if (n > 0) { takeCarry(p, kind, n); th.fuel = Math.min(f.max, th.fuel + n * each); }
     } else if (m.do === 'light') {
-      if (!th.lit && th.fuel > 0) { th.lit = true; th.at = Date.now(); }
+      if (!th.lit && th.fuel > 0) { th.lit = true; th.burnt = true; th.at = Date.now(); } // burnt: taking it apart then gives back only what doesn't burn
     } else if (m.do === 'out') th.lit = false;
     th.at = Date.now();
     spend(p, 'tend', G);

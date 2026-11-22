@@ -39,10 +39,19 @@ export const placedMethods = {
     if (th.fuel <= 0) { th.lit = false; th.fuel = 0; }
     return th;
   },
+  // why a built one can't be packed up or taken apart ('' if it can): only by who built it (or the admin; ones from
+  // before 0.2.6 have no builder, so anyone), a fire has to be out, and nobody else can be sitting by it
+  whyNotTakeDown(th, p, admin) {
+    if (th.by && th.by !== p.who && !admin) return 'Only the person who built it can do that';
+    if (this.burn(th).lit) return 'Put the fire out first';
+    const now = Date.now();
+    for (const o of this.persons.values()) if (o.who !== p.who && this.alive(o) && o.sit && o.sit.fire === th.id && o.sit.until > now) return 'Someone is sitting by it';
+    return '';
+  },
   // what the game is told: fuel is ms left right now (so phone clocks don't matter)
   placedView(th, now = Date.now()) {
     this.burn(th, now);
-    return { id: th.id, kind: th.kind, x: th.x, z: th.z, rot: th.rot, built: !!th.built, fuel: Math.round(th.fuel || 0), lit: !!th.lit };
+    return { id: th.id, kind: th.kind, x: th.x, z: th.z, rot: th.rot, built: !!th.built, fuel: Math.round(th.fuel || 0), lit: !!th.lit, burnt: !!th.burnt };
   },
   sendPlaced(th, reply, extra) {
     const v = this.placedView(th);
