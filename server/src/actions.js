@@ -164,7 +164,7 @@ export const ACTIONS = {
       if (m.what === 'tree' && st) { reply({ t: 'tree', idx: i, state: st[0] }); return; } // someone else got it first
       if (m.what === 'stump' && (!st || st[0] !== 'stump')) { reply({ t: 'tree', idx: i, state: st ? st[0] : 'tree' }); return; }
       w.trees[i] = [m.what === 'tree' ? 'stump' : 'gone', Date.now()];
-      this.send({ t: 'tree', idx: i, state: w.trees[i][0] }, null);
+      this.send({ t: 'tree', idx: i, state: w.trees[i][0], at: w.trees[i][1] }, null);
     } else {
       const j = w.items.findIndex((it) => it.id === m.id && it.kind === m.what);
       if (j < 0) { reply(this.mine(p)); return; }

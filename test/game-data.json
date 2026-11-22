@@ -1,6 +1,6 @@
 {
   "version": "0.2.8",
-  "build": 5,
+  "build": 6,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,
@@ -802,7 +802,8 @@
         "New: the stone pickaxe, made from 2 sticks, 3 stones and 1 twine. What it's for is coming soon.",
         "Giving your person a task while they're sitting by the fire makes them stand up and do it.",
         "The stone knife and stone pickaxe have new looks to match the stone axe: shaped stone heads, a grip at the end and twine lashing.",
-        "The old tree stumps and fallen logs are gone from the world. Stumps now only come from trees that have been chopped down, and they grow back into trees."
+        "The old tree stumps and fallen logs are gone from the world. Stumps now only come from trees that have been chopped down, and they grow back into trees.",
+        "Tap a tree stump to see how long until it grows back into a tree."
       ]
     },
     {
