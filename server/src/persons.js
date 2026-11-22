@@ -19,7 +19,9 @@ export const personsMethods = {
   people(except) { return [...this.persons.values()].filter((p) => this.alive(p) && p.who !== except).map((p) => this.pub(p)); },
   // what the player is told about their own person
   mine(p) {
-    return { t: 'me', name: p.name, look: p.look, age: ageOf(p), born: p.born, x: num(p.x), z: num(p.z), ry: num(p.ry),
+    p.seen = p.seen || []; // everything they've ever carried: recipes show once you've had all but one of their things
+    for (const k of Object.keys(p.carry || {})) if (!p.seen.includes(k)) p.seen.push(k);
+    return { t: 'me', seen: p.seen, name: p.name, look: p.look, age: ageOf(p), born: p.born, x: num(p.x), z: num(p.z), ry: num(p.ry),
       stats: p.stats, statsAt: p.statsAt, carry: p.carry, wear: p.wear || {}, lastKind: p.lastKind, sleeping: !!p.sleeping, collapsed: !!p.collapsed,
       sit: p.sit && p.sit.until > Date.now() ? { fire: p.sit.fire, seat: p.sit.seat, ms: p.sit.until - Date.now() } : null };
   },

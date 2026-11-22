@@ -112,7 +112,7 @@ async def grass_and_tools():
         await idle(a, 60); await a.wait_for_timeout(1500)
         expect(await a.evaluate('__pl.you.carry.twine || 0') == before + 1, 'cutting grass by hand gives 1 twine')
         await a.click('#craftBtn'); await a.wait_for_timeout(500); await shot(a, 'craft')
-        await a.evaluate("[...document.querySelectorAll('#craftList .craft-card')].find((c) => c.innerText.includes('Stone knife')).querySelector('button').click()")
+        await a.evaluate("[...document.querySelectorAll('#craftList .craft-card')].find((c) => c.innerText.includes('Stone knife')).querySelector('.small-btn').click()")
         await a.wait_for_timeout(1500); await a.click('#craftClose')
         expect(await a.evaluate('!!__pl.you.carry.knife'), 'made a stone knife')
         await a.evaluate("""(() => { const P = __pl.plants.tallGrass, p = __pl.player.position;
@@ -277,7 +277,14 @@ async def smoke():
           const t = [...document.querySelectorAll('#bagList .bag-tile[data-kind="knife"]')].map((b) => b.getAttribute('aria-label'));
           document.getElementById('bagClose').click(); return t; })()""")
         expect(tools == ['Stone knife, 5 uses left', 'Stone knife, spare, 12 uses'], f'each tool gets its own tile: the one in use, then a spare ({tools})')
-        await a.click('#craftBtn'); expect(await a.evaluate("document.querySelectorAll('#craftList .craft-card').length") > 0, 'craft shows recipes'); await a.click('#craftClose')
+        await a.click('#craftBtn'); expect(await a.evaluate("document.querySelectorAll('#craftList .craft-card').length > 0 || !document.getElementById('craftMore').hidden"), 'craft shows recipes, or how to find them'); await a.click('#craftClose')
+        found = await a.evaluate("""(() => { const out = [];
+          for (const seen of [[], ['stick'], ['stick', 'stone']]) {
+            __pl.you.carry = {}; __pl.you.seen = seen; document.getElementById('craftBtn').click();
+            out.push([document.querySelectorAll('#craftList .craft-card').length, document.querySelectorAll('#craftChips .craft-chip').length]);
+            document.getElementById('craftClose').click(); }
+          return out; })()""")
+        expect(found == [[0, 0], [0, 0], [3, 3]], f'recipes are discovered (all but one thing had), with Tools and Building buttons ({found})')
         await a.evaluate("(() => { const p = __pl.player.position; __pl.queueTask({ type: 'walk', x: p.x + 1.5, z: p.z + 1 }); })()")
         await idle(a, 20)
         await a.click('#menuBtn'); await a.wait_for_timeout(300); await a.click('#exitBtn'); await a.wait_for_timeout(1500)
@@ -291,7 +298,7 @@ async def campfire():
         a = await W.page('fireA'); await join(a)
         b = await W.page('fireB'); await join(b)
         await a.click('#craftBtn'); await a.wait_for_timeout(500)
-        await a.evaluate("[...document.querySelectorAll('#craftList .craft-card')].find((c) => c.innerText.includes('Campfire')).querySelector('button').click()")
+        await a.evaluate("[...document.querySelectorAll('#craftList .craft-card')].find((c) => c.innerText.includes('Campfire')).querySelector('.small-btn').click()")
         await a.wait_for_timeout(1500); await a.click('#craftClose')
         expect(await a.evaluate('__pl.you.carry.campfire === 1 && !__pl.you.carry.log && __pl.you.carry.stick === 6 && !__pl.you.carry.stone'), 'crafting a campfire uses 1 log, 3 sticks and 4 stones')
         await a.click('#bagBtn'); await a.wait_for_timeout(400); await shot(a, 'campfire-bag')
