@@ -80,12 +80,22 @@
       "eat": null,
       "uses": 0
     },
+    "twine": {
+      "weight": 0.2,
+      "eat": null,
+      "uses": 0
+    },
     "berry": {
       "weight": 0.1,
       "eat": {
         "hunger": 10
       },
       "uses": 0
+    },
+    "knife": {
+      "weight": 0.5,
+      "eat": null,
+      "uses": 10
     },
     "stone-axe": {
       "weight": 2,
@@ -99,10 +109,21 @@
     }
   },
   "recipes": {
+    "knife": {
+      "needs": {
+        "stick": 1,
+        "stone": 1,
+        "twine": 1
+      },
+      "makes": {
+        "knife": 1
+      }
+    },
     "stone-axe": {
       "needs": {
         "stick": 2,
-        "stone": 3
+        "stone": 3,
+        "twine": 1
       },
       "makes": {
         "stone-axe": 1
@@ -115,14 +136,33 @@
         "thirst": 15
       },
       "harvest": null,
-      "water": true
+      "water": true,
+      "tool": null,
+      "toolHarvest": null
     },
     "berryBush": {
       "gives": null,
       "harvest": {
         "berry": 1
       },
-      "water": false
+      "water": false,
+      "tool": "knife",
+      "toolHarvest": {
+        "berry": 2
+      }
+    }
+  },
+  "plants": {
+    "tallGrass": {
+      "gives": {
+        "twine": 1
+      },
+      "count": 40,
+      "regrowHours": [
+        1,
+        4
+      ],
+      "tool": "knife"
     }
   },
   "berryKind": "berry",

@@ -21,6 +21,7 @@ const kindOk = (k) => typeof k === 'string' && /^[a-z0-9-]{1,24}$/.test(k);
 const AWAY = { sleepBelow: 35, wanderMin: 25, wanderMax: 50, strollSpeed: 1.2, eatBelow: 60, drinkBelow: 55, sleepAfterHours: 24, goneAfterDays: 7, graveHours: 24, ...(G.away || {}) };
 const START = G.start || { x: 0.6, z: 1.9 };
 const REST = (G.needs || []).find((s) => s.id === 'rest');
+const BERRY_SRC = Object.values(G.sources || {}).find((s) => s.harvest) || {}; // the berry bush
 // '0.0.6' with build 5 is [0,0,6,5]; a minVersion of '0.0.6' only checks the first three
 const parts = (v) => String(v || '0').split('.').map((n) => parseInt(n, 10) || 0);
 function tooOld(v, b, min) {
@@ -343,6 +344,18 @@ export class World extends DurableObject {
     walk(pickRandom(far.length && Math.random() < 0.6 ? far : spots));
   }
 
+  // a tool wears with each use; a worn-out one breaks (and the next one you carry takes over)
+  wearTool(p, tool, reply) {
+    if (!tool || !p.carry[tool] || !G.items[tool] || !G.items[tool].uses) return;
+    p.wear = p.wear || {};
+    p.wear[tool] = (p.wear[tool] ?? G.items[tool].uses) - 1;
+    if (p.wear[tool] <= 0) {
+      takeCarry(p, tool, 1);
+      if (p.carry[tool]) p.wear[tool] = G.items[tool].uses;
+      reply({ t: 'broke', kind: tool });
+    }
+  }
+
   /* ---------- berry bushes ---------- */
   berriesOn(i, t = Date.now()) {
     const w = this.world, b = w.bushes[i] || [null, null];
@@ -368,7 +381,7 @@ export class World extends DurableObject {
   /* ---------- the shared world as players see it ---------- */
   view() {
     const w = this.world;
-    return w ? { items: w.items, bushes: w.bushes, graves: w.graves || [], trees: w.trees || {}, oldStumps: w.oldStumps || {} } : null;
+    return w ? { items: w.items, bushes: w.bushes, graves: w.graves || [], trees: w.trees || {}, oldStumps: w.oldStumps || {}, plants: w.plants || {} } : null;
   }
 
   async fetch(request) {
@@ -558,26 +571,39 @@ export class World extends DurableObject {
       w.items.push(...out);
       if (out.length) this.send({ t: 'added', items: out }, null);
       spend(p, 'chop', G);
-      // the tool wears; a worn-out tool breaks
-      if (tool && G.items[tool] && G.items[tool].uses) {
-        p.wear = p.wear || {};
-        p.wear[tool] = (p.wear[tool] ?? G.items[tool].uses) - 1;
-        if (p.wear[tool] <= 0) {
-          takeCarry(p, tool, 1);
-          if (p.carry[tool]) p.wear[tool] = G.items[tool].uses;
-          reply({ t: 'broke', kind: tool });
-        }
-      }
+      this.wearTool(p, tool, reply);
       await this.save();
       save();
       reply(this.mine(p));
     } else if (m.t === 'pick') {
       const i = Math.floor(m.bush);
       if (!(i >= 0 && i < 200)) return;
-      if (this.berriesOn(i) < 1 || !addCarry(p, G.berryKind, 1, G)) { reply({ t: 'picked', bush: i, ok: false }); return; }
-      this.takeBerry(i);
+      // with the bush's tool (a knife) a few come off at once (toolHarvest), and the tool wears
+      const many = BERRY_SRC.tool && BERRY_SRC.toolHarvest && p.carry[BERRY_SRC.tool] ? Number(BERRY_SRC.toolHarvest[G.berryKind]) || 1 : 1;
+      const n = this.berriesOn(i) >= many ? many : 1;
+      if (this.berriesOn(i) < 1 || !addCarry(p, G.berryKind, n, G)) { reply({ t: 'picked', bush: i, ok: false }); return; }
+      for (let k = 0; k < n; k++) this.takeBerry(i);
       spend(p, 'harvest', G);
+      if (n > 1) { this.wearTool(p, BERRY_SRC.tool, reply); reply(this.mine(p)); }
       save();
+    } else if (m.t === 'cut') { // cutting a plant (tall grass): it gives its things and grows back at a random time
+      const def = (G.plants || {})[m.plant], i = Math.floor(m.i);
+      if (!def || !(i >= 0 && i < (def.count || 0))) return;
+      w.plants = w.plants || {};
+      const ps = (w.plants[m.plant] = w.plants[m.plant] || {}), now = Date.now();
+      if (ps[i] && ps[i] > now) { reply({ t: 'cutNo', plant: m.plant, i, readyAt: ps[i] }); return; } // someone got it first
+      let ok = true;
+      for (const [k, c] of Object.entries(def.gives || {})) ok = addCarry(p, k, c, G) && ok;
+      if (!ok) { reply(this.mine(p)); return; }
+      const [lo, hi] = Array.isArray(def.regrowHours) ? def.regrowHours : [def.regrowHours || 2, def.regrowHours || 2];
+      ps[i] = Math.round(now + (lo + Math.random() * (hi - lo)) * 3600000);
+      for (const [k, at] of Object.entries(ps)) if (at <= now) delete ps[k]; // grown back: nothing to remember
+      this.send({ t: 'plant', plant: m.plant, i, readyAt: ps[i] }, null);
+      spend(p, 'harvest', G);
+      if (def.tool && p.carry[def.tool]) this.wearTool(p, def.tool, reply);
+      await this.save();
+      save();
+      reply(this.mine(p));
     }
   }
 
