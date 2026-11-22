@@ -478,7 +478,7 @@ export class World extends DurableObject {
       p.x = nx; p.z = nz; p.ry = num(m.ry);
       this.touch(p);
       // a walk is sent once with where it's going (tx, tz), plus now and then where they've got to; everyone else's game walks them there
-      const go = Number.isFinite(m.tx) && Number.isFinite(m.tz) ? { tx: num(m.tx), tz: num(m.tz) } : {};
+      const go = Number.isFinite(m.tx) && Number.isFinite(m.tz) ? { tx: num(m.tx), tz: num(m.tz), sp: Number.isFinite(m.sp) ? Math.min(1, Math.max(0.3, m.sp)) : 1 } : {};
       this.send({ t: 'move', id: me.id, x: p.x, z: p.z, ry: p.ry, ...go }, me.id);
     } else if (m.t === 'sleep') { // lie down to rest, or get up
       if (!m.on && p.collapsed && p.stats.rest < (REST.wakeAt || 0)) { reply(this.mine(p)); return; } // too tired to get up yet

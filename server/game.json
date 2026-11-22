@@ -5,11 +5,12 @@
       "name": "Health",
       "colour": "#c9584a",
       "start": 100,
-      "perHour": 1,
+      "perHour": 4,
       "onlyWhenFine": true,
       "deadAtZero": true,
       "lowAt": 30,
-      "lowLabel": "Weak"
+      "lowLabel": "Weak",
+      "whileAsleep": 8
     },
     {
       "id": "rest",
@@ -59,11 +60,13 @@
       "colour": "#e8c547",
       "icon": "bolt",
       "start": 100,
-      "perHour": 30,
-      "whileAsleep": 60,
-      "lowAt": 15,
-      "lowLabel": "Worn out",
-      "fullLabel": "Full of energy"
+      "perHour": 400,
+      "whileAsleep": 400,
+      "lowAt": 20,
+      "lowLabel": "Out of breath",
+      "fullLabel": "Full of energy",
+      "slowBelow": 20,
+      "slowBy": 1.5
     }
   ],
   "items": {
@@ -143,12 +146,12 @@
     "sleepBelow": 35
   },
   "energyCosts": {
-    "pickup": 1,
-    "harvest": 1,
-    "drink": 0.5,
-    "craft": 3,
-    "chop": 6,
-    "walkPerMetre": 0.04
+    "pickup": 2,
+    "harvest": 2,
+    "drink": 1,
+    "craft": 5,
+    "chop": 15,
+    "walkPerMetre": 0.15
   },
   "chopping": {
     "tool": "stone-axe",

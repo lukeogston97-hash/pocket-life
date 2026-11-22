@@ -1619,13 +1619,24 @@ function updateLabels() {
 /* ---------- the clock and the info at the edges ---------- */
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const formatDate = (d) => `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
-const formatTime = (d) => `${((d.getHours() + 11) % 12) + 1}:${String(d.getMinutes()).padStart(2, '0')} ${d.getHours() < 12 ? 'am' : 'pm'}`;
+// The world has one clock for everyone: settings.worldTimeZone (Darwin time for the Oceania world). worldNow() gives
+// a Date whose UTC fields read as the time there, so the date, the time and day and night are the same on every phone.
+const WORLD_TZ = SETTINGS.worldTimeZone || 'Australia/Darwin';
+let tzParts = null;
+try { tzParts = new Intl.DateTimeFormat('en-US', { timeZone: WORLD_TZ, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' }); } catch (err) { /* very old browser */ }
+function worldNow() {
+  const now = new Date();
+  if (!tzParts) return new Date(now.getTime() + 9.5 * 3600000); // Darwin is UTC+9:30 all year
+  const p = Object.fromEntries(tzParts.formatToParts(now).map((x) => [x.type, x.value]));
+  return new Date(Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second));
+}
+const formatDate = (d) => `${DAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+const formatTime = (d) => `${((d.getUTCHours() + 11) % 12) + 1}:${String(d.getUTCMinutes()).padStart(2, '0')} ${d.getUTCHours() < 12 ? 'am' : 'pm'}`;
 function drawHud() {
   if (!you.look) return;
   $('hudName').textContent = you.look.name;
   $('hudAge').textContent = String(you.look.age);
-  const now = new Date(); // the world runs on real time
+  const now = worldNow(); // the world runs on real time, on its own clock
   $('hudTime').textContent = `${formatDate(now)} · ${formatTime(now)}`;
   measureHud();
 }
@@ -1657,14 +1668,15 @@ const NEED_ICONS = {
   bolt: '<path d="M13 3 5 14h6l-1 7 8-11h-6z"/>',
 };
 const iconFor = (s) => NEED_ICONS[s.icon] || NEED_ICONS[{ health: 'heart', hunger: 'food', thirst: 'drop', rest: 'moon', energy: 'bolt' }[s.id]] || NEED_ICONS.heart;
-// Energy: every task takes a little (energyCosts in game-data.json), and it comes back while you take it easy
+// Energy is short-term stamina: every task and every metre walked takes a little (energyCosts in game-data.json),
+// and it comes back quickly by itself. Below slowBelow your person slows down (slowBy) instead of stopping.
 const COSTS = DATA.energyCosts || {};
+const ENERGY = STATS.find((s) => s.id === 'energy');
+const slowness = () => (ENERGY && you.stats && you.stats.energy != null && you.stats.energy < (ENERGY.slowBelow || 0) ? ENERGY.slowBy || 1 : 1);
 function spendEnergy(what, amount = 1) {
   const c = (COSTS[what] || 0) * amount;
   if (c && you.stats && you.stats.energy != null) { you.stats.energy = Math.max(0, you.stats.energy - c); }
 }
-const costOf = (t) => (t.type === 'pickup' ? COSTS.pickup : t.type === 'use' ? (t.water ? COSTS.drink : COSTS.harvest) : t.type === 'chop' ? COSTS.chop : 0) || 0;
-const tooTired = (cost) => you.stats && you.stats.energy != null && cost > 0 && you.stats.energy < cost;
 function buildNeeds() {
   $('needs').replaceChildren(...STATS.map((s) => {
     const row = document.createElement('div');
@@ -1745,8 +1757,8 @@ const lerpNum = (a, b, t) => (Number.isFinite(a) && Number.isFinite(b) ? a + (b 
 let hourOverride = null; // lets a test pick the time of day
 function localHour() {
   if (hourOverride != null) return hourOverride;
-  const d = new Date();
-  return d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600;
+  const d = worldNow();
+  return d.getUTCHours() + d.getUTCMinutes() / 60 + d.getUTCSeconds() / 3600;
 }
 function applyDaylight() {
   const n = DAYLIGHT.length;
@@ -1858,7 +1870,6 @@ function canMake(r) {
 }
 function make(r) {
   if (!canMake(r)) return;
-  if (tooTired(COSTS.craft || 0)) { showTag('Too tired. I need a breather', headTop(), 2.5); return; }
   spendEnergy('craft');
   for (const [k, n] of Object.entries(r.needs)) takeFromCarry(k, n);
   for (const [k, n] of Object.entries(r.makes)) addToCarry(k, n);
@@ -2181,6 +2192,7 @@ function resetPose() {
 function startAction(a) {
   walk.target = null;
   action = { t0: elapsed, done: false, seconds: 0.5, pose: 'bend', ...a };
+  action.seconds *= slowness(); // out of breath: it takes longer
   if (online()) net.sock.send(JSON.stringify({ t: 'act', pose: action.pose, seconds: action.seconds }));
 }
 // other people's actions, shown the same way as yours: a bend to pick something up, picking berries, kneeling to drink
@@ -2283,11 +2295,6 @@ function nextTask() {
   drawQueue();
   const t = tasks.current;
   if (!t || !player || you.dead) return;
-  if (tooTired(costOf(t)) || (t.type === 'walk' && you.stats && you.stats.energy <= 0)) {
-    showTag('Too tired. I need a breather', headTop(), 2.5);
-    stopQueue();
-    return;
-  }
   if (t.type === 'pickup') {
     const item = getItem(t.id);
     if (!item) { nextTask(); return; }
@@ -3082,7 +3089,7 @@ function updatePlayer(dt) {
     }
     else {
       // head for the next point, stepping round anything small in the way
-      const step = Math.min(ad, SETTINGS.walkSpeed * dt);
+      const step = Math.min(ad, (SETTINGS.walkSpeed / slowness()) * dt); // out of breath: slower
       const base = Math.atan2(ax, az);
       const tries = walk.side < 0 ? [0, -0.5, -1, -1.5, -2, 0.5, 1, 1.5, 2] : [0, 0.5, 1, 1.5, 2, -0.5, -1, -1.5, -2];
       let nx = 0, nz = 0, heading = base, ok = false;
@@ -4128,22 +4135,22 @@ function sendMove() {
   const x = player.position.x, z = player.position.z, ry = player.rotation.y;
   const goal = walk.target ? [Math.round(walk.target.x * 100) / 100, Math.round(walk.target.z * 100) / 100] : null;
   const l = net.last;
-  const newGoal = goal && (!l || !l.goal || l.goal[0] !== goal[0] || l.goal[1] !== goal[1]);
+  const newGoal = goal && (!l || !l.goal || l.goal[0] !== goal[0] || l.goal[1] !== goal[1] || l.slow !== slowness());
   const stopped = !goal && l && l.goal;
   if (!newGoal && !stopped) {
     if (goal) { if (elapsed - net.sentAt < 2.5) return; } // walking: now and then, where you've got to
     else if (elapsed - net.sentAt < 0.5 || (l && Math.hypot(x - l.x, z - l.z) < 0.05 && Math.abs(ry - l.ry) < 0.15)) return; // standing: only when moved or turned
   }
   net.sentAt = elapsed;
-  net.last = { x, z, ry, goal };
-  net.sock.send(JSON.stringify({ t: 'move', x, z, ry, ...(goal ? { tx: goal[0], tz: goal[1] } : {}) }));
+  net.last = { x, z, ry, goal, slow: slowness() };
+  net.sock.send(JSON.stringify({ t: 'move', x, z, ry, ...(goal ? { tx: goal[0], tz: goal[1], sp: Math.round(100 / slowness()) / 100 } : {}) }));
 }
 // Someone else moved. A walk comes with where they're going (tx, tz) and their game walks them there along the
 // same kind of route; if they've drifted far from where they really are, they jump there.
 function heardMove(o, m) {
   const p = o.mesh.position;
   if (Math.hypot(p.x - m.x, p.z - m.z) > 3) { p.x = m.x; p.z = m.z; o.pathKey = null; }
-  if (m.tx != null) Object.assign(o, { tx: m.tx, tz: m.tz, speed: SETTINGS.walkSpeed, then: null, act: null });
+  if (m.tx != null) Object.assign(o, { tx: m.tx, tz: m.tz, speed: SETTINGS.walkSpeed * (m.sp > 0 && m.sp <= 1 ? m.sp : 1), then: null, act: null });
   else Object.assign(o, { tx: m.x, tz: m.z, tr: m.ry, speed: null });
 }
 // speech bubbles: what you say shows over your head for everyone nearby
