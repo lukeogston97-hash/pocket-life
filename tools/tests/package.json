@@ -1,0 +1,12 @@
+{
+  "name": "pocket-life-tests",
+  "private": true,
+  "description": "Checks for Pocket Life: a local copy of the server and browser tests. See README.md.",
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "eslint": "^9.0.0",
+    "globals": "^15.0.0",
+    "three": "0.170.0",
+    "ws": "^8.18.0"
+  }
+}

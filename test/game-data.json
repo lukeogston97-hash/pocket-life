@@ -1,6 +1,6 @@
 {
-  "version": "0.1.6",
-  "build": 4,
+  "version": "0.1.7",
+  "build": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,
@@ -697,6 +697,15 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.1.7",
+      "date": "2026-11-22",
+      "notes": [
+        "New home: the game is now at pocketlife.pages.dev. The old address sends you there and you keep your person.",
+        "People away from the game no longer walk through trees or get stuck: they keep to a route round things and keep up with where they're meant to be.",
+        "A big clean-up behind the scenes so lots of new things can be added quickly. Nothing about how the game plays has changed."
+      ]
+    },
     {
       "version": "0.1.6",
       "date": "2026-11-22",
