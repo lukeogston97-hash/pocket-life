@@ -142,6 +142,13 @@ function removeSpotNear(x, z) {
   if (!a) return;
   for (let k = 0; k < a.length; k += 4) if (Math.abs(a[k] - x) < 0.01 && Math.abs(a[k + 1] - z) < 0.01) { a.splice(k, 4); return; }
 }
+// take the spot at x, z off the map and say how big it was: [r, tree] (for moving something)
+function takeSpot(x, z) {
+  const a = spots.get(spotKey(x, z));
+  if (!a) return null;
+  for (let k = 0; k < a.length; k += 4) if (Math.abs(a[k] - x) < 0.01 && Math.abs(a[k + 1] - z) < 0.01) { const out = [a[k + 2], !!a[k + 3]]; a.splice(k, 4); return out; }
+  return null;
+}
 function addSpot(x, z, r, tree = false) {
   const k = spotKey(x, z);
   if (!spots.has(k)) spots.set(k, []);
@@ -431,7 +438,10 @@ function bush(x, z, s = 1, withBerries = true) {
     blobs.push({ ox, oz, r, y: r * 0.6 });
   }
   scene.add(g);
+  recording = withBerries ? [] : null; // a berry bush remembers its drawn copies, so the admin can move or remove it
   for (const m of g.children) drawAlong(drawnTogether.bushes, m);
+  if (withBerries) g.userData.parts = recording;
+  recording = null;
   if (withBerries) {
     // each berry bush remembers which berries are its own, so they can be picked and grow back
     g.userData.berries = { start: berries.count, n: 15 };
@@ -446,6 +456,7 @@ function bush(x, z, s = 1, withBerries = true) {
     }
   }
   g.userData.label = withBerries ? 'Berry bush' : 'Bush';
+  g.userData.r = s * 0.85;
   addSpot(x, z, s * 0.85);
   interactive.push(g);
   return g;

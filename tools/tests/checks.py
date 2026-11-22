@@ -287,7 +287,7 @@ async def smoke():
             out.push([document.querySelectorAll('#craftList .craft-card').length, document.querySelectorAll('#craftChips .craft-chip').length]);
             document.getElementById('craftClose').click(); }
           return out; })()""")
-        expect(found == [[0, 0], [0, 0], [3, 3]], f'recipes are discovered (all but one thing had), with Tools and Building buttons ({found})')
+        expect(found == [[0, 0], [0, 0], [4, 3]], f'recipes are discovered (all but one thing had), with Tools and Building buttons ({found})')
         await a.evaluate("(() => { const p = __pl.player.position; __pl.queueTask({ type: 'walk', x: p.x + 1.5, z: p.z + 1 }); })()")
         await idle(a, 20)
         await a.click('#menuBtn'); await a.wait_for_timeout(300); await a.click('#exitBtn'); await a.wait_for_timeout(1500)
@@ -355,8 +355,8 @@ async def campfire():
         await a.click('#menuBtn'); await a.wait_for_timeout(300); await a.click('#exitBtn'); await a.wait_for_timeout(2500)
         expect(await b.evaluate("[...__pl.others.values()].some((o) => o.sit && o.state === 'away')"), 'still sitting while away')
         await a.click('#playBtn'); await a.wait_for_timeout(2500)
-        left = await a.evaluate('__pl.you.sit ? __pl.you.sit.until - Date.now() : 0')
-        expect(200000 < left < 300000 and await a.evaluate("__pl.tasks.current && __pl.tasks.current.type === 'sit'"), f'back in the game: still sitting ({left} ms left)')
+        # since 0.2.8 sitting has no set time: you sit until you stand up, do something else or the fire goes out
+        expect(await a.evaluate("!!__pl.you.sit && !!__pl.tasks.current && __pl.tasks.current.type === 'sit'"), 'back in the game: still sitting')
         await a.evaluate('__pl.endSit(true)'); await a.wait_for_timeout(1500)
         expect(not await b.evaluate('[...__pl.others.values()].some((o) => o.sit)'), 'stood up, on both phones')
         await a.evaluate(f"__pl.queueTask({{ type: 'tend', id: {fid}, do: 'out' }})"); await idle(a, 15); await a.wait_for_timeout(800)

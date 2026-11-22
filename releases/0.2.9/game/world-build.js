@@ -39,7 +39,7 @@ function readyIn(b) {
 function drawBerries(b) {
   const { start, n } = b.userData.berries;
   const src = SOURCES[b.userData.source];
-  const shown = freshLook ? n : Math.min(n, src && harvests(src) ? berriesOn(b) : n);
+  const shown = b.userData.removed ? 0 : freshLook ? n : Math.min(n, src && harvests(src) ? berriesOn(b) : n);
   if (b.userData.shown === shown) return;
   b.userData.shown = shown;
   const a = berries.instanceMatrix.array;
@@ -55,11 +55,22 @@ for (const set of [...Object.values(near), wild.bush, ...wild.boulders, wild.roc
   interactive.push(...buildSet(set));
 }
 for (const t of [...trees, ...oldStumps, ...rocks]) t.parts = t.parts.map(([m, key, idx]) => ({ ...(m.byKey.get(key) || {}), idx }));
+for (const b of berryBushes) b.userData.parts = (b.userData.parts || []).map(([m, key, idx]) => ({ ...(m.byKey.get(key) || {}), idx }));
 // which tree or old stump a tapped copy belongs to (the drawn mesh and its copy number)
 const copyOwner = new Map();
 trees.forEach((t, i) => { for (const p of t.parts) for (const mesh of [p.full, p.simple]) if (mesh) copyOwner.set(`${mesh.uuid}:${p.idx}`, { kind: 'tree', i }); });
 oldStumps.forEach((t, i) => { for (const p of t.parts) if (p.full) copyOwner.set(`${p.full.uuid}:${p.idx}`, { kind: 'oldStump', i }); });
 rocks.forEach((t, i) => { for (const p of t.parts) if (p.full) copyOwner.set(`${p.full.uuid}:${p.idx}`, { kind: 'rock', i }); });
+// a moved thing (admin): its laid-out copy, shifted by t.off
+const shifted = (t, m4) => (t.off ? new THREE.Matrix4().makeTranslation(t.off[0], t.off[1], t.off[2]).multiply(m4) : m4);
+// remember each drawn copy as it was laid out (once, before it's hidden or moved)
+function keepParts(t) {
+  for (const p of t.parts) for (const mesh of [p.full, p.simple]) {
+    if (!mesh) continue;
+    p.saved = p.saved || {};
+    if (!p.saved[mesh.uuid]) { const m4 = new THREE.Matrix4(); mesh.getMatrixAt(p.idx, m4); p.saved[mesh.uuid] = m4; }
+  }
+}
 // hide (or show again) the drawn copies a tree or stump is made of
 function showParts(t, show) {
   for (const p of t.parts) for (const mesh of [p.full, p.simple]) {
@@ -68,8 +79,9 @@ function showParts(t, show) {
     if (!show) {
       if (!p.saved[mesh.uuid]) { const m4 = new THREE.Matrix4(); mesh.getMatrixAt(p.idx, m4); p.saved[mesh.uuid] = m4; }
       mesh.setMatrixAt(p.idx, NO_TREE);
-    } else if (p.saved[mesh.uuid]) mesh.setMatrixAt(p.idx, p.saved[mesh.uuid]);
+    } else if (p.saved[mesh.uuid]) mesh.setMatrixAt(p.idx, shifted(t, p.saved[mesh.uuid]));
     mesh.instanceMatrix.needsUpdate = true;
+    if (t.off) mesh.computeBoundingSphere(); // so it isn't skipped when its old spot is off screen
   }
 }
 // an old stump dug out: gone for good
@@ -136,9 +148,10 @@ function drawRock(r) {
     if (!mesh) continue;
     p.saved = p.saved || {};
     if (!p.saved[mesh.uuid]) { const m4 = new THREE.Matrix4(); mesh.getMatrixAt(p.idx, m4); p.saved[mesh.uuid] = m4; }
-    const m4 = look === 'gone' ? NO_TREE : look === 'mined' ? p.saved[mesh.uuid].clone().multiply(MINED_SQUASH) : p.saved[mesh.uuid];
+    const m4 = look === 'gone' ? NO_TREE : shifted(r, look === 'mined' ? p.saved[mesh.uuid].clone().multiply(MINED_SQUASH) : p.saved[mesh.uuid]);
     mesh.setMatrixAt(p.idx, m4);
     mesh.instanceMatrix.needsUpdate = true;
+    if (r.off) mesh.computeBoundingSphere();
   }
 }
 function setRockState(i, state, since) {
@@ -183,3 +196,75 @@ function updateDetails(x, z) {
    code. Everything in the world is also kept as plain data (world.items
    and you), ready to be saved or sent to a server later.
    ===================================================================== */
+
+/* ---------- the admin moving and removing things laid out with the world (trees, rocks, berry bushes) ----------
+   The layout itself never changes: a moved thing is drawn shifted from where it was laid out (world.moved on the
+   server), and a removed one is hidden (trees and rocks as gone, berry bushes in world.removed). */
+function movedThing(what, i) { return what === 'tree' ? trees[i] : what === 'rock' ? rocks[i] : what === 'bush' ? berryBushes[i] : null; }
+function moveLayoutThing(what, i, x, z) {
+  const t = movedThing(what, i);
+  if (!t || !Number.isFinite(x) || !Number.isFinite(z)) return;
+  if (what === 'bush') { moveBush(t, x, z); return; }
+  if (!t.from) { keepParts(t); t.from = [t.x, t.z]; t.spot = takeSpot(t.x, t.z) || [what === 'rock' ? t.r : 0.5, what === 'tree']; } // where it was laid out
+  else removeSpotNear(t.x, t.z);
+  clearCellsNear(t.x, t.z, t.spot[0] + 1);
+  const was = [t.x, t.z];
+  t.off = [x - t.from[0], groundY(x, z) - groundY(t.from[0], t.from[1]), z - t.from[1]];
+  t.x = x; t.z = z;
+  if (what === 'tree') {
+    showParts(t, t.state === 'tree' || freshLook);
+    if (t.stump) t.stump.position.set(x, groundY(x, z) - 0.05, z);
+  } else {
+    drawRock(t);
+    if (t.proxy) t.proxy.position.set(x, t.proxy.position.y - groundY(was[0], was[1]) + groundY(x, z), z);
+  }
+  if (t.state !== 'gone') addSpot(x, z, t.spot[0], t.spot[1]);
+  clearCellsNear(x, z, t.spot[0] + 1);
+}
+function moveBush(b, x, z) {
+  const u = b.userData;
+  if (!u.from) { // where it was laid out, and its drawn copies and berries as they were
+    keepParts({ parts: u.parts || [] });
+    u.from = [b.position.x, b.position.z, b.position.y];
+    const { start, n } = u.berries;
+    u.berryBase = berryMatrices.slice(start * 16, (start + n) * 16);
+  }
+  removeSpotNear(b.position.x, b.position.z);
+  clearCellsNear(b.position.x, b.position.z, u.r + 1);
+  const off = [x - u.from[0], groundY(x, z) - u.from[2], z - u.from[1]], T = new THREE.Matrix4().makeTranslation(...off);
+  u.off = off;
+  for (const p of u.parts || []) for (const mesh of [p.full, p.simple]) {
+    if (!mesh || !p.saved[mesh.uuid]) continue;
+    mesh.setMatrixAt(p.idx, u.removed ? NO_TREE : T.clone().multiply(p.saved[mesh.uuid]));
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingSphere();
+  }
+  const { start, n } = u.berries, m4 = new THREE.Matrix4();
+  for (let k = 0; k < n; k++) { m4.fromArray(u.berryBase, k * 16); T.clone().multiply(m4).toArray(berryMatrices, (start + k) * 16); }
+  berries.computeBoundingSphere();
+  u.shown = -1;
+  drawBerries(b);
+  b.position.set(x, groundY(x, z), z);
+  if (!u.removed) addSpot(x, z, u.r);
+  clearCellsNear(x, z, u.r + 1);
+}
+// a berry bush the admin took out: hidden, can't be tapped, and doesn't block the way
+function removeLayoutThing(what, i) {
+  if (what !== 'bush') return; // trees and rocks come as gone (setTreeState, setRockState)
+  const b = berryBushes[i];
+  if (!b || b.userData.removed) return;
+  b.userData.removed = true;
+  keepParts({ parts: b.userData.parts || [] });
+  for (const p of b.userData.parts || []) for (const mesh of [p.full, p.simple]) if (mesh) { mesh.setMatrixAt(p.idx, NO_TREE); mesh.instanceMatrix.needsUpdate = true; }
+  b.userData.shown = -1;
+  drawBerries(b);
+  const j = interactive.indexOf(b);
+  if (j >= 0) interactive.splice(j, 1);
+  removeSpotNear(b.position.x, b.position.z);
+  clearCellsNear(b.position.x, b.position.z, b.userData.r + 1);
+}
+// the world from the server: everything the admin moved or removed
+function useWorldEdits(w) {
+  for (const [key, at] of Object.entries(w.moved || {})) { const [what, i] = key.split(':'); moveLayoutThing(what, Number(i), at[0], at[1]); }
+  for (const key of Object.keys(w.removed || {})) { const [what, i] = key.split(':'); removeLayoutThing(what, Number(i)); }
+}
