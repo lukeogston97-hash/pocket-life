@@ -205,6 +205,7 @@ function bagDropAt(s, e, loose) {
   const at = t && t.kind === 'item' ? { x: t.item.x + 0.3, z: t.item.z + 0.3 } : t && t.kind === 'ground' ? { x: t.point.x, z: t.point.z }
     : gh && !['shore', 'use'].includes(t && t.kind) ? { x: gh.point.x, z: gh.point.z } : null;
   if (!at) { say("Can't put it there"); return; } // the pond, a bush
+  if (!loose && spareInBag(kind) < 1) { say('Already in your queue'); return; } // every one you carry is already queued to go somewhere
   then({ type: 'drop', kind, n: 1, ...(!loose && it.uses ? { which: s.i } : {}), x: at.x, z: at.z });
 }
 // the bar under the grid: what it is, and what you can do with it (the main thing in green)

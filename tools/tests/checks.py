@@ -759,6 +759,8 @@ async def bagdrag():
         await drag('stick', await a.evaluate(f"({scr})([{tgt[0]}, 0, {tgt[1]}])"))
         g = await a.evaluate('__pl.dropGhosts.size'); listed = await a.evaluate("document.getElementById('queueNow').textContent")
         expect(g == 1 and listed == 'Putting down', f'the drop is a task with a see-through copy where it will land ({g} copies, "{listed}")')
+        nums = await a.evaluate("[...document.querySelectorAll('.qnum')].map((e) => e.textContent).join()")
+        expect(nums == '1', f'a lone task keeps its number ({nums!r})')
         await idle(a, 60); await a.wait_for_timeout(800)
         expect(await a.evaluate('__pl.dropGhosts.size') == 0, 'the see-through copy goes once it is down')
         left2 = await a.evaluate('__pl.you.carry.stick')
@@ -766,6 +768,14 @@ async def bagdrag():
         expect(left2 == left - 1 and d[0] < 3.0, f'a stick dragged onto far ground was put down there ({left} -> {left2}, {d[0]:.1f} m from where I let go)')
         expect(await a.evaluate("document.getElementById('bag').classList.contains('open')"), 'the bag is open again after a drop')
         await a.evaluate("document.getElementById('bag').classList.remove('open')")
+        # a loose item already in the queue can't be tapped again till its task is done or taken off
+        sid = await a.evaluate(f"(() => {{ let best = null, bd = 99; for (const it of __pl.world.items) {{ const d = Math.hypot(it.x - {tgt[0]}, it.z - {tgt[1]}); if (d < bd) {{ bd = d; best = it; }} }} return best && best.id; }})()")
+        P2 = await a.evaluate('[__pl.player.position.x, __pl.player.position.z]')
+        await a.evaluate(f"__pl.queueTask({{ type: 'walk', x: {P2[0] - 6}, z: {P2[1]} }}); __pl.queueTask({{ type: 'pickup', id: {sid} }})")
+        await a.wait_for_timeout(300)
+        sp = await a.evaluate(f"(() => {{ const v = __pl.itemViews.get({sid}).position; return ({scr})([v.x, v.y, v.z]); }})()")
+        await a.mouse.click(sp[0], sp[1]); await a.wait_for_timeout(400)
+        expect(await a.evaluate("document.getElementById('actMenu').hidden"), 'tapping a stick already queued opens no menu')
         # (dragging a loose item along the ground is not checked yet: the headless mouse drag did not pick the stick up)
 
 async def glow():

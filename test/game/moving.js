@@ -218,6 +218,9 @@ const allTasks = () => (tasks.current ? [tasks.current, ...tasks.list] : [...tas
 const listed = (t) => t.type !== 'drop' || Number.isFinite(t.x); // a drop with a spot (from a drag) is a task like any other; Drop 1 happens by your feet
 const shownTasks = () => allTasks().filter(listed);
 const took = new Set(); // loose items you've picked up, so the second half of moving one knows the pick-up happened
+const queuedItem = (id) => allTasks().some((q) => q.type === 'pickup' && q.id === id); // already in your queue: can't be tapped or dragged again
+// how many of a kind in your bag aren't already queued to be dropped somewhere
+const spareInBag = (kind) => (you.carry[kind] || 0) - allTasks().reduce((n, q) => n + (q.type === 'drop' && q.kind === kind && !q.landed ? q.n : 0), 0);
 // the weight you'll be carrying once everything queued is picked up or harvested
 const plannedWeight = () => carried() + allTasks().reduce((sum, t) => {
   if (t.type === 'pickup') { const it = getItem(t.id); return sum + (it ? ITEMS[it.kind].weight : 0); }
@@ -628,7 +631,7 @@ let badges = [];
 function taskSpot(t) {
   if (t.type === 'pickup') { const v = itemViews.get(t.id); return v ? V(v.position.x, v.position.y + 0.22, v.position.z) : null; }
   if (t.type === 'use') return t.water ? V(POND.x, WATER_Y + 0.5, POND.z) : V(t.x, t.top + 0.15, t.z);
-  if (t.type === 'walk' || t.type === 'drop') return Number.isFinite(t.x) ? V(t.x, groundY(t.x, t.z) + 0.3, t.z) : null;
+  if (t.type === 'walk' || t.type === 'drop') return Number.isFinite(t.x) && !t.landed ? V(t.x, groundY(t.x, t.z) + 0.3, t.z) : null;
   if (TASK_KINDS[t.type]) return TASK_KINDS[t.type].spot(t);
   return null;
 }
@@ -691,7 +694,7 @@ function drawQueue() {
     x.className = 'q-x';
     x.textContent = '\u00d7';
     x.setAttribute('aria-label', `Remove ${taskName(t, false)}`);
-    x.addEventListener('click', () => { const j = tasks.list.indexOf(t); if (j >= 0) tasks.list.splice(j, 1); drawQueue(); });
+    x.addEventListener('click', () => { tasks.list = tasks.list.filter((q) => q !== t && (t.type !== 'pickup' || q.from !== t.id)); drawQueue(); }); // a move's second half goes with it
     li.append(name, x);
     return li;
   });
@@ -711,7 +714,7 @@ function drawQueue() {
   $('queueStop').hidden = !cur && !next.length;
   // numbers over the things you've queued
   const list = shownTasks();
-  if (list.length < 2) return;
+  if (!list.length) return; // (a lone task keeps its 1 till it's done)
   const used = new Set();
   list.forEach((t, i) => {
     const p = taskSpot(t);

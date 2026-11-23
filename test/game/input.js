@@ -26,7 +26,7 @@ canvas.addEventListener('pointerdown', (e) => {
   wdrag = null;
   if (ui.mode === 'world' && player && !you.dead && !paused && !placing.on) {
     const hit = pickTarget(...toCanvas(e));
-    if (hit && hit.kind === 'item') {
+    if (hit && hit.kind === 'item' && !queuedItem(hit.item.id)) { // (one already queued to move stays put)
       wdrag = { item: hit.item, x: e.clientX, y: e.clientY, ready: e.pointerType === 'mouse', ghost: null };
       if (wdrag.ready) controls.enableRotate = false; // a mouse on a loose item drags it, not the view
       else { const w = wdrag; w.timer = setTimeout(() => { w.ready = true; }, 300); }
@@ -354,6 +354,7 @@ function thingActions(t) {
 function openMenuAt(px, py, known) {
   if (ui.mode !== 'world' || !player || you.dead || paused || placing.on) return false;
   const t = known || pickTarget(px, py);
+  if (t && t.kind === 'item' && queuedItem(t.item.id)) { closeMenu(); showTag('Already in your queue', headTop(), 2); return true; } // till it's done or taken off the list
   const acts = menuActions(t);
   hideHint(); // the tip has done its job once you've tapped something
   if (!acts.length) { closeMenu(); return false; }
@@ -702,7 +703,7 @@ function updateGlow(dt) {
   else if ((hoverWait -= dt) <= 0) {
     hoverWait = 0.12;
     const t = pickTarget(...toCanvas(hoverAt));
-    hoverGlow = glowViewOf(t);
+    hoverGlow = t && t.kind === 'item' && queuedItem(t.item.id) ? null : glowViewOf(t);
   }
   const g = (!$('actMenu').hidden && menuGlow) || hoverGlow;
   if (g && !g.view.parent) { if (g === menuGlow) menuGlow = null; else hoverGlow = null; clearGlow(); return; } // it was picked up
