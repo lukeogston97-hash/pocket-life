@@ -115,6 +115,8 @@ export const ACTIONS = {
   // picking something up off the ground
   take: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
     const i = w.items.findIndex((it) => it.id === m.id);
+    const c = i >= 0 && this.notYours(p, w.items[i].x, w.items[i].z, me.admin);
+    if (c) { reply({ t: 'took', id: m.id, ok: false, why: this.claimNo(c) }); return; } // inside someone else's claim
     if (i < 0 || !addCarry(p, w.items[i].kind, 1, G)) { reply({ t: 'took', id: m.id, ok: false }); return; }
     const got = w.items[i];
     if (got.uses != null) { const list = wearList(p, got.kind, G); list[list.length - 1] = got.uses; p.wear = p.wear || {}; p.wear[got.kind] = list; } // a worn tool stays worn
@@ -149,6 +151,8 @@ export const ACTIONS = {
   chop: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
     const C = G.chopping || {}, rule = C[m.what === 'oldStump' ? 'stump' : m.what], tool = C.tool;
     if (!rule || (tool && !p.carry[tool])) { reply(this.mine(p)); return; }
+    const log = m.id != null && w.items.find((it) => it.id === m.id), cl = log ? this.notYours(p, log.x, log.z, me.admin) : this.notYours(p, Number.isFinite(m.x) ? m.x : p.x, Number.isFinite(m.z) ? m.z : p.z, me.admin);
+    if (cl) { reply({ t: 'placeNo', why: this.claimNo(cl) }); reply(this.mine(p)); return; }
     w.trees = w.trees || {};
     let at = [num(m.x), num(m.z)];
     if (m.what === 'oldStump') { // an old stump that was already in the world: dug out for good
@@ -189,10 +193,12 @@ export const ACTIONS = {
     reply(this.mine(p));
   } },
   // mining (0.2.9): breaking a rock (gone, one comes back now and then) or mining a boulder (it stays, and can be mined again after regrowDays)
-  quarry: { when: 'world', async run({ m, p, w, reply, save }) {
+  quarry: { when: 'world', async run({ me, m, p, w, reply, save }) {
     const R = G.mining || {}, rule = R[m.what], tool = R.tool, i = Math.floor(m.idx);
     if (!rule || (m.what !== 'rock' && m.what !== 'boulder') || !(i >= 0 && i < 2000)) return;
     if (tool && !p.carry[tool]) { reply(this.mine(p)); return; }
+    const cl = this.notYours(p, p.x, p.z, me.admin); // where they're standing, next to the rock
+    if (cl) { reply({ t: 'placeNo', why: this.claimNo(cl) }); reply(this.mine(p)); return; }
     w.rocks = w.rocks || {};
     if (w.rocks[i]) { reply({ t: 'rock', idx: i, state: w.rocks[i][0], at: w.rocks[i][1] }); return; } // someone else got it first
     w.rocks[i] = [m.what === 'rock' ? 'gone' : 'mined', Date.now()];
@@ -218,6 +224,8 @@ export const ACTIONS = {
   pick: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
     const i = Math.floor(m.bush);
     if (!(i >= 0 && i < 200)) return;
+    const at = (w.layout && w.layout.bushes && w.layout.bushes[i]) || [p.x, p.z], cl = this.notYours(p, at[0], at[1], me.admin);
+    if (cl) { reply({ t: 'picked', bush: i, ok: false, why: this.claimNo(cl) }); return; }
     // with the bush's tool (a knife) a few come off at once (toolHarvest), and the tool wears
     const many = BERRY_SRC.tool && BERRY_SRC.toolHarvest && p.carry[BERRY_SRC.tool] ? Number(BERRY_SRC.toolHarvest[G.berryKind]) || 1 : 1;
     const n = this.berriesOn(i) >= many ? many : 1;
@@ -234,6 +242,8 @@ export const ACTIONS = {
     const no = (why) => { reply({ t: 'placeNo', why }); reply(this.mine(p)); };
     if (!rule || !p.carry[m.kind]) return no('You need to carry it');
     if (Math.hypot(x - p.x, z - p.z) > 4) return no('Too far away');
+    const cl = this.notYours(p, x, z, me.admin);
+    if (cl) return no(this.claimNo(cl));
     if (this.placedList().some((th) => Math.hypot(th.x - x, th.z - z) < (rule.solid || 0.5) + 1)) return no('Too close to something else');
     takeCarry(p, m.kind, 1);
     const th = { id: w.nextId++, kind, x, z, rot: num(m.rot), built: false, fuel: 0, lit: false, at: Date.now(), by: p.who }; // by: who built it (only they can pack it up or take it apart)
@@ -247,7 +257,7 @@ export const ACTIONS = {
   // building a site (it took buildSeconds in the game)
   build: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
     const th = this.placedById(m.id);
-    if (!th || th.built || Math.hypot(th.x - p.x, th.z - p.z) > 3) { if (th) this.sendPlaced(th, reply, {}); return; }
+    if (!th || th.built || Math.hypot(th.x - p.x, th.z - p.z) > 3 || this.notYours(p, th.x, th.z, me.admin)) { if (th) this.sendPlaced(th, reply, {}); return; }
     th.built = true;
     th.at = Date.now();
     spend(p, 'build', G);
@@ -305,19 +315,23 @@ export const ACTIONS = {
     const th = this.placedById(m.id), f = th && fireRule(th.kind);
     if (!th || !f || !th.built || Math.hypot(th.x - p.x, th.z - p.z) > 3) { if (th) this.sendPlaced(th, reply, {}); reply(this.mine(p)); return; }
     this.burn(th);
+    const cl = this.notYours(p, th.x, th.z, me.admin); // only the owner tends a fire in their claim
+    if (cl) { reply({ t: 'placeNo', why: this.claimNo(cl) }); this.sendPlaced(th, reply, {}); reply(this.mine(p)); return; }
+    let note = '';
     if (m.do === 'add') {
       const kind = m.fuel && f.fuels[m.fuel] ? m.fuel : f.fuel, each = f.fuels[kind]; // sticks, or another fuel like logs
       const room = Math.ceil((f.max - th.fuel) / each - 0.05); // one that only part fits still goes on
       const n = Math.min(Math.max(1, Math.floor(m.n) || 1), room, p.carry[kind] || 0);
       if (n > 0) { takeCarry(p, kind, n); th.fuel = Math.min(f.max, th.fuel + n * each); }
     } else if (m.do === 'light') {
-      if (!th.lit && th.fuel > 0) { th.lit = true; th.burnt = true; th.at = Date.now(); } // burnt: taking it apart then gives back only what doesn't burn
-    } else if (m.do === 'out') th.lit = false;
+      if (!th.lit && th.fuel > 0) { th.lit = true; th.burnt = true; th.at = Date.now(); note = this.tryClaim(th, p); } // burnt: taking it apart then gives back only what doesn't burn; a first fire claims the land
+    } else if (m.do === 'out') { th.lit = false; this.burn(th); } // putting it out ends a claim
     th.at = Date.now();
     spend(p, 'tend', G);
     await this.save();
     save();
     this.sendPlaced(th, null);
+    if (note) reply({ t: 'claimNote', text: note });
     reply(this.mine(p));
   } },
   // sitting by a fire (no set time: until they stand up, do something else or the fire goes out; it carries on while they're away), or standing up (off)
@@ -326,6 +340,8 @@ export const ACTIONS = {
     const th = this.placedById(m.id), seats = th && (PLACEABLES[th.kind] || {}).seats, k = Math.floor(m.seat);
     const no = (why) => { reply({ t: 'sitNo', why }); reply(this.mine(p)); };
     if (!th || !th.built || !seats || !(k >= 0 && k < (seats.count || 6))) return no("Can't sit there");
+    const cl = this.notYours(p, th.x, th.z, me.admin);
+    if (cl) return no(this.claimNo(cl));
     if (this.sitterAt(th.id, k, Date.now(), p.who)) return no('Someone is sitting there');
     const at = seatAt(th, k);
     if (Math.hypot(at[0] - p.x, at[1] - p.z) > 3) return no('Too far away');
@@ -342,6 +358,8 @@ export const ACTIONS = {
     if (!def || !(i >= 0 && i < (def.count || 0))) return;
     w.plants = w.plants || {};
     const ps = (w.plants[m.plant] = w.plants[m.plant] || {}), now = Date.now();
+    const cl = this.notYours(p, p.x, p.z, me.admin); // where they're standing, next to the grass
+    if (cl) { reply({ t: 'cutNo', plant: m.plant, i, readyAt: ps[i] || 0, why: this.claimNo(cl) }); return; }
     if (ps[i] && ps[i] > now) { reply({ t: 'cutNo', plant: m.plant, i, readyAt: ps[i] }); return; } // someone got it first
     let ok = true;
     for (const [k, c] of Object.entries(def.gives || {})) ok = addCarry(p, k, c, G) && ok;

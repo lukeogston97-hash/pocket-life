@@ -21,6 +21,7 @@ function frame() {
     if (!paused) keyCamera(dt);
     updateOthers(dt);
     fadeTapRing(dt);
+    updateClaims(Date.now());
     sendMove();
     followPlayer(dt);
     controls.update();

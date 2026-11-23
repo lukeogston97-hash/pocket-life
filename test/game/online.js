@@ -86,7 +86,7 @@ function goOnline() {
       let back = false;
       for (const [k, n] of Object.entries((PLANTS[m.plant] || {}).gives || {})) back = takeFromCarry(k, n) || back;
       if (back) { drawHeld(); drawCarry(); }
-      showTag('Someone cut it first', headTop(), 2);
+      showTag(m.why || 'Someone cut it first', headTop(), 2);
     }
     else if (m.t === 'oldStump') removeOldStump(m.idx);
     else if (m.t === 'rock') setRockState(m.idx, m.state || 'whole', m.at);
@@ -94,6 +94,7 @@ function goOnline() {
     else if (m.t === 'graves') drawGraves(m.graves);
     else if (m.t === 'speed') setSpeed(m.speed);
     else if (m.t === 'live') applyLive(m.live);
+    else if (m.t === 'claimNote') showTag(m.text, headTop(), 3.5);
     else if (m.t === 'moved') moveLayoutThing(m.what, m.idx, m.x, m.z);
     else if (m.t === 'removed') removeLayoutThing(m.what, m.idx);
     else if (m.t === 'world') useSharedWorld(m.world);
@@ -107,7 +108,7 @@ function goOnline() {
     else if (m.t === 'bush') { const b = berryBushes[m.bush]; if (b) { b.userData.count = m.count; b.userData.growFrom = m.growFrom; drawBerries(b); } }
     else if (m.t === 'picked' && !m.ok) {
       if (takeFromCarry(Object.keys((BERRY_SOURCE() || {}).harvest || {})[0], you.lastPick || 1)) { drawHeld(); drawCarry(); }
-      showTag('Someone picked it first', headTop(), 2);
+      showTag(m.why || 'Someone picked it first', headTop(), 2);
     }
     else if (m.t === 'join') addOther(m.person);
     else if (m.t === 'leave') removeOther(m.id);
@@ -306,7 +307,7 @@ function tookBack(m) {
   shared.taking.delete(m.id);
   if (m.ok || !kind) return;
   if (takeFromCarry(kind, 1)) { drawHeld(); drawCarry(); }
-  showTag('Someone got there first', headTop(), 2);
+  showTag(m.why || 'Someone got there first', headTop(), 2);
 }
 function sharePick(bush) {
   if (online() && shared.on) net.sock.send(JSON.stringify({ t: 'pick', bush }));

@@ -1,6 +1,6 @@
 {
-  "version": "0.2.9",
-  "build": 3,
+  "version": "0.3.0",
+  "build": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,
@@ -368,8 +368,9 @@
         "fuel": "stick",
         "secondsEach": 300,
         "maxFuel": 24,
+        "maxHours": 72,
         "otherFuels": {
-          "log": 1800
+          "log": 28800
         },
         "lightSeconds": 3
       },
@@ -728,11 +729,12 @@
     "plants": "Plants you cut, like tall grass. Each kind is laid out by itself: count clumps (nearStart of them near the start), on its own random numbers (seed) so nothing else moves. action is the tap menu button, verb what shows while doing it. gives goes into your inventory each cut. seconds is how long by hand, toolSeconds with the tool (each use wears the tool). regrowHours [lo, hi]: a cut clump grows back at a random time in between. look: blades per clump, height, colour and tips (the seed heads). Run tools/worlds.py test-build after changing plants.",
     "regions": "The worlds (regions) on the main menu, under Play. Each is its own world on its own clock (timeZone). open: false shows it as Coming soon; tapping it shows this world's view at that region's time of day. For now only one world exists, so only one region can be open, and its timeZone should match settings.worldTimeZone.",
     "night": "Night in the world's clock (settings.worldTimeZone), from the hour 'from' to the hour 'to'. Sleeping at night fills Rest at whileAsleepAtNight instead of whileAsleep. People away or on autopilot go to sleep when night starts and get up in the morning. The server uses the same numbers.",
-    "placeables": "Things you place in the world and build, like the campfire. An item with places (the id of an entry here) gets a Place button in the Inventory: you pick a spot, your person puts it down as an unbuilt site, then builds it (buildSeconds; buildVerb shows while building). solid is how big it is for walking round (metres). fire makes it a fire you can light and put out: fuel is the item you add (sticks), secondsEach is how long one burns (300 = 5 minutes), otherFuels are more items it burns with their seconds each (log: 1800), maxFuel is the most it holds (in fuel items, 24 sticks = 2 hours), lightSeconds how long lighting takes. It only burns while lit, keeps burning while players are away, and goes out by itself when the fuel runs out. seats: people can sit round it (count places, distance metres from the middle). Sitting is a task with no set time: your person sits until you stand up, do something else or the fire goes out, and keeps sitting while you're away. Run tools/worlds.py test-build after changing placeables. craftLabel names the tap menu list of recipes made there (recipes with near), like Cook.",
+    "placeables": "Things you place in the world and build, like the campfire. An item with places (the id of an entry here) gets a Place button in the Inventory: you pick a spot, your person puts it down as an unbuilt site, then builds it (buildSeconds; buildVerb shows while building). solid is how big it is for walking round (metres). fire makes it a fire you can light and put out: fuel is the item you add (sticks), secondsEach is how long one burns (300 = 5 minutes), otherFuels are more items it burns with their seconds each (log: 1800), maxHours is the most it holds in hours of burning (72 = 3 days, so a claim's fire can last the 3-day away timer; without maxHours, maxFuel counts it in fuel items), lightSeconds how long lighting takes. It only burns while lit, keeps burning while players are away, and goes out by itself when the fuel runs out. seats: people can sit round it (count places, distance metres from the middle). Sitting is a task with no set time: your person sits until you stand up, do something else or the fire goes out, and keeps sitting while you're away. Run tools/worlds.py test-build after changing placeables. craftLabel names the tap menu list of recipes made there (recipes with near), like Cook.",
     "mining": "Mining with a tool (tool: the item you need, the stone pickaxe). rock: breaking a small rock (seconds, and what falls: gives); the rock is then gone, but one broken rock comes back by a boulder every rockBackHours. boulder: mining a boulder; gives can be a range like [3, 5]. A mined boulder stays (it can't be removed) and can be mined again after regrowDays real days (the same as trees). Each hit wears the tool by one use and takes energyCosts.chop energy. The server uses the same rules.",
     "liveSettings": "Numbers the admin can change live from the Admin panel (Settings tab) without a new build. Each one's id is wired up in code (server/src/live.js and test/game/admin.js); name, group, unit, min, max and step are just how it shows. The normal value still comes from the rest of this file (settings, chopping, mining, sources, stats); a live change wins until the admin taps Reset.",
     "testNames": "While settings.autoName is on (testing), Make your person fills in a random name from this list. Turn autoName off for the real game.",
-    "bodyShapes": "The body builds on Make your person (slim, average and so on): how much wider or taller each part of the body is drawn. Add one by copying an entry; it shows up as a choice by itself."
+    "bodyShapes": "The body builds on Make your person (slim, average and so on): how much wider or taller each part of the body is drawn. Add one by copying an entry; it shows up as a choice by itself.",
+    "claims": "Claims (0.3.0): your first campfire becomes your claim when you light it: radius metres round it, yours only while the fire burns (once it's out the land is free and anyone can take the cold fire apart). One claim each. Claims can't overlap and can't reach into the free area round the main pond (spawnRadius metres from the pond's middle; the pond itself is about 6 m across from its middle). Inside someone else's claim others can only walk through. placeable: the kind that claims. ringShowsWithin: how near you have to be to see a claim's faint ring. Run tools/worlds.py test-build after changing it."
   },
   "chatFilter": {
     "anywhere": [
@@ -820,6 +822,17 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.3.0",
+      "date": "2026-11-23",
+      "notes": [
+        "Claims: light your first campfire and the land 10 m round it becomes your claim, for as long as the fire burns. A faint ring shows its edge.",
+        "Inside someone else's claim you can walk through, but you can't build, pick things up, chop, mine, pick berries, cut grass or use their fire.",
+        "Logs now burn for 8 hours, and a campfire holds up to 3 days of fuel. Sticks still burn for 5 minutes each.",
+        "If your fire goes out, your claim is gone and anyone can take the cold fire apart. You get one claim, and the land round the pond can't be claimed.",
+        "While you're away your person stays near their claim, keeps its fire going with sticks and logs from their bag, and walks to the pond for water."
+      ]
+    },
     {
       "version": "0.2.9",
       "date": "2026-11-22",
@@ -1209,5 +1222,11 @@
       "max": 100,
       "step": 0.1
     }
-  ]
+  ],
+  "claims": {
+    "radius": 10,
+    "spawnRadius": 16,
+    "placeable": "campfire",
+    "ringShowsWithin": 25
+  }
 }

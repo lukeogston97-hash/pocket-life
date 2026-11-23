@@ -39,6 +39,7 @@ if cmd == 'test-build':
                            'solid': v.get('solid', 0.5), 'fire': v.get('fire'), 'seats': v.get('seats')} for k, v in data.get('placeables', {}).items()},
         # numbers the admin can change live (Admin > Settings); wired up in server/src/live.js
         'liveSettings': data.get('liveSettings', []),
+        'claims': data.get('claims', {}),
         'start': {'x': 0.6, 'z': 1.9},
         'pond': {'x': -5.6, 'z': -0.9},  # the main pond's middle (POND in game.js)
     }

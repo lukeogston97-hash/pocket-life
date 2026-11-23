@@ -214,8 +214,22 @@ function walkToTarget(t) {
   }
   walkFirst(t.point);
 }
-// the small menu: Gather Sticks, Gather Stones, Harvest Berries
+// where a tapped thing is, to check claims (people, the ground and the pond are never blocked)
+function targetSpot(t) {
+  if (t.kind === 'item') return [t.item.x, t.item.z];
+  if (t.kind === 'placed') return [t.th.x, t.th.z];
+  if (t.kind === 'use') return t.task.water || t.task.x == null ? null : [t.task.x, t.task.z];
+  if (['tree', 'stump', 'oldStump', 'rock', 'plant'].includes(t.kind)) return [t.x, t.z];
+  return null;
+}
+// the small menu. Inside someone else's claim it only says whose claim it is, with Walk here (and Admin for the admin)
 function menuActions(t) {
+  const acts = thingActions(t), at = t && targetSpot(t), c = at && notMineAt(at[0], at[1]);
+  if (!c) return acts;
+  return [{ label: `${c.claim.name}'s claim`, note: 'Only they can use things here', disabled: true }, ...acts.filter((a) => a.foot || a.admin || a.label === 'Walk here')];
+}
+// the small menu: Gather Sticks, Gather Stones, Harvest Berries
+function thingActions(t) {
   if (!t) return [];
   if (t.kind === 'person') {
     const o = t.person, isMuted = muted.has(o.who);

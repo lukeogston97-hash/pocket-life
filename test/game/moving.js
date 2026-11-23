@@ -345,7 +345,7 @@ function autopilot() {
   auto.drinking = false;
   const hasFood = Object.keys(you.carry).some((k) => ITEMS[k] && ITEMS[k].eat);
   if (!hasFood && st.hunger < AWAY.eatBelow + 20) { // getting peckish with nothing to eat: go and pick some
-    const near = berryBushes.filter((b) => ripe(b)).sort((a, b) => a.position.distanceTo(player.position) - b.position.distanceTo(player.position))[0];
+    const near = berryBushes.filter((b) => ripe(b) && !b.userData.removed && !notMineAt(b.position.x, b.position.z)).sort((a, b) => a.position.distanceTo(player.position) - b.position.distanceTo(player.position))[0];
     if (near) { queueTask(bushTask(near)); return; }
   }
   // rest a little, then stroll somewhere near where you left off

@@ -16,6 +16,7 @@ import { natureMethods } from './nature.js';
 import { adminMethods } from './admin.js';
 import { placedMethods } from './placed.js';
 import { liveMethods, maxPlaying } from './live.js';
+import { claimsMethods } from './claims.js';
 import { ACTIONS } from './actions.js';
 
 export class World extends DurableObject {
@@ -305,7 +306,7 @@ export class World extends DurableObject {
 
 }
 // the rest of the world's methods, kept in their own files by topic
-Object.assign(World.prototype, lineMethods, personsMethods, awayMethods, natureMethods, adminMethods, placedMethods, liveMethods);
+Object.assign(World.prototype, lineMethods, personsMethods, awayMethods, natureMethods, adminMethods, placedMethods, liveMethods, claimsMethods);
 
 export default {
   async fetch(request, env) {

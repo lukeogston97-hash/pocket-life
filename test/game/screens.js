@@ -277,6 +277,7 @@ function showWelcomeBack(a) {
   if (a.ate) bits.push(`ate ${a.ate} ${(a.ate === 1 ? fruit.name : fruit.plural).toLowerCase()}`);
   if (a.picked) bits.push(`picked ${a.picked}`);
   if (a.drank) bits.push(`drank ${a.drank} time${a.drank === 1 ? '' : 's'}`);
+  if (a.fed) bits.push('kept the fire going');
   if (a.slept) bits.push('slept');
   if (a.ms < 5 * 60000 && !bits.length) return; // only gone a moment
   const days = Math.round(((AWAY.sleepAfterHours || 24) + (AWAY.goneAfterDays || 1) * 24) / 24); // away this long and they leave the world

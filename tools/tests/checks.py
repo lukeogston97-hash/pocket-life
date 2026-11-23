@@ -456,7 +456,38 @@ async def admin_tools():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools}
+async def claims():
+    """Lighting your first campfire away from the pond claims the land round it; others can't use it; putting it out frees it."""
+    async with world(CAMPKIT=1) as W:
+        a = await W.page('ownerA'); await join(a)
+        send = "(m) => window.__sock.send(JSON.stringify(m))"
+        await a.evaluate(f"({send})({{ t: 'craft', id: 'campfire' }})"); await a.wait_for_timeout(800)
+        expect(await a.evaluate('__pl.you.carry.campfire') == 1, 'made a campfire')
+        await a.evaluate("__pl.queueTask({ type: 'walk', x: 28, z: 6 })"); await idle(a, 50); await a.wait_for_timeout(1500)
+        spot = await a.evaluate("(() => { const p = __pl.player.position; for (let k = 0; k < 16; k++) { const ang = k / 16 * Math.PI * 2, x = p.x + Math.cos(ang) * 1.8, z = p.z + Math.sin(ang) * 1.8; if (!__pl.cantPlaceAt(x, z, 'campfire')) return [x, z]; } return null; })()")
+        expect(spot is not None and ((spot[0] + 5.6) ** 2 + (spot[1] + 0.9) ** 2) ** 0.5 > 27, f'a spot to place it away from the pond ({spot})')
+        await a.evaluate(f"({send})({{ t: 'place', kind: 'campfire', x: {spot[0]:.2f}, z: {spot[1]:.2f}, rot: 0 }})"); await a.wait_for_timeout(800)
+        fid = await a.evaluate("[...__pl.placed.keys()][0]")
+        for m in [f"{{ t: 'build', id: {fid} }}", f"{{ t: 'fire', id: {fid}, do: 'add', n: 5, fuel: 'stick' }}", f"{{ t: 'fire', id: {fid}, do: 'light' }}"]:
+            await a.evaluate(f"({send})({m})"); await a.wait_for_timeout(700)
+        expect(await a.evaluate(f"!!__pl.placed.get({fid}).claim && __pl.isLit(__pl.placed.get({fid}))"), 'lighting it made a claim')
+        b = await W.page('visitorB'); await join(b); await b.wait_for_timeout(800)
+        name = await a.evaluate('__pl.you.look.name')
+        expect(await b.evaluate(f"(__pl.placed.get({fid}).claim || {{}}).name") == name, "the other phone sees whose claim it is")
+        expect(await b.evaluate(f"__pl.cantPlaceAt(__pl.placed.get({fid}).x + 3, __pl.placed.get({fid}).z, 'campfire')") == f"That's {name}'s claim", "can't place inside someone else's claim")
+        acts = await b.evaluate(f"__pl.menuActions({{ kind: 'placed', th: __pl.placed.get({fid}), name: '' }}).map((x) => x.label)")
+        expect(acts[0] == f"{name}'s claim" and 'Put out fire' not in acts, f'their fire menu only says whose claim it is ({acts})')
+        # the server says no too: B walks over and tries to put it out
+        await b.evaluate(f"__pl.queueTask({{ type: 'walk', x: __pl.placed.get({fid}).x + 1.6, z: __pl.placed.get({fid}).z }})"); await idle(b, 40); await b.wait_for_timeout(1500)
+        await b.evaluate(f"({send})({{ t: 'fire', id: {fid}, do: 'out' }})"); await b.wait_for_timeout(800)
+        expect(await a.evaluate(f"__pl.isLit(__pl.placed.get({fid}))"), "the server won't let them put it out")
+        # the owner puts it out: the claim is gone
+        await a.evaluate(f"({send})({{ t: 'fire', id: {fid}, do: 'out' }})"); await a.wait_for_timeout(800)
+        expect(not await b.evaluate(f"__pl.cantPlaceAt(__pl.placed.get({fid}).x + 3, __pl.placed.get({fid}).z, 'campfire')"), 'once out, the land is free')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'claims': claims}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

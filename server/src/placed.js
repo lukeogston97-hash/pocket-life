@@ -12,7 +12,7 @@ export const fireRule = (kind) => {
   if (!f) return null;
   const each = (f.secondsEach || 300) * 1000, fuels = { [f.fuel]: each }; // every fuel it takes, in ms each (otherFuels: { log: 1800 })
   for (const [k, s] of Object.entries(f.otherFuels || {})) if (G.items[k] && s > 0) fuels[k] = s * 1000;
-  return { fuel: f.fuel, each, fuels, max: each * (f.maxFuel || 10) };
+  return { fuel: f.fuel, each, fuels, max: f.maxHours > 0 ? f.maxHours * 3600000 : each * (f.maxFuel || 10) }; // maxHours: the most it holds, in hours of burning
 };
 // where seat k round a placed thing is (the game works it out the same way)
 export function seatAt(th, k) {
@@ -29,7 +29,7 @@ export const placedMethods = {
     const P = PLACEABLES[kind];
     if (!P) return null;
     return this.placedList().find((th) => th.kind === kind && th.built && (!fireRule(kind) || this.burn(th).lit)
-      && Math.hypot(th.x - p.x, th.z - p.z) <= 4 + (P.solid || 0.5)) || null;
+      && !this.notYours(p, th.x, th.z) && Math.hypot(th.x - p.x, th.z - p.z) <= 4 + (P.solid || 0.5)) || null; // not in someone else's claim
   },
   // bring a fire up to now: burnt fuel is gone, and with none left it's out
   burn(th, now = Date.now()) {
@@ -37,6 +37,7 @@ export const placedMethods = {
     th.fuel = Math.max(0, (th.fuel || 0) - (now - (th.at || now)));
     th.at = now;
     if (th.fuel <= 0) { th.lit = false; th.fuel = 0; }
+    if (!th.lit && th.claim) { th.claim = null; th.by = null; } // a claim's fire went out: the land is free and the fire is anyone's
     return th;
   },
   // when a placed thing's fire goes out (ms): Infinity if it isn't a fire or is gone; now (or earlier) if it's already out
@@ -49,6 +50,8 @@ export const placedMethods = {
   // why a built one can't be packed up or taken apart ('' if it can): only by who built it (or the admin; ones from
   // before 0.2.6 have no builder, so anyone), a fire has to be out, and nobody else can be sitting by it
   whyNotTakeDown(th, p, admin) {
+    const c = this.notYours(p, th.x, th.z, admin);
+    if (c) return this.claimNo(c);
     if (th.by && th.by !== p.who && !admin) return 'Only the person who built it can do that';
     if (this.burn(th).lit) return 'Put the fire out first';
     const now = Date.now();
@@ -58,7 +61,9 @@ export const placedMethods = {
   // what the game is told: fuel is ms left right now (so phone clocks don't matter)
   placedView(th, now = Date.now()) {
     this.burn(th, now);
-    return { id: th.id, kind: th.kind, x: th.x, z: th.z, rot: th.rot, built: !!th.built, fuel: Math.round(th.fuel || 0), lit: !!th.lit, burnt: !!th.burnt };
+    const v = { id: th.id, kind: th.kind, x: th.x, z: th.z, rot: th.rot, built: !!th.built, fuel: Math.round(th.fuel || 0), lit: !!th.lit, burnt: !!th.burnt };
+    if (th.claim) v.claim = { who: th.claim, name: this.ownerName(th) }; // whose claim it is (while it burns)
+    return v;
   },
   sendPlaced(th, reply, extra) {
     const v = this.placedView(th);

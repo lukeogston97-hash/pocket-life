@@ -1,6 +1,8 @@
 // Away: while a player is gone their person looks after themselves (strolls, eats, drinks, picks berries, sleeps), played forward to now.
 // These are methods of the World (index.js adds them to it), so `this` is the world.
-import { G, HOUR, MINUTE, advanceStats, addCarry, applyGives, eatOne, posAt, dist, sleepMs, spend, num, AWAY, pickRandom, isNight, morningAfter } from './shared.js';
+import { G, HOUR, MINUTE, advanceStats, addCarry, takeCarry, applyGives, eatOne, posAt, dist, sleepMs, spend, num, AWAY, pickRandom, isNight, morningAfter } from './shared.js';
+import { fireRule } from './placed.js';
+import { CLAIM_R } from './claims.js';
 
 export const awayMethods = {
   // Plays a person's time forward to `now`: walking, drinking, picking berries, eating, idling,
@@ -44,7 +46,8 @@ export const awayMethods = {
     if (plan.then === 'drink') {
       const src = G.sources[plan.source];
       for (let n = 0; n < 8 && src && p.stats.thirst != null && p.stats.thirst < 95; n++) { applyGives(p, src.gives); spend(p, 'drink', G); p.log.drank++; }
-    } else if (plan.then === 'pick') {
+    } else if (plan.then === 'feed') this.feedFire(p);
+    else if (plan.then === 'pick') {
       for (let n = 0; n < 4 && this.berriesOn(plan.bush, t) > 0; n++) {
         if (!addCarry(p, G.berryKind, 1, G)) break;
         this.takeBerry(plan.bush, t);
@@ -54,7 +57,31 @@ export const awayMethods = {
     }
     this.touch(p);
   },
-  // what to do next: eat if hungry, then water, then berries, otherwise potter about near home
+  // their claim's fire, and whether there's room in it for something they carry (biggest fuel first): [fire, kind] or null
+  fireToFeed(p) {
+    const th = this.claimOf(p.who), f = th && fireRule(th.kind);
+    if (!f) return null;
+    const room = f.max - this.burn(th).fuel;
+    const kind = Object.keys(f.fuels).filter((k) => p.carry[k] > 0 && f.fuels[k] <= room).sort((a, b) => f.fuels[b] - f.fuels[a])[0];
+    return kind ? [th, kind] : null;
+  },
+  // put what fits on their claim's fire from their bag (logs first, then sticks)
+  feedFire(p) {
+    for (let guard = 0; guard < 50; guard++) {
+      const got = this.fireToFeed(p);
+      if (!got) break;
+      const [th, kind] = got, f = fireRule(th.kind);
+      if (Math.hypot(th.x - p.x, th.z - p.z) > 4) break;
+      takeCarry(p, kind, 1);
+      th.fuel = Math.min(f.max, th.fuel + f.fuels[kind]); th.at = Date.now();
+      p.log.fed = (p.log.fed || 0) + 1;
+    }
+    this.save();
+    const th = this.claimOf(p.who);
+    if (th) this.sendPlaced(th, null);
+    this.touch(p);
+  },
+  // what to do next: eat if hungry, then water, then berries, then keep their claim's fire going, otherwise potter about near home
   decide(p, t, now, L) {
     while (p.stats.hunger != null && p.stats.hunger < AWAY.eatBelow && eatOne(p, G)) p.log.ate++;
     const at = [p.x, p.z];
@@ -97,11 +124,21 @@ export const awayMethods = {
       walk(stand, ripe ? { then: 'pick', bush: go.i } : {});
       return;
     }
-    // potter about: rest a little, then stroll somewhere within reach of where you left them
+    // their claim's fire has room for a log or stick they carry: go and put it on
+    const feed = this.fireToFeed(p);
+    if (feed) {
+      const [th] = feed, d = Math.max(0.01, dist(at, [th.x, th.z]));
+      if (d <= 2.5) { this.feedFire(p); idle(20000); return; }
+      walk([th.x + ((at[0] - th.x) / d) * 1.8, th.z + ((at[1] - th.z) / d) * 1.8], { then: 'feed' });
+      return;
+    }
+    // potter about: rest a little, then stroll somewhere within reach of home (their claim's fire if they have one)
     if (!p.wanderNext) { p.wanderNext = true; idle((15 + Math.random() * 45) * 1000); return; }
     p.wanderNext = false;
-    const home = AWAY.near === 'pond' && G.pond ? [G.pond.x, G.pond.z] : p.home || at; // round the main pond, or where you left them
-    const spots = (L.open || []).filter((o) => dist(o, home) <= AWAY.wanderMax && dist(o, at) > 3);
+    const fire = this.claimOf(p.who);
+    const home = fire ? [fire.x, fire.z] : AWAY.near === 'pond' && G.pond ? [G.pond.x, G.pond.z] : p.home || at; // their claim, round the main pond, or where you left them
+    const reach = fire ? Math.min(AWAY.wanderMax, CLAIM_R) : AWAY.wanderMax;
+    const spots = (L.open || []).filter((o) => dist(o, home) <= reach && dist(o, at) > 3);
     const far = spots.filter((o) => dist(o, home) >= AWAY.wanderMin);
     if (!spots.length) { idle(2 * MINUTE); return; } // nowhere to stroll to: rest a while
     walk(pickRandom(far.length && Math.random() < 0.6 ? far : spots));
