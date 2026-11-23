@@ -6,6 +6,7 @@
 // These are methods of the World (index.js adds them to it), so `this` is the world.
 import { FILTER, G, starText, MINUTE, HOUR, clean, num, kindOk, addCarry, takeCarry, ageOf, pickRandom } from './shared.js';
 import { fireRule } from './placed.js';
+import { CLAIM_KIND } from './claims.js';
 
 const DONE_KEEP_DAYS = 30; // feedback and reports marked Done are deleted after this
 const PAST_KEEP = 20; // earlier people each player had
@@ -13,6 +14,30 @@ const PLAYERS_SHOWN = 50; // the Players tab shows this many at a time (search t
 const CLEAR_NEAR = 10; // Clear loose items near you: within this many metres
 const idxOk = (i, most) => Number.isInteger(i) && i >= 0 && i < most;
 const MOVABLE = { tree: 5000, rock: 2000, bush: 200 }; // things laid out with the world, by their number in the layout
+// What the activity log calls each tool that changes something. Every tool's answer goes in the log under its name
+// (also when the answer is that it couldn't be done). Tools that only read aren't here, so they aren't logged.
+// A new tool that changes something gets a line here.
+const TOOLS = { 'a.maintenance': 'Maintenance', 'a.announce': 'Message to everyone', 'a.speed': 'Speed up time', 'a.kick': 'Kick', 'a.ban': 'Ban', 'a.unban': 'Unban',
+  'a.mute': 'Mute', 'a.fill': 'Fill needs', 'a.give': 'Give', 'a.take': 'Take', 'a.wake': 'Wake', 'a.sleep': 'Send to sleep', 'a.movePerson': 'Move person',
+  'a.setStats': 'Edit person', 'a.removePerson': 'Remove person', 'a.regrowAll': 'Regrow everything', 'a.clear': 'Clear loose items', 'a.move': 'Move', 'a.regrow': 'Regrow',
+  'a.remove': 'Remove', 'a.live': 'Setting', 'a.liveItem': 'Item number', 'a.fire': 'Fire', 'a.claim': 'Claim', 'a.rename': 'Rename', 'a.tell': 'Message' };
+// which thing a tool was used on, when its answer doesn't say (server: the World)
+function aboutOf(m, server) {
+  const short = (v) => clean(String(v == null ? '' : v), 40);
+  if (m.t === 'a.liveItem') return Array.isArray(m.at) ? short(m.at.join(' ')) : '';
+  if (m.t === 'a.live') return short(m.id);
+  if (m.t === 'a.announce') return `"${clean(m.text, 60).trim()}"`;
+  if (m.t === 'a.unban') return short(m.id);
+  if (['a.fire', 'a.claim', 'a.move', 'a.regrow', 'a.remove'].includes(m.t)) {
+    const th = m.id != null ? server.placedById(m.id) : null; // a campfire: by where it is
+    if (th) return `${th.kind} at ${Math.round(th.x)}, ${Math.round(th.z)}`;
+    return m.what && m.what !== 'placed' ? `${short(m.what)} ${short(m.idx != null ? m.idx : m.id)}` : '';
+  }
+  return '';
+}
+const FIRE_PEOPLE = 200; // Give a claim to: this many people are offered
+// 5400000 ms -> '1 h 30 m'
+const hoursText = (ms) => { const m = Math.round(ms / MINUTE), h = Math.floor(m / 60); return h && m % 60 ? `${h} h ${m % 60} m` : h ? `${h} h` : `${m} m`; };
 
 export const adminMethods = {
   adminState(me) {
@@ -52,6 +77,18 @@ export const adminMethods = {
     }
     return out;
   },
+  // every fire, for the World tab: where it is, whether it burns, how long its fuel lasts (ms) and whose land it holds.
+  // people: everyone a claim could be given to.
+  firesView(now = Date.now()) {
+    const list = this.placedList().filter((th) => fireRule(th.kind)).map((th) => {
+      this.burn(th, now);
+      const by = th.by ? this.persons.get(th.by) : null;
+      return { id: th.id, kind: th.kind, x: num(th.x), z: num(th.z), built: !!th.built, lit: !!th.lit, fuel: Math.round(th.fuel || 0), max: fireRule(th.kind).max,
+        canClaim: th.kind === CLAIM_KIND, claim: th.claim ? { who: th.claim, name: this.ownerName(th) } : null, by: by ? by.name : '' };
+    });
+    const people = [...this.persons.values()].filter((p) => this.alive(p)).map((p) => ({ id: p.who, name: p.name })).sort((a, b) => a.name.localeCompare(b.name)).slice(0, FIRE_PEOPLE);
+    return { t: 'adminFires', list, people };
+  },
   // sticks and stones back up to their normal amount, round the spots they turn up at
   topUp() {
     const w = this.world;
@@ -68,7 +105,11 @@ export const adminMethods = {
     const reply = (msg) => { try { ws.send(JSON.stringify(msg)); } catch (err) { /* gone */ } };
     // what a tool answers: the fresh admin numbers with a few words in `text`. (It goes out as t: 'admin', not 'adminDone':
     // adminState's own t wins the spread, and the game has always read it that way. Checks should listen for 'admin'.)
-    const done = (text) => reply({ t: 'adminDone', text, ...this.adminState(me) });
+    const about = TOOLS[m.t] ? aboutOf(m, this) : ''; // (worked out first: the thing may be gone by the time the tool answers)
+    const done = (text) => {
+      if (TOOLS[m.t] && text) this.note('admin', `${TOOLS[m.t]}${about ? ` (${about})` : ''}: ${text}`); // the activity log (activity.js)
+      reply({ t: 'adminDone', text, ...this.adminState(me) });
+    };
     const w = this.world;
     const them = m.id ? this.persons.get(m.id) : null;
     const sock = m.id ? this.socketOf(m.id) : null;
@@ -274,9 +315,11 @@ export const adminMethods = {
           for (const prefix of ['p:', 'past:']) gone.push(...(await this.ctx.storage.list({ prefix })).keys());
           this.use('writes', gone.length);
           for (let i = 0; i < gone.length; i += 100) await this.ctx.storage.delete(gone.slice(i, i + 100));
+          this.activity = []; // the log starts again too (it would only name people who are gone)
         }
         this.world = null;
         await this.ctx.storage.delete('world');
+        this.note('admin', m.all ? 'Reset everything: the land and every person start again' : 'Reset the world: the land starts again');
         for (const { ws: s, p: them } of this.sockets()) { // everyone rejoins and the first one lays it out fresh
           if (m.all) { them.alive = false; this.attach(s, them); } // nobody has a person any more
           this.boot(s, { t: 'reset', all: !!m.all });
@@ -294,6 +337,7 @@ export const adminMethods = {
         w.items.push(...out);
         await this.save();
         this.send({ t: 'added', items: out }, null);
+        this.note('admin', `Add item: ${n} ${m.kind} at ${Math.round(num(m.x))}, ${Math.round(num(m.z))}`);
         return;
       }
       case 'a.move': {
@@ -362,15 +406,108 @@ export const adminMethods = {
           const list = this.placedList(), j = list.findIndex((th) => th.id === m.id);
           if (j < 0) return;
           for (const o of this.persons.values()) if (o.sit && o.sit.fire === m.id) this.standUp(o);
+          this.note('admin', `Remove: ${list[j].kind} at ${Math.round(list[j].x)}, ${Math.round(list[j].z)}`);
           list.splice(j, 1);
           await this.save();
           this.send({ t: 'unplaced', id: m.id }, null);
           return;
         }
+        this.note('admin', `Remove: loose ${w.items[i].kind} at ${Math.round(w.items[i].x)}, ${Math.round(w.items[i].z)}`);
         w.items.splice(i, 1);
         await this.save();
         this.send({ t: 'gone', id: m.id }, null);
         return;
+      }
+
+      /* ---------- the activity log (activity.js) ---------- */
+      case 'a.log': return reply(this.activityView());
+
+      /* ---------- one person: a new name, or a few words only they see ---------- */
+      case 'a.rename': { // (the admin picks any name: this is how a bad one that got past the filter is fixed)
+        if (!this.alive(them)) return done("They've gone");
+        const name = clean(m.name, 20).trim(), was = them.name;
+        if (!name) return done('Type a name');
+        if (name === was) return done("That's already their name");
+        them.name = name;
+        if (them.look && them.look.name != null) them.look = { ...them.look, name };
+        this.touch(them);
+        await this.flush(them.who);
+        this.send({ t: 'join', person: this.pub(them) }, them.who); // everyone else sees the new name (their game adds the person again)
+        this.tell(them.who, this.mine(them));
+        reply(await this.playerPage(them.who));
+        return done(`${was} is now ${name}`);
+      }
+      case 'a.tell': { // a few words on one player's screen, shown like a message to everyone
+        const text = clean(m.text, 140).trim();
+        if (!text) return done('Type a message');
+        if (!this.alive(them)) return done("They've gone");
+        if (!sock) return done(`${them.name} is away, so they wouldn't see it`);
+        this.tell(them.who, { t: 'announce', text });
+        return done(`Sent to ${them.name}`);
+      }
+
+      case 'a.fires': return reply(this.firesView());
+      case 'a.fire': { // any fire's flame and fuel: light it, put it out, or set how many hours it has left
+        if (!w) return;
+        const th = this.placedById(m.id), rule = th && fireRule(th.kind);
+        if (!rule) return done("That fire is gone");
+        if (!th.built) return done("It isn't built yet");
+        this.burn(th);
+        const whose = th.claim ? this.ownerName(th) : '', was = th.claim;
+        let text;
+        if (m.do === 'out') {
+          if (!th.lit) return done("It's already out");
+          th.lit = false;
+          text = 'Put out';
+        } else if (m.do === 'light') {
+          if (th.lit) return done("It's already burning");
+          if (!(th.fuel > 0)) return done('It has no fuel. Set its fuel first');
+          th.lit = true; th.burnt = true; // (burnt: taking it apart gives back only what doesn't burn, as when a player lights it)
+          text = `Lit, with ${hoursText(th.fuel)} of fuel. It's nobody's claim unless you give it to someone`;
+        } else if (m.do === 'fuel') {
+          const h = m.hours; // (a real number only: nothing typed arrives as null, and must never count as 0 and put a fire out)
+          if (typeof h !== 'number' || !Number.isFinite(h) || h < 0) return done('How many hours?');
+          th.fuel = Math.min(rule.max, Math.round(h * HOUR));
+          if (th.fuel <= 0) th.lit = false;
+          text = th.fuel <= 0 ? 'No fuel left' : `${hoursText(th.fuel)} of fuel${th.fuel >= rule.max && h * HOUR > rule.max ? ' (the most it holds)' : ''}`;
+        } else return;
+        th.at = Date.now();
+        this.burn(th); // out: a claim on it ends with it
+        if (was && !th.claim) { text += `. ${whose}'s claim ended with it`; this.tell(was, { t: 'claimNote', text: 'Your fire is out, so your claim has ended' }); }
+        await this.save();
+        this.sendPlaced(th);
+        reply(this.firesView());
+        return done(text);
+      }
+      case 'a.claim': { // whose land a burning campfire holds: end the claim (the fire burns on), or give it to someone
+        if (!w) return;
+        const th = this.placedById(m.id);
+        if (!th) return done("That fire is gone");
+        this.burn(th);
+        const whose = th.claim ? this.ownerName(th) : '', was = th.claim;
+        let text;
+        if (m.do === 'end') {
+          if (!th.claim) return done("It's nobody's claim");
+          th.claim = null; // the fire is still its builder's to pack up (th.by)
+          text = `${whose}'s claim ended. The fire burns on`;
+        } else if (m.do === 'give') {
+          const to = this.persons.get(clean(m.to, 40));
+          if (!to || !this.alive(to)) return done("They've left");
+          if (th.kind !== CLAIM_KIND) return done("That can't hold a claim");
+          if (th.claim === to.who) return done(`It's already ${to.name}'s claim`);
+          if (!th.built || !th.lit) return done('Light it first: a claim lasts only while its fire burns');
+          const no = this.claimFit(th, to); // the same rules as lighting a first fire: one claim each, clear of the pond and of other claims
+          if (no) return done(no.why === 'has' ? `${to.name} already has a claim` : no.why === 'pond' ? "It's too close to the pond to be a claim" : `It's too close to ${no.name}'s claim`);
+          th.claim = to.who;
+          th.by = to.who; // theirs to pack up later, as when they light it themselves
+          text = `Now ${to.name}'s claim${whose ? ` (it was ${whose}'s)` : ''}`;
+          this.tell(to.who, { t: 'claimNote', text: 'The land round this fire is now your claim, while it burns' });
+        } else return;
+        if (was && was !== th.claim) this.tell(was, { t: 'claimNote', text: 'Your claim has ended' });
+        await this.save();
+        this.sendPlaced(th);
+        reply(this.firesView());
+        return done(text);
       }
 
       /* ---------- Restore: the whole world back to an earlier time, or undo the last restore (restore.js) ---------- */

@@ -38,6 +38,7 @@ export const ACTIONS = {
       born: Date.now(), x: num(START.x + Math.cos(a) * r), z: num(START.z + Math.sin(a) * r), ry: 0.62,
       stats: freshStats(G), statsAt: Date.now(), carry: {}, lastKind: null, log: { ate: 0, drank: 0, picked: 0 } };
     this.persons.set(me.who, np);
+    this.note('world', `New person: ${name}, ${np.age}`);
     me.alive = true;
     this.attach(ws, me);
     this.touch(np);

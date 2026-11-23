@@ -59,6 +59,7 @@ export const personsMethods = {
     p.cause = cause;
     p.diedAt = Date.now();
     p.diedAway = !!away;
+    this.note('world', `${p.name} died${away ? ' while away' : ''}${cause ? `: ${cause}` : ''}`);
     p.plan = null;
     p.sit = null;
     this.spill(p);

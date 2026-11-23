@@ -21,6 +21,7 @@ import { liveItemsMethods } from './live-items.js';
 import { claimsMethods } from './claims.js';
 import { restoreMethods } from './restore.js';
 import { guardMethods } from './guard.js';
+import { activityMethods, BACK_AFTER, longText } from './activity.js';
 import { ACTIONS } from './actions.js';
 
 export class World extends DurableObject {
@@ -37,6 +38,7 @@ export class World extends DurableObject {
     this.admin = { maintenance: false, message: '', banned: [], muted: [] }; // set by the admin player in the game
     this.live = {}; // live settings the admin changed (live.js)
     this.liveItems = {}; // item and recipe numbers the admin changed (live-items.js)
+    this.activity = []; // the admin's activity log (activity.js)
     this.adminFails = new Map(); // wrong admin codes, by address (guard.js); kept in memory only
     this.feedbackLog = []; // when feedback came in and from where, to stop floods (guard.js)
     this.socks = null; this.byWho = null; // who's connected, worked out once per message or tick (sockets, socketOf)
@@ -49,6 +51,7 @@ export class World extends DurableObject {
       this.applyLive();
       this.liveItems = (await ctx.storage.get('liveItems')) || {};
       this.applyLiveItems();
+      this.activity = (await ctx.storage.get('activity')) || [];
       Object.assign(this.usage, (await ctx.storage.get('usage')) || {});
       for (const [k, p] of await ctx.storage.list({ prefix: 'p:' })) this.persons.set(k.slice(2), p);
       if (!(await ctx.storage.getAlarm())) await ctx.storage.setAlarm(Date.now() + TICK_MS);
@@ -251,7 +254,11 @@ export class World extends DurableObject {
     const min = (WORLDS.minVersion || {})[link];
     const asksAdmin = !!m.watch && !!m.admin && !!m.adminCode; // admin mode: watching only, never while playing a person
     const isAdmin = asksAdmin && !this.adminLocked(me) && this.codeOk(m.adminCode);
-    if (m.adminCode && !isAdmin) this.adminFail(me); // too many wrong codes from one address and it has to wait (guard.js)
+    if (m.adminCode && !isAdmin) { // too many wrong codes from one address and it has to wait (guard.js)
+      const locked = this.adminLocked(me), wrong = locked || !this.codeOk(m.adminCode); // (the right code sent while playing is refused too, but isn't a wrong password)
+      this.adminFail(me);
+      if (wrong) this.note('guard', locked ? 'Admin password tried from an address that is locked out' : this.adminLocked(me) ? 'Wrong admin password 5 times: that address is locked out for 15 minutes' : 'Wrong admin password');
+    }
     const who = await this.whoFor(m);
     if (!isAdmin && this.admin.banned.includes(who)) { this.boot(ws, { t: 'banned' }); return; }
     if (!isAdmin && this.admin.maintenance && link !== 'test') { this.boot(ws, { t: 'maintenance', text: this.admin.message }); return; }
@@ -267,7 +274,7 @@ export class World extends DurableObject {
       const p = this.persons.get(who);
       reply({ t: 'welcome', watch: true, id: me.id, people: this.people(null), world: this.view(), count: this.playing(), speed: this.speed, live: this.live, liveItems: this.liveItems,
         yours: this.alive(p) ? { name: p.name, age: ageOf(p) } : null, line: full ? this.placeOf(ws) : 0, needLayout: isAdmin && this.needLayout(me), needSeed: isAdmin && !this.world });
-      if (isAdmin) reply(this.adminState(me)); // admin mode is on: the panels get their numbers
+      if (isAdmin) { reply(this.adminState(me)); this.note('admin', 'Admin mode opened'); } // admin mode is on: the panels get their numbers
       if (full) this.callLine();
       return;
     }
@@ -284,6 +291,7 @@ export class World extends DurableObject {
         this.advanceAway(p, Date.now());
         if (this.alive(p)) {
           away = { ms: Date.now() - p.leftAt, ...(p.log || {}) };
+          if (away.ms >= BACK_AFTER) this.note('world', `${p.name} came back after ${longText(away.ms)}`);
           p.plan = null; p.asleep = false; p.sleeping = false; p.collapsed = false; p.leftAt = 0; p.log = { ate: 0, drank: 0, picked: 0 }; // back: awake
           this.touch(p);
         }
@@ -333,6 +341,7 @@ export class World extends DurableObject {
             if (p.asleep) { // asleep: needs are caught up when they come back (nothing to save until they wake or go)
               if (now - p.sleepAt > AWAY.goneAfterDays * 24 * HOUR) { // asleep too long (3 days away in all): gone, their things left where they slept
                 p.state = 'gone'; p.diedAt = now;
+                this.note('world', `${p.name} was away too long and is gone`);
                 this.spill(p);
                 this.send({ t: 'leave', id: p.who }, null);
                 this.touch(p);
@@ -404,7 +413,7 @@ export class World extends DurableObject {
 
 }
 // the rest of the world's methods, kept in their own files by topic
-Object.assign(World.prototype, lineMethods, personsMethods, awayMethods, natureMethods, adminMethods, placedMethods, liveMethods, liveItemsMethods, claimsMethods, guardMethods, restoreMethods);
+Object.assign(World.prototype, lineMethods, personsMethods, awayMethods, natureMethods, adminMethods, placedMethods, liveMethods, liveItemsMethods, claimsMethods, guardMethods, restoreMethods, activityMethods);
 
 export default {
   async fetch(request, env) {

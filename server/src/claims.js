@@ -10,6 +10,7 @@ import { claimProblem } from './rules.js';
 
 const C = { radius: 10, spawnRadius: 16, placeable: 'campfire', ...(G.claims || {}) };
 export const CLAIM_R = C.radius;
+export const CLAIM_KIND = C.placeable; // the one kind of placed thing that can hold a claim
 
 export const claimsMethods = {
   // every claim right now: built, lit fires with an owner
@@ -26,13 +27,18 @@ export const claimsMethods = {
   // the answer when someone tries something inside another person's claim
   claimNo(c) { return `This is ${this.ownerName(c)}'s claim`; },
   // lighting a fire: it becomes the lighter's claim if they have none and it fits here. Says what happened.
+  // why this fire can't be p's claim (null if it can): they have one, or it's too close to the pond or someone else's claim
+  claimFit(th, p) {
+    return claimProblem(th.x, th.z, { radius: C.radius, spawnRadius: C.spawnRadius, pond: G.pond || { x: 0, z: 0 }, hasClaim: !!this.claimOf(p.who),
+      claims: this.claims().filter((o) => o.id !== th.id).map((o) => ({ x: o.x, z: o.z, name: this.ownerName(o) })) }); // rules.js, the same as in the game
+  },
   tryClaim(th, p) {
     if (th.kind !== C.placeable || th.claim) return '';
-    const no = claimProblem(th.x, th.z, { radius: C.radius, spawnRadius: C.spawnRadius, pond: G.pond || { x: 0, z: 0 }, hasClaim: !!this.claimOf(p.who),
-      claims: this.claims().filter((o) => o.id !== th.id).map((o) => ({ x: o.x, z: o.z, name: this.ownerName(o) })) }); // rules.js, the same as in the game
+    const no = this.claimFit(th, p);
     if (no) return no.why === 'has' ? 'Lit. You already have a claim, so this is just a fire' : no.why === 'pond' ? "Lit. It's too close to the pond to claim land" : `Lit. Too close to ${no.name}'s claim to claim land`;
     th.claim = p.who;
     th.by = p.who; // it's theirs to pack up later
+    this.note('world', `${p.name} claimed land`);
     return `Lit. The land round it is now your claim, while it burns`;
   },
 };
