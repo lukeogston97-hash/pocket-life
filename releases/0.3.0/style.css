@@ -117,7 +117,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 /* choosing where to put a campfire: a bar along the bottom with Cancel and Place */
 .place-bar { position: absolute; z-index: 4; left: 50%; bottom: calc(68px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: flex; align-items: center; gap: 8px;
   max-width: calc(100% - 24px); padding: 6px 6px 6px 15px; border-radius: 999px; font: 700 13px var(--font-ui); white-space: nowrap; }
-.place-bar span { overflow: hidden; text-overflow: ellipsis; margin-right: 4px; }
+.place-bar span { overflow: hidden; text-overflow: ellipsis; margin-right: 4px; white-space: normal; line-height: 1.25; } /* a longer line (about claims) wraps onto two */
 .place-bar[hidden], .placing .queue, .is-menu .place-bar, .is-creating .place-bar { display: none; }
 
 /* things over the world: name tags, speech bubbles, little notes, "+1 Stick" */
@@ -221,6 +221,7 @@ button.craft-head { padding: 0; border: 0; background: none; color: inherit; fon
 .craft-words small { font-size: 11.5px; color: var(--ink-soft); font-weight: 600; }
 .craft-needs { grid-column: 1; display: flex; flex-wrap: wrap; gap: 6px; padding-left: 24px; }
 .craft-card > .small-btn { grid-column: 2; grid-row: 1 / span 2; }
+.craft-card > .small-btn:disabled { opacity: 1; color: var(--ink-faint); } /* still looks like a button, just not one you can press yet */
 .need-chip { font-size: 11.5px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: rgba(240, 138, 122, 0.16); color: var(--warn); }
 .need-chip.ok { background: rgba(143, 212, 158, 0.16); color: var(--accent); }
 
@@ -280,7 +281,7 @@ button.craft-head { padding: 0; border: 0; background: none; color: inherit; fon
 .admin-usage { margin: -2px 0 10px !important; font-size: 12px !important; font-weight: 700; color: var(--ink-soft); }
 .admin-usage.warn { color: var(--warn); }
 .admin-usage:empty { display: none; }
-.admin-tabs { display: grid; grid-template-columns: repeat(4, auto); gap: 2px; margin-bottom: 8px; overflow-x: auto; }
+.admin-tabs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; margin-bottom: 12px; overflow-x: auto; }
 .admin-tabs .seg-btn { white-space: nowrap; padding-inline: 6px; } /* "Feedback (0)" stays on one line */
 .admin-tabs .seg-btn { font-size: 11.5px; padding: 6px 2px; min-height: 32px; }
 
@@ -355,3 +356,55 @@ button.craft-head { padding: 0; border: 0; background: none; color: inherit; fon
 .is-creating .queue, .is-creating .act-menu, .is-creating .chat, .is-creating .auto-chip { display: none; }
 .pic { width: 40px; height: 40px; border-radius: 10px; background: rgba(255, 255, 255, 0.07); border: 1px solid var(--line); object-fit: contain; flex: none; }
 .craft-needs { padding-left: 50px; }
+
+/* the Admin panel's tabs (Server, Players, Inbox, World, Settings) */
+.admin-page { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
+.admin-page[hidden] { display: none; }
+.admin-page .admin-list { max-height: 48vh; margin-bottom: 0; }
+.admin-page .admin-sec { margin: 0 0 4px; }
+.admin-page .admin-wide { margin: 0; }
+.admin-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.admin-chips .seg-btn { min-height: 30px; padding: 0 10px; font-size: 12px; border: 1px solid var(--line); }
+.admin-row .admin-chips { justify-content: flex-end; }
+.admin-entry.tap { cursor: pointer; }
+.admin-entry.done { opacity: 0.55; }
+.admin-name { font-size: 14.5px; font-weight: 700; }
+.admin-tag { font-size: 11.5px; font-weight: 700; color: var(--ink-soft); }
+.admin-back { align-self: flex-start; min-height: 32px; padding: 0 2px; }
+.admin-counts { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 13px; font-weight: 600; }
+.admin-counts b { font-weight: 800; text-align: right; }
+.admin-stat { display: grid; grid-template-columns: 70px 1fr 34px; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 700; margin-top: 4px; }
+.admin-stat i { display: block; height: 6px; border-radius: 3px; background: var(--hover); overflow: hidden; }
+.admin-stat i b { display: block; height: 100%; border-radius: 3px; }
+.admin-setting { display: grid; grid-template-columns: 1fr 120px; gap: 4px 8px; align-items: center; }
+.admin-setting .admin-input { padding: 6px 8px; font-size: 14px; text-align: right; }
+.admin-setting > div:first-child { grid-row: span 2; }
+.admin-setting .admin-btns { grid-column: 2; margin-top: 0; justify-content: flex-end; flex-wrap: nowrap; }
+.admin-pick-list { display: grid !important; grid-template-columns: 1fr 1fr; gap: 6px; }
+.admin-pick-list .small-btn { white-space: normal; line-height: 1.15; min-height: 40px; }
+.admin-danger-zone { margin-top: 6px !important; padding-top: 10px; border-top: 1px solid var(--line); }
+
+/* a panel's heading with its Close link: the same in Inventory, Craft, Settings, What's new and Admin */
+.modal-card .bag-head { margin: -8px -10px 4px 0; }
+.modal-card .bag-head h2 { margin: 0; }
+.pause-list .menu-tile { min-height: 58px; }
+/* the Admin panel keeps one height as you switch tabs; the tab's page scrolls inside it */
+.admin-panel { display: flex; flex-direction: column; height: min(78vh, 580px); }
+@supports (height: 1dvh) { .admin-panel { height: min(78dvh, 580px); } }
+.admin-panel .admin-tabs { flex: none; }
+.admin-panel .admin-page { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; margin-bottom: 0; }
+.admin-panel .admin-page .admin-list { max-height: none; overflow: visible; flex: none; }
+/* fingers need bigger buttons than a mouse does */
+@media (pointer: coarse) {
+  .admin-chips .seg-btn { min-height: 38px; padding: 0 12px; }
+  .admin-btns .small-btn, .admin-grid .small-btn { min-height: 40px; }
+  .admin-tabs .seg-btn { min-height: 40px; }
+}
+/* on a computer the corner cards and buttons are a little bigger, so they don't look lost on a wide screen */
+@media (min-width: 1000px) and (pointer: fine) {
+  .hud-top .who, .hud-top .top-btns, .hud-bottom .needs, .hud-bottom .bottom-btns { transform: scale(1.2); }
+  .hud-top .who { transform-origin: left top; }
+  .hud-top .top-btns { transform-origin: right top; }
+  .hud-bottom .needs { transform-origin: left bottom; }
+  .hud-bottom .bottom-btns { transform-origin: right bottom; }
+}

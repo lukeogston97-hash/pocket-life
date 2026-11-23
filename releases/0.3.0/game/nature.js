@@ -4,10 +4,15 @@
 // - a set can split its copies into chunks of the map, so the parts you can't see aren't drawn
 // - a detail set (grass, flowers, pebbles) only draws the copies near you, refilled as you walk
 const dummy = new THREE.Object3D();
+// Old stumps and fallen logs were taken out of the world (0.2.8, Luke: only real stumps, from chopped trees). They're
+// still worked out the same way so nothing else in the layout moves, then their spots are freed in start.js.
+const noLongerHere = [];
+const skipPut = () => {};
 let DRY = false; // while true, put() works a copy out but doesn't keep it (so the clearing's layout never changes)
 let recording = null; // while a tree is being placed: [set, chunk, index] of every copy it's made of (so it can be chopped down)
 const trees = []; // every tree you can walk up to: { x, z, s, parts, state }
 const oldStumps = []; // the old stumps already in the world when it was made: { x, z, parts, proxy, gone }
+const rocks = []; // every rock and boulder you can mine (0.2.9): { x, z, r, boulder, parts, proxy, state: whole | mined | gone }
 function IM(geo, material, n, shadow = true) {
   const m = new THREE.InstancedMesh(geo, material, n);
   m.count = 0;
@@ -136,6 +141,13 @@ function removeSpotNear(x, z) {
   const a = spots.get(spotKey(x, z));
   if (!a) return;
   for (let k = 0; k < a.length; k += 4) if (Math.abs(a[k] - x) < 0.01 && Math.abs(a[k + 1] - z) < 0.01) { a.splice(k, 4); return; }
+}
+// take the spot at x, z off the map and say how big it was: [r, tree] (for moving something)
+function takeSpot(x, z) {
+  const a = spots.get(spotKey(x, z));
+  if (!a) return null;
+  for (let k = 0; k < a.length; k += 4) if (Math.abs(a[k] - x) < 0.01 && Math.abs(a[k + 1] - z) < 0.01) { const out = [a[k + 2], !!a[k + 3]]; a.splice(k, 4); return out; }
+  return null;
 }
 function addSpot(x, z, r, tree = false) {
   const k = spotKey(x, z);
@@ -426,7 +438,10 @@ function bush(x, z, s = 1, withBerries = true) {
     blobs.push({ ox, oz, r, y: r * 0.6 });
   }
   scene.add(g);
+  recording = withBerries ? [] : null; // a berry bush remembers its drawn copies, so the admin can move or remove it
   for (const m of g.children) drawAlong(drawnTogether.bushes, m);
+  if (withBerries) g.userData.parts = recording;
+  recording = null;
   if (withBerries) {
     // each berry bush remembers which berries are its own, so they can be picked and grow back
     g.userData.berries = { start: berries.count, n: 15 };
@@ -441,6 +456,7 @@ function bush(x, z, s = 1, withBerries = true) {
     }
   }
   g.userData.label = withBerries ? 'Berry bush' : 'Bush';
+  g.userData.r = s * 0.85;
   addSpot(x, z, s * 0.85);
   interactive.push(g);
   return g;
@@ -454,8 +470,12 @@ function rock(x, z, s, label = 'Boulder', color) {
   m.rotation.set(rr(-0.2, 0.2), rand() * 6, rr(-0.2, 0.2));
   m.castShadow = m.receiveShadow = true;
   m.userData.label = label;
+  m.userData.rock = rocks.length;
   scene.add(m);
+  recording = [];
   drawAlong(drawnTogether.rocks[rockGeos.indexOf(m.geometry)], m);
+  rocks.push({ x, z, r: s * 1.1, boulder: label === 'Boulder', parts: recording, proxy: m, state: 'whole' });
+  recording = null;
   addSpot(x, z, s * 1.1);
   interactive.push(m);
   return m;
@@ -475,46 +495,10 @@ for (let i = 0; i < 90; i++) {
   const s = rr(0.06, 0.15);
   put(pebbles, x, heightAt(x, z) + s * 0.25, z, rand(), rand() * 6, rand(), s, s * 0.7, s, tint(pick(PEBBLE_COLOURS)));
 }
-{
-  const g = new THREE.Group();
-  const x = -3.6, z = 4.6;
-  g.position.set(x, groundY(x, z), z);
-  const body = new THREE.Mesh(wild.stump.geo, mat('#7a5c40'));
-  body.position.y = 0.17;
-  const top = new THREE.Mesh(wild.stumpTop.geo, mat('#cfb48a'));
-  top.position.y = 0.39;
-  g.add(body, top);
-  g.userData.label = 'Tree stump';
-  g.userData.oldStump = oldStumps.length;
-  scene.add(g);
-  recording = [];
-  drawAlong(wild.stump, body);
-  drawAlong(wild.stumpTop, top);
-  oldStumps.push({ x, z, parts: recording, proxy: g });
-  recording = null;
-  addSpot(x, z, 0.5);
-  interactive.push(g);
-}
-{
-  const g = new THREE.Group();
-  const x = 7.6, z = -6.8;
-  g.position.set(x, groundY(x, z) + 0.24, z);
-  const log = new THREE.Mesh(wild.log.geo, mat('#76583d'));
-  const endM = mat('#cdb085');
-  const e1 = new THREE.Mesh(wild.logEnd.geo, endM);
-  e1.position.x = 1.71;
-  const e2 = e1.clone(); e2.position.x = -1.71;
-  g.add(log, e1, e2);
-  g.rotation.y = 0.5;
-  g.userData.label = 'Fallen log';
-  scene.add(g);
-  drawAlong(wild.log, log);
-  for (const k of [-1, 0, 1]) addSpot(x + Math.cos(0.5) * 1.2 * k, z - Math.sin(0.5) * 1.2 * k, 0.6);
-  drawAlong(wild.logEnd, e1);
-  drawAlong(wild.logEnd, e2);
-  interactive.push(g);
-}
-
+// the old stump and fallen log by the clearing are gone too; their spots stay until start.js so nothing moves
+addSpot(-3.6, 4.6, 0.5);
+noLongerHere.push([-3.6, 4.6]);
+for (const k of [-1, 0, 1]) { const x = 7.6 + Math.cos(0.5) * 1.2 * k, z = -6.8 - Math.sin(0.5) * 1.2 * k; addSpot(x, z, 0.6); noLongerHere.push([x, z]); }
 /* ---------- the rest of the world: grass, flowers, pebbles, bushes, boulders, stumps and logs ---------- */
 withWorldRand(() => {
   const L = WALK_LIMIT, area = 4 * L * L;
@@ -574,8 +558,14 @@ withWorldRand(() => {
     if (pair) wildBush(...pair);
   }
   // boulders, sometimes with a smaller rock or two beside them
-  const stone = (set, x, z, s) => put(set, x, groundY(x, z) + s * 0.16, z, rr(-0.2, 0.2), rand() * 6, rr(-0.2, 0.2),
-    s * rr(0.9, 1.3), s * rr(0.55, 0.8), s * rr(0.9, 1.2), tint(pick(ROCK_COLOURS)));
+  // each one is remembered (rocks) so it can be mined; recording only notes which copy it is, nothing in the layout moves
+  const stone = (set, x, z, s) => {
+    recording = [];
+    put(set, x, groundY(x, z) + s * 0.16, z, rr(-0.2, 0.2), rand() * 6, rr(-0.2, 0.2),
+      s * rr(0.9, 1.3), s * rr(0.55, 0.8), s * rr(0.9, 1.2), tint(pick(ROCK_COLOURS)));
+    rocks.push({ x, z, r: s * 1.1, boulder: set !== wild.rock, parts: recording, state: 'whole' });
+    recording = null;
+  };
   for (let i = 0, n = Math.round(area / 260); i < n; i++) {
     const s = rr(0.5, 1.2);
     const at = findRoom(14, s * 1.1 + 0.4, 0.5);
@@ -598,11 +588,10 @@ withWorldRand(() => {
     const at = findRoom(14, 0.55 * k + 0.3, 0.5);
     if (!at) continue;
     const [x, z] = at, y = groundY(x, z);
-    if (!DRY) recording = [];
-    put(wild.stump, x, y + 0.17 * k, z, 0, rand() * 6, 0, k, k, k, tint('#7a5c40', 0.01, 0.04, 0.03));
-    put(wild.stumpTop, x, y + 0.39 * k, z, 0, 0, 0, k, k, k, tint('#cfb48a', 0.005, 0.03, 0.03));
-    if (recording) { oldStumps.push({ x, z, parts: recording }); recording = null; }
+    skipPut(wild.stump, x, y + 0.17 * k, z, 0, rand() * 6, 0, k, k, k, tint('#7a5c40', 0.01, 0.04, 0.03));
+    skipPut(wild.stumpTop, x, y + 0.39 * k, z, 0, 0, 0, k, k, k, tint('#cfb48a', 0.005, 0.03, 0.03));
     addSpot(x, z, 0.55 * k);
+    noLongerHere.push([x, z]);
   }
   // fallen logs, on fairly flat ground
   for (let i = 0, n = Math.round(area / 2300); i < n; i++) {
@@ -614,11 +603,11 @@ withWorldRand(() => {
       const gs = pts.map(([px, pz]) => groundY(px, pz));
       if (Math.max(...gs) - Math.min(...gs) > 0.35) continue;
       const y = Math.max(...gs) - 0.04 + 0.24 * k;
-      put(wild.log, x, y, z, 0, a, 0, k, k, k, tint('#76583d', 0.01, 0.04, 0.03));
+      skipPut(wild.log, x, y, z, 0, a, 0, k, k, k, tint('#76583d', 0.01, 0.04, 0.03));
       const endC = tint('#cdb085', 0.005, 0.03, 0.03);
-      put(wild.logEnd, x + ex, y, z + ez, 0, a, 0, k, k, k, endC);
-      put(wild.logEnd, x - ex, y, z - ez, 0, a, 0, k, k, k, endC);
-      for (const [px, pz] of pts) addSpot(px, pz, 0.6);
+      skipPut(wild.logEnd, x + ex, y, z + ez, 0, a, 0, k, k, k, endC);
+      skipPut(wild.logEnd, x - ex, y, z - ez, 0, a, 0, k, k, k, endC);
+      for (const [px, pz] of pts) { addSpot(px, pz, 0.6); noLongerHere.push([px, pz]); }
       break;
     }
   }

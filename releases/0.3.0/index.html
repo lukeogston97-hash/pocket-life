@@ -97,7 +97,7 @@
         <div class="seg" id="sexOpts" role="group" aria-label="Sex"></div>
       </div>
       <p id="nameErr" class="err" hidden>Give your person a name to start.</p>
-      <div class="row"><label class="lbl" for="ageInput">Age</label><div class="age"><input id="ageInput" type="range" min="18" max="90" step="1" value="25"><output id="ageOut" for="ageInput">25</output></div></div>
+      <div class="row"><label class="lbl" for="ageInput">Age</label><div class="age"><input id="ageInput" type="range" min="13" max="90" step="1" value="25"><output id="ageOut" for="ageInput">25</output></div></div>
       <div class="row"><span class="lbl" id="buildLbl">Build</span><div class="chips" id="buildOpts" role="group" aria-labelledby="buildLbl"></div></div>
       <div class="row"><span class="lbl" id="skinLbl">Skin</span><div class="swatches" id="skinOpts" role="group" aria-labelledby="skinLbl"></div></div>
       <div class="row"><span class="lbl" id="hairLbl">Hair</span><div class="chips" id="hairOpts" role="group" aria-labelledby="hairLbl"></div></div>
@@ -126,7 +126,7 @@
 
   <div id="settings" class="modal" hidden>
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
-      <h2 id="settingsTitle">Settings</h2>
+      <div class="bag-head"><h2 id="settingsTitle">Settings</h2><button id="settingsClose" class="text-btn" type="button">Close</button></div>
       <div class="gfx-row"><span class="lbl">Graphics</span>
         <div class="seg" role="group" aria-label="Graphics">
           <button type="button" class="seg-btn" data-gfx="low">Low</button>
@@ -134,7 +134,6 @@
           <button type="button" class="seg-btn" data-gfx="high">High</button>
         </div>
       </div>
-      <div class="modal-actions"><button id="settingsClose" type="button" class="action-btn">Done</button></div>
     </div>
   </div>
 
@@ -144,6 +143,11 @@
       <p>The world keeps going while this is open.</p>
       <div class="pause-list">
         <button id="resumeBtn" type="button" class="action-btn">Resume</button>
+        <div class="menu-row">
+          <button id="pauseNewsBtn" type="button" class="menu-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.4 5.6 6.1.5-4.6 4 1.4 5.9L12 16l-5.3 3 1.4-5.9-4.6-4 6.1-.5z"/></svg>What's new</button>
+          <button id="pauseSettingsBtn" type="button" class="menu-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Settings</button>
+          <button id="pauseFeedbackBtn" type="button" class="menu-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/></svg>Feedback</button>
+        </div>
         <button id="exitBtn" type="button" class="small-btn">Exit</button>
         <button id="pauseAdminBtn" type="button" class="small-btn" hidden>Admin</button>
       </div>
@@ -183,37 +187,74 @@
   </div>
 
   <div id="adminPanel" class="modal" hidden>
-    <div class="modal-card admin-card" role="dialog" aria-modal="true" aria-labelledby="adminTitle">
-      <h2 id="adminTitle">Admin</h2>
-      <p id="adminUsage" class="admin-usage"></p>
-      <button id="adminListBtn" type="button" class="action-btn admin-wide">Feedback, reports, players</button>
-      <div class="admin-sec">
-        <div class="admin-row"><span class="lbl">Maintenance</span><span id="adminMaintState" class="admin-state">Off</span></div>
-        <div class="admin-inline"><input id="adminMaintText" class="admin-input" maxlength="200" placeholder="Message (optional)"><button id="adminMaintBtn" type="button" class="small-btn">Turn on</button></div>
+    <div class="modal-card admin-card admin-panel" role="dialog" aria-modal="true" aria-labelledby="adminTitle">
+      <div class="bag-head"><h2 id="adminTitle">Admin</h2><button id="adminClose" class="text-btn" type="button">Close</button></div>
+      <div class="seg admin-tabs" role="group" aria-label="Admin">
+        <button type="button" class="seg-btn" data-admin-tab="server" data-label="Server">Server</button>
+        <button type="button" class="seg-btn" data-admin-tab="players" data-label="Players">Players</button>
+        <button type="button" class="seg-btn" data-admin-tab="inbox" data-label="Inbox">Inbox</button>
+        <button type="button" class="seg-btn" data-admin-tab="world" data-label="World">World</button>
+        <button type="button" class="seg-btn" data-admin-tab="settings" data-label="Settings">Settings</button>
       </div>
-      <form id="adminAnnounceForm" class="admin-sec">
-        <span class="lbl">Message everyone</span>
-        <div class="admin-inline"><input id="adminAnnounceText" class="admin-input" maxlength="140" placeholder="Everyone sees this"><button type="submit" class="small-btn">Send</button></div>
-      </form>
-      <div class="admin-grid">
-        <button id="adminSpeedBtn" type="button" class="small-btn">Speed up time</button>
-        <button id="adminTagBtn" type="button" class="small-btn">Admin tag: on</button>
-        <button id="adminResetBtn" type="button" class="small-btn admin-danger">Reset the world</button>
-        <button id="adminClose" type="button" class="small-btn">Done</button>
+      <div class="admin-page" data-admin-page="server">
+        <p id="adminUsage" class="admin-usage"></p>
+        <div class="admin-sec">
+          <div class="admin-row"><span class="lbl">Maintenance</span><span id="adminMaintState" class="admin-state">Off</span></div>
+          <div class="admin-inline"><input id="adminMaintText" class="admin-input" maxlength="200" placeholder="Message (optional)"><button id="adminMaintBtn" type="button" class="small-btn">Turn on</button></div>
+        </div>
+        <form id="adminAnnounceForm" class="admin-sec">
+          <span class="lbl">Message everyone</span>
+          <div class="admin-inline"><input id="adminAnnounceText" class="admin-input" maxlength="140" placeholder="Everyone sees this"><button type="submit" class="small-btn">Send</button></div>
+        </form>
+        <div class="admin-sec">
+          <div class="admin-row"><span class="lbl">Speed up time</span><span id="adminSpeedState" class="admin-state">Normal</span></div>
+          <div class="admin-chips" id="adminSpeedX"></div>
+          <div class="admin-chips" id="adminSpeedMins"></div>
+          <button id="adminSpeedBtn" type="button" class="small-btn">Start</button>
+        </div>
+        <button id="adminTagBtn" type="button" class="small-btn admin-wide">Admin tag: on</button>
+      </div>
+      <div class="admin-page" data-admin-page="players" hidden>
+        <input id="adminFind" class="admin-input" maxlength="30" placeholder="Search by name" autocomplete="off">
+        <div class="admin-chips" id="adminShow"></div>
+        <div id="adminPlayers" class="admin-list"></div>
+      </div>
+      <div class="admin-page" data-admin-page="player" hidden>
+        <button id="adminPlayerBack" type="button" class="text-btn admin-back">‹ Players</button>
+        <div id="adminPlayer" class="admin-list"></div>
+      </div>
+      <div class="admin-page" data-admin-page="inbox" hidden>
+        <div class="admin-chips" id="adminInboxShow"></div>
+        <div id="adminInbox" class="admin-list"></div>
+      </div>
+      <div class="admin-page" data-admin-page="world" hidden>
+        <div id="adminCounts" class="admin-counts"></div>
+        <button id="adminRegrowBtn" type="button" class="small-btn admin-wide">Regrow everything</button>
+        <div class="admin-sec">
+          <span class="lbl">Clear loose items</span>
+          <div class="admin-grid">
+            <button id="adminClearNearBtn" type="button" class="small-btn">Near me (10 m)</button>
+            <button id="adminClearAllBtn" type="button" class="small-btn">Whole world</button>
+          </div>
+        </div>
+        <div class="admin-sec admin-danger-zone">
+          <span class="lbl">Danger zone</span>
+          <button id="adminResetBtn" type="button" class="small-btn admin-danger">Reset the world</button>
+        </div>
+      </div>
+      <div class="admin-page" data-admin-page="settings" hidden>
+        <div id="adminSettings" class="admin-list"></div>
       </div>
     </div>
   </div>
 
-  <div id="adminList" class="modal" hidden>
-    <div class="modal-card admin-card" role="dialog" aria-modal="true" aria-label="Feedback, reports, players">
-      <div class="seg admin-tabs" role="group">
-        <button type="button" class="seg-btn" data-admin-tab="feedback" data-label="Feedback">Feedback</button>
-        <button type="button" class="seg-btn" data-admin-tab="reports" data-label="Reports">Reports</button>
-        <button type="button" class="seg-btn" data-admin-tab="online" data-label="Online">Online</button>
-        <button type="button" class="seg-btn" data-admin-tab="banned" data-label="Banned">Banned</button>
-      </div>
-      <div id="adminListBody" class="admin-list"></div>
-      <div class="modal-actions"><button id="adminListClose" type="button" class="action-btn">Close</button></div>
+  <div id="adminPick" class="modal" hidden>
+    <div class="modal-card admin-card" role="dialog" aria-modal="true" aria-labelledby="adminPickTitle">
+      <div class="bag-head"><h2 id="adminPickTitle">Add item</h2><button id="adminPickClose" class="text-btn" type="button">Close</button></div>
+      <input id="adminPickFind" class="admin-input" maxlength="30" placeholder="Search" autocomplete="off">
+      <div class="admin-chips" id="adminPickKinds"></div>
+      <div class="admin-row"><span class="lbl">How many</span><div class="admin-chips" id="adminPickCount"></div></div>
+      <div id="adminPickList" class="admin-list admin-pick-list"></div>
     </div>
   </div>
 
@@ -237,9 +278,8 @@
 
   <div id="news" class="modal" hidden>
     <div class="modal-card admin-card" role="dialog" aria-modal="true" aria-labelledby="newsTitle">
-      <h2 id="newsTitle">What's new</h2>
+      <div class="bag-head"><h2 id="newsTitle">What's new</h2><button id="newsClose" class="text-btn" type="button">Close</button></div>
       <div id="newsBody" class="admin-list news-list"></div>
-      <div class="modal-actions"><button id="newsClose" type="button" class="action-btn">Close</button></div>
     </div>
   </div>
 
@@ -303,7 +343,7 @@ await new Promise((done) => {
 document.documentElement.style.visibility = '';
 // The game's code is kept in small files by topic (game/*.js, in this order). They share one scope, so they're
 // joined into one module here and run together, exactly as if they were one file.
-const PARTS = ['core', 'land', 'nature', 'plants', 'world-build', 'items', 'people', 'world-items', 'you', 'needs',
+const PARTS = ['rules', 'core', 'land', 'nature', 'plants', 'world-build', 'items', 'people', 'world-items', 'you', 'needs',
   'inventory', 'camera', 'moving', 'placeables', 'input', 'screens', 'loop', 'online', 'admin', 'others', 'start'];
 let code;
 try {

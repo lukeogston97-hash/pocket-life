@@ -31,7 +31,7 @@ function adminMessage(m) {
     if ('speed' in m) timeSpeed = m.speed && m.speed.until > Date.now() ? m.speed : null;
     try { localStorage.setItem(ADMIN_KEY, admin.code); } catch (err) { /* full */ }
     drawAdmin();
-    if (!was) showTag('Admin on. Open the Menu for admin tools', headTop(), 3);
+    if (!was) { showTag('Admin on. Open the Menu for admin tools', headTop(), 3); adminSend({ t: 'a.list' }); } // (the list: for the Inbox count on the Admin button)
     if (m.text) showTag(m.text, headTop(), 2.5);
   } else if (m.t === 'adminNo') {
     try { localStorage.removeItem(ADMIN_KEY); } catch (err) { /* none */ }
@@ -40,6 +40,10 @@ function adminMessage(m) {
   } else if (m.t === 'adminList') { inboxData = m; drawInbox(); }
   else if (m.t === 'adminPlayers') { playersData = m; drawPlayers(); }
   else if (m.t === 'adminPlayer') { playerData = m; if (adminTab === 'player') drawPlayer(); }
+  else if (m.t === 'adminNew') { // new feedback or a report just came in: the Inbox count goes up straight away
+    adminSend({ t: 'a.list' });
+    if (player && ui.mode === 'world') showTag(m.list === 'reports' ? 'New report in your Inbox' : 'New feedback in your Inbox', headTop(), 3);
+  }
   else if (m.t === 'announce') announce(m.text);
   else if (m.t === 'badge') { const o = others.get(m.id); if (o) { o.badge = m.on; drawTag(o); } }
   else if (m.t === 'kicked' || m.t === 'banned') {
@@ -135,8 +139,7 @@ function adminMoveTap() {
 }
 
 /* ---------- the item picker: Add item (on the ground) and Give (into someone's bag) ---------- */
-const ITEM_GROUPS = ['Tools', 'Food', 'Building', 'Materials'];
-const itemGroup = (it) => (it.uses ? 'Tools' : Object.keys(it.eat || {}).length ? 'Food' : (DATA.items[it.id] || {}).places ? 'Building' : 'Materials');
+const itemGroup = itemGroupOf; // rules.js: the same kinds as Craft
 const picker = { group: 'All', n: 1, onPick: null };
 function openPicker(title, onPick) {
   picker.onPick = onPick;
@@ -233,7 +236,9 @@ function drawAdmin() {
     $('adminUsage').classList.toggle('warn', pct >= 80);
   }
   drawSpeed();
-  if (adminTab === 'settings' && !$('adminPanel').hidden) drawSettings();
+  // the Settings tab shows the new numbers, unless you're in the middle of typing one
+  const typing = document.activeElement && document.activeElement.tagName === 'INPUT' && $('adminSettings').contains(document.activeElement);
+  if (adminTab === 'settings' && !$('adminPanel').hidden && !typing) drawSettings();
 }
 
 /* ---------- Server tab ---------- */
@@ -360,6 +365,7 @@ function drawInbox() {
   const n = newCount('feedback') + newCount('reports');
   const tab = document.querySelector('[data-admin-tab="inbox"]');
   if (tab) tab.textContent = n ? `Inbox ${n}` : 'Inbox';
+  $('pauseAdminBtn').textContent = n ? `Admin · ${n} new` : 'Admin'; // the Menu's Admin button says when there's something new
   if (adminTab !== 'inbox') return;
   chips($('adminInboxShow'), [['feedback', `Feedback ${newCount('feedback')}`], ['reports', `Reports ${newCount('reports')}`], ['done', inboxDone ? 'Hide done' : 'Show done']],
     inboxList, (v) => { if (v === 'done') inboxDone = !inboxDone; else inboxList = v; drawInbox(); });

@@ -6,13 +6,81 @@ let nextItemId = 1;
 const HIT_MAT = new THREE.MeshBasicMaterial({ visible: false });
 HIT_MAT.userData.shared = true;
 const HIT_BOX = new THREE.BoxGeometry(1, 1, 1), HIT_BALL = new THREE.SphereGeometry(1, 8, 6);
+/* ---------- drawn together ----------
+   Things whose shapes are shared (sticks, stones, logs, berries: sharedGeo in items.js) are drawn as copies of one
+   mesh per shape (an InstancedMesh), so a thousand sticks cost about the same to draw as one. Each copy keeps its own
+   place, turn, size and colour, so they look just as they did. Anything else (tools, a campfire) is drawn one by one. */
+const itemBatches = new Map(); // shape and surface -> { geo, material, mesh, n, cap, owners }
+function batchFor(geo, src) {
+  const key = `${geo.uuid}|${src.roughness}|${src.metalness}|${src.flatShading ? 1 : 0}`;
+  let b = itemBatches.get(key);
+  if (!b) {
+    const material = src.clone(); // the same surface, in white: each copy brings its own colour
+    material.color.set('#ffffff');
+    material.userData = { shared: true };
+    itemBatches.set(key, (b = { geo, material, mesh: null, n: 0, cap: 0, owners: [] }));
+  }
+  if (b.n >= b.cap) { // full: a bigger mesh with the same copies in it
+    const cap = Math.max(64, b.cap * 2), mesh = new THREE.InstancedMesh(geo, b.material, cap);
+    mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
+    if (b.mesh) {
+      mesh.instanceMatrix.array.set(b.mesh.instanceMatrix.array);
+      mesh.instanceColor.array.set(b.mesh.instanceColor.array);
+      scene.remove(b.mesh);
+      b.mesh.dispose();
+    }
+    mesh.count = b.n;
+    mesh.castShadow = mesh.receiveShadow = true;
+    mesh.frustumCulled = false; // they're all over the world, so there's nothing to gain from checking
+    mesh.visible = !freshLook;
+    scene.add(mesh);
+    b.mesh = mesh; b.cap = cap;
+  }
+  return b;
+}
+function batchTouched(b) { b.mesh.count = b.n; b.mesh.instanceMatrix.needsUpdate = true; b.mesh.instanceColor.needsUpdate = true; }
+// one more copy: where it is (matrix), its colour, and whose it is (owner.slots is told if the copy moves to another slot)
+function batchAdd(b, matrix, color, owner) {
+  const i = b.n++;
+  b.mesh.setMatrixAt(i, matrix);
+  b.mesh.setColorAt(i, color);
+  b.owners[i] = owner;
+  batchTouched(b);
+  return i;
+}
+// take a copy out: the last copy moves into its slot
+const batchM4 = new THREE.Matrix4(), batchCol = new THREE.Color();
+function batchRemove(b, i) {
+  const last = --b.n;
+  if (i !== last) {
+    b.mesh.getMatrixAt(last, batchM4); b.mesh.setMatrixAt(i, batchM4);
+    b.mesh.getColorAt(last, batchCol); b.mesh.setColorAt(i, batchCol);
+    const o = (b.owners[i] = b.owners[last]);
+    o.slots.find((s) => s[0] === b && s[1] === last)[1] = i;
+  }
+  b.owners.length = b.n;
+  batchTouched(b);
+}
+const showItemBatches = (on) => { for (const b of itemBatches.values()) if (b.mesh) b.mesh.visible = on; };
 function addWorldItem(kind, x, z, rot, id, uses) { // uses: a worn tool's uses left (none means new)
   if (id != null && itemViews.has(id)) return getItem(id); // already here
   const item = { id: id ?? nextItemId++, kind, x, z, rot, ...(uses != null ? { uses } : {}) };
   if (id != null) nextItemId = Math.max(nextItemId, id + 1);
   world.items.push(item);
   const { model, rest, hit, hitR } = buildItem(kind);
-  const view = shadowsOn(model);
+  const meshes = [];
+  model.traverse((o) => { if (o.isMesh) meshes.push(o); });
+  let view;
+  if (meshes.length && meshes.every((o) => o.geometry.userData.shared && !Array.isArray(o.material))) { // drawn together
+    model.position.set(x, groundY(x, z) + rest, z);
+    model.rotation.y = rot;
+    model.updateMatrixWorld(true);
+    const drawn = { slots: [] };
+    for (const o of meshes) { const b = batchFor(o.geometry, o.material); drawn.slots.push([b, batchAdd(b, o.matrixWorld, o.material.color, drawn)]); }
+    disposeMaterials(model); // its own tinted materials aren't needed: each copy keeps its colour
+    view = new THREE.Group(); // what's tapped and found: the hit area below
+    view.userData.drawn = drawn;
+  } else view = shadowsOn(model);
   const area = new THREE.Mesh(hit ? HIT_BOX : HIT_BALL, HIT_MAT);
   if (hit) area.scale.set(...hit); else area.scale.setScalar(hitR || 0.2);
   view.add(area);
@@ -32,6 +100,7 @@ function removeWorldItem(id) {
   const view = itemViews.get(id);
   if (view) {
     scene.remove(view);
+    if (view.userData.drawn) for (const s of view.userData.drawn.slots) batchRemove(s[0], s[1]);
     disposeMaterials(view); // each item has its own slightly different colour
     const j = interactive.indexOf(view);
     if (j >= 0) interactive.splice(j, 1);

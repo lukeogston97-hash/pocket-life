@@ -10,25 +10,15 @@ const NO_BERRY = new THREE.Matrix4().makeScale(0, 0, 0);
 const bushHolds = (src) => Math.max(1, Math.min(15, src.holds || 5)); // how many berries a full bush has
 const growEvery = (src) => (src.regrowHours * 3600000) / bushHolds(src); // how long one berry takes to grow back
 // how many berries are on a bush right now (picked ones come back over time)
+// (the maths is berriesGrown and berryPicked in rules.js, the same on the server)
 function berriesOn(b) {
   const src = SOURCES[b.userData.source];
   if (!src || !harvests(src)) return 0;
-  const holds = bushHolds(src);
-  if (b.userData.count == null) return holds;
-  if (!src.regrowHours) return holds;
-  const grown = Math.floor((Date.now() - b.userData.growFrom) / growEvery(src));
-  return Math.min(holds, b.userData.count + grown);
+  return berriesGrown(b.userData.count, b.userData.growFrom, bushHolds(src), src.regrowHours * 3600000, Date.now());
 }
 function pickBerry(b) {
   const src = SOURCES[b.userData.source];
-  const holds = bushHolds(src);
-  if (b.userData.count == null) { b.userData.count = holds; b.userData.growFrom = Date.now(); }
-  else if (src.regrowHours) {
-    const grown = Math.floor((Date.now() - b.userData.growFrom) / growEvery(src));
-    b.userData.count = Math.min(holds, b.userData.count + grown);
-    b.userData.growFrom = b.userData.count >= holds ? Date.now() : b.userData.growFrom + grown * growEvery(src);
-  }
-  b.userData.count -= 1;
+  [b.userData.count, b.userData.growFrom] = berryPicked(b.userData.count, b.userData.growFrom, bushHolds(src), src.regrowHours * 3600000, Date.now());
 }
 const ripe = (b) => berriesOn(b) >= 1;
 function readyIn(b) {

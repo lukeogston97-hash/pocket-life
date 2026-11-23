@@ -25,6 +25,13 @@ function matFor(colour) {
 // Things you can carry. Each look gets a little variety of its own (Math.random, never the world's random numbers,
 // so the layout of the world never shifts).
 const tinted = (hex, l = 0.05) => { const m = mat(new THREE.Color(hex).offsetHSL(0, (Math.random() - 0.5) * 0.04, (Math.random() - 0.5) * l)); return m; };
+// A shape built once and used by every copy of it. Things made only of shared shapes are drawn together on the
+// ground (world-items.js), so hundreds of them cost about the same to draw as one. Use it for anything that lies about.
+const sharedGeos = new Map();
+function sharedGeo(key, make) {
+  if (!sharedGeos.has(key)) { const g = make(); g.userData.shared = true; sharedGeos.set(key, g); }
+  return sharedGeos.get(key);
+}
 // a stick: two gently bent pieces of wood with a short side twig, a little thinner at the tip
 const stickGeos = new Map();
 function stickGeo(len, t, twig) {
@@ -39,12 +46,14 @@ function stickGeo(len, t, twig) {
       nub.applyMatrix4(new THREE.Matrix4().compose(V(len * 0.12, t * 0.3, t * 1.9), new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, 0, -0.75)), V(1, 1, 1)));
       parts.push(nub);
     }
-    stickGeos.set(key, mergeGeometries(parts.map((g) => g.toNonIndexed())));
+    const merged = mergeGeometries(parts.map((g) => g.toNonIndexed()));
+    merged.userData.shared = true;
+    stickGeos.set(key, merged);
   }
   return stickGeos.get(key);
 }
 // a stone: a smooth, slightly flat pebble
-const pebbleGeos = [1, 2, 3].map((k) => jitterGeo(new THREE.IcosahedronGeometry(1, 1), 0.16, 40 + k));
+const pebbleGeos = [1, 2, 3].map((k) => { const g = jitterGeo(new THREE.IcosahedronGeometry(1, 1), 0.16, 40 + k); g.userData.shared = true; return g; });
 // the stone axe: a handle that's thicker at the grip, a wedge of stone with a sharp edge, and a lashing where they meet
 // A stone axe head seen from the side: a narrow neck where it's lashed to the handle, flaring out to a wide curved
 // cutting edge, with a short stub (the poll) behind the handle. It's flat and thins to a sharp edge.
@@ -260,9 +269,9 @@ const SHAPES = {
   log(look) {
     const len = look.length ?? 0.9, r = look.radius ?? 0.12;
     const g = new THREE.Group();
-    g.add(new THREE.Mesh(new THREE.CylinderGeometry(r, r * 1.06, len, 8).rotateZ(Math.PI / 2), tinted(look.colour || '#7a5c40', 0.05)));
+    g.add(new THREE.Mesh(sharedGeo(`log|${r}|${len}`, () => new THREE.CylinderGeometry(r, r * 1.06, len, 8).rotateZ(Math.PI / 2)), tinted(look.colour || '#7a5c40', 0.05)));
     for (const sx of [-1, 1]) {
-      const end = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.92, r * 0.92, 0.012, 8).rotateZ(Math.PI / 2), matFor(look.end || '#cdb085'));
+      const end = new THREE.Mesh(sharedGeo(`logEnd|${r}`, () => new THREE.CylinderGeometry(r * 0.92, r * 0.92, 0.012, 8).rotateZ(Math.PI / 2)), matFor(look.end || '#cdb085'));
       end.position.x = sx * len / 2;
       g.add(end);
     }
@@ -289,9 +298,9 @@ const SHAPES = {
   ball(look) {
     const s = look.size ?? 0.08;
     const g = new THREE.Group();
-    g.add(new THREE.Mesh(new THREE.IcosahedronGeometry(s, 1), mat(look.colour, { roughness: 0.35 })));
+    g.add(new THREE.Mesh(sharedGeo(`ball|${s}`, () => new THREE.IcosahedronGeometry(s, 1)), mat(look.colour, { roughness: 0.35 })));
     if (look.leaf !== false) {
-      const crown = new THREE.Mesh(new THREE.ConeGeometry(s * 0.55, s * 0.5, 5), matFor(look.leaf || '#4f7a3a'));
+      const crown = new THREE.Mesh(sharedGeo(`crown|${s}`, () => new THREE.ConeGeometry(s * 0.55, s * 0.5, 5)), matFor(look.leaf || '#4f7a3a'));
       crown.position.y = s * 0.95;
       crown.rotation.x = Math.PI;
       g.add(crown);

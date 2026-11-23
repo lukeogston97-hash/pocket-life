@@ -8,11 +8,11 @@ const PLACEABLES = {};
 for (const [kind, raw] of Object.entries(DATA.placeables || {})) {
   const item = Object.keys(ITEMS).find((k) => (DATA.items[k] || {}).places === kind);
   if (!item) { console.warn(`Placeable "${kind}" has no item that places it, so it's left out.`); continue; }
-  const f = raw.fire, s = raw.seats, each = Math.max(1, Number(f && f.secondsEach) || 300) * 1000;
+  const s = raw.seats;
   PLACEABLES[kind] = {
     kind, item, name: raw.name || ITEMS[item].name, buildSeconds: Math.max(1, Number(raw.buildSeconds) || 10), buildVerb: raw.buildVerb || 'Building', solid: Number(raw.solid) || 0.5,
-    fire: f ? { fuel: ITEMS[f.fuel] ? f.fuel : 'stick', each, fuels: { [ITEMS[f.fuel] ? f.fuel : 'stick']: each, ...Object.fromEntries(Object.entries(f.otherFuels || {}).filter(([k, s]) => ITEMS[k] && s > 0).map(([k, s]) => [k, s * 1000])) }, maxFuel: Math.max(1, Math.floor(f.maxFuel) || 10), max: each * Math.max(1, Math.floor(f.maxFuel) || 10), lightSeconds: Math.max(0.5, Number(f.lightSeconds) || 3) } : null,
-    seats: s ? { count: Math.max(1, Math.floor(s.count) || 6), distance: Number(s.distance) || 1.2, minutes: (s.minutes || [15]).filter((n) => n > 0) } : null,
+    fire: fireRuleOf(raw.fire, (k) => !!ITEMS[k]), // rules.js: fuels and how long each burns, the most it holds
+    seats: s ? { count: Math.max(1, Math.floor(s.count) || 6), distance: Number(s.distance) || 1.2 } : null,
     craftLabel: raw.craftLabel || 'Make', // the tap menu's list of recipes made here (Cook on a campfire)
   };
   ITEMS[item].places = kind;
@@ -20,11 +20,11 @@ for (const [kind, raw] of Object.entries(DATA.placeables || {})) {
 const placed = new Map(); // id -> { id, kind, x, z, rot, built, fuel, lit, at, progress, view }
 
 /* ---------- fire and fuel ---------- */
-const fuelLeft = (th, now = Date.now()) => (th.lit ? Math.max(0, th.fuel - (now - th.at)) : th.fuel); // ms of burning left
+const fuelLeft = (th, now = Date.now()) => fuelLeftAt(th, now); // ms of burning left (rules.js)
 const isLit = (th) => !!th.lit && fuelLeft(th) > 0;
 const fuelIn = (th) => (PLACEABLES[th.kind].fire ? fuelLeft(th) / PLACEABLES[th.kind].fire.each : 0); // in sticks (can be part of one)
 // how many more sticks fit (one that only part fits still goes on; the server works it out the same way)
-const roomFor = (th, kind) => { const f = PLACEABLES[th.kind].fire; const each = f && (f.fuels[kind] || f.each); return f ? Math.max(0, Math.ceil((f.max - fuelLeft(th)) / each - 0.05)) : 0; };
+const roomFor = (th, kind) => { const f = PLACEABLES[th.kind].fire; return f ? fuelRoom(f, fuelLeft(th), kind) : 0; };
 function burnNow(th) { // bring it up to now
   if (!th.lit) return;
   th.fuel = fuelLeft(th);
@@ -35,9 +35,10 @@ function timeLeft(ms) {
   const m = Math.ceil(ms / 60000);
   if (ms <= 0) return 'none';
   if (m < 60) return `${m} min`;
-  return `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}`;
+  const h = Math.floor(m / 60);
+  if (h >= 24) return `${Math.floor(h / 24)} d${h % 24 ? ` ${h % 24} h` : ''}`; // days for a claim's fire (holds 3 days)
+  return `${h} h${m % 60 ? ` ${m % 60} min` : ''}`;
 }
-const minutesLabel = (n) => (n < 60 ? `${n} minutes` : n === 60 ? '1 hour' : `${Math.round((n / 60) * 10) / 10} hours`);
 function fireState(th) {
   const f = PLACEABLES[th.kind].fire;
   if (!th.built) return 'Not built yet';
@@ -51,14 +52,12 @@ const placedName = (th) => {
   if (!th.built) return `${P.name} (not built)`;
   if (!P.fire) return P.name;
   const left = fuelLeft(th);
+  if (claimOn(th)) return `${claimName(th)} · ${timeLeft(left)} left`;
   return isLit(th) ? `${P.name} · lit · ${timeLeft(left)} left` : `${P.name} · ${left > 0 ? `${timeLeft(left)} of fuel` : 'no fuel'}`;
 };
 
 /* ---------- seats round it ---------- */
-function seatSpot(th, k) {
-  const s = PLACEABLES[th.kind].seats, a = (th.rot || 0) + (k * Math.PI * 2) / s.count;
-  return [th.x + Math.sin(a) * s.distance, th.z + Math.cos(a) * s.distance];
-}
+const seatSpot = (th, k) => seatSpotOf(th, PLACEABLES[th.kind].seats, k); // rules.js, the same on the server
 const seatTaken = (th, k) => [...others.values()].some((o) => o.sit && o.sit[0] === th.id && o.sit[1] === k);
 // the nearest free seat you can stand at, or -1
 function freeSeat(th) {
@@ -168,7 +167,8 @@ function setPlaced(v) {
     clearCellsNear(th.x, th.z, PLACEABLES[th.kind].solid + 1);
   }
   const wasBuilt = th.built;
-  Object.assign(th, { built: !!v.built, fuel: Math.max(0, Number(v.fuel) || 0), lit: !!v.lit, at: Date.now() });
+  Object.assign(th, { built: !!v.built, fuel: Math.max(0, Number(v.fuel) || 0), lit: !!v.lit, at: Date.now(), claim: v.claim && v.claim.who ? v.claim : null });
+  drawClaimRing(th);
   if (th.lit || v.burnt) th.burnt = true;
   if (th.built && !wasBuilt && !th.progress) th.progress = 0.999; // built by someone else: pieces just settle
   drawPlaced(th);
@@ -182,6 +182,7 @@ function removePlaced(id) {
   if (i >= 0) interactive.splice(i, 1);
   removeSpotNear(th.x, th.z);
   clearCellsNear(th.x, th.z, PLACEABLES[th.kind].solid + 1);
+  if (th.ring) { scene.remove(th.ring); th.ring.geometry.dispose(); }
   placed.delete(id);
   if (you.sit && you.sit.fire === id) endSit(false);
 }
@@ -220,7 +221,6 @@ function animatePlaced(dt) {
     fireLight.position.set(near.x, groundY(near.x, near.z) + 0.6, near.z);
     fireLight.intensity = (5 + (reduceMotion ? 0 : Math.sin(elapsed * 11) * 0.6 + Math.sin(elapsed * 27) * 0.4)) * dark * (0.7 + 0.3 * Math.min(1, fuelIn(near) / 4));
   } else fireLight.intensity = 0;
-  if (second && you.sit && tasks.current && tasks.current.type === 'sit') $('queueNow').textContent = taskName(tasks.current, true); // minutes left
 }
 
 /* ---------- placing: pick a spot, then your person goes and puts it down ---------- */
@@ -236,6 +236,8 @@ function cantPlaceAt(x, z, kind) {
   if (pondShape(x, z) < 1.35) return 'Too close to the water';
   if (!roomAt(x, z, r + 0.25, 0.4)) return 'Not enough room here';
   if ([...placed.values()].some((th) => Math.hypot(th.x - x, th.z - z) < r + PLACEABLES[th.kind].solid + 1)) return 'Too close to another one';
+  const c = notMineAt(x, z);
+  if (c) return `That's ${c.claim.name}'s claim`;
   return null;
 }
 function startPlacing(item) {
@@ -262,13 +264,16 @@ function movePlacing(x, z) {
   placeRing.position.set(x, groundY(x, z) + 0.04, z);
   placeRing.material.color.set(why ? '#e07a6a' : '#9fd88a');
   placeRing.visible = true;
-  $('placeText').textContent = why || `Tap the ground to move it`;
+  const claim = !why && placing.kind === CLAIMS.placeable ? claimHere(x, z) : null; // would lighting it claim the land?
+  showPlaceClaim(why ? null : [x, z], claim);
+  $('placeText').textContent = why || (claim ? claim.text : 'Tap the ground to move it');
   $('placeGo').disabled = !!why;
 }
 function stopPlacing() {
   if (placing.ghost) { scene.remove(placing.ghost); disposeMaterials(placing.ghost); }
   placing.on = false; placing.ghost = null;
   placeRing.visible = false;
+  showPlaceClaim(null);
   $('placeBar').hidden = true;
   app.classList.remove('placing');
 }
@@ -282,7 +287,7 @@ $('placeGo').addEventListener('click', finishPlacing);
 $('placeCancel').addEventListener('click', stopPlacing);
 
 /* ---------- doing things with them: tasks in your queue ---------- */
-const sendNow = (msg) => { if (!online()) return; sendMove(); net.sock.send(JSON.stringify(msg)); }; // where you are first (the server checks you're close)
+const sendNow = (msg) => sendAct(msg); // where you are first (the server checks you're close); kept for when the connection comes back (online.js)
 const goNear = (th, then) => approach(th.x, th.z, PLACEABLES[th.kind].solid + 0.35, PLACEABLES[th.kind].solid + 0.75, then);
 const placedSpot = (t) => { const th = placed.get(t.id); return th ? V(th.x, groundY(th.x, th.z) + 0.8, th.z) : null; };
 Object.assign(TASK_KINDS, {
@@ -338,7 +343,7 @@ Object.assign(TASK_KINDS, {
       const th = placed.get(t.id);
       if (!th || (th.built && PLACEABLES[th.kind].fire && isLit(th))) { nextTask(); return; }
       const P = PLACEABLES[th.kind];
-      if (carried() + ITEMS[P.item].weight > SETTINGS.carryCapacity) { showTag('Inventory full', headTop(), 2); nextTask(); return; }
+      if (carried() + ITEMS[P.item].weight > SETTINGS.carryCapacity) { showTag('Too heavy', headTop(), 2); nextTask(); return; }
       goNear(th, () => {
         face(th.x, th.z);
         startAction({ pose: 'bend', seconds: th.built ? 2 : 0.9, mid: () => sendNow({ t: 'unplace', id: th.id }) });
@@ -403,7 +408,7 @@ Object.assign(TASK_KINDS, {
     },
     spot: placedSpot,
   },
-  // sitting by the fire: walk to a free seat, sit for the time chosen (it carries on while you're away)
+  // sitting by the fire: walk to a free seat and sit until you stand up, do something else or the fire goes out (it carries on while you're away)
   sit: {
     start(t) {
       const th = placed.get(t.id);
@@ -419,8 +424,8 @@ Object.assign(TASK_KINDS, {
         playerGround = groundY(sx, sz);
         player.position.set(sx, playerGround, sz);
         face(th.x, th.z);
-        you.sit = { fire: th.id, seat: k, until: Date.now() + t.ms };
-        sendNow({ t: 'sit', id: th.id, seat: k, ms: t.ms });
+        you.sit = { fire: th.id, seat: k };
+        sendNow({ t: 'sit', id: th.id, seat: k });
         showTag('Sitting by the fire', headTop(), 2);
         drawQueue();
       };
@@ -428,16 +433,16 @@ Object.assign(TASK_KINDS, {
       else walkTo(V(x, 0, z), sitDown, nextTask);
     },
     stop() { endSit(true, false); },
-    name: (t, now) => (now ? `Sitting by the fire${you.sit ? ` · ${timeLeft(you.sit.until - Date.now())} left` : ''}` : `Sit for ${minutesLabel(Math.round(t.ms / 60000))}`),
+    name: (t, now) => (now ? 'Sitting by the fire' : 'Sit by the fire'),
     spot: placedSpot,
   },
 });
-// while sitting (called each frame instead of walking): stay put, stand up when the time's up
+// while sitting (called each frame instead of walking): stay put, stand up if the fire has gone out
 function holdSit(P) {
   const th = placed.get(you.sit.fire);
   if (th) player.rotation.y = Math.atan2(th.x - player.position.x, th.z - player.position.z);
   sitPose(player, P, playerGround);
-  if (Date.now() >= you.sit.until) endSit(true);
+  if (!th || (PLACEABLES[th.kind].fire && !isLit(th))) endSit(true);
 }
 // standing up: tell the server (unless it already knows), and move on to the next thing in the queue
 function endSit(tell = true, next = true) {
@@ -450,12 +455,12 @@ function endSit(tell = true, next = true) {
 // back in the game while still sitting (you left the task running): carry on sitting
 function resumeSit(s) {
   const th = s && placed.get(s.fire);
-  if (!th || !player || !(s.ms > 0)) return;
+  if (!th || !player) return;
   const [x, z] = seatSpot(th, s.seat);
   playerGround = groundY(x, z);
   player.position.set(x, playerGround, z);
-  tasks.current = { type: 'sit', id: th.id, ms: s.ms };
-  you.sit = { fire: th.id, seat: s.seat, until: Date.now() + s.ms };
+  tasks.current = { type: 'sit', id: th.id };
+  you.sit = { fire: th.id, seat: s.seat };
   drawQueue();
 }
 // leaving the world (Exit, or your person died): forget the sit here; the server still has it while you're away
@@ -471,7 +476,7 @@ function forgetSit() {
 function placedActions(th) {
   const P = PLACEABLES[th.kind], name = P.name.toLowerCase();
   const walkHere = { label: 'Walk here', foot: true, run: () => walkFirst(V(th.x + P.solid + 0.8, 0, th.z)) };
-  const adminRemove = adminMore(admin.on ? [{ label: 'Remove', run: () => adminSend({ t: 'a.remove', id: th.id }) }] : []);
+  const adminRemove = adminMore(adminPlacedActions(th));
   if (!th.built) {
     return [{ label: `Build ${name}`, note: `${P.buildSeconds} s`, run: () => queueTask({ type: 'build', id: th.id }) },
       { label: `Pick up ${name}`, note: 'Not built yet', run: () => queueTask({ type: 'unplace', id: th.id }) }, ...adminRemove, walkHere];
@@ -500,7 +505,7 @@ function placedActions(th) {
       return { label: recipeName(r), note: why, disabled: !!why, run: () => queueTask({ type: 'make', id: th.id, recipe: r.id }) };
     }) });
   }
-  if (P.seats && (!F || lit)) out.push({ label: `Sit by ${name}`, sub: P.seats.minutes.map((n) => ({ label: minutesLabel(n), run: () => queueTask({ type: 'sit', id: th.id, ms: n * 60000 }) })) });
+  if (P.seats && (!F || lit)) out.push({ label: `Sit by ${name}`, run: () => queueTask({ type: 'sit', id: th.id }) });
   if (lit) out.push({ label: 'Put out fire', run: () => queueTask({ type: 'tend', id: th.id, do: 'out' }) });
   else { // once it's out: pack it into your inventory, or take it apart for what it's made of (only who built it; the server checks)
     const heavy = carried() + ITEMS[P.item].weight > SETTINGS.carryCapacity;
@@ -527,7 +532,7 @@ function stationNear(kind) {
   const P = PLACEABLES[kind];
   if (!P || !player) return null;
   for (const th of placed.values()) {
-    if (th.kind === kind && th.built && (!P.fire || isLit(th)) && Math.hypot(th.x - player.position.x, th.z - player.position.z) <= STATION_REACH + P.solid) return th;
+    if (th.kind === kind && th.built && (!P.fire || isLit(th)) && !notMineAt(th.x, th.z) && Math.hypot(th.x - player.position.x, th.z - player.position.z) <= STATION_REACH + P.solid) return th;
   }
   return null;
 }
@@ -548,3 +553,69 @@ Object.assign(TASK_KINDS, {
     spot: placedSpot,
   },
 });
+
+/* ---------- claims (0.3.0): your first lit campfire claims the land round it while it burns ----------
+   The server decides (server/src/claims.js) and says whose claim a fire is (th.claim: { who, name }); a claim only
+   counts while its fire is lit. Inside someone else's claim you can only walk through: the tap menus say so
+   (menuActions in input.js), placing there is refused, and autopilot leaves their things alone. */
+const CLAIMS = { radius: 10, spawnRadius: 16, placeable: 'campfire', ringShowsWithin: 25, ...(DATA.claims || {}) };
+const claimOn = (th) => !!th.claim && isLit(th);
+const claimName = (th) => (th.claim.who === net.myId ? 'Your claim' : `${th.claim.name}'s claim`);
+const claimAt = (x, z) => { for (const th of placed.values()) if (claimOn(th) && Math.hypot(th.x - x, th.z - z) <= CLAIMS.radius) return th; return null; };
+// someone else's claim at x, z (the admin can do anything anywhere)
+const notMineAt = (x, z) => { if (admin.on) return null; const c = claimAt(x, z); return c && c.claim.who !== net.myId ? c : null; };
+// placing a campfire: would lighting it there claim the land? { ok, text } (the server has the final say)
+function claimHere(x, z) {
+  const all = [...placed.values()].filter(claimOn);
+  const no = claimProblem(x, z, { radius: CLAIMS.radius, spawnRadius: CLAIMS.spawnRadius, pond: POND, hasClaim: all.some((th) => th.claim.who === net.myId),
+    claims: all.map((th) => ({ x: th.x, z: th.z, name: th.claim.name })) }); // rules.js, the same on the server
+  if (!no) return { ok: true, text: 'Light it to claim the land round it' };
+  return { ok: false, text: no.why === 'has' ? 'Just a fire: you already have a claim' : no.why === 'pond' ? 'Just a fire: too close to the pond to claim' : `Just a fire: too close to ${no.name}'s claim` };
+}
+// a soft ring on the ground at a claim's edge, following the hills
+const ringMats = { mine: new THREE.MeshBasicMaterial({ color: '#9fd88a', transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide }),
+  theirs: new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide }),
+  maybe: new THREE.MeshBasicMaterial({ color: '#9fd88a', transparent: true, opacity: 0.35, depthWrite: false, side: THREE.DoubleSide }),
+  no: new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.18, depthWrite: false, side: THREE.DoubleSide }) };
+for (const m of Object.values(ringMats)) m.userData.shared = true;
+function claimRingMesh(x, z, material) {
+  const n = 120, w = 0.12, R = CLAIMS.radius, pos = [];
+  for (let i = 0; i <= n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    for (const r of [R - w, R]) { const px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r; pos.push(px, groundY(px, pz) + 0.06, pz); }
+  }
+  const idx = [];
+  for (let i = 0; i < n; i++) { const k = i * 2; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  const mesh = new THREE.Mesh(g, material);
+  mesh.renderOrder = 2;
+  scene.add(mesh);
+  return mesh;
+}
+function drawClaimRing(th) {
+  const want = claimOn(th) ? (th.claim.who === net.myId ? 'mine' : 'theirs') : null;
+  if (th.ring && th.ring.userData.kind === want && th.ring.userData.x === th.x && th.ring.userData.z === th.z) return;
+  if (th.ring) { scene.remove(th.ring); th.ring.geometry.dispose(); th.ring = null; }
+  if (!want) return;
+  th.ring = claimRingMesh(th.x, th.z, ringMats[want]);
+  Object.assign(th.ring.userData, { kind: want, x: th.x, z: th.z });
+}
+let placeClaim = null;
+function showPlaceClaim(at, claim) {
+  if (placeClaim) { scene.remove(placeClaim); placeClaim.geometry.dispose(); placeClaim = null; }
+  if (at && claim) placeClaim = claimRingMesh(at[0], at[1], claim.ok ? ringMats.maybe : ringMats.no);
+}
+// every half second: rings near you show, fires that went out lose theirs, and walking into a claim says whose it is
+let claimCheckAt = 0, inClaim = null;
+function updateClaims(now) {
+  if (now - claimCheckAt < 500 || !player) return;
+  claimCheckAt = now;
+  for (const th of placed.values()) {
+    drawClaimRing(th);
+    if (th.ring) th.ring.visible = Math.hypot(th.x - player.position.x, th.z - player.position.z) <= CLAIMS.radius + CLAIMS.ringShowsWithin;
+  }
+  const c = claimAt(player.position.x, player.position.z), id = c ? c.id : null;
+  if (id !== inClaim) { inClaim = id; if (c) showTag(claimName(c), headTop(), 2.5); }
+}

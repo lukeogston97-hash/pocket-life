@@ -214,8 +214,22 @@ function walkToTarget(t) {
   }
   walkFirst(t.point);
 }
-// the small menu: Gather Sticks, Gather Stones, Harvest Berries
+// where a tapped thing is, to check claims (people, the ground and the pond are never blocked)
+function targetSpot(t) {
+  if (t.kind === 'item') return [t.item.x, t.item.z];
+  if (t.kind === 'placed') return [t.th.x, t.th.z];
+  if (t.kind === 'use') return t.task.water || t.task.x == null ? null : [t.task.x, t.task.z];
+  if (['tree', 'stump', 'oldStump', 'rock', 'plant'].includes(t.kind)) return [t.x, t.z];
+  return null;
+}
+// the small menu. Inside someone else's claim it only says whose claim it is, with Walk here (and Admin for the admin)
 function menuActions(t) {
+  const acts = thingActions(t), at = t && targetSpot(t), c = at && notMineAt(at[0], at[1]);
+  if (!c) return acts;
+  return [{ label: `${c.claim.name}'s claim`, note: 'Only they can use things here', disabled: true }, ...acts.filter((a) => a.foot || a.admin || a.label === 'Walk here')];
+}
+// the small menu for a thing: Pick up Stick, Pick berries, Drink, Chop tree...
+function thingActions(t) {
   if (!t) return [];
   if (t.kind === 'person') {
     const o = t.person, isMuted = muted.has(o.who);
@@ -284,7 +298,7 @@ function menuActions(t) {
     if (harvests(src)) {
       const b = berryBushes[task.bush];
       const ready = !b || ripe(b);
-      return [{ label: `Harvest ${ITEMS[Object.keys(src.harvest)[0]].plural}`, note: ready ? (b ? `${berriesOn(b)} left` : '') : `Next in ${readyIn(b)}`,
+      return [{ label: src.action || `Pick ${ITEMS[Object.keys(src.harvest)[0]].plural.toLowerCase()}`, note: ready ? (b ? `${berriesOn(b)} left` : '') : `Next in ${readyIn(b)}`,
         disabled: !ready, run: () => queueTask(task) }, walkHere, ...(b ? adminMore(adminThingActions('bush', task.bush, berriesOn(b) < bushHolds(src))) : [])];
     }
     return [{ label: src.action || `Use ${src.name.toLowerCase()}`, run: () => queueTask(task) }, walkHere];
@@ -377,6 +391,7 @@ document.addEventListener('keydown', (e) => {
   if (maint.on) return;
   if (placing.on) stopPlacing();
   else if (!$('news').hidden) closeNews();
+  else if (!$('settings').hidden) closeSettings();
   else if (!$('back').hidden) $('back').hidden = true;
   else if (!$('adminPick').hidden) closePicker();
   else if (!$('adminPanel').hidden) adminEscape(); // the player page goes back to Players, else the panel closes
