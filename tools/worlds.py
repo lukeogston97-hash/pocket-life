@@ -94,6 +94,22 @@ def problems(d):
     opened = [r for r in d.get('regions', []) if r.get('open')]
     if len(opened) != 1: out.append('regions: exactly one world can be open for now')
     elif opened[0].get('timeZone') != d['settings'].get('worldTimeZone'): out.append("regions: the open world's timeZone should match settings.worldTimeZone")
+    # What's new (Luke, 23 Nov 2026): each version has its release date and short + added, ~ improved and − fixed lines
+    day = re.compile(r'\d{4}-\d{2}-\d{2}$')
+    for i, e in enumerate(d.get('devlog', [])):
+        w = f'devlog[{i}] ({e.get("version")})'
+        if not re.fullmatch(r'\d+\.\d+\.(\d+|x)( to \d+\.\d+\.\d+)?', str(e.get('version', ''))): out.append(f'{w}: needs a "version" like "0.1.2"')
+        if not day.match(str(e.get('date', ''))): out.append(f'{w}: needs a release "date" like "2026-11-23"')
+        if 'from' in e and not (day.match(str(e['from'])) and str(e['from']) <= str(e.get('date', ''))): out.append(f'{w}.from: a date like "2026-11-21", before "date"')
+        for k in e:
+            if k == 'notes': out.append(f'{w}: put its lines in "added", "improved" or "fixed" instead of "notes"')
+            elif k not in ('version', 'date', 'from', 'title', 'added', 'improved', 'fixed'): out.append(f'{w}: unknown key "{k}"')
+        if not any(e.get(k) for k in ('added', 'improved', 'fixed')): out.append(f'{w}: needs at least one line in "added", "improved" or "fixed"')
+        for k in ('added', 'improved', 'fixed'):
+            if k not in e: continue
+            if not (isinstance(e[k], list) and all(isinstance(t, str) and t.strip() for t in e[k])): out.append(f'{w}.{k}: should be a list of short lines'); continue
+            for t in e[k]:
+                if len(t) > 90 or t.endswith('.') or '—' in t: out.append(f'{w}.{k}: keep lines short (90 letters at most), with no full stop at the end and no em-dash: "{t[:40]}..."')
     for k in d:
         if k not in ('version', 'build', 'server', 'help', 'devlog') and k not in d.get('help', {}): out.append(f'help: "{k}" has no help note')
     return out

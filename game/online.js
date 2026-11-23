@@ -408,22 +408,45 @@ function reportError(err, where) {
 }
 window.addEventListener('error', (e) => reportError(e.error || e.message, 'error'));
 window.addEventListener('unhandledrejection', (e) => reportError(e.reason, 'promise'));
-// What's new: the dev log from game-data.json, newest first
+// What's new: the dev log from game-data.json, newest first. Each version shows its release date and its
+// changes as + added, ~ improved and − fixed lines (docs/design/working.md). The newest is open, older ones fold.
+const NEWS_KINDS = [['added', '+', 'Added'], ['improved', '~', 'Improved'], ['fixed', '−', 'Fixed']];
+function newsDate(v) { // "23 Nov 2026", or "21 to 23 Nov 2026" when the entry has a "from" date
+  const day = (s) => { const [y, m, d] = String(s || '').split('-').map(Number); return y && m && d ? { y, m, d } : null; };
+  const a = day(v.from), b = day(v.date);
+  if (!b) return '';
+  const full = (x) => `${x.d} ${MONTHS[x.m - 1]} ${x.y}`;
+  if (!a || (a.y === b.y && a.m === b.m && a.d === b.d)) return full(b);
+  if (a.y !== b.y) return `${full(a)} to ${full(b)}`;
+  return `${a.d}${a.m === b.m ? '' : ` ${MONTHS[a.m - 1]}`} to ${full(b)}`;
+}
 function openNews() {
   closePause();
   paused = true;
-  const rows = (DATA.devlog || []).map((v, i) => {
-    const el = document.createElement('details');
-    el.className = 'admin-entry news-entry';
-    el.open = i === 0;
-    const h = document.createElement('summary');
-    h.className = 'admin-head';
-    const date = v.date ? new Date(`${v.date}T12:00:00`).toLocaleDateString([], { day: 'numeric', month: 'short' }) : '';
-    h.textContent = `v${v.version}${date ? ` · ${date}` : ''}${i ? ` · ${(v.notes || []).length} changes` : ''}`;
-    const ul = document.createElement('ul');
-    for (const n of v.notes || []) { const li = document.createElement('li'); li.textContent = n; ul.appendChild(li); }
-    el.append(h, ul);
-    return el;
+  const mk = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const line = (kind, sym, word, text) => {
+    const li = mk('li', `news-${kind}`);
+    const s = mk('b', 'news-sym', sym);
+    s.setAttribute('aria-hidden', 'true');
+    li.append(s, mk('span', 'sr-only', word ? `${word}: ` : ''), mk('span', null, text));
+    return li;
+  };
+  const key = mk('div', 'news-key');
+  for (const [k, sym, word] of NEWS_KINDS) { const s = mk('span', `news-${k}`); s.append(mk('b', 'news-sym', sym), word); key.appendChild(s); }
+  const rows = [key];
+  (DATA.devlog || []).forEach((v, i) => {
+    if (i === 1) rows.push(mk('div', 'news-sec', 'Version history'));
+    const entry = mk('details', 'news-entry');
+    entry.open = i === 0;
+    const h = mk('summary', 'news-head');
+    h.append(mk('span', 'news-ver', `v${v.version}`));
+    if (v.title) h.append(mk('span', 'news-title', v.title));
+    h.append(mk('span', 'news-date', newsDate(v)));
+    const ul = mk('ul', 'news-lines');
+    for (const [k, sym, word] of NEWS_KINDS) for (const t of v[k] || []) ul.appendChild(line(k, sym, word, t));
+    for (const t of v.notes || []) ul.appendChild(line('note', '•', '', t)); // an entry still in the old format
+    entry.append(h, ul);
+    rows.push(entry);
   });
   $('newsBody').replaceChildren(...rows);
   $('news').hidden = false;

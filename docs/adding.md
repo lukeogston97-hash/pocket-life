@@ -28,6 +28,6 @@ The short way to add each kind of thing. Most are one edit to test/game-data.jso
 - **Errors**: no need to wrap new code in try/catch. The server's tick and each message, and the game's frame, already catch a problem, carry on and put a note in the admin's Inbox (Server error / Game error). Fix what shows up there.
 
 ## Every update
-- Bump `build` in test/game-data.json (`version` only goes up once per release, see docs/design/working.md), add short notes to the current version's devlog entry, run `python3 tools/tests/lint.py` and the check for the area you touched, push to main and Luke tries the test link.
+- Bump `build` in test/game-data.json (`version` only goes up once per release, see docs/design/working.md), add short lines to the current version's devlog entry (in "added", "improved" or "fixed", see docs/design/working.md), run `python3 tools/tests/lint.py` and the check for the area you touched, push to main and Luke tries the test link.
 - Add the decision to the right file in docs/design/.
 - Release only when Luke says: `sh tools/release.sh`, commit, push.

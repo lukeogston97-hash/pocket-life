@@ -7,7 +7,11 @@
   - Patch: one per release to players, not one per test build. It can go past 9 (0.1.10, 0.1.11).
   - Test builds: only "build" goes up (0.1.0 test 1, test 2...). After a release, the next round starts on the next patch with build 1.
   - It's only in game-data.json: "version" and "build". The page shows it, like "v0.1.0 (test 2)".
-- Dev log (What's new): one entry per version, and test builds add their notes to that same entry. Keep notes short. When a minor version is finished, fold its patches into one entry like "0.1.0 to 0.1.9" with a few highlights.
+- Dev log (What's new): one entry per version, newest first, and test builds add their lines to that same entry. When a minor version is finished, fold its patches into one entry like "0.1.0 to 0.1.9" with a few highlights.
+  - Format (Luke, 23 Nov 2026: cleaner and more compact, easy for players to read): each entry has "version", "date" (the release day; add "from" for a range, like the 0.0.x early builds, 21 to 23 Nov 2026), an optional "title", and its lines in "added" (shown as + : new features), "improved" (~ : changes and refinements to what's there) and "fixed" (− : bug fixes, corrections and removed issues). Only the lists it needs.
+  - Lines: short (90 letters at most, one line on a computer), plain words for players, no full stop at the end, no em-dashes. Don't start them with "Added", "Improved" or "Fixed": the symbol says it. lint checks the format.
+  - The panel shows a small key (+ Added, ~ Improved, − Fixed), the newest version open, then the rest under Version history, each with its release date. It's in openNews in game/online.js.
+  - Some changes get no entry when Luke says so (the admin rework, this dev log format change).
 - To test needs quickly, raise settings.needsSpeed (60 makes an hour pass in a minute). Put it back to 1 before pushing.
 - game-data.json is loaded with fetch, so opening index.html straight from the disk won't work. Test with a local server (python3 -m http.server) or the test link.
 - Test first, then release. Make every change in the test/ folder, push it to main, and tell Luke to try it on the test link: https://pocketlife.pages.dev/test/

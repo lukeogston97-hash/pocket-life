@@ -262,13 +262,25 @@ button.craft-head { padding: 0; border: 0; background: none; color: inherit; fon
 .admin-btns { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
 .admin-btns .small-btn { min-height: 32px; padding: 4px 10px; font-size: 12.5px; }
 .admin-empty { color: var(--ink-faint); text-align: center; font-size: 13px; }
-.news-list .admin-head { font-size: 13px; font-weight: 800; color: var(--ink); }
-.news-list ul { margin: 4px 0 0; padding-left: 18px; font-size: 13.5px; color: var(--ink-soft); }
-.news-list li { margin: 2px 0; }
-.news-entry summary { cursor: pointer; list-style: none; }
-.news-entry summary::-webkit-details-marker { display: none; }
-.news-entry summary::before { content: "▸ "; color: var(--ink-faint); }
-.news-entry[open] summary::before { content: "▾ "; }
+/* What's new: a small key, then each version with its release date and + added, ~ improved, − fixed lines */
+.news-key { display: flex; gap: 14px; padding: 0 0 9px; font-size: 11.5px; font-weight: 700; color: var(--ink-faint); }
+.news-key .news-sym { display: inline-block; margin-right: 4px; }
+.news-sec { padding: 14px 0 6px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-faint); }
+.news-entry { padding: 9px 0; border-top: 1px solid var(--line); }
+.news-sec + .news-entry { border-top: 0; padding-top: 2px; }
+.news-head { display: flex; align-items: baseline; gap: 6px; cursor: pointer; list-style: none; font-size: 13.5px; }
+.news-head::-webkit-details-marker { display: none; }
+.news-head::before { content: "▸"; width: 10px; flex: none; font-size: 11px; color: var(--ink-faint); }
+.news-entry[open] .news-head::before { content: "▾"; }
+.news-ver { font-weight: 800; color: var(--ink); white-space: nowrap; }
+.news-title { font-weight: 700; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.news-date { margin-left: auto; padding-left: 8px; font-size: 12px; font-weight: 600; color: var(--ink-faint); white-space: nowrap; }
+.news-lines { list-style: none; margin: 6px 0 0; padding: 0 0 0 16px; display: flex; flex-direction: column; gap: 4px; }
+.news-lines li { display: flex; gap: 8px; font-size: 13.5px; line-height: 1.35; color: var(--ink-soft); }
+.news-sym { flex: none; width: 10px; text-align: center; font-weight: 800; }
+.news-added .news-sym { color: var(--accent); }
+.news-improved .news-sym { color: #8ec5ee; }
+.news-fixed .news-sym { color: var(--warn); }
 .admin-sec { display: flex; flex-direction: column; gap: 6px; margin: 0 0 12px; }
 .admin-row { display: flex; justify-content: space-between; align-items: center; }
 .admin-state { font-size: 12.5px; color: var(--ink-soft); }
