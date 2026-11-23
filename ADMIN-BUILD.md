@@ -18,7 +18,7 @@ Branch: `admin-mode`. Never push unfinished work to main (the server deploys fro
 - If it can't be finished or checks fail: publish nothing, leave it on this branch, tell Luke.
 
 ## Plan (tick as done)
-- [ ] 1. Read the code (server, game admin/online/input/camera/screens, tests)
+- [x] 1. Read the code (server, game admin/online/input/camera/screens, tests)
 - [ ] 2. Server: admin as watcher, old /admin removed, tools by target
 - [ ] 3. Game: entry (5 taps + password), free camera PC + phone, exit
 - [ ] 4. Game: overlay panels with all current tools
@@ -34,3 +34,6 @@ Branch: `admin-mode`. Never push unfinished work to main (the server deploys fro
 - 21:25 Branch created, notes written.
 - 21:26 Check-ins scheduled (cancel the unfired ones at the end with delete_trigger): trig_01MFHwhkpa4tSebmEMrMSKke (11pm), trig_01CJurrnop76uWLnHagb5J9f (1am), trig_0112iKM78AXZAZMz46fHmjpR (3:30am), trig_013FP6oEBHVHXBqQ6WauqUjp (6am).
 - 21:32 Luke added step 11 (full check of the whole game, fixes to the test link only). Baseline: lint passes on untouched code; tools/tests npm install done.
+- 22:05 Step 1 done. Checks run here (Chrome, Node, Playwright all present). On UNTOUCHED main: lint passes, smoke passes, admin_tools passes (334 s here, so the full run.py will take well over 35 minutes), layout FAILS on serverLayout only.
+- 22:05 FINDING for step 11 (was there before this build, not caused by it): tools/tests/layout-baseline.json says serverLayout 38022df1, main gives 1994efcb. Checked on this machine: at bb4d71a (where the baseline was saved) the check passes with 38022df1, so the machine is fine. Hashing each part of layoutData() (script kept at /home/claude/notes/layout_parts.py, run from tools/tests) shows ONLY `shore` changed (46 points both times, d80729e -> e5fdf8d0). bushes, open, trees, rocks, oldStumps and plants are identical, so nothing laid out in the shared world moved. Likely from 4f81a83 "a fix for getting stuck walking to the pond" (matched by its message only, diff NOT read yet: confirm in step 11). DO NOT run UPDATE_LAYOUT or edit layout-baseline.json: whether that change was meant is Luke's call. Report it to him.
+- Guard for this build: after my changes every part must still hash to the main values: bushes 30:c382205b, shore 46:e5fdf8d0, open 600:c31ad514, trees 1133:1cd3e8d5, rocks 66:948268a7, oldStumps 0:741638a5, plants 1:ced5fb4c, all 1994efcb.
