@@ -10,6 +10,7 @@ Every decision so far, split by area so an update only reads the file it needs. 
 - docs/design/away.md: what your person does while you're away; timing, sleep and death
 - docs/design/needs-and-crafting.md: crafting, chopping, rest, stamina, tall grass, held tools
 - docs/design/placeables.md: campfires, fuel, sitting
+- docs/design/claims.md: campfire claims (who can do what where, fuel, away people)
 - docs/design/inventory-and-menus.md: inventory grid, Craft, recipe discovery, tap menus, stations, pack up
 - docs/design/admin.md: the Admin panel, moving and removing things, live settings
 - docs/design/later.md: sign-in, buildings, later ideas

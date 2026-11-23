@@ -184,6 +184,7 @@ function setFresh(on) {
   oldStumps.forEach((t) => showParts(t, on || !t.gone));
   rocks.forEach(drawRock);
   for (const v of itemViews.values()) v.visible = !on;
+  showItemBatches(!on);
   for (const th of placed.values()) if (th.view) th.view.visible = !on;
   fireLight.visible = !on;
   for (const b of berryBushes) drawBerries(b);
@@ -256,6 +257,10 @@ $('exitBtn').addEventListener('click', () => { closePause(); toMenu(); });
 $('menuNewsBtn').addEventListener('click', () => openNews());
 $('menuFeedbackBtn').addEventListener('click', () => openFeedback());
 $('menuSettingsBtn').addEventListener('click', () => { $('settings').hidden = false; $('settingsClose').focus(); });
+// the same three in the pause menu, so you don't have to leave the world for them
+$('pauseNewsBtn').addEventListener('click', () => { closePause(); openNews(); });
+$('pauseFeedbackBtn').addEventListener('click', () => { closePause(); openFeedback(); });
+$('pauseSettingsBtn').addEventListener('click', () => { closePause(); $('settings').hidden = false; $('settingsClose').focus(); });
 function closeSettings() { $('settings').hidden = true; }
 $('settingsClose').addEventListener('click', closeSettings);
 $('settings').addEventListener('click', (e) => { if (e.target === $('settings')) closeSettings(); });

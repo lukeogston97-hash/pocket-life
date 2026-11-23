@@ -8,7 +8,7 @@
     "walkSpeed": 2.2,
     "worldSize": 100,
     "needsSpeed": 1,
-    "autoName": true,
+    "autoName": false,
     "respawnMinutes": 5,
     "maxPlaying": 20,
     "worldTimeZone": "Australia/Darwin"
@@ -421,7 +421,8 @@
     "idleMinutes": 3,
     "near": "pond",
     "sleepBelow": 35,
-    "asleepFloor": 10
+    "asleepFloor": 10,
+    "comeBackSeconds": 15
   },
   "night": {
     "from": 20,
@@ -660,7 +661,7 @@
       }
     ],
     "age": {
-      "min": 18,
+      "min": 13,
       "max": 90,
       "start": 25
     }
@@ -721,7 +722,7 @@
     "version": "version is the game version and build counts the test copies of that version (start build at 1 for each new version, count up for each test copy). Both only need changing here.",
     "server": "server is the address of the online world. The test link joins the test world and the release joins the live world. Leave it empty to play offline.",
     "chatFilter": "Words kept out of speech bubbles (shown as stars) and names (pick another). anywhere: caught even inside a longer word. words: only caught as a whole word (so 'class' is fine), plus endings like s, ed, ing. phrases: caught as a run of words. Numbers and symbols standing in for letters (sh1t, @ss) are caught too. The server gets a copy: tools/worlds.py test-build copies it to server/words.json. names: extra words only kept out of names, so nobody can pretend to be the admin.",
-    "away": "How a person looks after themselves while their player is away (the server does this). near: 'pond' keeps them strolling round the main pond (anything else: round where you left them). wanderMin and wanderMax: how far in metres from there they stroll. strollSpeed in metres per second. They eat what they carry when hunger is under eatBelow, go for berries if they have none, and drink at the pond when thirst is under drinkBelow. After sleepAfterHours away they lie down asleep: hunger and thirst keep dropping slowly (the asleep rates) but stop at asleepFloor, so they can't die; after goneAfterDays asleep (3 days away in all) they leave the world and their things stay where they slept. A grave marks where someone died for graveHours. idleMinutes: if you're in the game but don't touch anything for this long, your person goes on autopilot and does the same, until you tap. sleepBelow: someone on autopilot or away lies down to sleep when Rest is under this, and gets up when it's full. At night (see night) they go to sleep until morning.",
+    "away": "How a person looks after themselves while their player is away (the server does this). near: 'pond' keeps them strolling round the main pond (anything else: round where you left them). wanderMin and wanderMax: how far in metres from there they stroll. strollSpeed in metres per second. They eat what they carry when hunger is under eatBelow, go for berries if they have none, and drink at the pond when thirst is under drinkBelow. After sleepAfterHours away they lie down asleep: hunger and thirst keep dropping slowly (the asleep rates) but stop at asleepFloor, so they can't die; after goneAfterDays asleep (3 days away in all) they leave the world and their things stay where they slept. A grave marks where someone died for graveHours. idleMinutes: if you're in the game but don't touch anything for this long, your person goes on autopilot and does the same, until you tap. sleepBelow: someone on autopilot or away lies down to sleep when Rest is under this, and gets up when it's full. At night (see night) they go to sleep until morning. comeBackSeconds: for this long after a player's connection goes, their person stays right where they are, so a short break in the connection changes nothing (the game carries on from where it was). With a claim (see claims) they stay within it instead of by the pond, keep its fire fed from their bag, and still walk to the pond to drink.",
     "berryBushes": "extra: how many more berry bushes grow out in the wider world, besides the ones by the start. seed: their own random numbers, so they're in the same places on every phone (change it to move them all).",
     "devlog": "What's new, shown in the Menu. Newest first: version, date and a short list of changes, written for players.",
     "energyCosts": "Stamina (the yellow ring, id energy) is short-term: every task takes these amounts and walking takes walkPerMetre for each metre. It comes back by itself quickly (perHour in its need: 600 an hour, so empty to full in about 10 minutes; whileAsleep 1500 when sleeping, whileSitting 2400 when sitting by a fire). Below slowBelow (20) your person is out of breath: walking and tasks take slowBy (1.5) times as long. It never stops you and it's not deadly. The server uses the same numbers.",
@@ -732,7 +733,7 @@
     "placeables": "Things you place in the world and build, like the campfire. An item with places (the id of an entry here) gets a Place button in the Inventory: you pick a spot, your person puts it down as an unbuilt site, then builds it (buildSeconds; buildVerb shows while building). solid is how big it is for walking round (metres). fire makes it a fire you can light and put out: fuel is the item you add (sticks), secondsEach is how long one burns (300 = 5 minutes), otherFuels are more items it burns with their seconds each (log: 1800), maxHours is the most it holds in hours of burning (72 = 3 days, so a claim's fire can last the 3-day away timer; without maxHours, maxFuel counts it in fuel items), lightSeconds how long lighting takes. It only burns while lit, keeps burning while players are away, and goes out by itself when the fuel runs out. seats: people can sit round it (count places, distance metres from the middle). Sitting is a task with no set time: your person sits until you stand up, do something else or the fire goes out, and keeps sitting while you're away. Run tools/worlds.py test-build after changing placeables. craftLabel names the tap menu list of recipes made there (recipes with near), like Cook.",
     "mining": "Mining with a tool (tool: the item you need, the stone pickaxe). rock: breaking a small rock (seconds, and what falls: gives); the rock is then gone, but one broken rock comes back by a boulder every rockBackHours. boulder: mining a boulder; gives can be a range like [3, 5]. A mined boulder stays (it can't be removed) and can be mined again after regrowDays real days (the same as trees). Each hit wears the tool by one use and takes energyCosts.chop energy. The server uses the same rules.",
     "liveSettings": "Numbers the admin can change live from the Admin panel (Settings tab) without a new build. Each one's id is wired up in code (server/src/live.js and test/game/admin.js); name, group, unit, min, max and step are just how it shows. The normal value still comes from the rest of this file (settings, chopping, mining, sources, stats); a live change wins until the admin taps Reset.",
-    "testNames": "While settings.autoName is on (testing), Make your person fills in a random name from this list. Turn autoName off for the real game.",
+    "testNames": "Only for testing: with settings.autoName on, Make your person fills in a random name from this list. autoName is off in the real game, so players type their own name (the checks in tools/tests switch it on for themselves).",
     "bodyShapes": "The body builds on Make your person (slim, average and so on): how much wider or taller each part of the body is drawn. Add one by copying an entry; it shows up as a choice by itself.",
     "claims": "Claims (0.3.0): your first campfire becomes your claim when you light it: radius metres round it, yours only while the fire burns (once it's out the land is free and anyone can take the cold fire apart). One claim each. Claims can't overlap and can't reach into the free area round the main pond (spawnRadius metres from the pond's middle; the pond itself is about 6 m across from its middle). Inside someone else's claim others can only walk through. placeable: the kind that claims. ringShowsWithin: how near you have to be to see a claim's faint ring. Run tools/worlds.py test-build after changing it."
   },
@@ -830,7 +831,12 @@
         "Inside someone else's claim you can walk through, but you can't build, pick things up, chop, mine, pick berries, cut grass or use their fire.",
         "Logs now burn for 8 hours, and a campfire holds up to 3 days of fuel. Sticks still burn for 5 minutes each.",
         "If your fire goes out, your claim is gone and anyone can take the cold fire apart. You get one claim, and the land round the pond can't be claimed.",
-        "While you're away your person stays near their claim, keeps its fire going with sticks and logs from their bag, and walks to the pond for water."
+        "While you're away your person stays near their claim, keeps its fire going with sticks and logs from their bag, and walks to the pond for water.",
+        "Make your person: ages 13 to 90, and you type your own name.",
+        "The Menu now has What's new, Settings and Feedback, so you don't have to leave the world for them.",
+        "A short break in your connection no longer loses what you were doing: your person waits for you, and what you finished is sent when you're back.",
+        "Fair play: the world now checks you're next to what you pick up, chop, mine or drink from.",
+        "Tidier wording (Pick berries, Too heavy), and lots of sticks and stones on the ground no longer slow phones down."
       ]
     },
     {

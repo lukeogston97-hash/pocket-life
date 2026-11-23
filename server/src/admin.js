@@ -77,12 +77,29 @@ export const adminMethods = {
         me.tag = !!m.on; ws.serializeAttachment(me);
         this.send({ t: 'badge', id: me.id, on: me.tag }, me.id);
         return done(me.tag ? 'Admin tag on' : 'Admin tag off');
-      case 'a.maintenance':
-        this.admin.maintenance = !!m.on;
+      case 'a.maintenance': { // on: release-link players see Back soon, and everyone not playing is paused (persons.js paused, thaw)
+        const on = !!m.on, was = !!this.admin.maintenance, now = Date.now();
+        if (on && !was) { // everyone and every fire brought up to now, then the pause starts
+          for (const p of this.persons.values()) if (this.alive(p)) { this.catchUp(p); this.touch(p); }
+          for (const th of this.placedList()) this.burn(th, now);
+          await this.flush(null, true);
+          if (w) await this.save();
+          this.admin.maintAt = now;
+        }
+        if (!on && was) { // the pause ends: clocks carry on from where they stopped
+          for (const p of this.persons.values()) if (this.alive(p) && !this.isOnline(p.who)) this.thaw(p, now);
+          for (const th of this.placedList()) this.burn(th, now);
+        }
+        this.admin.maintenance = on;
         this.admin.message = clean(m.text, 200).trim();
         await this.saveAdmin();
-        if (this.admin.maintenance) for (const { ws: s, p } of this.sockets()) if (!p.admin && p.link !== 'test') this.boot(s, { t: 'maintenance', text: this.admin.message });
-        return done(this.admin.maintenance ? 'Maintenance on' : 'Maintenance off');
+        if (!on && was) {
+          await this.flush(null, true);
+          if (w) { await this.save(); for (const th of this.placedList()) if (th.lit) this.sendPlaced(th, null); }
+        }
+        if (on) for (const { ws: s, p } of this.sockets()) if (!p.admin && p.link !== 'test') this.boot(s, { t: 'maintenance', text: this.admin.message });
+        return done(on ? 'Maintenance on' : 'Maintenance off');
+      }
       case 'a.announce': {
         const text = starText(clean(m.text, 140).trim(), FILTER);
         if (text) this.send({ t: 'announce', text }, null);

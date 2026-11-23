@@ -17,12 +17,16 @@ const ctx = {
   async blockConcurrencyWhile(f) { await f(); },
 };
 const w = new World(ctx, { ADMIN_CODE: process.env.ADMIN_CODE || 'secret123456' });
+// One thing at a time, as on Cloudflare: a Durable Object finishes one message (its storage calls hold the next one back)
+// before the next is handled, so the checks see the same order of events the real server gives.
+let line = Promise.resolve();
+const inTurn = (f) => { line = line.then(f).catch((err) => console.error(err)); return line; };
 const wss = new WebSocketServer({ port: Number(process.env.PORT || 8795) });
 wss.on('connection', (raw) => {
   const s = { att: {}, closed: false, send(t) { raw.send(t); }, close() { this.closed = true; raw.close(); },
     serializeAttachment(a) { this.att = structuredClone(a); }, deserializeAttachment() { return structuredClone(this.att); } };
   ctx.acceptWebSocket(s);
-  raw.on('message', async (d) => {
+  raw.on('message', (d) => inTurn(async () => {
     const t = String(d), m = JSON.parse(t);
     if (m.t !== 'move' && m.t !== 'ping') console.log('<-', m.t);
     await w.webSocketMessage(s, t);
@@ -34,8 +38,8 @@ wss.on('connection', (raw) => {
       if (process.env.COLLAPSE) p.stats.rest = 0;
       if (process.env.TESTKIT || process.env.MINEKIT || process.env.CAMPKIT || process.env.COLLAPSE) s.send(JSON.stringify(w.mine(p)));
     }
-  });
-  raw.on('close', () => { s.closed = true; w.webSocketClose(s); });
+  }));
+  raw.on('close', () => { s.closed = true; inTurn(() => w.webSocketClose(s)); });
 });
-setInterval(() => w.alarm(), 5000);
+setInterval(() => inTurn(() => w.alarm()), 5000);
 console.log('test server up');

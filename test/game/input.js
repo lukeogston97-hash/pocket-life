@@ -228,7 +228,7 @@ function menuActions(t) {
   if (!c) return acts;
   return [{ label: `${c.claim.name}'s claim`, note: 'Only they can use things here', disabled: true }, ...acts.filter((a) => a.foot || a.admin || a.label === 'Walk here')];
 }
-// the small menu: Gather Sticks, Gather Stones, Harvest Berries
+// the small menu for a thing: Pick up Stick, Pick berries, Drink, Chop tree...
 function thingActions(t) {
   if (!t) return [];
   if (t.kind === 'person') {
@@ -298,7 +298,7 @@ function thingActions(t) {
     if (harvests(src)) {
       const b = berryBushes[task.bush];
       const ready = !b || ripe(b);
-      return [{ label: `Harvest ${ITEMS[Object.keys(src.harvest)[0]].plural}`, note: ready ? (b ? `${berriesOn(b)} left` : '') : `Next in ${readyIn(b)}`,
+      return [{ label: src.action || `Pick ${ITEMS[Object.keys(src.harvest)[0]].plural.toLowerCase()}`, note: ready ? (b ? `${berriesOn(b)} left` : '') : `Next in ${readyIn(b)}`,
         disabled: !ready, run: () => queueTask(task) }, walkHere, ...(b ? adminMore(adminThingActions('bush', task.bush, berriesOn(b) < bushHolds(src))) : [])];
     }
     return [{ label: src.action || `Use ${src.name.toLowerCase()}`, run: () => queueTask(task) }, walkHere];
@@ -391,6 +391,7 @@ document.addEventListener('keydown', (e) => {
   if (maint.on) return;
   if (placing.on) stopPlacing();
   else if (!$('news').hidden) closeNews();
+  else if (!$('settings').hidden) closeSettings();
   else if (!$('back').hidden) $('back').hidden = true;
   else if (!$('adminPick').hidden) closePicker();
   else if (!$('adminPanel').hidden) adminEscape(); // the player page goes back to Players, else the panel closes

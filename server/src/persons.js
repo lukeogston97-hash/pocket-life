@@ -25,8 +25,21 @@ export const personsMethods = {
       stats: p.stats, statsAt: p.statsAt, carry: p.carry, wear: p.wear || {}, lastKind: p.lastKind, sleeping: !!p.sleeping, collapsed: !!p.collapsed,
       sit: p.sit && p.sit.until > Date.now() ? { fire: p.sit.fire, seat: p.sit.seat, ms: p.sit.until - Date.now() } : null };
   },
+  // Maintenance pauses everyone who isn't playing (release-link players are shut out, so it shouldn't cost them anything):
+  // their needs, strolls, the day-asleep and 3-days-gone timers all stop, and carry on from where they were afterwards.
+  paused(p) { return !!this.admin.maintenance && !this.isOnline(p.who); },
+  // their clocks moved on past the pause: from when maintenance began (or when they stopped playing, if that was later) to now.
+  // Called when they come back during maintenance, and for everyone not playing when it ends.
+  thaw(p, now = Date.now()) {
+    if (!this.admin.maintenance || !this.alive(p)) return;
+    const d = now - Math.max(this.admin.maintAt || now, p.leftAt || 0);
+    if (!(d > 0)) return;
+    for (const k of ['statsAt', 'simAt', 'leftAt', 'sleepAt']) if (p[k]) p[k] += d;
+    if (p.plan) { p.plan.start += d; p.plan.arrive += d; }
+    this.touch(p);
+  },
   catchUp(p, now = Date.now()) {
-    if (!this.alive(p)) return;
+    if (!this.alive(p) || this.paused(p)) return;
     if (p.asleep && !this.isOnline(p.who)) { advanceStats(p, now, G, this.speed, AWAY.asleepFloor); return; } // asleep away: slowly down to the floor, can't die
     if (this.isOnline(p.who) || !p.leftAt) { const d = advanceStats(p, now, G, this.speed); if (d) this.die(p, d.cause, false); else this.collapse(p); }
     else this.advanceAway(p, now);
@@ -34,7 +47,7 @@ export const personsMethods = {
   // Rest ran out (collapseAtZero): they drop asleep where they stand, and can't get up until it's back to wakeAt
   collapse(p) {
     if (!REST || !REST.collapseAtZero || p.sleeping || !(p.stats.rest <= 0)) return;
-    p.sleeping = true; p.collapsed = true;
+    p.sleeping = true; p.collapsed = true; p.sleptAt = Date.now();
     this.touch(p);
     this.send({ t: 'state', id: p.who, state: 'sleeping', x: num(p.x), z: num(p.z) }, p.who);
     this.tell(p.who, this.mine(p));

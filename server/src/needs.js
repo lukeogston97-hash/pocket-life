@@ -1,6 +1,8 @@
 // People live on the server: their needs, what they carry and where they are.
 // G is server/game.json (copied from the game's game-data.json by tools/worlds.py).
 
+import { needsStep } from './rules.js';
+
 export const HOUR = 3600000, MINUTE = 60000;
 const clampStat = (v) => Math.max(0, Math.min(100, v));
 
@@ -56,23 +58,6 @@ export function ageOf(p, now = Date.now()) {
   if (n.getUTCMonth() < b.getUTCMonth() || (n.getUTCMonth() === b.getUTCMonth() && n.getUTCDate() < b.getUTCDate())) years--;
   return p.age + Math.max(0, years);
 }
-// one slice of time, the same as in the game: every need moves by perHour, an empty need (atZero)
-// drags others down, and needs marked onlyWhenFine (health) only recover while nothing is empty
-// (asleep: needs with whileAsleep, like Rest, change by that instead, and by whileAsleepAtNight at night)
-// floor (asleep while away): needs that can empty stop at the floor (or where they were, if lower), and nothing hurts
-function step(st, hours, G, asleep, night, floor, sitting = false) {
-  const empty = floor != null ? [] : G.needs.filter((s) => s.atZero && st[s.id] <= 0);
-  const change = {}, before = floor != null ? { ...st } : null;
-  for (const s of G.needs) {
-    const sleepRate = night && s.whileAsleepAtNight != null ? s.whileAsleepAtNight : s.whileAsleep;
-    change[s.id] = s.onlyWhenFine && empty.length ? 0 : asleep && sleepRate != null ? sleepRate : sitting && s.whileSitting != null ? s.whileSitting : s.perHour;
-  }
-  for (const s of empty) for (const [k, v] of Object.entries(s.atZero)) if (k in change) change[k] += v;
-  for (const s of G.needs) {
-    st[s.id] = clampStat((st[s.id] ?? 0) + change[s.id] * hours);
-    if (before && s.atZero) st[s.id] = Math.max(st[s.id], Math.min(before[s.id] ?? 0, floor));
-  }
-}
 // what they died of: the empty need that hurts most
 function causeOf(st, G) {
   const c = G.needs.filter((s) => s.atZero && st[s.id] <= 0).sort((a, b) => (a.atZero.health ?? 0) - (b.atZero.health ?? 0))[0];
@@ -86,7 +71,7 @@ export function advanceStats(p, to, G, speed, floor = null) {
   while (t < to) {
     const next = Math.min(to, t + MINUTE);
     const fast = speed && t < speed.until ? speed.x : 1;
-    step(p.stats, ((next - t) / HOUR) * fast, G, asleep, asleep && isNight(t, G), floor, !asleep && !!p.sit && t < p.sit.until); // sitting by a fire: whileSitting
+    needsStep(p.stats, ((next - t) / HOUR) * fast, G.needs, { asleep, night: asleep && isNight(t, G), floor, sitting: !asleep && !!p.sit && t < p.sit.until }); // rules.js, the same as in the game
     t = next;
     if (floor == null && G.needs.some((s) => s.deadAtZero && p.stats[s.id] <= 0)) { p.statsAt = t; return { at: t, cause: causeOf(p.stats, G) }; }
   }

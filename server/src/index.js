@@ -8,7 +8,7 @@
 // - what players do, one small handler each (actions.js); chat, reports, feedback; the admin player's tools (admin.js)
 // What every part shares (the game's rules from game.json, limits, helpers) is in shared.js.
 import { DurableObject } from 'cloudflare:workers';
-import { WORLDS, G, HOUR, PROTOCOL, CORS, clean, num, AWAY, tooOld, FEEDBACK_KEEP, lastHeard, QUIET_MS, TICK_MS, SAVE_EVERY, FREE, allowed, tagOf, ageOf } from './shared.js';
+import { WORLDS, G, HOUR, MINUTE, PROTOCOL, CORS, clean, num, AWAY, tooOld, FEEDBACK_KEEP, lastHeard, QUIET_MS, TICK_MS, SAVE_EVERY, FREE, allowed, tagOf, ageOf } from './shared.js';
 import { lineMethods } from './line.js';
 import { personsMethods } from './persons.js';
 import { awayMethods } from './away.js';
@@ -17,6 +17,7 @@ import { adminMethods } from './admin.js';
 import { placedMethods } from './placed.js';
 import { liveMethods, maxPlaying } from './live.js';
 import { claimsMethods } from './claims.js';
+import { guardMethods } from './guard.js';
 import { ACTIONS } from './actions.js';
 
 export class World extends DurableObject {
@@ -30,6 +31,8 @@ export class World extends DurableObject {
     this.speed = null; // the admin's "speed up time": { x, until }
     this.admin = { maintenance: false, message: '', banned: [], muted: [] }; // set by the admin player in the game
     this.live = {}; // live settings the admin changed (live.js)
+    this.adminFails = new Map(); // wrong admin codes, by address (guard.js); kept in memory only
+    this.feedbackLog = []; // when feedback came in and from where, to stop floods (guard.js)
     ctx.blockConcurrencyWhile(async () => {
       this.world = (await ctx.storage.get('world')) || null;
       Object.assign(this.admin, (await ctx.storage.get('admin')) || {});
@@ -105,25 +108,31 @@ export class World extends DurableObject {
 
   async fetch(request) {
     const url = new URL(request.url);
+    const from = await tagOf(request.headers.get('CF-Connecting-IP') || ''); // their address, scrambled: only for the limits in guard.js
     if (url.pathname === '/feedback') { // feedback sent while not connected
       let note = {};
-      try { note = JSON.parse(await request.text()); } catch (err) { /* ignore */ }
-      await this.addFeedback(note);
+      try { note = JSON.parse((await request.text()).slice(0, 4000)); } catch (err) { /* ignore */ }
+      await this.addFeedback(note, from);
       return new Response('ok', { headers: CORS });
     }
     this.use('connections');
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
     this.ctx.acceptWebSocket(server);
-    server.serializeAttachment({});
+    server.serializeAttachment({ from });
     return new Response(null, { status: 101, webSocket: client });
   }
-  async addFeedback(note) {
-    const text = clean(note.text, 1000).trim();
-    if (!text) return;
+  async addFeedback(note, from = '') {
+    const text = clean(note && note.text, 1000).trim();
+    if (!text || !this.feedbackOk(from)) return; // (too many from one address: quietly dropped)
     const list = (await this.ctx.storage.get('feedback')) || [];
     list.push({ at: new Date().toISOString(), name: clean(note.name, 20), v: clean(note.v, 30), device: clean(note.device, 200), x: num(note.x), z: num(note.z), text });
     await this.put('feedback', list.slice(-FEEDBACK_KEEP));
+    this.tellAdmins({ t: 'adminNew', list: 'feedback' }); // the admin's Inbox count goes up straight away
+  }
+  tellAdmins(msg) {
+    const text = JSON.stringify(msg);
+    for (const { ws, p } of this.sockets()) if (p.admin) { try { ws.send(text); } catch (err) { /* gone */ } }
   }
 
   async webSocketMessage(ws, raw) {
@@ -156,14 +165,20 @@ export class World extends DurableObject {
       this.catchUp(p);
       if (!this.alive(p) || (action.when === 'world' && !w)) return;
     }
-    await action.run.call(this, { ws, me, m, p, w, reply, save });
+    try {
+      await action.run.call(this, { ws, me, m, p, w, reply, save });
+    } catch (err) { // one action going wrong never takes the world down: it's logged, and their game gets their person as the server has them
+      console.error(`action ${m.t} failed:`, err && err.stack ? err.stack : err);
+      try { if (this.alive(p)) reply(this.mine(p)); } catch (e) { /* gone */ }
+    }
   }
 
   async hello(ws, me, m, reply) {
     if (m.proto !== PROTOCOL) { this.boot(ws, { t: 'maintenance', text: 'A big update is on its way. Back soon.' }); return; } // an older game
     const link = m.link === 'test' ? 'test' : 'release';
     const min = (WORLDS.minVersion || {})[link];
-    const isAdmin = this.codeOk(m.adminCode);
+    const isAdmin = !!m.adminCode && !this.adminLocked(me) && this.codeOk(m.adminCode);
+    if (m.adminCode && !isAdmin) this.adminFail(me); // too many wrong codes from one address and it has to wait (guard.js)
     const who = await this.whoFor(m);
     if (!isAdmin && this.admin.banned.includes(who)) { this.boot(ws, { t: 'banned' }); return; }
     if (!isAdmin && this.admin.maintenance && link !== 'test') { this.boot(ws, { t: 'maintenance', text: this.admin.message }); return; }
@@ -174,7 +189,7 @@ export class World extends DurableObject {
     const full = !m.watch && !isAdmin && !this.mayPlay(ws, me, who);
     if (m.watch || full) { // the main menu: watch the world go by without a person
       const queued = full ? me.queued || Date.now() : 0;
-      Object.assign(me, { id: me.watch && me.id ? me.id : `w:${crypto.randomUUID().slice(0, 8)}`, who: null, watch: true, queued, turnAt: 0, admin: isAdmin, tag: m.adminTag !== false, v: clean(m.v, 20), link, alive: false });
+      Object.assign(me, { id: me.watch && me.id ? me.id : `w:${crypto.randomUUID().slice(0, 8)}`, who: null, watch: true, queued, turnAt: 0, admin: isAdmin, tag: m.adminTag !== false, v: clean(m.v, 20), b: Math.floor(Number(m.b)) || 0, link, alive: false });
       ws.serializeAttachment(me);
       const p = this.persons.get(who);
       reply({ t: 'welcome', watch: true, id: me.id, people: this.people(null), world: this.view(), count: this.playing(), speed: this.speed, live: this.live,
@@ -185,10 +200,11 @@ export class World extends DurableObject {
     me.queued = 0; me.turnAt = 0;
     // the same phone in another tab or link: that one closes
     for (const s of this.sockets()) if (s.p.who === who && s.ws !== ws) { s.p.alive = false; s.ws.serializeAttachment(s.p); this.boot(s.ws, { t: 'elsewhere' }); }
-    Object.assign(me, { id: who, who, watch: false, admin: isAdmin, tag: m.adminTag !== false, said: me.said || [], v: clean(m.v, 20), link, alive: false });
+    Object.assign(me, { id: who, who, watch: false, admin: isAdmin, tag: m.adminTag !== false, said: me.said || [], v: clean(m.v, 20), b: Math.floor(Number(m.b)) || 0, link, alive: false });
     const p = this.persons.get(who);
     let away = null, dead = null;
     if (p && this.alive(p)) {
+      this.thaw(p); // maintenance paused them: their clocks carry on from where they stopped
       if (p.asleep) this.catchUp(p, Date.now()); // asleep away: hunger and thirst dropped slowly to the floor
       if (p.leftAt) {
         this.advanceAway(p, Date.now());
@@ -210,7 +226,7 @@ export class World extends DurableObject {
     if (p) await this.flush(who);
     if (isAdmin) reply(this.adminState(me));
     const w = this.world;
-    reply({ t: 'welcome', id: who, people: this.people(who), world: this.view(), needSeed: !w, needLayout: !!w && !w.layout,
+    reply({ t: 'welcome', id: who, people: this.people(who), world: this.view(), needSeed: !w, needLayout: this.needLayout(me),
       count: this.playing(), me: me.alive ? this.mine(p) : null, away, dead, speed: this.speed, live: this.live });
     if (me.alive) this.send({ t: 'join', person: this.pub(p) }, who);
     this.sendCount();
@@ -231,6 +247,7 @@ export class World extends DurableObject {
           if (p.diedAt && now - p.diedAt > 30 * 24 * HOUR) { await this.rememberPast(p); this.persons.delete(p.who); await this.ctx.storage.delete(`p:${p.who}`); }
           continue;
         }
+        if (this.paused(p)) continue; // maintenance: nothing happens to people who aren't playing
         if (this.isOnline(p.who)) {
           this.catchUp(p, now);
           if (this.alive(p)) this.tell(p.who, this.mine(p));
@@ -274,6 +291,7 @@ export class World extends DurableObject {
         }
         if (grew) await this.save();
       }
+      for (const [k, list] of this.adminFails) if (!list.some((t) => now - t < 15 * MINUTE)) this.adminFails.delete(k); // old wrong-code counts are forgotten
       if (this.speed && now > this.speed.until) { this.speed = null; await this.ctx.storage.delete('speed'); this.send({ t: 'speed', speed: null }, null); }
     } finally {
       await this.ctx.storage.setAlarm(Date.now() + TICK_MS);
@@ -294,7 +312,9 @@ export class World extends DurableObject {
     const p = this.persons.get(who);
     if (wasAlive && this.alive(p) && !this.socketOf(who)) { // away now: they start looking after themselves
       p.leftAt = Date.now(); p.simAt = p.leftAt; p.statsAt = Math.min(p.statsAt, p.leftAt);
-      p.home = [p.x, p.z]; p.plan = null; p.asleep = false; p.wanderNext = true; p.log = { ate: 0, drank: 0, picked: 0 }; // off for a stroll straight away
+      p.home = [p.x, p.z]; p.asleep = false; p.wanderNext = true; p.log = { ate: 0, drank: 0, picked: 0 };
+      // they stay put for a few seconds (away.comeBackSeconds), so a short break in the connection changes nothing; then off for a stroll
+      p.plan = { kind: 'idle', start: p.leftAt, arrive: p.leftAt + (AWAY.comeBackSeconds || 0) * 1000 };
       this.touch(p);
       this.flush(who);
       this.send({ t: 'state', id: p.who, state: 'away', x: num(p.x), z: num(p.z) }, null);
@@ -306,7 +326,7 @@ export class World extends DurableObject {
 
 }
 // the rest of the world's methods, kept in their own files by topic
-Object.assign(World.prototype, lineMethods, personsMethods, awayMethods, natureMethods, adminMethods, placedMethods, liveMethods, claimsMethods);
+Object.assign(World.prototype, lineMethods, personsMethods, awayMethods, natureMethods, adminMethods, placedMethods, liveMethods, claimsMethods, guardMethods);
 
 export default {
   async fetch(request, env) {

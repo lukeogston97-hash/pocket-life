@@ -1,6 +1,7 @@
 // Nature and the shared world: berry bushes, tools wearing out, the world as players see it, laying out a new world, sticks and stones topping up.
 // These are methods of the World (index.js adds them to it), so `this` is the world.
 import { G, MINUTE, takeCarry, wearList, WORLD_FORMAT, num, kindOk, pickRandom } from './shared.js';
+import { berriesGrown, berryPicked } from './rules.js';
 
 export const natureMethods = {
   // a tool wears with each use; a worn-out one breaks (and the next one you carry takes over)
@@ -18,20 +19,11 @@ export const natureMethods = {
   berriesOn(i, t = Date.now()) {
     const w = this.world, b = w.bushes[i] || [null, null];
     if ((w.removed || {})[`bush:${i}`]) return 0; // the admin took this bush out
-    if (b[0] == null || !w.regrowMs) return w.holds;
-    const every = w.regrowMs / w.holds;
-    return Math.min(w.holds, b[0] + Math.floor((t - b[1]) / every));
+    return berriesGrown(b[0], b[1], w.holds, w.regrowMs, t); // rules.js, the same as in the game
   },
   takeBerry(i, t = Date.now()) {
     const w = this.world, b = w.bushes[i] || [null, null];
-    const every = w.regrowMs / w.holds;
-    let count = w.holds, from = t;
-    if (b[0] != null && w.regrowMs) {
-      const grown = Math.floor((t - b[1]) / every);
-      count = Math.min(w.holds, b[0] + grown);
-      from = count >= w.holds ? t : b[1] + grown * every;
-    }
-    count -= 1;
+    const [count, from] = berryPicked(b[0], b[1], w.holds, w.regrowMs, t);
     w.bushes[i] = [count, from];
     this.save();
     this.send({ t: 'bush', bush: i, count, growFrom: from }, null);
@@ -40,25 +32,24 @@ export const natureMethods = {
     const w = this.world;
     return w ? { items: w.items, bushes: w.bushes, graves: w.graves || [], trees: w.trees || {}, oldStumps: w.oldStumps || {}, rocks: w.rocks || {}, plants: w.plants || {}, moved: w.moved || {}, removed: w.removed || {}, placed: this.placedList().map((th) => this.placedView(th)) } : null;
   },
-  cleanLayout(m) {
-    const pts = (list, n) => (Array.isArray(list) ? list : []).slice(0, n).filter((a) => Array.isArray(a)).map(([x, z]) => [num(x), num(z)]);
-    return { bushes: pts(m.bushes, 200), shore: pts(m.shore, 200), open: pts(m.open, 1000) };
-  },
   // the first player into a new world lays it out (everyone's game builds the same starting world)
-  async seed(m) {
-    const items = (Array.isArray(m.items) ? m.items : []).slice(0, 3000).filter((it) => it && kindOk(it.kind));
+  // Only things that lie about the world to start with (items with startInWorld), no more of each than that, and inside the world.
+  async seed(m, me = {}) {
+    const most = (k) => (kindOk(k) && G.items[k] && G.items[k].startInWorld) || 0, edge = (G.worldSize || 100) / 2;
+    const inside = (v) => Number.isFinite(v) && Math.abs(v) <= edge, count = {};
+    const items = (Array.isArray(m.items) ? m.items : []).slice(0, 3000).filter((it) => it && most(it.kind) > 0 && inside(it.x) && inside(it.z) && (count[it.kind] = (count[it.kind] || 0) + 1) <= most(it.kind));
     const spots = {};
-    for (const [k, list] of Object.entries(m.spots || {})) if (kindOk(k) && Array.isArray(list)) spots[k] = list.slice(0, 500).map(([x, z]) => [num(x), num(z)]);
+    for (const [k, list] of Object.entries(m.spots || {})) if (most(k) > 0 && Array.isArray(list)) spots[k] = list.slice(0, 500).filter((a) => Array.isArray(a) && inside(a[0]) && inside(a[1])).map(([x, z]) => [num(x), num(z)]);
     const caps = {};
-    for (const [k, n] of Object.entries(m.caps || {})) if (kindOk(k) && Number.isFinite(n)) caps[k] = Math.max(0, Math.min(2000, Math.floor(n)));
+    for (const [k, n] of Object.entries(m.caps || {})) if (most(k) > 0 && Number.isFinite(n)) caps[k] = Math.max(0, Math.min(most(k), Math.floor(n)));
     const respawnMs = Math.max(MINUTE, Number(m.respawnMs) || 10 * MINUTE);
     this.world = {
       format: WORLD_FORMAT, nextId: 1, items: [], bushes: [], graves: [], spots, caps,
       holds: Math.max(1, Math.min(15, Math.floor(m.holds) || 5)),
       regrowMs: Math.max(0, Number(m.regrowMs) || 0),
       respawnMs, nextRespawn: Date.now() + respawnMs,
-      layout: this.cleanLayout(m.layout || {}),
     };
+    this.takeLayout(me, m.layout || {});
     for (const it of items) this.world.items.push({ id: this.world.nextId++, kind: it.kind, x: num(it.x), z: num(it.z), rot: num(it.rot) });
     this.applyLive(); // a live berry regrow time wins
     await this.save();
@@ -91,7 +82,8 @@ export const natureMethods = {
       w.items.push(item);
       added.push(item);
     }
+    if (!added.length) return; // nothing new: nothing to save (the next top-up time is only kept in memory)
     await this.save();
-    if (added.length) this.send({ t: 'added', items: added }, null);
+    this.send({ t: 'added', items: added }, null);
   },
 };

@@ -57,25 +57,29 @@ export const awayMethods = {
     }
     this.touch(p);
   },
-  // their claim's fire, and whether there's room in it for something they carry (biggest fuel first): [fire, kind] or null
-  fireToFeed(p) {
+  // their claim's fire, and whether there's room in it for something they carry (biggest fuel first): [fire, kind] or null.
+  // least: the room there has to be before it's worth walking over (so they don't go back and forth for every stick)
+  fireToFeed(p, least = 30 * MINUTE) {
     const th = this.claimOf(p.who), f = th && fireRule(th.kind);
     if (!f) return null;
     const room = f.max - this.burn(th).fuel;
-    const kind = Object.keys(f.fuels).filter((k) => p.carry[k] > 0 && f.fuels[k] <= room).sort((a, b) => f.fuels[b] - f.fuels[a])[0];
+    const kind = Object.keys(f.fuels).filter((k) => p.carry[k] > 0 && Math.max(f.fuels[k], least) <= room).sort((a, b) => f.fuels[b] - f.fuels[a])[0];
     return kind ? [th, kind] : null;
   },
-  // put what fits on their claim's fire from their bag (logs first, then sticks)
+  // put everything that fits on their claim's fire from their bag (logs first, then sticks)
   feedFire(p) {
-    for (let guard = 0; guard < 50; guard++) {
-      const got = this.fireToFeed(p);
+    let fed = 0;
+    for (let guard = 0; guard < 60; guard++) {
+      const got = this.fireToFeed(p, 0);
       if (!got) break;
       const [th, kind] = got, f = fireRule(th.kind);
       if (Math.hypot(th.x - p.x, th.z - p.z) > 4) break;
       takeCarry(p, kind, 1);
       th.fuel = Math.min(f.max, th.fuel + f.fuels[kind]); th.at = Date.now();
-      p.log.fed = (p.log.fed || 0) + 1;
+      fed++;
     }
+    if (!fed) return;
+    p.log.fed = (p.log.fed || 0) + fed;
     this.save();
     const th = this.claimOf(p.who);
     if (th) this.sendPlaced(th, null);
@@ -115,7 +119,8 @@ export const awayMethods = {
       return;
     }
     if (p.stats.hunger != null && p.stats.hunger < AWAY.eatBelow && L.bushes.length) {
-      const near = L.bushes.map((b, i) => ({ i, b, d: dist(at, b) })).filter((n) => !(this.world.removed || {})[`bush:${n.i}`]).sort((a, b) => a.d - b.d);
+      const near = L.bushes.map((b, i) => ({ i, b, d: dist(at, b) })).filter((n) => !(this.world.removed || {})[`bush:${n.i}`] && !this.notYours(p, n.b[0], n.b[1])) // not ones in someone else's claim
+        .sort((a, b) => a.d - b.d);
       const ripe = near.find((n) => this.berriesOn(n.i, t) > 0);
       const go = ripe || near[0];
       if (!go) { idle(15 * MINUTE); return; } // every bush taken out

@@ -4,18 +4,19 @@
 // person (p), the world (w), reply() to answer just you, and save() to save your person straight away; `this` is the
 // world (index.js), so this.send() tells everyone. Remember a spam limit in LIMITS (shared.js) for anything new.
 import { PLACEABLES, fireRule, seatAt } from './placed.js';
+import { fuelRoom } from './rules.js';
 import { FILTER, G, starText, badName, freshStats, addCarry, takeCarry, wearList, applyGives, eatOne, craft, spend, clean, num, kindOk, START, REST, BERRY_SRC, cleanLook, REPORTS_KEEP } from './shared.js';
 const SIT_OPEN = 365 * 24 * 3600000; // sitting has no set time: `until` is far off, and ends when they stand up, do something else, or the fire goes out
 
 export const ACTIONS = {
   // feedback from the Send feedback screen
   feedback: { when: 'any', async run({ ws, me, m, p, w, reply, save }) {
-    await this.addFeedback(m); reply({ t: 'thanks' });
+    await this.addFeedback(m, me.from); reply({ t: 'thanks' });
   } },
   // typing /admin and the code in the Say box
   adminLogin: { when: 'any', async run({ ws, me, m, p, w, reply, save }) {
     me.tries = (me.tries || 0) + 1;
-    if (me.tries > 5 || !this.codeOk(m.code)) { ws.serializeAttachment(me); reply({ t: 'adminNo' }); return; }
+    if (me.tries > 5 || this.adminLocked(me) || !this.codeOk(m.code)) { this.adminFail(me); ws.serializeAttachment(me); reply({ t: 'adminNo' }); return; }
     me.admin = true;
     ws.serializeAttachment(me);
     reply(this.adminState(me));
@@ -30,9 +31,12 @@ export const ACTIONS = {
     list.push({ at: new Date().toISOString(), by: { name: p ? p.name : '', who: me.who }, about: { name: them.name, who: them.who, v: sock ? sock.p.v : '' },
       reason: clean(m.reason, 30), note: clean(m.note, 500), said: (sock && sock.p.said) || [], x: num(them.x), z: num(them.z) });
     await this.put('reports', list.slice(-REPORTS_KEEP));
+    this.tellAdmins({ t: 'adminNew', list: 'reports' });
     reply({ t: 'reported', ok: true });
     return;
   } },
+  // the game asks for its person again (after sending what it did while the connection was down)
+  sync: { when: 'alive', async run({ p, reply }) { reply(this.mine(p)); } },
   // making a new person
   create: { when: 'any', async run({ ws, me, m, p, w, reply, save }) {
     if (this.alive(p)) { reply(this.mine(p)); return; }
@@ -63,11 +67,11 @@ export const ACTIONS = {
   } },
   // laying out a brand new world
   seed: { when: 'any', async run({ ws, me, m, p, w, reply, save }) {
-    if (!w) await this.seed(m); // the first player into a brand new world lays it out
+    if (!w) await this.seed(m, me); // the first player into a brand new world lays it out
   } },
   // the layout's open spots, shore and bushes (for people strolling while away)
   layout: { when: 'any', async run({ ws, me, m, p, w, reply, save }) {
-    if (w && !w.layout) { w.layout = this.cleanLayout(m); await this.save(); } // where away people can stroll (sent once)
+    if (w && this.needLayout(me)) { this.takeLayout(me, m); await this.save(); } // where things are: for people away, and for reach (guard.js)
   } },
   // bending, picking, kneeling to drink, chopping: shown to everyone else
   act: { when: 'alive', async run({ ws, me, m, p, w, reply, save }) {
@@ -77,6 +81,7 @@ export const ACTIONS = {
   // walking: once with where the walk ends, and now and then on the way
   move: { when: 'alive', async run({ ws, me, m, p, w, reply, save }) {
     const nx = num(m.x), nz = num(m.z), moved = Math.hypot(nx - p.x, nz - p.z);
+    if (!this.moveOk(ws, me, p, nx, nz)) { reply({ t: 'pos', x: num(p.x), z: num(p.z) }); return; } // too far, off the map or asleep: back where they really are (guard.js)
     if (p.sit && moved > 0.4) this.standUp(p); // walked off: no longer sitting
     if (moved < 30) spend(p, 'walkPerMetre', G, moved); // walking takes a little energy
     p.x = nx; p.z = nz; p.ry = num(m.ry);
@@ -89,7 +94,7 @@ export const ACTIONS = {
   sleep: { when: 'alive', async run({ ws, me, m, p, w, reply, save }) {
     if (!m.on && p.collapsed && p.stats.rest < (REST.wakeAt || 0)) { reply(this.mine(p)); return; } // too tired to get up yet
     p.sleeping = !!m.on;
-    if (p.sleeping) this.standUp(p);
+    if (p.sleeping) { this.standUp(p); p.sleptAt = Date.now(); }
     if (!p.sleeping) p.collapsed = false;
     save();
     reply(this.mine(p));
@@ -109,7 +114,7 @@ export const ACTIONS = {
   // drinking at the pond
   drink: { when: 'alive', async run({ ws, me, m, p, w, reply, save }) {
     const src = G.sources[m.source];
-    if (src && src.gives && src.water) { applyGives(p, src.gives); spend(p, 'drink', G); save(); }
+    if (src && src.gives && src.water && (me.admin || this.nearWater(p))) { applyGives(p, src.gives); spend(p, 'drink', G); save(); }
     reply(this.mine(p));
   } },
   // picking something up off the ground
@@ -117,16 +122,18 @@ export const ACTIONS = {
     const i = w.items.findIndex((it) => it.id === m.id);
     const c = i >= 0 && this.notYours(p, w.items[i].x, w.items[i].z, me.admin);
     if (c) { reply({ t: 'took', id: m.id, ok: false, why: this.claimNo(c) }); return; } // inside someone else's claim
-    if (i < 0 || !addCarry(p, w.items[i].kind, 1, G)) { reply({ t: 'took', id: m.id, ok: false }); return; }
+    if (i < 0) { reply({ t: 'took', id: m.id, ok: false }); return; } // someone got there first
+    if (!me.admin && !this.near(p, [w.items[i].x, w.items[i].z])) { reply({ t: 'took', id: m.id, ok: false, why: 'Too far away' }); return; }
+    if (!addCarry(p, w.items[i].kind, 1, G)) { reply({ t: 'took', id: m.id, ok: false, why: 'Too heavy' }); return; }
     const got = w.items[i];
     if (got.uses != null) { const list = wearList(p, got.kind, G); list[list.length - 1] = got.uses; p.wear = p.wear || {}; p.wear[got.kind] = list; } // a worn tool stays worn
     w.items.splice(i, 1);
     spend(p, 'pickup', G);
-    await this.save();
-    save();
-    reply({ t: 'took', id: m.id, ok: true });
+    reply({ t: 'took', id: m.id, ok: true }); // (said before saving, so the game always hears it before any other news of what they carry)
     if (got.uses != null) reply(this.mine(p)); // a worn tool: the game shows how worn straight away
     this.send({ t: 'gone', id: m.id }, me.id);
+    await this.save();
+    save();
   } },
   // putting things down
   drop: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
@@ -136,7 +143,8 @@ export const ACTIONS = {
       const full = (G.items[it.kind] || {}).uses, which = Number.isInteger(it.which) && it.which >= 0 && it.which < p.carry[it.kind] ? it.which : undefined; // which tool (0 is the one in use)
       const uses = full ? wearList(p, it.kind, G)[which ?? p.carry[it.kind] - 1] : null;
       if (!takeCarry(p, it.kind, 1, which)) continue;
-      const item = { id: w.nextId++, kind: it.kind, x: num(it.x), z: num(it.z), rot: num(it.rot) };
+      const here = Number.isFinite(it.x) && Number.isFinite(it.z) && (me.admin || this.near(p, [it.x, it.z])); // not near them: it lands by their feet
+      const item = { id: w.nextId++, kind: it.kind, x: num(here ? it.x : p.x + (Math.random() - 0.5) * 0.8), z: num(here ? it.z : p.z + (Math.random() - 0.5) * 0.8), rot: num(it.rot) };
       if (uses != null && uses < full) item.uses = uses; // a worn tool stays worn on the ground
       w.items.push(item);
       added.push(item);
@@ -151,10 +159,15 @@ export const ACTIONS = {
   chop: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
     const C = G.chopping || {}, rule = C[m.what === 'oldStump' ? 'stump' : m.what], tool = C.tool;
     if (!rule || (tool && !p.carry[tool])) { reply(this.mine(p)); return; }
-    const log = m.id != null && w.items.find((it) => it.id === m.id), cl = log ? this.notYours(p, log.x, log.z, me.admin) : this.notYours(p, Number.isFinite(m.x) ? m.x : p.x, Number.isFinite(m.z) ? m.z : p.z, me.admin);
+    // where it is: a log's own spot, a tree or stump's spot in the layout (guard.js), else what the game says if that's near them
+    const laidOut = ['tree', 'stump', 'oldStump'].includes(m.what), log = !laidOut && w.items.find((it) => it.id === m.id && it.kind === m.what);
+    if (!laidOut && !log) { reply(this.mine(p)); return; } // the log has gone
+    const said = Number.isFinite(m.x) && Number.isFinite(m.z) && this.near(p, [m.x, m.z]) ? [num(m.x), num(m.z)] : [p.x, p.z];
+    let at = log ? [log.x, log.z] : this.spotOf(m.what === 'oldStump' ? 'oldStump' : 'tree', Math.floor(m.idx)) || said;
+    if (!me.admin && !this.near(p, at)) { reply({ t: 'placeNo', why: 'Too far away' }); reply(this.mine(p)); return; }
+    const cl = this.notYours(p, at[0], at[1], me.admin);
     if (cl) { reply({ t: 'placeNo', why: this.claimNo(cl) }); reply(this.mine(p)); return; }
     w.trees = w.trees || {};
-    let at = [num(m.x), num(m.z)];
     if (m.what === 'oldStump') { // an old stump that was already in the world: dug out for good
       const i = Math.floor(m.idx);
       if (!(i >= 0 && i < 5000)) return;
@@ -197,14 +210,16 @@ export const ACTIONS = {
     const R = G.mining || {}, rule = R[m.what], tool = R.tool, i = Math.floor(m.idx);
     if (!rule || (m.what !== 'rock' && m.what !== 'boulder') || !(i >= 0 && i < 2000)) return;
     if (tool && !p.carry[tool]) { reply(this.mine(p)); return; }
-    const cl = this.notYours(p, p.x, p.z, me.admin); // where they're standing, next to the rock
+    const rock = this.spotOf('rock', i) || [p.x, p.z]; // where it is (guard.js), else where they're standing, next to it
+    if (!me.admin && !this.near(p, rock, 1)) { reply({ t: 'placeNo', why: 'Too far away' }); reply(this.mine(p)); return; }
+    const cl = this.notYours(p, rock[0], rock[1], me.admin);
     if (cl) { reply({ t: 'placeNo', why: this.claimNo(cl) }); reply(this.mine(p)); return; }
     w.rocks = w.rocks || {};
     if (w.rocks[i]) { reply({ t: 'rock', idx: i, state: w.rocks[i][0], at: w.rocks[i][1] }); return; } // someone else got it first
     w.rocks[i] = [m.what === 'rock' ? 'gone' : 'mined', Date.now()];
     this.send({ t: 'rock', idx: i, state: w.rocks[i][0], at: w.rocks[i][1] }, null);
     // the stones fall round where you're standing
-    const ax = Number.isFinite(m.x) ? num(m.x) : p.x, az = Number.isFinite(m.z) ? num(m.z) : p.z, out = [];
+    const by = Number.isFinite(m.x) && Number.isFinite(m.z) && this.near(p, [m.x, m.z]), ax = by ? num(m.x) : p.x, az = by ? num(m.z) : p.z, out = [];
     for (const [kind, c] of Object.entries(rule.gives || {})) {
       const count = Array.isArray(c) ? c[0] + Math.floor(Math.random() * (c[1] - c[0] + 1)) : c;
       for (let k = 0; k < count && out.length < 20; k++) {
@@ -224,8 +239,9 @@ export const ACTIONS = {
   pick: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
     const i = Math.floor(m.bush);
     if (!(i >= 0 && i < 200)) return;
-    const at = (w.layout && w.layout.bushes && w.layout.bushes[i]) || [p.x, p.z], cl = this.notYours(p, at[0], at[1], me.admin);
+    const at = this.spotOf('bush', i) || [p.x, p.z], cl = this.notYours(p, at[0], at[1], me.admin);
     if (cl) { reply({ t: 'picked', bush: i, ok: false, why: this.claimNo(cl) }); return; }
+    if (!me.admin && !this.near(p, at)) { reply({ t: 'picked', bush: i, ok: false, why: 'Too far away' }); return; }
     // with the bush's tool (a knife) a few come off at once (toolHarvest), and the tool wears
     const many = BERRY_SRC.tool && BERRY_SRC.toolHarvest && p.carry[BERRY_SRC.tool] ? Number(BERRY_SRC.toolHarvest[G.berryKind]) || 1 : 1;
     const n = this.berriesOn(i) >= many ? many : 1;
@@ -275,7 +291,7 @@ export const ACTIONS = {
     if (!th || Math.hypot(th.x - p.x, th.z - p.z) > 3) { reply(this.mine(p)); return; }
     const why = th.built ? this.whyNotTakeDown(th, p, me.admin) : '';
     if (why) return no(why);
-    if (!addCarry(p, item, 1, G)) return no('Too heavy to carry');
+    if (!addCarry(p, item, 1, G)) return no('Too heavy');
     if (p.sit && p.sit.fire === th.id) this.standUp(p);
     list.splice(i, 1);
     await this.save();
@@ -320,7 +336,7 @@ export const ACTIONS = {
     let note = '';
     if (m.do === 'add') {
       const kind = m.fuel && f.fuels[m.fuel] ? m.fuel : f.fuel, each = f.fuels[kind]; // sticks, or another fuel like logs
-      const room = Math.ceil((f.max - th.fuel) / each - 0.05); // one that only part fits still goes on
+      const room = fuelRoom(f, th.fuel, kind); // one that only part fits still goes on (rules.js)
       const n = Math.min(Math.max(1, Math.floor(m.n) || 1), room, p.carry[kind] || 0);
       if (n > 0) { takeCarry(p, kind, n); th.fuel = Math.min(f.max, th.fuel + n * each); }
     } else if (m.do === 'light') {
@@ -358,8 +374,10 @@ export const ACTIONS = {
     if (!def || !(i >= 0 && i < (def.count || 0))) return;
     w.plants = w.plants || {};
     const ps = (w.plants[m.plant] = w.plants[m.plant] || {}), now = Date.now();
-    const cl = this.notYours(p, p.x, p.z, me.admin); // where they're standing, next to the grass
+    const plant = this.plantSpot(m.plant, i) || [p.x, p.z]; // where it is (guard.js), else where they're standing, next to it
+    const cl = this.notYours(p, plant[0], plant[1], me.admin);
     if (cl) { reply({ t: 'cutNo', plant: m.plant, i, readyAt: ps[i] || 0, why: this.claimNo(cl) }); return; }
+    if (!me.admin && !this.near(p, plant)) { reply({ t: 'cutNo', plant: m.plant, i, readyAt: ps[i] || 0, why: 'Too far away' }); return; }
     if (ps[i] && ps[i] > now) { reply({ t: 'cutNo', plant: m.plant, i, readyAt: ps[i] }); return; } // someone got it first
     let ok = true;
     for (const [k, c] of Object.entries(def.gives || {})) ok = addCarry(p, k, c, G) && ok;

@@ -76,6 +76,7 @@ class World:
         async def game_data(route):
             resp = await route.fetch(); d = json.loads(await resp.text())
             d['server'] = f'ws://127.0.0.1:{WS_PORT}/world'
+            d['settings']['autoName'] = True  # the checks make a person with one tap (off in the real game)
             for k, v in (data or {}).items():
                 if isinstance(v, dict) and isinstance(d.get(k), dict): d[k].update(v)
                 else: d[k] = v

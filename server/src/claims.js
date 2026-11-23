@@ -6,6 +6,7 @@
 // The admin can do anything anywhere. A fire's claim is th.claim (the owner's who); burn() in placed.js ends it.
 // These are methods of the World (index.js adds them to it), so `this` is the world.
 import { G } from './shared.js';
+import { claimProblem } from './rules.js';
 
 const C = { radius: 10, spawnRadius: 16, placeable: 'campfire', ...(G.claims || {}) };
 export const CLAIM_R = C.radius;
@@ -27,11 +28,9 @@ export const claimsMethods = {
   // lighting a fire: it becomes the lighter's claim if they have none and it fits here. Says what happened.
   tryClaim(th, p) {
     if (th.kind !== C.placeable || th.claim) return '';
-    if (this.claimOf(p.who)) return 'Lit. You already have a claim, so this is just a fire';
-    const pond = G.pond || { x: 0, z: 0 };
-    if (Math.hypot(th.x - pond.x, th.z - pond.z) < C.spawnRadius + C.radius) return "Lit. It's too close to the pond to claim land";
-    const near = this.claims().find((o) => o.id !== th.id && Math.hypot(o.x - th.x, o.z - th.z) < C.radius * 2);
-    if (near) return `Lit. Too close to ${this.ownerName(near)}'s claim to claim land`;
+    const no = claimProblem(th.x, th.z, { radius: C.radius, spawnRadius: C.spawnRadius, pond: G.pond || { x: 0, z: 0 }, hasClaim: !!this.claimOf(p.who),
+      claims: this.claims().filter((o) => o.id !== th.id).map((o) => ({ x: o.x, z: o.z, name: this.ownerName(o) })) }); // rules.js, the same as in the game
+    if (no) return no.why === 'has' ? 'Lit. You already have a claim, so this is just a fire' : no.why === 'pond' ? "Lit. It's too close to the pond to claim land" : `Lit. Too close to ${no.name}'s claim to claim land`;
     th.claim = p.who;
     th.by = p.who; // it's theirs to pack up later
     return `Lit. The land round it is now your claim, while it burns`;

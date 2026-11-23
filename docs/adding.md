@@ -10,15 +10,18 @@ The short way to add each kind of thing. Most are one edit to test/game-data.jso
 - **Something that lies about and respawns** (like sticks and stones): give the item `startInWorld` (how many) and `spawnsNear` (`trees` or `boulders`). It starts turning up by itself, no world reset needed.
 - **Cuttable plant** (like tall grass): an entry in `plants`, with its own `seed` so nothing else in the world moves.
 - **Placeable** (like the campfire): an entry in `placeables`, plus an item with `"places": "<id>"`. Fires, seats, Pack up, Take apart and the admin's Move, Remove and Fill with fuel all come with it. Its look needs a shape in game/placeables.js (makePlacedView).
-- **A new item shape**: add it to SHAPES in game/items.js, then items can use it by name.
+- **A new item shape**: add it to SHAPES in game/items.js, then items can use it by name. If lots of them will lie on the ground, build its geometry with sharedGeo (as sticks, stones and logs do) so they're drawn together and stay cheap on phones.
+
+- **Before pushing**: `python3 tools/tests/lint.py` checks game-data.json for mistakes first (an item name that doesn't exist, a shape that isn't there, a weight that isn't a whole number...) and says what's wrong in plain words.
 
 ## Settings and numbers
 - **A setting the admin can change live** (Admin > Settings): add it to `liveSettings` in game-data.json (id, name, group, unit, min, max, step), then wire the id up in two places: RULES in server/src/live.js and LIVE_SET plus LIVE_BASE in game/admin.js.
 
 ## Code (when data isn't enough)
-- **A new action a player does**: a handler in server/src/actions.js (and a LIMITS entry in shared.js), a task in game/moving.js, a tap menu entry in game/input.js (menuActions).
+- **A rule both the game and the server work out** (how needs move, how a fire burns, what fits where): it goes in test/game/rules.js, once. test-build copies it to the server. Never write the same maths in both places.
+- **A new action a player does**: a handler in server/src/actions.js (and a LIMITS entry in shared.js), a task in game/moving.js, a tap menu entry in game/input.js (thingActions). The game sends it with sendAct (online.js), so it survives a short break in the connection. On the server, check the person is near what they're acting on (this.near, this.spotOf in guard.js) and that it isn't in someone else's claim (this.notYours in claims.js).
 - **A new admin tool**: a case in server/src/admin.js (every admin message starts with `a.`), and a button in game/admin.js (a tab) or a tap menu entry under Admin (adminThingActions, adminPlacedActions, adminGroundActions, adminPersonActions).
-- **A new kind of world thing** (ore vein, animal): needs code for drawing, tapping and its server state, like trees and rocks. Keep the world layout the same: give it its own random seed. For the admin, add it to MOVABLE in server/src/admin.js and movedThing in game/world-build.js.
+- **A new kind of world thing** (ore vein, animal): needs code for drawing, tapping and its server state, like trees and rocks. Keep the world layout the same: give it its own random seed. For the admin, add it to MOVABLE in server/src/admin.js and movedThing in game/world-build.js. So the server can check players are near it, add its spots to layoutData (game/online.js) and cleanLayout and LISTS (server/src/guard.js). More water (ponds, streams): teach nearWater in guard.js about it.
 - **A new part of the game code**: a new file in test/game/ and its name in PARTS in test/index.html.
 
 ## Every update

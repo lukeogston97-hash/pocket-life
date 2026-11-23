@@ -164,8 +164,8 @@ function recipeKnown(r) {
   return had >= Math.max(1, kinds.length - 1);
 }
 // the buttons along the top (Tools, Food, Building...): a recipe's "group", else what it makes says
-const CRAFT_GROUPS = ['Tools', 'Food', 'Building', 'Clothes', 'Materials'];
-const recipeGroup = (r) => { const it = ITEMS[Object.keys(r.makes)[0]]; return r.group || (it.uses ? 'Tools' : Object.keys(it.eat || {}).length ? 'Food' : it.places ? 'Building' : 'Materials'); };
+const CRAFT_GROUPS = ITEM_GROUPS; // rules.js
+const recipeGroup = (r) => r.group || itemGroupOf(ITEMS[Object.keys(r.makes)[0]]);
 const groupOrder = (g) => (CRAFT_GROUPS.includes(g) ? CRAFT_GROUPS.indexOf(g) : CRAFT_GROUPS.length);
 let craftGroup = null, craftQuery = '', craftPick = null; // the button picked (null: All), what's typed in search, the card tapped open
 // why a recipe can't be made right now ('' if it can): things missing, too heavy, or not by what it needs
@@ -181,7 +181,7 @@ function make(r) {
   spendEnergy('craft');
   for (const [k, n] of Object.entries(r.needs)) takeFromCarry(k, n);
   for (const [k, n] of Object.entries(r.makes)) addToCarry(k, n);
-  if (online()) net.sock.send(JSON.stringify({ t: 'craft', id: r.id }));
+  sendAct({ t: 'craft', id: r.id });
   startAction({ pose: 'kneel', seconds: 1.6 });
   if (bagOpen()) drawBag();
   drawHeld();

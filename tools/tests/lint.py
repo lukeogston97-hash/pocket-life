@@ -1,7 +1,10 @@
-"""Lint the server and the game: python3 tools/tests/lint.py   (joins the game's parts first, like index.html does)."""
+"""Lint the server and the game: python3 tools/tests/lint.py   (joins the game's parts first, like index.html does).
+First it checks game-data.json for mistakes and that the server's copies of the rules are up to date (tools/worlds.py check)."""
 import os, re, shutil, subprocess, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, '..', '..'))
+c = subprocess.run([sys.executable, os.path.join(ROOT, 'tools', 'worlds.py'), 'check'])
+if c.returncode: sys.exit(c.returncode)
 html = open(os.path.join(ROOT, 'test', 'index.html'), encoding='utf-8').read()
 parts = re.findall(r"'([a-z-]+)'", re.search(r'const PARTS = \[(.*?)\];', html, re.S).group(1))
 os.makedirs(os.path.join(HERE, 'build'), exist_ok=True)

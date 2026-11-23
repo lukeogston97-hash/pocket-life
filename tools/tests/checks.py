@@ -52,11 +52,25 @@ async def menu():
         seen = await b.evaluate("document.getElementById('regions').textContent")
         expect('1 person' in seen, f'another phone on the menu sees 1 person in the world picker ({seen})')
         await a.click('#menuBtn'); await a.wait_for_timeout(300); await shot(a, 'pause')
+        # the pause menu has What's new, Settings and Feedback too, each closed with the same Close link
+        await a.click('#pauseNewsBtn'); expect(await shown(a, '#news') and not await shown(a, '#pause'), "What's new opens from the pause menu"); await a.click('#newsClose')
+        await a.click('#menuBtn'); await a.click('#pauseSettingsBtn'); expect(await shown(a, '#settings'), 'Settings opens from the pause menu'); await a.click('#settingsClose')
+        await a.click('#menuBtn'); await a.click('#pauseFeedbackBtn'); expect(await shown(a, '#feedback'), 'Feedback opens from the pause menu'); await a.click('#feedbackCancel')
+        await a.click('#menuBtn'); await a.wait_for_timeout(300)
         await a.click('#exitBtn'); await a.wait_for_timeout(2500)
         expect(await shown(a, '#mainMenu'), 'Exit goes back to the menu')
         expect((await text(a, '#playSub') or '').startswith(f'as {name}'), 'Play now says as <name>')
         await a.click('#playBtn'); await a.wait_for_timeout(2500)
         expect(await text(a, '#hudName') == name and not await shown(a, '#mainMenu'), 'Play carries on as the same person')
+        # the real game has no ready-made name (settings.autoName is off): you have to type one, and it can be 13 to 90
+        c = await W.page('menuC', data={'settings': {'autoName': False}})
+        await c.click('#playBtn'); await c.wait_for_timeout(1500)
+        expect(await c.evaluate("document.getElementById('nameInput').value") == '' and await c.evaluate("document.getElementById('ageInput').min") == '13', 'no name filled in, and age starts at 13')
+        await c.click('.start-btn'); await c.wait_for_timeout(300)
+        expect(await shown(c, '#nameErr'), 'starting without a name asks for one')
+        await c.fill('#nameInput', 'Tester'); await c.click('.start-btn')
+        await c.wait_for_function("document.getElementById('mainMenu').hidden && !document.getElementById('app').classList.contains('is-creating')", timeout=30000)
+        expect(await text(c, '#hudName') == 'Tester', 'in the world with the name they typed')
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
@@ -474,7 +488,8 @@ async def claims():
         b = await W.page('visitorB'); await join(b); await b.wait_for_timeout(800)
         name = await a.evaluate('__pl.you.look.name')
         expect(await b.evaluate(f"(__pl.placed.get({fid}).claim || {{}}).name") == name, "the other phone sees whose claim it is")
-        expect(await b.evaluate(f"__pl.cantPlaceAt(__pl.placed.get({fid}).x + 3, __pl.placed.get({fid}).z, 'campfire')") == f"That's {name}'s claim", "can't place inside someone else's claim")
+        why = await b.evaluate(f"(() => {{ const th = __pl.placed.get({fid}); for (let dx = -7; dx <= 7; dx++) for (let dz = -7; dz <= 7; dz++) {{ const w = __pl.cantPlaceAt(th.x + dx, th.z + dz, 'campfire'); if (w !== 'Not enough room here' && w !== 'Too close to another one') return w; }} return 'no clear spot'; }})()")
+        expect(why == f"That's {name}'s claim", f"can't place inside someone else's claim ({why})")
         acts = await b.evaluate(f"__pl.menuActions({{ kind: 'placed', th: __pl.placed.get({fid}), name: '' }}).map((x) => x.label)")
         expect(acts[0] == f"{name}'s claim" and 'Put out fire' not in acts, f'their fire menu only says whose claim it is ({acts})')
         # the server says no too: B walks over and tries to put it out
@@ -482,12 +497,94 @@ async def claims():
         await b.evaluate(f"({send})({{ t: 'fire', id: {fid}, do: 'out' }})"); await b.wait_for_timeout(800)
         expect(await a.evaluate(f"__pl.isLit(__pl.placed.get({fid}))"), "the server won't let them put it out")
         # the owner puts it out: the claim is gone
+        await a.evaluate(f"__pl.queueTask({{ type: 'walk', x: __pl.placed.get({fid}).x - 1.6, z: __pl.placed.get({fid}).z }})"); await idle(a, 30); await a.wait_for_timeout(1500)
         await a.evaluate(f"({send})({{ t: 'fire', id: {fid}, do: 'out' }})"); await a.wait_for_timeout(800)
-        expect(not await b.evaluate(f"__pl.cantPlaceAt(__pl.placed.get({fid}).x + 3, __pl.placed.get({fid}).z, 'campfire')"), 'once out, the land is free')
+        free = await b.evaluate(f"(() => {{ const th = __pl.placed.get({fid}); return [__pl.isLit(th), !!__pl.notMineAt(th.x + 3, th.z)]; }})()")
+        expect(free == [False, False], f'once out, the land is free ({free})')
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'claims': claims}
+async def guards():
+    """The server's guards: you can't take, chop or drink from far away, jump across the world, or guess the admin code for long."""
+    async with world() as W:
+        a = await W.page('guardA'); await join(a)
+        b = await W.page('guardB'); await join(b); await b.wait_for_timeout(500)
+        send = "(m) => window.__sock.send(JSON.stringify(m))"
+        # a stick on the far side of the world can't be picked up from here
+        far = await a.evaluate("(() => { const p = __pl.player.position; return [...__pl.world.items].sort((x, y) => Math.hypot(y.x - p.x, y.z - p.z) - Math.hypot(x.x - p.x, x.z - p.z))[0].id; })()")
+        await a.evaluate(f"({send})({{ t: 'take', id: {far} }})"); await a.wait_for_timeout(700)
+        expect(await b.evaluate(f"!!__pl.getItem({far})") and not await a.evaluate("Object.keys(__pl.you.carry).length"), "a far-off stick can't be taken")
+        # nor a far-off tree chopped (even with an axe, and saying it's right here)
+        tree = await a.evaluate("(() => { const p = __pl.player.position; return __pl.trees.map((t, i) => [i, Math.hypot(t.x - p.x, t.z - p.z)]).sort((x, y) => y[1] - x[1])[0][0]; })()")
+        await a.evaluate(f"({send})({{ t: 'chop', what: 'tree', idx: {tree}, x: __pl.player.position.x, z: __pl.player.position.z }})"); await a.wait_for_timeout(700)
+        expect(await b.evaluate(f"__pl.trees[{tree}].state") == 'tree', "a far-off tree can't be chopped")
+        # a game that says its person jumped across the world is put back where they really are
+        before = await b.evaluate("(() => { const o = [...__pl.others.values()][0]; return [o.mesh.position.x, o.mesh.position.z]; })()")
+        await a.evaluate(f"({send})({{ t: 'move', x: 40, z: -40, ry: 0 }})"); await a.wait_for_timeout(900)
+        after = await b.evaluate("(() => { const o = [...__pl.others.values()][0]; return [o.mesh.position.x, o.mesh.position.z]; })()")
+        expect(abs(after[0] - before[0]) < 1 and abs(after[1] - before[1]) < 1, f'no jumping across the world ({after})')
+        await a.evaluate(f"({send})({{ t: 'move', x: 400, z: 0, ry: 0 }})"); await a.wait_for_timeout(500)
+        # a normal walk still works, and things near you can still be picked up
+        near = await a.evaluate("(() => { const p = __pl.player.position; const it = [...__pl.world.items].sort((x, y) => Math.hypot(x.x - p.x, x.z - p.z) - Math.hypot(y.x - p.x, y.z - p.z))[0]; __pl.queueTask({ type: 'pickup', id: it.id }); return it.id; })()")
+        await idle(a, 40); await a.wait_for_timeout(1200)
+        expect(not await b.evaluate(f"!!__pl.getItem({near})") and await a.evaluate("Object.values(__pl.you.carry).reduce((s, n) => s + n, 0)") == 1, 'walking over and picking up still works')
+        # drinking only works by the water
+        await a.evaluate("__pl.queueTask({ type: 'walk', x: 20, z: 12 })"); await idle(a, 40); await a.wait_for_timeout(1500)
+        await a.evaluate(f"({send})({{ t: 'sync' }})"); await a.wait_for_timeout(500)
+        thirst = await a.evaluate("__pl.you.stats.thirst")
+        await a.evaluate(f"({send})({{ t: 'drink', source: 'pond' }})"); await a.wait_for_timeout(700)
+        expect(await a.evaluate("__pl.you.stats.thirst") <= thirst + 0.5, "can't drink far from the pond")
+        # wrong admin codes: after a few, even the right one is refused for a while
+        for k in range(6):
+            await a.evaluate(f"({send})({{ t: 'adminLogin', code: 'wrong{k}' }})"); await a.wait_for_timeout(250)
+        await a.evaluate(f"({send})({{ t: 'adminLogin', code: 'secret123456' }})"); await a.wait_for_timeout(600)
+        expect(not await a.evaluate('__pl.admin.on'), 'too many wrong admin codes locks that address out')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
+async def maintenance():
+    """Maintenance pauses people who aren't playing: their needs stop, then carry on afterwards."""
+    async with world() as W:
+        b = await W.page('pausedB'); await join(b); await b.wait_for_timeout(500)
+        who = await b.evaluate('__pl.net.myId')
+        a = await W.page('maintA'); await join(a)
+        await a.click('#sayBtn'); await a.fill('#sayInput', '/admin secret123456'); await a.press('#sayInput', 'Enter'); await a.wait_for_timeout(800)
+        await a.mouse.click(195, 300); await a.wait_for_timeout(300)
+        send = "(m) => window.__sock.send(JSON.stringify(m))"
+        await b.close(); await a.wait_for_timeout(1500)  # B stops playing: their person is away
+        hunger = f"(async () => {{ ({send})({{ t: 'a.player', id: '{who}' }}); await new Promise((r) => setTimeout(r, 600)); return __pl.adminData.playerData.stats.hunger; }})()"
+        await a.evaluate(f"({send})({{ t: 'a.speed', x: 600, minutes: 5 }})"); await a.wait_for_timeout(300)  # an hour passes every 6 seconds
+        h0 = await a.evaluate(hunger); await a.wait_for_timeout(7000); h1 = await a.evaluate(hunger)
+        expect(h1 < h0 - 1, f'away from the game their hunger drops ({h0:.1f} to {h1:.1f})')
+        await a.evaluate(f"({send})({{ t: 'a.maintenance', on: true, text: 'Back soon' }})"); await a.wait_for_timeout(600)
+        h2 = await a.evaluate(hunger); await a.wait_for_timeout(9000); h3 = await a.evaluate(hunger)
+        expect(abs(h3 - h2) < 0.2, f'during maintenance it stays put ({h2:.1f} to {h3:.1f})')
+        await a.evaluate(f"({send})({{ t: 'a.maintenance', on: false }})"); await a.wait_for_timeout(600)
+        h4 = await a.evaluate(hunger)
+        # (time is sped up 600 times here, so the second or so it takes to ask already costs a little: unpaused, those 9 seconds would have cost about 6)
+        expect(-0.1 < h3 - h4 < 2.5, f'ending maintenance costs them nothing ({h3:.1f} to {h4:.1f})')
+        await a.wait_for_timeout(8000); h5 = await a.evaluate(hunger)
+        expect(h5 < h4 - 1, f'afterwards it carries on dropping ({h4:.1f} to {h5:.1f})')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
+async def reconnect():
+    """Something you finish while the connection is down is sent when it comes back, so it isn't lost."""
+    async with world() as W:
+        a = await W.page('dropA'); await join(a)
+        b = await W.page('dropB'); await join(b); await b.wait_for_timeout(500)
+        item = await a.evaluate("(() => { const p = __pl.player.position; return [...__pl.world.items].sort((x, y) => Math.hypot(x.x - p.x, x.z - p.z) - Math.hypot(y.x - p.x, y.z - p.z))[0].id; })()")
+        await a.evaluate(f"(() => {{ const it = __pl.getItem({item}); __pl.queueTask({{ type: 'walk', x: it.x + 0.6, z: it.z }}); }})()"); await idle(a, 40); await a.wait_for_timeout(800)
+        await a.evaluate("(() => { __pl.net.wanted = false; window.__sock.close(); })()"); await a.wait_for_timeout(400)  # the connection drops (and stays down for now)
+        await a.evaluate(f"__pl.queueTask({{ type: 'pickup', id: {item} }})"); await idle(a, 20); await a.wait_for_timeout(600)
+        expect(await a.evaluate('__pl.outbox.length') == 1 and await b.evaluate(f"!!__pl.getItem({item})"), 'picked up while offline: kept to send later')
+        await a.evaluate("(() => { __pl.net.wanted = true; __pl.goOnline(); })()"); await a.wait_for_timeout(3500)
+        carried = await a.evaluate("Object.values(__pl.you.carry).reduce((s, n) => s + n, 0)")
+        expect(carried == 1 and not await b.evaluate(f"!!__pl.getItem({item})") and not await a.evaluate(f"!!__pl.getItem({item})"), f'sent once the connection is back ({carried} carried)')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'claims': claims, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

@@ -8,10 +8,10 @@ const PLACEABLES = {};
 for (const [kind, raw] of Object.entries(DATA.placeables || {})) {
   const item = Object.keys(ITEMS).find((k) => (DATA.items[k] || {}).places === kind);
   if (!item) { console.warn(`Placeable "${kind}" has no item that places it, so it's left out.`); continue; }
-  const f = raw.fire, s = raw.seats, each = Math.max(1, Number(f && f.secondsEach) || 300) * 1000;
+  const s = raw.seats;
   PLACEABLES[kind] = {
     kind, item, name: raw.name || ITEMS[item].name, buildSeconds: Math.max(1, Number(raw.buildSeconds) || 10), buildVerb: raw.buildVerb || 'Building', solid: Number(raw.solid) || 0.5,
-    fire: f ? { fuel: ITEMS[f.fuel] ? f.fuel : 'stick', each, fuels: { [ITEMS[f.fuel] ? f.fuel : 'stick']: each, ...Object.fromEntries(Object.entries(f.otherFuels || {}).filter(([k, s]) => ITEMS[k] && s > 0).map(([k, s]) => [k, s * 1000])) }, maxFuel: Math.max(1, Math.floor(f.maxFuel) || 10), max: f.maxHours > 0 ? f.maxHours * 3600000 : each * Math.max(1, Math.floor(f.maxFuel) || 10), lightSeconds: Math.max(0.5, Number(f.lightSeconds) || 3) } : null,
+    fire: fireRuleOf(raw.fire, (k) => !!ITEMS[k]), // rules.js: fuels and how long each burns, the most it holds
     seats: s ? { count: Math.max(1, Math.floor(s.count) || 6), distance: Number(s.distance) || 1.2 } : null,
     craftLabel: raw.craftLabel || 'Make', // the tap menu's list of recipes made here (Cook on a campfire)
   };
@@ -20,11 +20,11 @@ for (const [kind, raw] of Object.entries(DATA.placeables || {})) {
 const placed = new Map(); // id -> { id, kind, x, z, rot, built, fuel, lit, at, progress, view }
 
 /* ---------- fire and fuel ---------- */
-const fuelLeft = (th, now = Date.now()) => (th.lit ? Math.max(0, th.fuel - (now - th.at)) : th.fuel); // ms of burning left
+const fuelLeft = (th, now = Date.now()) => fuelLeftAt(th, now); // ms of burning left (rules.js)
 const isLit = (th) => !!th.lit && fuelLeft(th) > 0;
 const fuelIn = (th) => (PLACEABLES[th.kind].fire ? fuelLeft(th) / PLACEABLES[th.kind].fire.each : 0); // in sticks (can be part of one)
 // how many more sticks fit (one that only part fits still goes on; the server works it out the same way)
-const roomFor = (th, kind) => { const f = PLACEABLES[th.kind].fire; const each = f && (f.fuels[kind] || f.each); return f ? Math.max(0, Math.ceil((f.max - fuelLeft(th)) / each - 0.05)) : 0; };
+const roomFor = (th, kind) => { const f = PLACEABLES[th.kind].fire; return f ? fuelRoom(f, fuelLeft(th), kind) : 0; };
 function burnNow(th) { // bring it up to now
   if (!th.lit) return;
   th.fuel = fuelLeft(th);
@@ -57,10 +57,7 @@ const placedName = (th) => {
 };
 
 /* ---------- seats round it ---------- */
-function seatSpot(th, k) {
-  const s = PLACEABLES[th.kind].seats, a = (th.rot || 0) + (k * Math.PI * 2) / s.count;
-  return [th.x + Math.sin(a) * s.distance, th.z + Math.cos(a) * s.distance];
-}
+const seatSpot = (th, k) => seatSpotOf(th, PLACEABLES[th.kind].seats, k); // rules.js, the same on the server
 const seatTaken = (th, k) => [...others.values()].some((o) => o.sit && o.sit[0] === th.id && o.sit[1] === k);
 // the nearest free seat you can stand at, or -1
 function freeSeat(th) {
@@ -290,7 +287,7 @@ $('placeGo').addEventListener('click', finishPlacing);
 $('placeCancel').addEventListener('click', stopPlacing);
 
 /* ---------- doing things with them: tasks in your queue ---------- */
-const sendNow = (msg) => { if (!online()) return; sendMove(); net.sock.send(JSON.stringify(msg)); }; // where you are first (the server checks you're close)
+const sendNow = (msg) => sendAct(msg); // where you are first (the server checks you're close); kept for when the connection comes back (online.js)
 const goNear = (th, then) => approach(th.x, th.z, PLACEABLES[th.kind].solid + 0.35, PLACEABLES[th.kind].solid + 0.75, then);
 const placedSpot = (t) => { const th = placed.get(t.id); return th ? V(th.x, groundY(th.x, th.z) + 0.8, th.z) : null; };
 Object.assign(TASK_KINDS, {
@@ -346,7 +343,7 @@ Object.assign(TASK_KINDS, {
       const th = placed.get(t.id);
       if (!th || (th.built && PLACEABLES[th.kind].fire && isLit(th))) { nextTask(); return; }
       const P = PLACEABLES[th.kind];
-      if (carried() + ITEMS[P.item].weight > SETTINGS.carryCapacity) { showTag('Inventory full', headTop(), 2); nextTask(); return; }
+      if (carried() + ITEMS[P.item].weight > SETTINGS.carryCapacity) { showTag('Too heavy', headTop(), 2); nextTask(); return; }
       goNear(th, () => {
         face(th.x, th.z);
         startAction({ pose: 'bend', seconds: th.built ? 2 : 0.9, mid: () => sendNow({ t: 'unplace', id: th.id }) });
@@ -569,12 +566,11 @@ const claimAt = (x, z) => { for (const th of placed.values()) if (claimOn(th) &&
 const notMineAt = (x, z) => { if (admin.on) return null; const c = claimAt(x, z); return c && c.claim.who !== net.myId ? c : null; };
 // placing a campfire: would lighting it there claim the land? { ok, text } (the server has the final say)
 function claimHere(x, z) {
-  const mine = [...placed.values()].find((th) => claimOn(th) && th.claim.who === net.myId);
-  if (mine) return { ok: false, text: 'Just a fire: you already have a claim' };
-  if (Math.hypot(x - POND.x, z - POND.z) < CLAIMS.spawnRadius + CLAIMS.radius) return { ok: false, text: 'Just a fire: too close to the pond to claim' };
-  const near = [...placed.values()].find((th) => claimOn(th) && Math.hypot(th.x - x, th.z - z) < CLAIMS.radius * 2);
-  if (near) return { ok: false, text: `Just a fire: too close to ${near.claim.name}'s claim` };
-  return { ok: true, text: 'Light it to claim the land round it' };
+  const all = [...placed.values()].filter(claimOn);
+  const no = claimProblem(x, z, { radius: CLAIMS.radius, spawnRadius: CLAIMS.spawnRadius, pond: POND, hasClaim: all.some((th) => th.claim.who === net.myId),
+    claims: all.map((th) => ({ x: th.x, z: th.z, name: th.claim.name })) }); // rules.js, the same on the server
+  if (!no) return { ok: true, text: 'Light it to claim the land round it' };
+  return { ok: false, text: no.why === 'has' ? 'Just a fire: you already have a claim' : no.why === 'pond' ? 'Just a fire: too close to the pond to claim' : `Just a fire: too close to ${no.name}'s claim` };
 }
 // a soft ring on the ground at a claim's edge, following the hills
 const ringMats = { mine: new THREE.MeshBasicMaterial({ color: '#9fd88a', transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide }),

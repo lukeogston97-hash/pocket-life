@@ -4,21 +4,13 @@
 // `at`, so nothing has to tick. It goes out by itself when that runs out, whether or not anyone is watching.
 // These are methods of the World (index.js adds them to it), so `this` is the world.
 import { G, num } from './shared.js';
+import { fireRuleOf, seatSpotOf } from './rules.js';
 
 export const PLACEABLES = G.placeables || {};
-// the fire's rules in ms: one piece of fuel, and the most it holds
-export const fireRule = (kind) => {
-  const f = (PLACEABLES[kind] || {}).fire;
-  if (!f) return null;
-  const each = (f.secondsEach || 300) * 1000, fuels = { [f.fuel]: each }; // every fuel it takes, in ms each (otherFuels: { log: 1800 })
-  for (const [k, s] of Object.entries(f.otherFuels || {})) if (G.items[k] && s > 0) fuels[k] = s * 1000;
-  return { fuel: f.fuel, each, fuels, max: f.maxHours > 0 ? f.maxHours * 3600000 : each * (f.maxFuel || 10) }; // maxHours: the most it holds, in hours of burning
-};
-// where seat k round a placed thing is (the game works it out the same way)
-export function seatAt(th, k) {
-  const s = (PLACEABLES[th.kind] || {}).seats || {}, n = s.count || 6, a = (th.rot || 0) + (k * Math.PI * 2) / n;
-  return [num(th.x + Math.sin(a) * (s.distance || 1.2)), num(th.z + Math.cos(a) * (s.distance || 1.2))];
-}
+// the fire's rules in ms: each fuel it takes, and the most it holds (rules.js, the same as in the game)
+export const fireRule = (kind) => fireRuleOf((PLACEABLES[kind] || {}).fire, (k) => !!G.items[k]);
+// where seat k round a placed thing is (rules.js, the same as in the game)
+export function seatAt(th, k) { const [x, z] = seatSpotOf(th, (PLACEABLES[th.kind] || {}).seats, k); return [num(x), num(z)]; }
 
 export const placedMethods = {
   placedList() { const w = this.world; if (w && !w.placed) w.placed = []; return w ? w.placed : []; },
@@ -33,7 +25,8 @@ export const placedMethods = {
   },
   // bring a fire up to now: burnt fuel is gone, and with none left it's out
   burn(th, now = Date.now()) {
-    if (!th.lit) return th;
+    if (!th.lit) { if (th.claim) { th.claim = null; th.by = null; } return th; } // a claim's fire went out: the land is free and the fire is anyone's
+    if (this.admin.maintenance) { th.at = now; return th; } // maintenance: fires hold their fuel (nobody can tend them)
     th.fuel = Math.max(0, (th.fuel || 0) - (now - (th.at || now)));
     th.at = now;
     if (th.fuel <= 0) { th.lit = false; th.fuel = 0; }

@@ -230,8 +230,10 @@
   "carryCapacity": 30,
   "maxPlaying": 20,
   "respawnMinutes": 5,
+  "worldSize": 100,
+  "walkSpeed": 2.2,
   "age": {
-    "min": 18,
+    "min": 13,
     "max": 90
   },
   "away": {
@@ -246,7 +248,8 @@
     "idleMinutes": 3,
     "near": "pond",
     "sleepBelow": 35,
-    "asleepFloor": 10
+    "asleepFloor": 10,
+    "comeBackSeconds": 15
   },
   "night": {
     "from": 20,
@@ -422,6 +425,7 @@
   },
   "pond": {
     "x": -5.6,
-    "z": -0.9
+    "z": -0.9,
+    "r": 5.0
   }
 }

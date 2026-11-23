@@ -225,7 +225,7 @@ function cantUse(t, planning) {
     // berries you've already queued to pick count as gone
     const queued = planning && b ? allTasks().filter((q) => q.type === 'use' && q.bush === t.bush).length : 0;
     if (b && berriesOn(b) - queued < 1) return queued ? 'No more berries' : `Next ${ITEMS[Object.keys(src.harvest)[0]].name.toLowerCase()} in ${readyIn(b)}`;
-    if ((planning ? plannedWeight() : carried()) + weightOf(src.harvest) > SETTINGS.carryCapacity) return 'Inventory full';
+    if ((planning ? plannedWeight() : carried()) + weightOf(src.harvest) > SETTINGS.carryCapacity) return 'Too heavy';
     return null;
   }
   return useHelps(src) ? null : fullLabel(src);
@@ -235,8 +235,8 @@ function queueTask(t) {
   if (t.type === 'pickup') {
     if (allTasks().some((q) => q.type === 'pickup' && q.id === t.id)) return;
     const w = ITEMS[getItem(t.id).kind].weight;
-    if (w > SETTINGS.carryCapacity) { showTag('Too heavy to carry', headTop(), 2); return; }
-    if (plannedWeight() + w > SETTINGS.carryCapacity) { showTag('Inventory full', headTop(), 2); return; }
+    if (w > SETTINGS.carryCapacity) { showTag('Too heavy', headTop(), 2); return; }
+    if (plannedWeight() + w > SETTINGS.carryCapacity) { showTag('Too heavy', headTop(), 2); return; }
   }
   if (t.type === 'use') {
     const why = cantUse(t, true);
@@ -279,7 +279,7 @@ function nextTask() {
   if (t.type === 'pickup') {
     const item = getItem(t.id);
     if (!item) { nextTask(); return; }
-    if (carried() + ITEMS[item.kind].weight > SETTINGS.carryCapacity) { showTag('Inventory full', headTop(), 2); stopQueue(); return; }
+    if (carried() + ITEMS[item.kind].weight > SETTINGS.carryCapacity) { showTag('Too heavy', headTop(), 2); stopQueue(); return; }
     approach(item.x, item.z, 0.5, 0.75, () => doPickup(item));
   } else if (t.type === 'use') {
     if (t.water) {
@@ -440,7 +440,7 @@ function doUse(t) {
     else {
       applyGives(src.gives);
       spendEnergy('drink');
-      if (online()) net.sock.send(JSON.stringify({ t: 'drink', source: src.id }));
+      sendAct({ t: 'drink', source: src.id });
     }
   } });
 }
@@ -478,7 +478,7 @@ function eatOne(kind) {
   if (!useHelps({ gives })) { showTag(fullLabel({ gives }), headTop(), 2); return; }
   takeFromCarry(kind, 1);
   applyGives(gives);
-  if (online()) net.sock.send(JSON.stringify({ t: 'eat', kind }));
+  sendAct({ t: 'eat', kind });
   drawHeld();
   drawCarry();
 }
@@ -488,7 +488,7 @@ function doCut(t) {
   const def = PLANTS[t.plant], c = plants[t.plant] && plants[t.plant].clumps[t.i];
   if (!def || !c) { nextTask(); return; }
   if (!plantReady(c)) { showTag(`Grows back in ${growsIn(c)}`, headTop(), 2); nextTask(); return; }
-  if (carried() + weightOf(def.gives) > SETTINGS.carryCapacity) { showTag('Inventory full', headTop(), 2); stopQueue(); return; }
+  if (carried() + weightOf(def.gives) > SETTINGS.carryCapacity) { showTag('Too heavy', headTop(), 2); stopQueue(); return; }
   const tool = def.tool && you.carry[def.tool] ? def.tool : null;
   if (tool) { you.tool = tool; drawHeld(); }
   const secs = tool ? def.toolSeconds || def.seconds : def.seconds || 6;
@@ -500,7 +500,7 @@ function doCut(t) {
     for (const [k, n] of Object.entries(def.gives || {})) addToCarry(k, n);
     setPlant(t.plant, t.i, Date.now() + 2 * 3600000); // the server sends the real time it grows back
     spendEnergy('harvest');
-    if (online()) net.sock.send(JSON.stringify({ t: 'cut', plant: t.plant, i: t.i }));
+    sendAct({ t: 'cut', plant: t.plant, i: t.i });
     drawHeld();
     drawCarry();
     showGain(Object.entries(def.gives || {}).map(([k, n]) => `+${countLabel(k, n)}`).join(', '));
@@ -518,7 +518,7 @@ function doChop(t) {
   tagLabel.busy = true;
   startAction({ pose: 'chop', seconds: rule.seconds || 10, tool: CHOP.tool, end: () => {
     spendEnergy('chop');
-    if (online()) net.sock.send(JSON.stringify({ t: 'chop', what: t.what, idx: t.idx, id: t.id, x: t.x, z: t.z }));
+    sendAct({ t: 'chop', what: t.what, idx: t.idx, id: t.id, x: t.x, z: t.z });
   } });
 }
 // mining (0.2.9): swing the pickaxe at a rock or boulder, then the server drops the stones round it
@@ -532,7 +532,7 @@ function doMine(t) {
   tagLabel.busy = true;
   startAction({ pose: 'chop', seconds: rule.seconds || 10, tool: MINE.tool, end: () => {
     spendEnergy('chop');
-    if (online()) net.sock.send(JSON.stringify({ t: 'quarry', what: r.boulder ? 'boulder' : 'rock', idx: t.idx, x: Math.round(player.position.x * 100) / 100, z: Math.round(player.position.z * 100) / 100 }));
+    sendAct({ t: 'quarry', what: r.boulder ? 'boulder' : 'rock', idx: t.idx, x: Math.round(player.position.x * 100) / 100, z: Math.round(player.position.z * 100) / 100 });
   } });
 }
 Object.assign(TASK_KINDS, {
@@ -596,7 +596,7 @@ function taskName(t, now) {
     const src = SOURCES[t.source];
     if (!src) return 'Use';
     if (now) return src.verb;
-    return harvests(src) ? `Harvest ${ITEMS[Object.keys(src.harvest)[0]].name}` : src.action || `Use ${src.name.toLowerCase()}`;
+    return src.action || (harvests(src) ? `Pick ${ITEMS[Object.keys(src.harvest)[0]].plural.toLowerCase()}` : `Use ${src.name.toLowerCase()}`);
   }
   if (t.type === 'drop') return now ? 'Putting down' : `Drop ${countLabel(t.kind, t.n)}`;
   if (t.type === 'cut') return now ? `${(PLANTS[t.plant] || {}).verb || 'Cutting'}` : (PLANTS[t.plant] || {}).action || 'Cut';
