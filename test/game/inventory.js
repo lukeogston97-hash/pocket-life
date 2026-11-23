@@ -18,8 +18,8 @@ function makeItemIcons() {
     const cam = new THREE.PerspectiveCamera(30, 1, 0.01, 20);
     const box = new THREE.Box3(), size = V(), mid = V();
     for (const kind of Object.keys(ITEMS)) {
-      const { model } = buildItem(kind);
-      model.rotation.y = 0.5;
+      const { model, iconY } = buildItem(kind);
+      model.rotation.y = iconY ?? 0.5; // a shape can turn its picture (a log shows its cut end)
       sc.add(model);
       box.setFromObject(model);
       box.getSize(size); box.getCenter(mid);
