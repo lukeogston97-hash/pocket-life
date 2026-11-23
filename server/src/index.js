@@ -240,14 +240,14 @@ export class World extends DurableObject {
     const who = await this.whoFor(m);
     if (!isAdmin && this.admin.banned.includes(who)) { this.boot(ws, { t: 'banned' }); return; }
     if (!isAdmin && this.admin.maintenance && link !== 'test') { this.boot(ws, { t: 'maintenance', text: this.admin.message }); return; }
-    if (min && tooOld(m.v, m.b, min)) { this.boot(ws, { t: 'update', min }); return; }
+    if (min && tooOld(m.v, m.b, min, m.e, (WORLDS.era || {})[link])) { this.boot(ws, { t: 'update', min }); return; }
     if (m.adminCode && !isAdmin) reply({ t: 'adminNo' });
     if (me.who) this.leave(ws, me); // was playing on this connection (Exit to the main menu): their person goes away
     // the world is full: watch from the main menu and wait in line (the admin always gets in)
     const full = !m.watch && !isAdmin && !this.mayPlay(ws, me, who);
     if (m.watch || full) { // the main menu: watch the world go by without a person
       const queued = full ? me.queued || Date.now() : 0;
-      Object.assign(me, { id: me.watch && me.id ? me.id : `w:${crypto.randomUUID().slice(0, 8)}`, who: null, watch: true, queued, turnAt: 0, admin: isAdmin, tag: m.adminTag !== false, v: clean(m.v, 20), b: Math.floor(Number(m.b)) || 0, link, alive: false });
+      Object.assign(me, { id: me.watch && me.id ? me.id : `w:${crypto.randomUUID().slice(0, 8)}`, who: null, watch: true, queued, turnAt: 0, admin: isAdmin, tag: m.adminTag !== false, v: clean(m.v, 20), b: Math.floor(Number(m.b)) || 0, e: Math.floor(Number(m.e)) || 0, link, alive: false });
       this.attach(ws, me);
       const p = this.persons.get(who);
       reply({ t: 'welcome', watch: true, id: me.id, people: this.people(null), world: this.view(), count: this.playing(), speed: this.speed, live: this.live,
@@ -258,7 +258,7 @@ export class World extends DurableObject {
     me.queued = 0; me.turnAt = 0;
     // the same phone in another tab or link: that one closes
     for (const s of this.sockets()) if (s.p.who === who && s.ws !== ws) { s.p.alive = false; this.attach(s.ws, s.p); this.boot(s.ws, { t: 'elsewhere' }); }
-    Object.assign(me, { id: who, who, watch: false, admin: isAdmin, tag: m.adminTag !== false, said: me.said || [], v: clean(m.v, 20), b: Math.floor(Number(m.b)) || 0, link, alive: false });
+    Object.assign(me, { id: who, who, watch: false, admin: isAdmin, tag: m.adminTag !== false, said: me.said || [], v: clean(m.v, 20), b: Math.floor(Number(m.b)) || 0, e: Math.floor(Number(m.e)) || 0, link, alive: false });
     const p = this.persons.get(who);
     let away = null, dead = null;
     if (p && this.alive(p)) {

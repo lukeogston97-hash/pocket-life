@@ -144,19 +144,23 @@ cmd = sys.argv[1] if len(sys.argv) > 1 else ''
 wpath = os.path.join(SERVER, 'worlds.json')
 w = json.load(open(wpath))
 now = f"{data['version']}.{data.get('build', 0)}"
+era = data.get('era', 0)  # version numbers were reset lower once: a newer era beats any number
 wrong = problems(data)
 if cmd in ('test-build', 'check') and wrong:
     sys.exit('game-data.json has mistakes:\n' + '\n'.join(f'- {p}' for p in wrong))
 if cmd == 'check':
     stale = [os.path.relpath(p, root) for p, text in server_files(data).items() if not os.path.exists(p) or open(p, encoding='utf-8').read() != text]
+    if w.get('era', {}).get('test', 0) != era: stale.append(f'server/worlds.json (test games should be on era {era})')
     if w['minVersion'].get('test') != now: stale.append(f'server/worlds.json (test games should be on {now})')
     if stale: sys.exit("The server's copies are out of date: run python3 tools/worlds.py test-build\n" + '\n'.join(f'- {s}' for s in stale))
     sys.exit(0)
 elif cmd == 'test-build':
     for p, text in server_files(data).items(): open(p, 'w', encoding='utf-8').write(text)
     w['minVersion']['test'] = now
+    w.setdefault('era', {})['test'] = era
 elif cmd == 'release':
     w['minVersion']['release'] = now  # a patch (new build) moves everyone on too
+    w.setdefault('era', {})['release'] = era
 else:
     sys.exit(__doc__)
 json.dump(w, open(wpath, 'w'), indent=2); open(wpath, 'a').write('\n')

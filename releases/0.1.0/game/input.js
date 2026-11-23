@@ -581,8 +581,8 @@ function updatePlayer(dt) {
 }
 
 /* ---------- a faint glow round what you're about to click ---------- */
-// Loose items (sticks, stones, tools...) and placed things (campfires) get a soft light outline when the mouse is
-// over them, and whatever the tap menu is open for stays outlined. The outline is a slightly bigger copy of the
+// Loose items (sticks, stones, tools...) get a soft light outline when the mouse is over them, and a loose item
+// the tap menu is open for stays outlined. Only loose items (Luke, 23 Nov 2026): not campfires, trees, rocks or bushes. The outline is a slightly bigger copy of the
 // thing's shapes, drawn from the inside only, so just a thin rim shows round the edge.
 const GLOW_MAT = new THREE.MeshBasicMaterial({ color: 0xfff1cf, transparent: true, opacity: 0.5, side: THREE.BackSide, depthWrite: false, fog: false });
 const GLOW_PAD = 0.045; // metres the rim sticks out
@@ -615,13 +615,11 @@ function itemGlow(kind) {
 function glowViewOf(t) {
   if (!t) return null;
   if (t.kind === 'item') { const v = itemViews.get(t.item.id); return v ? { view: v, kind: t.item.kind } : null; }
-  if (t.kind === 'placed' && t.th.view) return { view: t.th.view };
   return null;
 }
 function clearGlow() {
   if (!glowShell) return;
   glowShell.parent && glowShell.parent.remove(glowShell);
-  if (glowShell.userData.rims) for (const r of glowShell.userData.rims) r.parent && r.parent.remove(r);
   glowOn = glowShell = null;
 }
 function showGlow(g) {
@@ -629,20 +627,9 @@ function showGlow(g) {
   clearGlow();
   if (!g) return;
   glowOn = g.view;
-  if (g.kind) { // a loose item: its outline model sits on it
-    glowShell = itemGlow(g.kind);
-    glowShell.userData.view = g.view;
-    g.view.add(glowShell);
-  } else { // a placed thing: a rim on each of its shapes, so moving pieces and flames keep up
-    const rims = [];
-    g.view.traverse((o) => { if (glowable(o) && o.visible) rims.push(o); });
-    glowShell = new THREE.Group();
-    glowShell.userData = { view: g.view, rims: rims.map((o) => {
-      const r = new THREE.Mesh(o.geometry, GLOW_MAT);
-      r.matrixAutoUpdate = false; r.matrix.copy(glowMatrix(o.geometry));
-      o.add(r); return r;
-    }) };
-  }
+  glowShell = itemGlow(g.kind); // its outline model sits on it
+  glowShell.userData.view = g.view;
+  g.view.add(glowShell);
 }
 // called every frame: works out what's under the mouse now and then (the camera may have moved under it)
 function updateGlow(dt) {

@@ -65,12 +65,12 @@ export const guardMethods = {
     if (!L) return true;
     const mine = `${me.v}.${me.b || 0}`, V = WORLDS.minVersion || {};
     if (mine !== V.test && mine !== V.release) return false;
-    if (!L.v || tooOld(L.v, L.b, mine)) return true;
+    if (!L.v || tooOld(L.v, L.b, mine, L.e, me.e)) return true;
     return !!me.admin && !L.admin;
   },
   takeLayout(me, m) {
     const w = this.world;
-    w.layout = { ...this.cleanLayout(m), v: me.v || '', b: me.b || 0, admin: !!me.admin };
+    w.layout = { ...this.cleanLayout(m), v: me.v || '', b: me.b || 0, e: me.e || 0, admin: !!me.admin };
     for (const [key, at] of Object.entries(w.moved || {})) { // bushes the admin moved stay where they were moved to
       const [what, i] = key.split(':');
       if (what === 'bush' && w.layout.bushes[i]) w.layout.bushes[i] = at;

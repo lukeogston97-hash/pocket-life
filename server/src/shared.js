@@ -28,7 +28,10 @@ export const REST = (G.needs || []).find((s) => s.id === 'rest');
 export const BERRY_SRC = Object.values(G.sources || {}).find((s) => s.harvest) || {}; // the berry bush
 // '0.0.6' with build 5 is [0,0,6,5]; a minVersion of '0.0.6' only checks the first three
 export const parts = (v) => String(v || '0').split('.').map((n) => parseInt(n, 10) || 0);
-export function tooOld(v, b, min) {
+// era: version numbers were reset lower once (0.3.8 became 0.1.0, 23 Nov 2026). Any game from an older era is too old,
+// whatever its numbers. era (e) is in game-data.json; worlds.json keeps the era each link is on.
+export function tooOld(v, b, min, e = 0, minEra = 0) {
+  if ((Number(e) || 0) !== (Number(minEra) || 0)) return (Number(e) || 0) < (Number(minEra) || 0);
   const have = parts(v), want = parts(min);
   have[3] = Number(b) || 0;
   for (let i = 0; i < want.length; i++) { const a = have[i] || 0; if (a !== want[i]) return a < want[i]; }

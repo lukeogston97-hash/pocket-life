@@ -1,13 +1,13 @@
 # Working on it: versions, testing, releasing, checks
 
 - Build in SMALL steps: Luke asked for just a couple of things per update from 0.0.7 on. After each change, tell Luke in a few short lines what changed and what to try on his phone.
-- Versions are Major.Minor.Patch (Luke, 23 Nov 2026: numbers were climbing too fast). Kept going from 0.3.x, since going back down would break the check that moves old games onto the newest version.
+- Versions are Major.Minor.Patch (Luke, 23 Nov 2026: numbers were climbing too fast). Luke then had them reset lower the same day: 0.3.8 became 0.1.0, and everything before is folded into one "0.0.x" early builds entry in What's new. game-data.json has "era" (now 1) so games from before the reset still count as older: the server checks era first (worlds.json keeps each link's era, tools/worlds.py sets it). Only raise era if numbers are ever reset lower again. tools/release.sh keeps the newest 3 copies by when they were released, not by number.
   - Major: 1.0.0 is the full game launch. Stay on 0.x until then.
-  - Minor: a big new update or content stage (for example farming, storage and shelter, hunting). Next one is 0.4.0. Only Luke decides when a minor bump happens.
-  - Patch: one per release to players, not one per test build. It can go past 9 (0.3.10, 0.3.11).
-  - Test builds: only "build" goes up (0.3.6 test 1, test 2...). After a release, the next round starts on the next patch with build 1.
-  - It's only in game-data.json: "version" and "build". The page shows it, like "v0.3.6 (test 2)".
-- Dev log (What's new): one entry per version, and test builds add their notes to that same entry. Keep notes short. When a minor version is finished, fold its patches into one entry like "0.3.0 to 0.3.9" with a few highlights.
+  - Minor: a big new update or content stage (for example farming, storage and shelter, hunting). Next one is 0.2.0. Only Luke decides when a minor bump happens.
+  - Patch: one per release to players, not one per test build. It can go past 9 (0.1.10, 0.1.11).
+  - Test builds: only "build" goes up (0.1.0 test 1, test 2...). After a release, the next round starts on the next patch with build 1.
+  - It's only in game-data.json: "version" and "build". The page shows it, like "v0.1.0 (test 2)".
+- Dev log (What's new): one entry per version, and test builds add their notes to that same entry. Keep notes short. When a minor version is finished, fold its patches into one entry like "0.1.0 to 0.1.9" with a few highlights.
 - To test needs quickly, raise settings.needsSpeed (60 makes an hour pass in a minute). Put it back to 1 before pushing.
 - game-data.json is loaded with fetch, so opening index.html straight from the disk won't work. Test with a local server (python3 -m http.server) or the test link.
 - Test first, then release. Make every change in the test/ folder, push it to main, and tell Luke to try it on the test link: https://pocketlife.pages.dev/test/

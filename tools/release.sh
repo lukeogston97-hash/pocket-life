@@ -17,7 +17,11 @@ python3 tools/worlds.py release
 # keep only the newest few release copies (enough to roll back), so the project stays light
 python3 -c "
 import os, shutil
-vs = sorted((d for d in os.listdir('releases') if os.path.isdir('releases/' + d)), key=lambda v: [int(x) for x in v.split('.') if x.isdigit()])
+import subprocess
+def when(v):  # when that copy was first committed (the new one isn't yet, so it's newest)
+    t = subprocess.run(['git', 'log', '--diff-filter=A', '--format=%ct', '--', 'releases/' + v + '/game-data.json'], capture_output=True, text=True).stdout.split()
+    return int(t[-1]) if t else 1 << 40
+vs = sorted((d for d in os.listdir('releases') if os.path.isdir('releases/' + d)), key=when)
 for v in vs[:-3]: shutil.rmtree('releases/' + v)
 "
 echo "Released $VERSION (copy kept in releases/$VERSION): https://pocketlife.pages.dev/"
