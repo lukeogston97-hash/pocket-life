@@ -19,7 +19,7 @@ Branch: `admin-mode`. Never push unfinished work to main (the server deploys fro
 
 ## Plan (tick as done)
 - [x] 1. Read the code (server, game admin/online/input/camera/screens, tests)
-- [ ] 2. Server: admin as watcher, old /admin removed, tools by target
+- [~] 2. Server: admin as watcher, old /admin removed (DONE, proven). Tools by target: a.movePerson and a.setStats DONE and proven; the rest of the new tools are DEFERRED until the client works (see 23:10 note)
 - [ ] 3. Game: entry (5 taps + password), free camera PC + phone, exit
 - [ ] 4. Game: overlay panels with all current tools
 - [ ] 5. Extras: follow/move people, edit stats/bag, claims and fires, activity log
@@ -44,3 +44,10 @@ Branch: `admin-mode`. Never push unfinished work to main (the server deploys fro
   - The 20 `me.admin` reads in actions.js are left in place on purpose (less churn in player actions); they can no longer be true for a player.
   - Lesson: my first grep for admin flags filtered out lines containing `this.admin.` and so missed admin.js:96. Re-grepped with nothing filtered.
 - NEXT: server tools that need a target instead of the admin's own person: a.movePerson, edit stats/age, bag set, rename, message one player, claims list/remove, fire light/out/fuel, activity log. Extend the raw check as each lands.
+- 23:10 Server tools added and saved: a.movePerson { id, x, z } and a.setStats { id, stats, age }. Check `admin_people` (19 assertions, passes, 99 s) uses a real player page plus a raw admin connection.
+  - Proven: an online person's own game goes to the new spot and stays; refusals for the pond (rough circle, the server only knows the pond's radius) and off the map; needs typed in reach their game; health can't be typed below 1 (my choice: no killing through a number box, Remove from world is its own button); age changes, never below 13 (I allow up to 120, since birthdays can pass 90: my choice, tell Luke); someone AWAY is moved and not snapped back.
+  - Someone away is NOT pinned where they are put: they decide again by themselves (away.js decide). The admin's answer says so. Tonight the test ran at night in the world's clock, so they lay down and slept in place. The daytime branch (stroll back toward the pond or their claim) is read from the code, NOT observed in a test: the server uses real Darwin time and the check can't change it.
+  - NOT tested: moving someone sitting by a fire, or someone 'asleep' after a day away; typing Rest to 0 (collapse).
+  - Tool answers arrive as t:'admin' with words in `text` (never 'adminDone': adminState's t wins the spread). Checks use the `ask()` helper, which waits for the answer. A fixed pause raced it: replies took 200 to 700 ms here. "Nothing comes back" checks wait QUIET = 1500 ms; that is longer than seen, not a guarantee. The firm proof that a player is never admin is tools/tests/stale_admin.mjs (no timing) plus admin_login.
+  - Lesson: when a reply seemed missing I guessed twice (an exception, then the wording) before measuring. A one-run diagnostic showed the real cause and a wording bug. Measure first.
+- 23:10 PLAN CHANGE (time): the client is the biggest piece and nothing can be published without it. Order from here: step 3 (entry, password, free camera, exit) proven in a real page, then step 4 (existing tools on the new screen), then rewrite the 8 broken checks, THEN the remaining extras and live item editing if time allows. If the whole update can't be finished and checked, publish nothing and tell Luke exactly what is done.

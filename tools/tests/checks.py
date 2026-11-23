@@ -852,6 +852,7 @@ async def fishing():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
+QUIET = 1500  # ms to wait when a check says "nothing comes back": a reply has taken up to about 700 ms here, so shorter proves nothing
 RAW = """(() => {
   // a bare connection to the server (no game), for checks about who the server lets do what
   window.__raw = window.__raw || {};
@@ -882,7 +883,7 @@ async def admin_login():
         ev = pg.evaluate
         # someone just watching from the main menu can't use the admin's tools
         await ev("conn('watcher', { watch: true })")
-        await ev("say('watcher', { t: 'a.state' })"); await pg.wait_for_timeout(400)
+        await ev("say('watcher', { t: 'a.state' })"); await pg.wait_for_timeout(QUIET)
         expect(len(await ev("heard('watcher', 'welcome')")) == 1 and not await ev("heard('watcher', 'admin').length"), "a plain watcher isn't the admin")
         # admin mode: watching, with the code
         await ev("conn('boss', { watch: true, admin: true, adminCode: 'secret123456' })")
@@ -890,17 +891,17 @@ async def admin_login():
         expect(len(on) == 1 and on[0].get('on') is True, f'watching with the right code is the admin ({on})')
         hi = (await ev("heard('boss', 'welcome')"))[0]
         expect(hi.get('watch') is True and str(hi.get('id', '')).startswith('w:') and not hi.get('me'), f"the admin has no person: a watcher ({hi.get('id')})")
-        await ev("say('boss', { t: 'a.announce', text: 'hello from admin' })"); await pg.wait_for_timeout(500)
-        expect([m.get('text') for m in await ev("heard('watcher', 'announce')")] == ['hello from admin'], "the admin's tools work from admin mode")
+        told = await ev("ask('boss', { t: 'a.announce', text: 'hello from admin' })"); await pg.wait_for_timeout(300)
+        expect(told == 'Message sent' and [m.get('text') for m in await ev("heard('watcher', 'announce')")] == ['hello from admin'], f"the admin's tools work from admin mode (\"{told}\")")
         # someone playing a person is never the admin, even with the right code
         await ev("conn('player', { adminCode: 'secret123456', admin: true })")
         await ev("say('player', { t: 'create', name: 'Pat', age: 30, look: {} })"); await pg.wait_for_timeout(600)
         expect(len(await ev("heard('player', 'me')")) >= 1, 'they have a person')
-        await ev("say('player', { t: 'a.state' })"); await ev("say('player', { t: 'a.announce', text: 'from a player' })"); await pg.wait_for_timeout(500)
+        await ev("say('player', { t: 'a.state' })"); await ev("say('player', { t: 'a.announce', text: 'from a player' })"); await pg.wait_for_timeout(QUIET)
         expect(not await ev("heard('player', 'admin').length") and not await ev("heard('player', 'adminDone').length"), 'a player with the right code is not the admin')
         expect(len(await ev("heard('watcher', 'announce')")) == 1, "a player can't use the admin's tools")
         # the old way in (typed in the Say box) is gone
-        await ev("say('player', { t: 'adminLogin', code: 'secret123456' })"); await pg.wait_for_timeout(400)
+        await ev("say('player', { t: 'adminLogin', code: 'secret123456' })"); await pg.wait_for_timeout(QUIET)
         expect(not await ev("heard('player', 'admin').length"), 'the old /admin login does nothing')
         # a wrong code is refused
         await ev("conn('guess', { watch: true, admin: true, adminCode: 'wrong-one' })")
@@ -925,12 +926,12 @@ async def admin_people():
         who = await a.evaluate('__pl.net.myId')
         at = lambda: a.evaluate('[__pl.player.position.x, __pl.player.position.z]')
         # (what a tool answers: the server sends it as an 'admin' message with the words in text, as it always has)
-        last = lambda: ev("(() => { const d = heard('boss', 'admin'); return d.length ? d[d.length - 1].text || '' : ''; })()")
+        ask = lambda m: ev(f"ask('boss', {m})")
         x0, z0 = await at()
         # move them 20 m away: their own game goes there, and stays there
-        await ev(f"say('boss', {{ t: 'a.movePerson', id: '{who}', x: 22, z: 14 }})"); await boss.wait_for_timeout(900)
+        told = await ask(f"{{ t: 'a.movePerson', id: '{who}', x: 22, z: 14 }}"); await a.wait_for_timeout(600)
         x1, z1 = await at()
-        expect('moved' in await last(), f'the admin is told it worked ("{await last()}")')
+        expect(told.endswith(' moved'), f'the admin is told it worked ("{told}")')
         expect(abs(x1 - 22) < 1.5 and abs(z1 - 14) < 1.5, f'their game put them where the admin moved them ({x1:.1f}, {z1:.1f}; was {x0:.1f}, {z0:.1f})')
         await a.wait_for_timeout(3500)  # (their game says where it is now and then: it mustn't walk them back)
         x2, z2 = await at()
@@ -939,28 +940,30 @@ async def admin_people():
         pg = await page()
         expect(abs(pg['x'] - 22) < 1.5 and abs(pg['z'] - 14) < 1.5, f"the server has them there too ({pg['x']}, {pg['z']})")
         # not into the pond, not off the map
-        await ev(f"say('boss', {{ t: 'a.movePerson', id: '{who}', x: -5.6, z: -0.9 }})"); await boss.wait_for_timeout(500)
-        expect('pond' in await last(), f'not into the pond ("{await last()}")')
-        await ev(f"say('boss', {{ t: 'a.movePerson', id: '{who}', x: 400, z: 0 }})"); await boss.wait_for_timeout(500)
-        expect('outside' in await last(), f'not off the map ("{await last()}")')
+        told = await ask(f"{{ t: 'a.movePerson', id: '{who}', x: -5.6, z: -0.9 }}")
+        expect('pond' in told, f'not into the pond ("{told}")')
+        told = await ask(f"{{ t: 'a.movePerson', id: '{who}', x: 400, z: 0 }}")
+        expect('outside' in told, f'not off the map ("{told}")')
+        await a.wait_for_timeout(600)
         x3, z3 = await at()
         expect(abs(x3 - x2) < 0.5 and abs(z3 - z2) < 0.5, 'a refused move leaves them where they were')
         # needs and age, typed in
-        await ev(f"say('boss', {{ t: 'a.setStats', id: '{who}', stats: {{ hunger: 12, thirst: 34.5, health: 0, bogus: 50 }}, age: 41 }})"); await boss.wait_for_timeout(900)
+        told = await ask(f"{{ t: 'a.setStats', id: '{who}', stats: {{ hunger: 12, thirst: 34.5, health: 0, bogus: 50 }}, age: 41 }}"); await a.wait_for_timeout(600)
+        expect(told.endswith(' changed'), f'the admin is told it worked ("{told}")')
         st = await a.evaluate('__pl.you.stats')
         expect(abs(st['hunger'] - 12) < 1 and abs(st['thirst'] - 34.5) < 1, f"their game shows the typed needs (hunger {st['hunger']:.1f}, thirst {st['thirst']:.1f})")
         expect(st['health'] >= 1 and 'bogus' not in st, f"health can't be typed down to death, and unknown needs are ignored (health {st['health']})")
         expect(not await a.evaluate('__pl.you.dead'), 'they are still alive')
         pg = await page()
         expect(pg['age'] == 41 and await a.evaluate('__pl.you.look.age') == 41, f"age changed for the admin and for them ({pg['age']})")
-        await ev(f"say('boss', {{ t: 'a.setStats', id: '{who}', age: 5 }})"); await boss.wait_for_timeout(600)
+        await ask(f"{{ t: 'a.setStats', id: '{who}', age: 5 }}")
         expect((await page())['age'] == 13, 'age never goes below 13')
         # someone away: they go to the menu, their person carries on by themselves, and can still be moved
         await a.evaluate("document.getElementById('menuBtn').click()"); await a.wait_for_timeout(300)
         await a.click('#exitBtn'); await a.wait_for_timeout(1500)
         pg = await page()
         expect(pg['state'] == 'away', f"they're away now ({pg['state']})")
-        told = await ev(f"ask('boss', {{ t: 'a.movePerson', id: '{who}', x: 30, z: -25 }})")
+        told = await ask(f"{{ t: 'a.movePerson', id: '{who}', x: 30, z: -25 }}")
         pg = await page()
         expect(abs(pg['x'] - 30) < 0.6 and abs(pg['z'] + 25) < 0.6 and pg['state'] in ('away', 'online'), f"someone away is moved too ({pg['x']}, {pg['z']}, {pg['state']})")
         expect('carry on by themselves' in told, f'and the admin is told they are not pinned there ("{told}")')
