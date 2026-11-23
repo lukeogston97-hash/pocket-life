@@ -18,8 +18,8 @@ function makeItemIcons() {
     const cam = new THREE.PerspectiveCamera(30, 1, 0.01, 20);
     const box = new THREE.Box3(), size = V(), mid = V();
     for (const kind of Object.keys(ITEMS)) {
-      const { model } = buildItem(kind);
-      model.rotation.y = 0.5;
+      const { model, iconY } = buildItem(kind);
+      model.rotation.y = iconY ?? 0.5; // a shape can turn its picture (a log shows its cut end)
       sc.add(model);
       box.setFromObject(model);
       box.getSize(size); box.getCenter(mid);
@@ -176,17 +176,23 @@ function cantMake(r) {
   return '';
 }
 const canMake = (r) => !cantMake(r);
+// a recipe with "seconds" (cooking) takes that long, and uses its things up when it finishes (if it still can be made)
 function make(r) {
   if (!canMake(r)) return;
-  spendEnergy('craft');
-  for (const [k, n] of Object.entries(r.needs)) takeFromCarry(k, n);
-  for (const [k, n] of Object.entries(r.makes)) addToCarry(k, n);
-  sendAct({ t: 'craft', id: r.id });
+  const finish = () => {
+    if (!canMake(r)) return;
+    spendEnergy('craft');
+    for (const [k, n] of Object.entries(r.needs)) takeFromCarry(k, n);
+    for (const [k, n] of Object.entries(r.makes)) addToCarry(k, n);
+    sendAct({ t: 'craft', id: r.id });
+    if (bagOpen()) drawBag();
+    drawHeld();
+    drawCarry();
+    showGain(`Made ${recipeName(r)}`);
+  };
+  if (r.seconds) { startAction({ pose: 'kneel', seconds: r.seconds, end: finish }); return; }
   startAction({ pose: 'kneel', seconds: 1.6 });
-  if (bagOpen()) drawBag();
-  drawHeld();
-  drawCarry();
-  showGain(`Made ${recipeName(r)}`);
+  finish();
 }
 function recipeCard(r) {
   const makes = Object.keys(r.makes)[0], it = ITEMS[makes];

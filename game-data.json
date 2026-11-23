@@ -1,5 +1,5 @@
 {
-  "version": "0.3.4",
+  "version": "0.3.5",
   "build": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -907,6 +907,13 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.3.5",
+      "date": "2026-11-23",
+      "notes": [
+        "Nicer sticks (an arched branch with a snapped end and twigs), stones (chunky rocks), berries (a cap and a stem) and logs (lumpy, with bark marks, a branch stub and growth rings on the cut ends)."
+      ]
+    },
     {
       "version": "0.3.4",
       "date": "2026-11-23",
