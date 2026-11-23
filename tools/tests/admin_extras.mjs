@@ -222,6 +222,22 @@ list = (await S.ask(again, { t: 'a.log' })).find((m) => m.t === 'adminLog').list
 expect(list.length === 1 && /^Reset everything/.test(list[0].text), 'one line is left, saying so', list.map((l) => l.text).join(' | '));
 expect(store.get('activity').length === 1, 'in storage too');
 
+console.log('F. leaving admin mode: the same connection says hello again as a plain watcher');
+const boss = S.sock({ from: 'addr-boss' });
+await S.ask(boss, hello('boss-pc', { watch: true, admin: true, adminCode: 'secret123456' }));
+expect(boss.att.admin === true && (await S.ask(boss, { t: 'a.state' })).some((m) => m.t === 'admin'), 'in admin mode its tools answer');
+await new Promise((r) => setTimeout(r, 2100)); // (one connection may say hello about every 2 seconds)
+const afterExit = await S.ask(boss, hello('boss-pc', { watch: true }));
+expect(boss.att.admin === false && boss.att.watch === true && afterExit.some((m) => m.t === 'welcome') && !afterExit.some((m) => m.t === 'admin'), 'after Exit it is a plain watcher: welcomed, with no admin numbers');
+S.w.world = { format: 1, nextId: 1, items: [], bushes: [], graves: [], spots: {}, caps: {}, holds: 5, regrowMs: 0, placed: [] }; // (E reset everything: a world and a person to protect)
+S.w.persons.set('zed', person('zed', 'Zed', 0, 5));
+const quiet = [];
+for (const m of [{ t: 'a.state' }, { t: 'a.log' }, { t: 'a.players' }, { t: 'a.list' }, { t: 'a.announce', text: 'still here?' }, { t: 'a.removePerson', id: 'zed' }, { t: 'a.reset', all: true }]) quiet.push(...(await S.ask(boss, m)));
+expect(quiet.length === 0 && S.w.world !== null && S.w.persons.has('zed') && S.w.alive(S.w.persons.get('zed')), 'and none of the admin tools answer it any more: Reset everything and Remove person from it do nothing', `${quiet.length} answers, world ${S.w.world ? 'still there' : 'GONE'}, Zed ${S.w.persons.has('zed') ? 'still there' : 'GONE'}`);
+const heard = S.sock({ id: 'w:7', who: null, watch: true, admin: false, from: 'addr-w' });
+await S.ask(boss, { t: 'a.announce', text: 'still here?' });
+expect(!heard.got.some((m) => m.t === 'announce'), 'nor does anyone hear a message from it');
+
 const failed = results.filter((ok) => !ok).length;
 console.log(`\n${results.length - failed} of ${results.length} as they should be${failed ? `, ${failed} NOT` : ''}`);
 process.exit(failed ? 1 : 0);

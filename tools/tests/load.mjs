@@ -29,7 +29,7 @@ const say = (s, m) => w.webSocketMessage(s, JSON.stringify(m));
 const last = (s, t) => { for (let i = s.got.length - 1; i >= 0; i--) { const m = JSON.parse(s.got[i]); if (m.t === t) return m; } return null; };
 const rnd = (a, b) => a + Math.random() * (b - a), pt = () => [+rnd(-46, 46).toFixed(2), +rnd(-46, 46).toFixed(2)];
 const DATA = JSON.parse(await readFile(new URL('../../test/game-data.json', import.meta.url)));
-const hello = (s, pid, extra = {}) => say(s, { t: 'hello', proto: 2, watch: false, v: DATA.version, b: DATA.build, link: 'test', pid, ...extra });
+const hello = (s, pid, extra = {}) => say(s, { t: 'hello', proto: 2, watch: false, v: DATA.version, b: DATA.build, e: DATA.era, link: 'test', pid, ...extra }); // (e: the era, or the server sends the game away to update)
 const name = (i) => 'Bo' + [...String(i)].map((d) => 'abcdefghij'[d]).join('');
 // the first player lays the world out
 const first = sock(); await hello(first, 'first');
@@ -39,7 +39,7 @@ await say(first, { t: 'seed', items: Array.from({ length: ITEMS }, (_, i) => ({ 
   layout: { bushes: Array.from({ length: 30 }, pt), shore: Array.from({ length: 48 }, (_, k) => [+(-5.6 + Math.cos(k) * 6).toFixed(2), +(-0.9 + Math.sin(k) * 5).toFixed(2)]), open: Array.from({ length: 600 }, pt),
     trees: Array.from({ length: 1133 }, pt), rocks: Array.from({ length: 66 }, pt), oldStumps: [], plants: { tallGrass: Array.from({ length: 40 }, pt) } } });
 // the items the check asked for beyond what a new world starts with (the server only takes startInWorld of each): added by the admin
-if (ITEMS > 105) { const a = sock(); await hello(a, 'adminbot', { adminCode: 'secret123456' }); await say(a, { t: 'create', name: 'Boss', age: 30, look: {} });
+if (ITEMS > 105) { const a = sock(); await hello(a, 'adminbot', { watch: true, admin: true, adminCode: 'secret123456' }); // (admin mode: the admin only watches, and is never a player)
   for (let i = 0; i < ITEMS - 105; i += 50) await say(a, { t: 'a.add', kind: kinds[(i / 50) % 2], n: 50, x: pt()[0], z: pt()[1] }); a.closed = true; await w.webSocketClose(a); }
 await say(first, { t: 'create', name: 'First', age: 30, look: {} });
 // people who played and went away
