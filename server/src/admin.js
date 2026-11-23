@@ -1,7 +1,7 @@
 // The admin player (Luke): every 'a.' message, from maintenance to Reset the world.
 // The Admin panel's tabs: Server (maintenance, announce, speed), Players (find someone, their page: stats, bag,
 // give and take, past people), Inbox (feedback and reports, marked Done and cleared after 30 days), World (counts,
-// regrow everything, clear loose items, reset the world or everything), Settings (live settings, live.js). Single things in the world
+// regrow everything, clear loose items, restore an earlier time (restore.js), reset the world or everything), Settings (live settings, live.js). Single things in the world
 // (trees, rocks, berry bushes, campfires, loose items) are moved, regrown and removed from their tap menus.
 // These are methods of the World (index.js adds them to it), so `this` is the world.
 import { FILTER, G, starText, MINUTE, HOUR, clean, num, kindOk, addCarry, takeCarry, ageOf, pickRandom } from './shared.js';
@@ -74,7 +74,7 @@ export const adminMethods = {
     switch (m.t) {
       case 'a.state': return reply(this.adminState(me)); // the Admin panel was opened: fresh numbers
       case 'a.tag':
-        me.tag = !!m.on; ws.serializeAttachment(me);
+        me.tag = !!m.on; this.attach(ws, me);
         this.send({ t: 'badge', id: me.id, on: me.tag }, me.id);
         return done(me.tag ? 'Admin tag on' : 'Admin tag off');
       case 'a.maintenance': { // on: release-link players see Back soon, and everyone not playing is paused (persons.js paused, thaw)
@@ -241,7 +241,7 @@ export const adminMethods = {
         this.world = null;
         await this.ctx.storage.delete('world');
         for (const { ws: s, p: them } of this.sockets()) { // everyone rejoins and the first one lays it out fresh
-          if (m.all) { them.alive = false; s.serializeAttachment(them); } // nobody has a person any more
+          if (m.all) { them.alive = false; this.attach(s, them); } // nobody has a person any more
           this.boot(s, { t: 'reset', all: !!m.all });
         }
         return;
@@ -335,6 +335,9 @@ export const adminMethods = {
         this.send({ t: 'gone', id: m.id }, null);
         return;
       }
+
+      /* ---------- Restore: the whole world back to an earlier time, or undo the last restore (restore.js) ---------- */
+      case 'a.restore': return this.restore(me, m, reply);
 
       /* ---------- Settings: live numbers (live.js) ---------- */
       case 'a.live':

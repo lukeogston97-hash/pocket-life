@@ -4,7 +4,7 @@ import { G, HOUR, advanceStats, posAt, num, AWAY, REST, ageOf, wearList } from '
 
 export const personsMethods = {
   alive(p) { return p && p.state === 'alive'; },
-  isOnline(who) { return !!who && !!this.sockets().find(({ p }) => p.who === who && p.alive); },
+  isOnline(who) { const s = this.socketOf(who); return !!(s && s.p.alive); }, // (socketOf prefers the connection still playing them)
   // online, away, asleep (a day away: needs drop slowly to a floor) or sleeping (resting, by choice or when tired)
   stateOf(p) { return p.asleep && !this.isOnline(p.who) ? 'asleep' : p.sleeping ? 'sleeping' : this.isOnline(p.who) ? 'online' : 'away'; },
   // what everyone else is told about a person
@@ -72,7 +72,7 @@ export const personsMethods = {
     this.send({ t: 'leave', id: p.who }, null);
     const s = this.socketOf(p.who);
     if (s) {
-      s.p.alive = false; s.ws.serializeAttachment(s.p);
+      s.p.alive = false; this.attach(s.ws, s.p);
       try { s.ws.send(JSON.stringify({ t: 'died', name: p.name, age: ageOf(p), cause, away: false, had: false })); } catch (err) { /* gone */ }
     }
   },

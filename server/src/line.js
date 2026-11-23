@@ -20,8 +20,8 @@ export const lineMethods = {
     for (const [i, s] of this.line().entries()) {
       if (spots > 0) {
         spots -= 1;
-        if (!s.p.turnAt) { s.p.turnAt = now; s.ws.serializeAttachment(s.p); }
-        if (now - s.p.turnAt > TURN_MS) { s.p.queued = 0; s.ws.serializeAttachment(s.p); try { s.ws.send(JSON.stringify({ t: 'line', place: 0, missed: true })); } catch (err) { /* gone */ } continue; } // didn't come: out of the line
+        if (!s.p.turnAt) { s.p.turnAt = now; this.attach(s.ws, s.p); }
+        if (now - s.p.turnAt > TURN_MS) { s.p.queued = 0; this.attach(s.ws, s.p); try { s.ws.send(JSON.stringify({ t: 'line', place: 0, missed: true })); } catch (err) { /* gone */ } continue; } // didn't come: out of the line
         try { s.ws.send(JSON.stringify({ t: 'turn' })); } catch (err) { /* gone */ }
       } else {
         try { s.ws.send(JSON.stringify({ t: 'line', place: i + 1 - free })); } catch (err) { /* gone */ }

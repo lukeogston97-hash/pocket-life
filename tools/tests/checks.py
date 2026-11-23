@@ -620,6 +620,58 @@ async def maintenance():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
+async def restore():
+    """Admin, Restore: the whole world goes back to an earlier time (bags and the ground too), everyone rejoins by themselves, and Undo puts it back."""
+    async with world() as W:
+        b = await W.page('restoreB'); await join(b)
+        a = await W.page('restoreA'); await join(a)
+        await a.click('#sayBtn'); await a.fill('#sayInput', '/admin secret123456'); await a.press('#sayInput', 'Enter'); await a.wait_for_timeout(800)
+        await a.mouse.click(195, 300); await a.wait_for_timeout(300)
+        send = "(m) => window.__sock.send(JSON.stringify(m))"
+        logs = "__pl.world.items.filter((it) => it.kind === 'log').length"
+        sticks = '(__pl.you.carry.stick || 0)'
+        before = await b.evaluate(sticks)
+        t0 = await a.evaluate('Date.now()'); await a.wait_for_timeout(1200)
+        # after t0: B is given 5 sticks and 3 logs go on the ground
+        bid = await b.evaluate('__pl.net.myId')
+        await a.evaluate(f"({send})({{ t: 'a.give', id: {json.dumps(bid)}, kind: 'stick', n: 5 }})")
+        await a.evaluate(f"({send})({{ t: 'a.add', kind: 'log', n: 3, x: __pl.player.position.x + 2, z: __pl.player.position.z }})"); await a.wait_for_timeout(900)
+        expect(await b.evaluate(sticks) == before + 5 and await b.evaluate(logs) == 3, 'after the chosen time: 5 sticks given and 3 logs on the ground')
+        # the panel: quick picks, Pick a time, and one tap only asks again
+        await a.click('#menuBtn'); await a.click('#pauseAdminBtn'); await a.wait_for_timeout(400)
+        await a.click('[data-admin-tab="world"]'); await a.wait_for_timeout(400)
+        picks = await text(a, '#adminRestoreWhen')
+        expect(all(k in picks for k in ['10 min', '1 hour', '6 hours', '1 day', 'Pick a time']), 'quick picks and Pick a time show')
+        expect((await text(a, '#adminRestoreBtn')).startswith('Restore to '), f'the button says when ({await text(a, "#adminRestoreBtn")})')
+        await a.click('#adminRestoreWhen >> text=Pick a time'); await a.wait_for_timeout(300)
+        expect(await shown(a, '#adminRestoreAt'), 'Pick a time shows a date and time box')
+        await a.click('#adminRestoreBtn'); await a.wait_for_timeout(300)
+        expect('Tap again' in await text(a, '#adminRestoreBtn'), 'one tap asks for a second')
+        await a.click('#adminClose'); await a.wait_for_timeout(300)
+        expect(await a.evaluate(logs) == 3, 'and nothing was restored by it')
+        # restore to t0 (sent straight, to the second)
+        await a.wait_for_timeout(max(0, 5500 - (await a.evaluate('Date.now()') - t0)))  # (it has to be at least 5 seconds ago)
+        await a.evaluate(f"({send})({{ t: 'a.restore', at: {t0} }})")
+        await b.wait_for_function('!__pl.net.myId', timeout=15000)  # the world restarts: everyone's connection drops
+        await b.wait_for_function("__pl.net.myId && document.getElementById('joining').hidden", timeout=30000); await b.wait_for_timeout(1500)
+        expect(await b.evaluate(sticks) == before and await b.evaluate(logs) == 0, f'restored: the sticks and logs are gone again ({await b.evaluate(sticks)} sticks, {await b.evaluate(logs)} logs)')
+        expect(await b.evaluate('!!__pl.player') and await a.evaluate('!!__pl.player'), 'both players are back in the world by themselves')
+        expect(await a.evaluate('__pl.admin.on'), 'the admin is still the admin')
+        expect(await a.evaluate("!!localStorage.getItem('pocket-life:restoreUndo')"), "the admin's phone keeps an undo point")
+        # Undo: back to how it was just before the restore
+        await a.evaluate("document.getElementById('announce').hidden = true")
+        await a.click('#menuBtn'); await a.click('#pauseAdminBtn'); await a.wait_for_timeout(400)
+        await a.click('[data-admin-tab="world"]'); await a.wait_for_timeout(400)
+        expect(await shown(a, '#adminRestoreUndo'), f'Undo shows ({await text(a, "#adminRestoreUndoText")})')
+        tap = "document.getElementById('adminUndoBtn').click()"  # (taps in the page itself, so a slow software-drawn page can't squeeze them together)
+        await a.evaluate(tap); await a.wait_for_timeout(1200); await a.evaluate(tap)
+        await b.wait_for_function('!__pl.net.myId', timeout=15000)
+        await b.wait_for_function("__pl.net.myId && document.getElementById('joining').hidden", timeout=30000); await b.wait_for_timeout(1500)
+        expect(await b.evaluate(sticks) == before + 5 and await b.evaluate(logs) == 3, f'undone: the sticks and logs are back ({await b.evaluate(sticks)} sticks, {await b.evaluate(logs)} logs)')
+        expect(await a.evaluate("!localStorage.getItem('pocket-life:restoreUndo')"), 'and the undo point is used up')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
 async def reconnect():
     """Something you finish while the connection is down is sent when it comes back, so it isn't lost."""
     async with world() as W:
@@ -673,7 +725,7 @@ async def crowd():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'claims': claims, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd}
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

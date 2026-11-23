@@ -6,6 +6,7 @@
 // - at most G.maxPlaying people play at once; anyone else waits in line on the main menu (line.js)
 // - things people place and build, like campfires (placed.js)
 // - what players do, one small handler each (actions.js); chat, reports, feedback; the admin player's tools (admin.js)
+// - Restore: the admin puts the whole world back to an earlier time with Cloudflare's 30 days of history (restore.js)
 // What every part shares (the game's rules from game.json, limits, helpers) is in shared.js.
 import { DurableObject } from 'cloudflare:workers';
 import { WORLDS, G, HOUR, MINUTE, PROTOCOL, CORS, clean, num, AWAY, tooOld, FEEDBACK_KEEP, lastHeard, QUIET_MS, TICK_MS, SAVE_EVERY, AWAY_SAVE_EVERY, FREE, allowed, tagOf, ageOf } from './shared.js';
@@ -17,6 +18,7 @@ import { adminMethods } from './admin.js';
 import { placedMethods } from './placed.js';
 import { liveMethods, maxPlaying } from './live.js';
 import { claimsMethods } from './claims.js';
+import { restoreMethods } from './restore.js';
 import { guardMethods } from './guard.js';
 import { ACTIONS } from './actions.js';
 
@@ -35,6 +37,8 @@ export class World extends DurableObject {
     this.live = {}; // live settings the admin changed (live.js)
     this.adminFails = new Map(); // wrong admin codes, by address (guard.js); kept in memory only
     this.feedbackLog = []; // when feedback came in and from where, to stop floods (guard.js)
+    this.socks = null; this.byWho = null; // who's connected, worked out once per message or tick (sockets, socketOf)
+    this.restoring = false; // a restore is on its way (restore.js)
     ctx.blockConcurrencyWhile(async () => {
       this.world = (await ctx.storage.get('world')) || null;
       Object.assign(this.admin, (await ctx.storage.get('admin')) || {});
@@ -93,8 +97,30 @@ export class World extends DurableObject {
     const pct = (n, of) => Math.round((n / of) * 100);
     return { requests: pct(requests, FREE.requests), writes: pct(u.writes, FREE.writes), messages: u.messages, playing: this.playing(), max: maxPlaying(), waiting: this.line().length };
   }
-  sockets() { return this.ctx.getWebSockets().map((ws) => ({ ws, p: ws.deserializeAttachment() })).filter(({ p }) => p && p.id); }
-  socketOf(who) { return who ? this.sockets().find(({ p }) => p.who === who) : undefined; }
+  /* ---------- who's connected ---------- */
+  // Every connection with its attachment (who it plays, admin, watching...), worked out once and reused until something
+  // changes: an attachment is saved (attach), or the next message, tick or connection starts (fresh). Until 0.3.2 every
+  // "is this person online?" unpacked every connection again, so a tick cost people in the world x people online.
+  // Always save an attachment with this.attach(ws, me), never ws.serializeAttachment, or the list goes stale.
+  sockets() {
+    if (!this.socks) this.socks = this.ctx.getWebSockets().map((ws) => ({ ws, p: ws.deserializeAttachment() })).filter(({ p }) => p && p.id);
+    return this.socks;
+  }
+  // the connection playing someone (if two do for a moment, the one still playing them), or undefined
+  socketOf(who) {
+    if (!who) return undefined;
+    if (!this.byWho) {
+      this.byWho = new Map();
+      for (const s of this.sockets()) {
+        if (!s.p.who) continue;
+        const had = this.byWho.get(s.p.who);
+        if (!had || (!had.p.alive && s.p.alive)) this.byWho.set(s.p.who, s);
+      }
+    }
+    return this.byWho.get(who);
+  }
+  attach(ws, me) { ws.serializeAttachment(me); this.fresh(); }
+  fresh() { this.socks = null; this.byWho = null; }
   send(msg, except) {
     const text = JSON.stringify(msg);
     for (const { ws, p } of this.sockets()) if (p.id !== except) { try { ws.send(text); } catch (err) { /* gone */ } }
@@ -122,6 +148,7 @@ export class World extends DurableObject {
 
 
   async fetch(request) {
+    this.fresh();
     const url = new URL(request.url);
     const from = await tagOf(request.headers.get('CF-Connecting-IP') || ''); // their address, scrambled: only for the limits in guard.js
     if (url.pathname === '/feedback') { // feedback sent while not connected
@@ -134,7 +161,7 @@ export class World extends DurableObject {
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
     this.ctx.acceptWebSocket(server);
-    server.serializeAttachment({ from });
+    this.attach(server, { from });
     return new Response(null, { status: 101, webSocket: client });
   }
   async addFeedback(note, from = '') {
@@ -165,12 +192,14 @@ export class World extends DurableObject {
   }
 
   async webSocketMessage(ws, raw) {
+    this.fresh();
     let m;
     try { m = JSON.parse(raw); } catch (err) { return; }
     if (!m || typeof m.t !== 'string') return;
     lastHeard.set(ws, Date.now());
     this.use('messages');
     if (m.t === 'ping') return;
+    if (this.restoring) return; // a restore is on its way and the world restarts in a moment, so nothing else is done (restore.js)
     const me = ws.deserializeAttachment() || {};
     const reply = (msg) => { try { ws.send(JSON.stringify(msg)); } catch (err) { /* gone */ } };
     if (m.t === 'hello') { if (me.id && !allowed(ws, me, 'hello')) { reply({ t: 'slow' }); return; } await this.hello(ws, me, m, reply); return; }
@@ -219,7 +248,7 @@ export class World extends DurableObject {
     if (m.watch || full) { // the main menu: watch the world go by without a person
       const queued = full ? me.queued || Date.now() : 0;
       Object.assign(me, { id: me.watch && me.id ? me.id : `w:${crypto.randomUUID().slice(0, 8)}`, who: null, watch: true, queued, turnAt: 0, admin: isAdmin, tag: m.adminTag !== false, v: clean(m.v, 20), b: Math.floor(Number(m.b)) || 0, link, alive: false });
-      ws.serializeAttachment(me);
+      this.attach(ws, me);
       const p = this.persons.get(who);
       reply({ t: 'welcome', watch: true, id: me.id, people: this.people(null), world: this.view(), count: this.playing(), speed: this.speed, live: this.live,
         yours: this.alive(p) ? { name: p.name, age: ageOf(p) } : null, line: full ? this.placeOf(ws) : 0 });
@@ -228,7 +257,7 @@ export class World extends DurableObject {
     }
     me.queued = 0; me.turnAt = 0;
     // the same phone in another tab or link: that one closes
-    for (const s of this.sockets()) if (s.p.who === who && s.ws !== ws) { s.p.alive = false; s.ws.serializeAttachment(s.p); this.boot(s.ws, { t: 'elsewhere' }); }
+    for (const s of this.sockets()) if (s.p.who === who && s.ws !== ws) { s.p.alive = false; this.attach(s.ws, s.p); this.boot(s.ws, { t: 'elsewhere' }); }
     Object.assign(me, { id: who, who, watch: false, admin: isAdmin, tag: m.adminTag !== false, said: me.said || [], v: clean(m.v, 20), b: Math.floor(Number(m.b)) || 0, link, alive: false });
     const p = this.persons.get(who);
     let away = null, dead = null;
@@ -251,7 +280,7 @@ export class World extends DurableObject {
       await this.ctx.storage.delete(`p:${who}`);
     }
     if (p && this.alive(p)) me.alive = true;
-    ws.serializeAttachment(me);
+    this.attach(ws, me);
     if (p) await this.flush(who);
     if (isAdmin) reply(this.adminState(me));
     const w = this.world;
@@ -263,6 +292,8 @@ export class World extends DurableObject {
 
   /* ---------- every minute: needs, people away, sleepers, graves, sticks and stones ---------- */
   async alarm() {
+    this.fresh();
+    if (this.restoring) { await this.ctx.storage.setAlarm(Date.now() + TICK_MS); return; } // (restore.js: the world restarts in a moment)
     const now = Date.now();
     this.use('alarms');
     try {
@@ -330,16 +361,17 @@ export class World extends DurableObject {
   }
 
   webSocketClose(ws) {
+    this.fresh(); // (a connection has gone)
     const me = ws.deserializeAttachment();
     if (!me || !me.id) return; // not joined, or already handled
-    if (!me.who) { me.id = null; ws.serializeAttachment(me); return; } // a watcher on the main menu
+    if (!me.who) { me.id = null; this.attach(ws, me); return; } // a watcher on the main menu
     this.leave(ws, me);
   }
   // someone stops playing (closed the game, or Exit to the main menu): their person goes away and looks after themselves
   leave(ws, me) {
     const who = me.who, wasAlive = me.alive;
     me.id = null; me.who = null; me.alive = false; // this connection no longer plays them
-    ws.serializeAttachment(me);
+    this.attach(ws, me);
     const p = this.persons.get(who);
     if (wasAlive && this.alive(p) && !this.socketOf(who)) { // away now: they start looking after themselves
       p.leftAt = Date.now(); p.simAt = p.leftAt; p.statsAt = Math.min(p.statsAt, p.leftAt);
@@ -357,7 +389,7 @@ export class World extends DurableObject {
 
 }
 // the rest of the world's methods, kept in their own files by topic
-Object.assign(World.prototype, lineMethods, personsMethods, awayMethods, natureMethods, adminMethods, placedMethods, liveMethods, claimsMethods, guardMethods);
+Object.assign(World.prototype, lineMethods, personsMethods, awayMethods, natureMethods, adminMethods, placedMethods, liveMethods, claimsMethods, guardMethods, restoreMethods);
 
 export default {
   async fetch(request, env) {

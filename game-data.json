@@ -1,5 +1,5 @@
 {
-  "version": "0.3.1",
+  "version": "0.3.2",
   "build": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -823,6 +823,14 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.3.2",
+      "date": "2026-11-23",
+      "notes": [
+        "If something ever goes badly wrong, the world can now be put back to how it was a little earlier, so your progress is safer.",
+        "Behind the scenes: the server keeps track of who's online much more cheaply, so the world copes with far more people."
+      ]
+    },
     {
       "version": "0.3.1",
       "date": "2026-11-23",

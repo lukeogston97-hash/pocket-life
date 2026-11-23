@@ -4,7 +4,7 @@
 // can't be reached, the game carries on as normal and keeps trying quietly.
 const SERVER = typeof DATA.server === 'string' ? DATA.server : '';
 const others = new Map(); // id -> { mesh, tx, tz, tr, phase, name, bubble }
-const net = { sock: null, myId: null, wanted: false, retry: 1000, sentAt: 0, last: null, mode: 'watch' }; // mode: watch (main menu) or play
+const net = { sock: null, myId: null, wanted: false, retry: 1000, sentAt: 0, last: null, mode: 'watch', restored: false }; // mode: watch (main menu) or play
 function cleanLook(look) {
   const l = { ...DEFAULT_LOOK, ...(look || {}) };
   for (const k of ['sex', 'skin', 'build', 'hair', 'hairColour', 'tunic']) l[k] = pickId(LOOKS[k], l[k]);
@@ -43,7 +43,7 @@ function goOnline() {
     else if (m.t === 'update') getUpdate(m.min);
     else if (m.t === 'maintenance') showMaintenance(m.text);
     else if (m.t === 'thanks') showTag('Thanks for the feedback!', headTop(), 2.5);
-    else if (m.t.startsWith('admin') || ['announce', 'kicked', 'banned', 'badge', 'reset'].includes(m.t)) adminMessage(m);
+    else if (m.t.startsWith('admin') || ['announce', 'kicked', 'banned', 'badge', 'reset', 'restoring'].includes(m.t)) adminMessage(m);
     else if (m.t === 'slow') { menuJoining = false; if (ui.mode === 'menu') drawMenu(); showTag('Slow down a little', headTop(), 2); }
     else if (m.t === 'reported') showTag(m.ok ? 'Thanks, your report was sent' : "They've left, so it couldn't be sent", headTop(), 2.5);
     else if (m.t === 'welcome') welcome(m);
@@ -130,6 +130,8 @@ function drawGraves(list) {
 // The server's welcome: the world, everyone in it, and your person (or how they got on while you were away)
 let creating = false;
 function welcome(m) {
+  const restored = net.restored; // the admin just restored the world (admin.js): you're where the server has you
+  net.restored = false;
   net.myId = m.id;
   hideMaintenance();
   showJoining(false);
@@ -159,7 +161,7 @@ function welcome(m) {
       applyMe(m.me);
       // Gone a while: they may have strolled off, so you're where the server has them. A short break in the connection
       // (under away.comeBackSeconds): they stayed put, so you carry on from where you are and whatever you were doing.
-      if (m.away && !(m.away.ms < BLIP_MS)) snapTo(m.me.x, m.me.z);
+      if (restored || (m.away && !(m.away.ms < BLIP_MS))) snapTo(m.me.x, m.me.z);
     }
     if (m.me.sit) resumeSit(m.me.sit); // left sitting by the fire, and the time isn't up yet
     else if (!tasks.current && tasks.list.length && !action) nextTask();

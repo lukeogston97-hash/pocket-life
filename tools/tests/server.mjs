@@ -4,19 +4,54 @@
 import { WebSocketServer } from 'ws';
 import { World } from './build/server.mjs';
 const store = new Map(); const socks = [];
+const env = { ADMIN_CODE: process.env.ADMIN_CODE || 'secret123456' };
+// Point-in-time recovery, as on Cloudflare (it keeps 30 days of the world's storage; server/src/restore.js): every change
+// to storage is a point in its history, a bookmark names one, and a restore happens when the world restarts (ctx.abort).
+const history = [{ at: Date.now(), data: new Map() }]; // (stored values are copies that never change, so points can share them)
+const remember = () => history.push({ at: Date.now(), data: new Map(store) });
+const mark = (i) => `pitr-${String(i).padStart(8, '0')}`;
+const undoMarks = new Map(); // an undo bookmark -> the point it stands for (the moment the restore happened)
+let restoreTo = null, undoMark = null, ready = Promise.resolve();
+const pointOf = (b) => (undoMarks.has(b) ? undoMarks.get(b) : /^pitr-\d+$/.test(b) ? Number(b.slice(5)) : -1);
 const ctx = {
   storage: {
     async get(k) { return structuredClone(store.get(k)); },
-    async put(k, v) { if (typeof k === 'object') { for (const [a, b] of Object.entries(k)) store.set(a, structuredClone(b)); } else store.set(k, structuredClone(v)); },
-    async delete(k) { for (const key of [].concat(k)) store.delete(key); },
-    async list({ prefix }) { return new Map([...store].filter(([k]) => k.startsWith(prefix))); },
+    async put(k, v) { if (typeof k === 'object') { for (const [a, b] of Object.entries(k)) store.set(a, structuredClone(b)); } else store.set(k, structuredClone(v)); remember(); },
+    async delete(k) { for (const key of [].concat(k)) store.delete(key); remember(); },
+    async list({ prefix }) { return new Map([...store].filter(([k]) => k.startsWith(prefix)).map(([k, v]) => [k, structuredClone(v)])); },
     async getAlarm() { return 1; }, async setAlarm() {}, async deleteAlarm() {},
+    async getCurrentBookmark() { return mark(history.length - 1); },
+    async getBookmarkForTime(t) { const at = new Date(t).getTime(); let i = 0; history.forEach((h, k) => { if (h.at <= at) i = k; }); return mark(i); },
+    async onNextSessionRestoreBookmark(b) {
+      const i = pointOf(String(b));
+      if (!history[i]) throw new Error(`No such bookmark: ${b}`);
+      restoreTo = i; undoMark = `pitr-undo-${undoMarks.size + 1}`; undoMarks.set(undoMark, -1);
+      return undoMark;
+    },
   },
   getWebSockets() { return socks.filter((s) => !s.closed); },
   acceptWebSocket(ws) { socks.push(ws); },
-  async blockConcurrencyWhile(f) { await f(); },
+  async blockConcurrencyWhile(f) { ready = f(); await ready; },
+  // The world restarts, as on Cloudflare: every connection drops (the games reconnect by themselves), a restore that was
+  // asked for happens, and a fresh World loads what's in storage.
+  abort(reason) {
+    console.log('restart:', reason);
+    inTurn(async () => {
+      for (const s of socks) { s.gone = true; if (!s.closed) s.close(); }
+      socks.length = 0;
+      if (restoreTo != null) {
+        undoMarks.set(undoMark, history.length - 1);
+        store.clear();
+        for (const [k, v] of history[restoreTo].data) store.set(k, v);
+        remember();
+        restoreTo = null;
+      }
+      w = new World(ctx, env);
+      await ready;
+    });
+  },
 };
-const w = new World(ctx, { ADMIN_CODE: process.env.ADMIN_CODE || 'secret123456' });
+let w = new World(ctx, env);
 // One thing at a time, as on Cloudflare: a Durable Object finishes one message (its storage calls hold the next one back)
 // before the next is handled, so the checks see the same order of events the real server gives.
 let line = Promise.resolve();
@@ -27,6 +62,7 @@ wss.on('connection', (raw) => {
     serializeAttachment(a) { this.att = structuredClone(a); }, deserializeAttachment() { return structuredClone(this.att); } };
   ctx.acceptWebSocket(s);
   raw.on('message', (d) => inTurn(async () => {
+    if (s.gone) return; // (from before a restart)
     const t = String(d), m = JSON.parse(t);
     if (m.t !== 'move' && m.t !== 'ping') console.log('<-', m.t);
     if (m.t === '__keys') { s.send(JSON.stringify({ t: '__keys', keys: [...store.keys()], value: m.get ? store.get(m.get) : null })); return; } // for checks: what's in storage
@@ -40,7 +76,7 @@ wss.on('connection', (raw) => {
       if (process.env.TESTKIT || process.env.MINEKIT || process.env.CAMPKIT || process.env.COLLAPSE) s.send(JSON.stringify(w.mine(p)));
     }
   }));
-  raw.on('close', () => { s.closed = true; inTurn(() => w.webSocketClose(s)); });
+  raw.on('close', () => { s.closed = true; if (!s.gone) inTurn(() => w.webSocketClose(s)); });
 });
 setInterval(() => inTurn(() => w.alarm()), 5000);
 console.log('test server up');

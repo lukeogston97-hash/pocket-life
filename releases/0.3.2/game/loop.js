@@ -1,7 +1,14 @@
 /* ---------- loop ---------- */
 const clock = new THREE.Clock();
 let hudTimer = 0;
+// One frame. If anything in it goes wrong the game doesn't freeze: the problem is noted for the admin (reportError in
+// online.js, each problem once) and the next frame still runs.
 function frame() {
+  try { frameStep(); } catch (err) { reportError(err, 'frame'); }
+  window.__frames = (window.__frames || 0) + 1;
+  requestAnimationFrame(frame);
+}
+function frameStep() {
   const raw = clock.getDelta();
   const dt = Math.min(raw, 0.05);
   if (!paused) elapsed += Math.min(raw, 0.25);
@@ -21,6 +28,7 @@ function frame() {
     if (!paused) keyCamera(dt);
     updateOthers(dt);
     fadeTapRing(dt);
+    updateClaims(Date.now());
     sendMove();
     followPlayer(dt);
     controls.update();
@@ -28,8 +36,6 @@ function frame() {
     hudTimer += raw;
     if (hudTimer > 1) { hudTimer = 0; drawHud(); tickStats(); applyDaylight(); for (const b of berryBushes) drawBerries(b); drawPlants(); }
   }
-  window.__frames = (window.__frames || 0) + 1;
-  requestAnimationFrame(frame);
 }
 
 // the world as the camera sees it (playing, and behind the main menu)

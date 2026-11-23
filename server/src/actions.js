@@ -17,9 +17,9 @@ export const ACTIONS = {
   // typing /admin and the code in the Say box
   adminLogin: { when: 'any', async run({ ws, me, m, p, w, reply, save }) {
     me.tries = (me.tries || 0) + 1;
-    if (me.tries > 5 || this.adminLocked(me) || !this.codeOk(m.code)) { this.adminFail(me); ws.serializeAttachment(me); reply({ t: 'adminNo' }); return; }
+    if (me.tries > 5 || this.adminLocked(me) || !this.codeOk(m.code)) { this.adminFail(me); this.attach(ws, me); reply({ t: 'adminNo' }); return; }
     me.admin = true;
-    ws.serializeAttachment(me);
+    this.attach(ws, me);
     reply(this.adminState(me));
     if (me.alive) this.send({ t: 'badge', id: me.id, on: !!me.tag }, me.id);
     return;
@@ -49,7 +49,7 @@ export const ACTIONS = {
       stats: freshStats(G), statsAt: Date.now(), carry: {}, lastKind: null, log: { ate: 0, drank: 0, picked: 0 } };
     this.persons.set(me.who, np);
     me.alive = true;
-    ws.serializeAttachment(me);
+    this.attach(ws, me);
     this.touch(np);
     await this.flush(np.who);
     reply(this.mine(np));
@@ -62,7 +62,7 @@ export const ACTIONS = {
     if (!text || !this.alive(p)) return;
     me.said = [...(me.said || []), [Date.now(), text]].slice(-8); // kept for reports
     while (me.said.length > 1 && new TextEncoder().encode(JSON.stringify(me)).length > 1800) me.said.shift(); // (what's kept with a connection has to stay under 2 KB)
-    ws.serializeAttachment(me);
+    this.attach(ws, me);
     if (this.admin.muted.includes(me.who)) reply({ t: 'say', id: me.id, text }); // muted by the admin: only they see it
     else this.send({ t: 'say', id: me.id, text }, null);
     return;
