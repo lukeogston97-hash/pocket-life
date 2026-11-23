@@ -1,5 +1,6 @@
 // Guards: checks that stop a changed (hacked) game from cheating, and stop the server being flooded.
-// - reach: your person has to be near what they pick up, pick, cut, chop or mine (the server knows where things are)
+// - reach: your person has to be near what they pick up, pick, cut, chop or mine (the server knows where things are),
+//   and a tree, rock, bush or clump of grass the layout doesn't have isn't there to use at all (isThing, isPlant)
 // - moving: the server keeps where your person is; a game that says they jumped across the world, walked off the
 //   map or moved while asleep is told where they really are instead
 // - the layout: where trees, rocks, bushes and plants are, sent by the first game of each new build (and the admin's)
@@ -27,6 +28,21 @@ export const guardMethods = {
     return (list && list[i]) || null;
   },
   plantSpot(kind, i) { const L = this.world && this.world.layout; return (L && L.plants && L.plants[kind] && L.plants[kind][i]) || null; },
+  // Is number i a real tree, rock, bush or old stump? Once the world's layout is known (it has its trees), a number the
+  // layout doesn't have isn't a thing at all, so a changed game can't chop, mine or pick it from wherever its person
+  // stands. (Found 24 Nov 2026: tree 4000, rock 1500 and bush 150 could all be used, for logs, stones and berries from
+  // nowhere.) With no layout yet nothing can be checked, as before.
+  isThing(what, i) {
+    const w = this.world, L = w && w.layout;
+    if (!L || !(L.trees || []).length) return true;
+    return !!((L[LISTS[what]] || [])[i] || (w.moved && w.moved[`${what}:${i}`]));
+  },
+  // the same for a plant (a clump of tall grass)
+  isPlant(kind, i) {
+    const L = this.world && this.world.layout;
+    if (!L || !(L.trees || []).length) return true;
+    return !!((L.plants && L.plants[kind]) || [])[i];
+  },
   nearWater(p) { const pond = G.pond || { x: 0, z: 0 }; return Math.hypot(p.x - pond.x, p.z - pond.z) <= (pond.r || 5) * 1.3 + REACH; },
 
   /* ---------- moving ---------- */

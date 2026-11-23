@@ -1536,11 +1536,11 @@ async def admin_phone():
 
 
 async def server_tests():
-    """The server's own code, tested with no browser (quick): the admin's fire, claim, Log, rename and message tools, live item numbers, and that an old admin flag gives a player nothing."""
+    """The server's own code, tested with no browser (quick): the admin's fire, claim, Log, rename and message tools, live item numbers, that an old admin flag gives a player nothing, and that things which aren't in the world can't be chopped, mined or picked."""
     import subprocess
     from lib import bundle
     bundle()
-    for f in ['admin_extras.mjs', 'live_items.mjs', 'stale_admin.mjs']:
+    for f in ['admin_extras.mjs', 'live_items.mjs', 'stale_admin.mjs', 'cheats.mjs']:
         r = subprocess.run(['node', f], cwd=HERE, capture_output=True, text=True, timeout=180)
         last = (r.stdout.strip().splitlines() or ['(nothing printed)'])[-1]
         if r.returncode: print(r.stdout[-4000:], r.stderr[-2000:])

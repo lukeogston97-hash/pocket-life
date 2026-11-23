@@ -4,7 +4,7 @@
 // regrow everything, clear loose items, restore an earlier time (restore.js), reset the world or everything), Settings (live settings, live.js). Single things in the world
 // (trees, rocks, berry bushes, campfires, loose items) are moved, regrown and removed from their tap menus.
 // These are methods of the World (index.js adds them to it), so `this` is the world.
-import { FILTER, G, starText, MINUTE, HOUR, clean, num, kindOk, addCarry, takeCarry, ageOf, pickRandom } from './shared.js';
+import { FILTER, G, starText, MINUTE, HOUR, clean, blank, num, kindOk, addCarry, takeCarry, ageOf, pickRandom } from './shared.js';
 import { fireRule } from './placed.js';
 import { CLAIM_KIND } from './claims.js';
 
@@ -426,7 +426,7 @@ export const adminMethods = {
       case 'a.rename': { // (the admin picks any name: this is how a bad one that got past the filter is fixed)
         if (!this.alive(them)) return done("They've gone");
         const name = clean(m.name, 20).trim(), was = them.name;
-        if (!name) return done('Type a name');
+        if (!name || blank(name)) return done('Type a name');
         if (name === was) return done("That's already their name");
         them.name = name;
         if (them.look && them.look.name != null) them.look = { ...them.look, name };

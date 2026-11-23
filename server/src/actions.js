@@ -5,7 +5,7 @@
 // world (index.js), so this.send() tells everyone. Remember a spam limit in LIMITS (shared.js) for anything new.
 import { PLACEABLES, fireRule, seatAt } from './placed.js';
 import { fuelRoom } from './rules.js';
-import { FILTER, G, starText, badName, freshStats, addCarry, takeCarry, wearList, applyGives, eatOne, craft, spend, clean, num, kindOk, START, REST, BERRY_SRC, cleanLook, REPORTS_KEEP } from './shared.js';
+import { FILTER, G, starText, badName, freshStats, addCarry, takeCarry, wearList, applyGives, eatOne, craft, spend, clean, blank, num, kindOk, START, REST, BERRY_SRC, cleanLook, REPORTS_KEEP } from './shared.js';
 const SIT_OPEN = 365 * 24 * 3600000; // sitting has no set time: `until` is far off, and ends when they stand up, do something else, or the fire goes out
 
 export const ACTIONS = {
@@ -32,7 +32,7 @@ export const ACTIONS = {
   create: { when: 'any', async run({ ws, me, m, p, w, reply, save }) {
     if (this.alive(p)) { reply(this.mine(p)); return; }
     const name = clean(m.name, 20).trim();
-    if (!name || (!me.admin && badName(name, FILTER))) { reply({ t: 'badName' }); return; }
+    if (!name || blank(name) || (!me.admin && badName(name, FILTER))) { reply({ t: 'badName' }); return; } // (blank: a name nobody could see)
     const a = Math.random() * Math.PI * 2, r = Math.random() * 1.5;
     const np = { who: me.who, state: 'alive', name, look: cleanLook({ ...m.look, name }), age: Math.max(G.age.min, Math.min(G.age.max, Math.round(Number(m.age) || G.age.min))),
       born: Date.now(), x: num(START.x + Math.cos(a) * r), z: num(START.z + Math.sin(a) * r), ry: 0.62,
@@ -50,7 +50,7 @@ export const ACTIONS = {
   // a speech bubble (bad words starred out)
   say: { when: 'any', async run({ ws, me, m, p, w, reply, save }) {
     const text = starText(clean(m.text, 80).trim(), FILTER);
-    if (!text || !this.alive(p)) return;
+    if (!text || blank(text) || !this.alive(p)) return;
     me.said = [...(me.said || []), [Date.now(), text]].slice(-8); // kept for reports
     while (me.said.length > 1 && new TextEncoder().encode(JSON.stringify(me)).length > 1800) me.said.shift(); // (what's kept with a connection has to stay under 2 KB)
     this.attach(ws, me);
@@ -169,6 +169,7 @@ export const ACTIONS = {
     // where it is: a log's own spot, a tree or stump's spot in the layout (guard.js), else what the game says if that's near them
     const laidOut = ['tree', 'stump', 'oldStump'].includes(m.what), log = !laidOut && w.items.find((it) => it.id === m.id && it.kind === m.what);
     if (!laidOut && !log) { reply(this.mine(p)); return; } // the log has gone
+    if (laidOut && !this.isThing(m.what === 'oldStump' ? 'oldStump' : 'tree', Math.floor(m.idx))) { reply(this.mine(p)); return; } // no such tree or stump (guard.js)
     const said = Number.isFinite(m.x) && Number.isFinite(m.z) && this.near(p, [m.x, m.z]) ? [num(m.x), num(m.z)] : [p.x, p.z];
     let at = log ? [log.x, log.z] : this.spotOf(m.what === 'oldStump' ? 'oldStump' : 'tree', Math.floor(m.idx)) || said;
     if (!me.admin && !this.near(p, at)) { reply({ t: 'placeNo', why: 'Too far away' }); reply(this.mine(p)); return; }
@@ -217,6 +218,7 @@ export const ACTIONS = {
     const R = G.mining || {}, rule = R[m.what], tool = R.tool, i = Math.floor(m.idx);
     if (!rule || (m.what !== 'rock' && m.what !== 'boulder') || !(i >= 0 && i < 2000)) return;
     if (tool && !p.carry[tool]) { reply(this.mine(p)); return; }
+    if (!this.isThing('rock', i)) { reply(this.mine(p)); return; } // no such rock (guard.js)
     const rock = this.spotOf('rock', i) || [p.x, p.z]; // where it is (guard.js), else where they're standing, next to it
     if (!me.admin && !this.near(p, rock, 1)) { reply({ t: 'placeNo', why: 'Too far away' }); reply(this.mine(p)); return; }
     const cl = this.notYours(p, rock[0], rock[1], me.admin);
@@ -246,6 +248,7 @@ export const ACTIONS = {
   pick: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
     const i = Math.floor(m.bush);
     if (!(i >= 0 && i < 200)) return;
+    if (!this.isThing('bush', i)) { reply({ t: 'picked', bush: i, ok: false }); return; } // no such bush (guard.js)
     const at = this.spotOf('bush', i) || [p.x, p.z], cl = this.notYours(p, at[0], at[1], me.admin);
     if (cl) { reply({ t: 'picked', bush: i, ok: false, why: this.claimNo(cl) }); return; }
     if (!me.admin && !this.near(p, at)) { reply({ t: 'picked', bush: i, ok: false, why: 'Too far away' }); return; }
@@ -381,6 +384,7 @@ export const ACTIONS = {
     if (!def || !(i >= 0 && i < (def.count || 0))) return;
     w.plants = w.plants || {};
     const ps = (w.plants[m.plant] = w.plants[m.plant] || {}), now = Date.now();
+    if (!this.isPlant(m.plant, i)) { reply({ t: 'cutNo', plant: m.plant, i, readyAt: ps[i] || 0 }); return; } // no such clump (guard.js)
     const plant = this.plantSpot(m.plant, i) || [p.x, p.z]; // where it is (guard.js), else where they're standing, next to it
     const cl = this.notYours(p, plant[0], plant[1], me.admin);
     if (cl) { reply({ t: 'cutNo', plant: m.plant, i, readyAt: ps[i] || 0, why: this.claimNo(cl) }); return; }

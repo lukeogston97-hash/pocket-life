@@ -18,7 +18,13 @@ import { HOUR, MINUTE, freshStats, advanceStats, addCarry, takeCarry, wearList, 
 export const PROTOCOL = 2; // bump when the game and server stop understanding each other
 export const CORS = { 'Access-Control-Allow-Origin': '*' };
 export const WORLD_FORMAT = 1;
-export const clean = (s, n) => String(s ?? '').replace(/[\u0000-\u001f]/g, '').slice(0, n);
+// Text from a game, tidied: no control characters, and none of the unseen ones that hide text or make it read backwards
+// (a name that looks empty, chat that reverses the line it's in). Found in the 24 Nov 2026 whole-game check. The joiners
+// that build one emoji out of several, and the marks other alphabets need, stay.
+const UNSEEN = /[\p{Cc}\u00ad\u180e\u200b\u2060\u202a-\u202e\u2066-\u2069\ufeff\ufff9-\ufffb]/gu;
+export const clean = (s, n) => String(s ?? '').replace(UNSEEN, '').slice(0, n);
+// nothing in it that can be seen: only spaces, joiners and letters that draw as blanks
+export const blank = (s) => !/[^\s\u115f\u1160\u2800\u3164\uffa0\u200c-\u200f]/u.test(String(s ?? ''));
 export const num = (v) => (Number.isFinite(v) ? Math.round(v * 100) / 100 : 0);
 export const kindOk = (k) => typeof k === 'string' && /^[a-z0-9-]{1,24}$/.test(k);
 useTimeZone(G.timeZone); // the world's clock (Darwin time) for night and birthdays
