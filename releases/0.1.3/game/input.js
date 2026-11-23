@@ -22,24 +22,65 @@ canvas.addEventListener('pointerdown', (e) => {
   if (swallowTap) { swallowTap = false; down = null; return; } // that press only closed the menu
   if (e.button !== 0) { down = null; return; } // right and middle buttons don't walk
   down = { x: e.clientX, y: e.clientY, t: e.timeStamp };
+  // pressing a loose item can turn into dragging it (mouse: move; touch: hold a moment, then move) onto the ground, a fire or you
+  wdrag = null;
+  if (ui.mode === 'world' && player && !you.dead && !paused && !placing.on) {
+    const hit = pickTarget(...toCanvas(e));
+    if (hit && hit.kind === 'item' && !queuedItem(hit.item.id)) { // (one already queued to move stays put)
+      wdrag = { item: hit.item, x: e.clientX, y: e.clientY, ready: e.pointerType === 'mouse', ghost: null };
+      if (wdrag.ready) controls.enableRotate = false; // a mouse on a loose item drags it, not the view
+      else { const w = wdrag; w.timer = setTimeout(() => { w.ready = true; }, 300); }
+    }
+  }
   if (e.pointerType !== 'mouse') {
     const at = { clientX: e.clientX, clientY: e.clientY };
     pressTimer = setTimeout(() => {
       pressTimer = null;
       if (!down || multi) return;
       const [px, py] = toCanvas(at);
-      if (openMenuAt(px, py)) down = null;
+      if (openMenuAt(px, py)) { down = null; endWorldDrag(); }
     }, 480);
   }
 });
+let wdrag = null;
+function endWorldDrag() {
+  controls.enableRotate = true;
+  if (!wdrag) return;
+  clearTimeout(wdrag.timer);
+  if (wdrag.ghost) { wdrag.ghost.remove(); bagDragging = false; dragPoint = null; }
+  wdrag = null;
+}
 canvas.addEventListener('pointermove', (e) => {
   if (e.pointerType === 'mouse') { hoverAt = e.buttons ? null : { clientX: e.clientX, clientY: e.clientY }; hoverWait = 0; }
+  if (wdrag && wdrag.ready && !wdrag.ghost && Math.hypot(e.clientX - wdrag.x, e.clientY - wdrag.y) > 8 && getItem(wdrag.item.id)) {
+    const g = document.createElement('div');
+    g.className = 'drag-ghost';
+    g.appendChild(itemPic(wdrag.item.kind));
+    document.body.appendChild(g);
+    wdrag.ghost = g;
+    bagDragging = true;
+    dragPoint = { x: e.clientX, y: e.clientY, armed: false };
+    controls.enableRotate = false; // the view holds still while you drag (it slides at the edges instead)
+    down = null; // not a tap any more
+    cancelPress();
+  }
+  if (wdrag && wdrag.ghost) {
+    wdrag.ghost.style.transform = `translate(${e.clientX - 28}px, ${e.clientY - 28}px)`;
+    if (dragPoint) { dragPoint.x = e.clientX; dragPoint.y = e.clientY; }
+  }
   if (pressTimer && down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 10) cancelPress();
 });
-canvas.addEventListener('pointercancel', cancelPress);
+canvas.addEventListener('pointercancel', () => { cancelPress(); endWorldDrag(); });
 canvas.addEventListener('pointerleave', () => { hoverAt = null; });
 canvas.addEventListener('pointerup', (e) => {
   cancelPress();
+  if (wdrag && wdrag.ghost) {
+    const w = wdrag;
+    endWorldDrag();
+    if (getItem(w.item.id)) bagDropAt({ kind: w.item.kind }, e, w.item);
+    return;
+  }
+  endWorldDrag();
   if (!e.isPrimary || multi || !down) return;
   if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > 12 || e.timeStamp - down.t > 550) return;
   down = null;
@@ -109,7 +150,7 @@ function pickTarget(px, py) {
   }
   const useful = hits.find(({ o }) => o === player || o.userData.itemId || o.userData.source || o.userData.placedId != null);
   const { h: hit = null, o: owner = null } = useful || hits[0] || {};
-  if (owner === player) return { kind: 'you' };
+  if (player && owner === player) return { kind: 'you' }; // (with no person, as in admin mode, a tap on bare ground has no owner either: it isn't you)
   const gp = groundHit && groundHit.point;
   // a near miss still counts: within a finger's width on screen, or within about a metre on the ground
   const item = (owner && owner.userData.itemId && getItem(owner.userData.itemId))
@@ -175,9 +216,9 @@ function fadeTapRing(dt) {
   if (age >= life) tapRing.visible = false;
 }
 function handleTap(px, py) {
+  if (ui.mode === 'admin') { adminTap(px, py); return; } // admin mode: what the admin can do with it (admin-mode.js)
   if (ui.mode !== 'world' || !player || you.dead || paused) return;
   if (!online()) { showTag('Reconnecting…', headTop(), 1.5); return; }
-  if (adminMoving) { adminMoveTap(); return; } // the admin moving something: this tap says where it goes
   if (placing.on) { // choosing where to put something: a tap moves it there
     ray.setFromCamera(ndc, camera);
     const g = ray.intersectObject(terrain, false)[0];
@@ -241,10 +282,10 @@ function thingActions(t) {
         showTag(isMuted ? `${o.title} unmuted` : `${o.title} muted`, headTop(), 2);
       } },
       { label: 'Report', run: () => openReport(o) },
-      { label: 'Walk here', foot: true, run: () => walkFirst(V(o.mesh.position.x, 0, o.mesh.position.z)) }, ...adminMore(adminPersonActions(o))];
+      { label: 'Walk here', foot: true, run: () => walkFirst(V(o.mesh.position.x, 0, o.mesh.position.z)) }];
   }
   if (t.kind === 'ground' || t.kind === 'thing' || t.kind === 'shore') {
-    return [{ label: 'Walk here', run: () => walkToTarget(t) }, ...adminMore(adminGroundActions(t.point || (t.hit && t.hit.point)))];
+    return [{ label: 'Walk here', run: () => walkToTarget(t) }];
   }
   if (t.kind === 'tree' || t.kind === 'stump' || t.kind === 'oldStump') {
     const what = t.kind;
@@ -253,23 +294,20 @@ function thingActions(t) {
     return [{ label: what === 'tree' ? 'Chop tree' : 'Remove stump', note: has ? `${rule.seconds || 15} s` : `Needs a ${tool.name.toLowerCase()}`, disabled: !has,
       run: () => queueTask({ type: 'chop', what, idx: t.idx, x: t.x, z: t.z }) },
       ...(what === 'stump' && trees[t.idx] ? [{ label: `Grows back in ${stumpGrowsIn(trees[t.idx])}`, disabled: true }] : []),
-      { label: 'Walk here', foot: true, run: () => walkFirst(V(t.x + 1.2, 0, t.z)) },
-      ...(what !== 'oldStump' ? adminMore(adminThingActions('tree', t.idx, what === 'stump')) : [])];
+      { label: 'Walk here', foot: true, run: () => walkFirst(V(t.x + 1.2, 0, t.z)) }];
   }
   if (t.kind === 'rock') {
     const r = rocks[t.idx], rule = MINE[r.boulder ? 'boulder' : 'rock'] || {}, tool = MINE.tool && ITEMS[MINE.tool];
     const has = !tool || you.carry[MINE.tool];
     const walk = { label: 'Walk here', foot: true, run: () => walkFirst(V(r.x + r.r + 0.6, 0, r.z)) };
-    const adm = adminMore(adminThingActions('rock', t.idx, r.state === 'mined'));
-    if (r.state === 'mined') return [{ label: `Mine again in ${growsBackIn(r.since, MINE.regrowDays || 3)}`, disabled: true }, walk, ...adm];
+    if (r.state === 'mined') return [{ label: `Mine again in ${growsBackIn(r.since, MINE.regrowDays || 3)}`, disabled: true }, walk];
     return [{ label: r.boulder ? 'Mine boulder' : 'Break rock', note: has ? `${rule.seconds || 10} s` : `Needs a ${tool.name.toLowerCase()}`, disabled: !has,
-      run: () => queueTask({ type: 'mine', idx: t.idx, x: r.x, z: r.z }) }, walk, ...adm];
+      run: () => queueTask({ type: 'mine', idx: t.idx, x: r.x, z: r.z }) }, walk];
   }
   if (t.kind === 'self') {
     const rest = you.stats && you.stats.rest != null ? Math.round(you.stats.rest) : null;
     if (you.sit) return [{ label: 'Stand up', run: () => endSit(true) }];
-    return [you.sleeping ? { label: 'Wake up', note: tooTiredToWake() ? `Rest ${Math.floor(you.stats.rest)} of ${REST.wakeAt}` : '', run: wakeUp } : { label: 'Sleep', note: rest != null ? `Rest ${rest}` : '', run: () => setSleeping(true) },
-      ...adminMore(admin.on ? [{ label: 'Fill my needs', run: () => adminSend({ t: 'a.fill', id: net.myId }) }] : [])];
+    return [you.sleeping ? { label: 'Wake up', note: tooTiredToWake() ? `Rest ${Math.floor(you.stats.rest)} of ${REST.wakeAt}` : '', run: wakeUp } : { label: 'Sleep', note: rest != null ? `Rest ${rest}` : '', run: () => setSleeping(true) }];
   }
   if (t.kind === 'placed') return placedActions(t.th);
   if (t.kind === 'grave') return [{ label: 'Walk here', run: () => walkFirst(V(t.x + 0.8, 0, t.z)) }];
@@ -287,8 +325,7 @@ function thingActions(t) {
     return [{ label: `Pick up ${ITEMS[it.kind].name}`, note: it.uses != null ? `${it.uses} ${it.uses === 1 ? 'use' : 'uses'} left` : '', run: () => queueTask({ type: 'pickup', id: it.id }) },
       ...(chopIt ? [{ label: 'Chop into sticks', note: you.carry[CHOP.tool] ? `${CHOP[it.kind].seconds || 8} s` : `Needs a ${ITEMS[CHOP.tool].name.toLowerCase()}`, disabled: !you.carry[CHOP.tool],
         run: () => queueTask({ type: 'chop', what: it.kind, id: it.id, x: it.x, z: it.z }) }] : []),
-      { label: 'Walk here', foot: true, run: () => walkFirst(V(it.x, 0, it.z)) },
-      ...adminMore(admin.on ? [{ label: 'Remove', run: () => adminSend({ t: 'a.remove', id: it.id }) }] : [])];
+      { label: 'Walk here', foot: true, run: () => walkFirst(V(it.x, 0, it.z)) }];
   }
   if (t.kind === 'use') {
     const src = SOURCES[t.task.source], task = t.task;
@@ -301,7 +338,7 @@ function thingActions(t) {
       const b = berryBushes[task.bush];
       const ready = !b || ripe(b);
       return [{ label: src.action || `Pick ${ITEMS[Object.keys(src.harvest)[0]].plural.toLowerCase()}`, note: ready ? (b ? `${berriesOn(b)} left` : '') : `Next in ${readyIn(b)}`,
-        disabled: !ready, run: () => queueTask(task) }, walkHere, ...(b ? adminMore(adminThingActions('bush', task.bush, berriesOn(b) < bushHolds(src))) : [])];
+        disabled: !ready, run: () => queueTask(task) }, walkHere];
     }
     const F = src.fish, has = F && you.carry[F.tool];
     return [{ label: src.action || `Use ${src.name.toLowerCase()}`, run: () => queueTask(task) },
@@ -313,6 +350,7 @@ function thingActions(t) {
 function openMenuAt(px, py, known) {
   if (ui.mode !== 'world' || !player || you.dead || paused || placing.on) return false;
   const t = known || pickTarget(px, py);
+  if (t && t.kind === 'item' && queuedItem(t.item.id)) { closeMenu(); showTag('Already in your queue', headTop(), 2); return true; } // till it's done or taken off the list
   const acts = menuActions(t);
   hideHint(); // the tip has done its job once you've tapped something
   if (!acts.length) { closeMenu(); return false; }
@@ -391,7 +429,8 @@ function closePause() { paused = false; $('pause').hidden = true; }
 $('resumeBtn').addEventListener('click', closePause);
 $('pause').addEventListener('click', (e) => { if (e.target === $('pause')) closePause(); });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && ui.mode === 'menu') { closeNews(); closeFeedback(); closeSettings(); return; }
+  if (e.key === 'Escape' && ui.mode === 'menu') { closeNews(); closeFeedback(); closeSettings(); if (!$('adminLogin').hidden) $('adminLoginCancel').click(); return; }
+  if (e.key === 'Escape' && ui.mode === 'admin') { if (!$('actMenu').hidden) closeMenu(); return; } // (never the pause menu: there's no person to pause)
   if (e.key !== 'Escape' || ui.mode !== 'world') return;
   e.preventDefault();
   if (maint.on) return;
@@ -419,7 +458,7 @@ let camFree = false, wasWalking = false; // camFree: you've moved the view off y
 const typing = (el) => el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
 document.addEventListener('keydown', (e) => {
   if (!CAM_KEYS.has(e.code) || e.ctrlKey || e.metaKey || e.altKey) return;
-  if (ui.mode !== 'world' || paused || typing(e.target)) return;
+  if ((ui.mode !== 'world' && ui.mode !== 'admin') || paused || typing(e.target)) return;
   e.preventDefault();
   keysDown.add(e.code);
   closeMenu();
@@ -467,6 +506,28 @@ function keyCamera(dt) {
   t.z += dz;
   camera.position.x += dx;
   camera.position.z += dz;
+}
+// dragging something near the edge of the screen slides the view that way, so you can take it further than you can see
+// (only once the drag has been away from the edge, so starting in the bag doesn't move it)
+const edgeOf = (p, size, zone) => (p < zone ? Math.max(-1, p / zone - 1) : p > size - zone ? Math.min(1, (p - size + zone) / zone) : 0);
+function edgePan(dt) {
+  if (!dragPoint || ui.mode !== 'world') return;
+  const r = canvas.getBoundingClientRect(), zone = Math.min(r.width, r.height) * 0.12;
+  const ex = edgeOf(dragPoint.x - r.left, r.width, zone), ey = edgeOf(dragPoint.y - r.top, r.height, zone);
+  if (!ex && !ey) { dragPoint.armed = true; return; }
+  if (!dragPoint.armed) return;
+  const t = controls.target;
+  const fwd = V(t.x - camera.position.x, 0, t.z - camera.position.z).normalize();
+  const right = V(-fwd.z, 0, fwd.x);
+  const step = camera.position.distanceTo(t) * 0.45 * dt;
+  const lim = WORLD_HALF + 4;
+  const mx = (right.x * ex - fwd.x * ey) * step, mz = (right.z * ex - fwd.z * ey) * step;
+  const dx = Math.max(-lim, Math.min(lim, t.x + mx)) - t.x, dz = Math.max(-lim, Math.min(lim, t.z + mz)) - t.z;
+  t.x += dx;
+  t.z += dz;
+  camera.position.x += dx;
+  camera.position.z += dz;
+  camFree = true;
 }
 function updatePlayer(dt) {
   const P = player.userData.parts;
@@ -633,13 +694,13 @@ function showGlow(g) {
 }
 // called every frame: works out what's under the mouse now and then (the camera may have moved under it)
 function updateGlow(dt) {
-  const live = ui.mode === 'world' && player && !you.dead && !paused && !placing.on && !adminMoving;
+  const live = ui.mode === 'world' && player && !you.dead && !paused && !placing.on;
   if (!live) { hoverGlow = menuGlow = null; clearGlow(); return; }
   if (!hoverAt || lastPointer !== 'mouse') hoverGlow = null;
   else if ((hoverWait -= dt) <= 0) {
     hoverWait = 0.12;
     const t = pickTarget(...toCanvas(hoverAt));
-    hoverGlow = glowViewOf(t);
+    hoverGlow = t && t.kind === 'item' && queuedItem(t.item.id) ? null : glowViewOf(t);
   }
   const g = (!$('actMenu').hidden && menuGlow) || hoverGlow;
   if (g && !g.view.parent) { if (g === menuGlow) menuGlow = null; else hoverGlow = null; clearGlow(); return; } // it was picked up

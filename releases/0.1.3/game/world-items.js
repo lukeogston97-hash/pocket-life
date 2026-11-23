@@ -108,6 +108,16 @@ function removeWorldItem(id) {
   }
 }
 const getItem = (id) => world.items.find((it) => it.id === id);
+// a see-through copy of a model (where a queued drop will land)
+function seeThrough(model, opacity = 0.45) {
+  const fade = (x) => { const c = x.clone(); if (!x.userData.shared) x.dispose(); c.userData = {}; c.transparent = true; c.opacity = opacity; c.depthWrite = false; return c; };
+  model.traverse((m) => {
+    if (!m.isMesh) return;
+    m.material = Array.isArray(m.material) ? m.material.map(fade) : fade(m.material);
+    m.castShadow = false;
+  });
+  return model;
+}
 const KEEP_CLEAR = [[4.3, -1.9, 1.2], [5.9, 0.5, 1.1], [3.0, -4.2, 1.2], [-0.9, -4.9, 1.1], [6.6, -3.4, 1], [-3.2, 6.9, 1], [5.8, 4.7, 1.5],
   [6.7, 5.4, 1], [5.1, 5.6, 0.8], [-2.6, -3.9, 1], [-10.4, 2.1, 1.2], [-1.6, 6.6, 0.8], [8.2, -1.2, 0.9], [-3.6, 4.6, 0.9],
   [7.6, -6.8, 2.2], [1.1, 4.2, 0.6], [0.6, 1.9, 1.6]];

@@ -23,9 +23,11 @@ function frameStep() {
     renderWorld(w, h, raw);
     hudTimer += raw;
     if (hudTimer > 1) { hudTimer = 0; drawMenu(); applyDaylight(); for (const b of berryBushes) drawBerries(b); drawPlants(); }
+  } else if (ui.mode === 'admin') {
+    adminFrame(dt, raw, w, h);
   } else if (player) {
     if (!you.dead && !paused && !you.sleeping) updatePlayer(dt);
-    if (!paused) keyCamera(dt);
+    if (!paused) { keyCamera(dt); edgePan(dt); }
     updateOthers(dt);
     fadeTapRing(dt);
     updateGlow(raw);
