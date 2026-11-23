@@ -1,5 +1,5 @@
 {
-  "version": "0.3.7",
+  "version": "0.3.8",
   "build": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -907,6 +907,13 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.3.8",
+      "date": "2026-11-23",
+      "notes": [
+        "Only loose items glow now: campfires don't."
+      ]
+    },
     {
       "version": "0.3.7",
       "date": "2026-11-23",
