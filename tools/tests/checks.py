@@ -237,10 +237,13 @@ async def new_home():
 
 async def strolling():
     """Someone away strolls about on another phone's screen without walking through trees or rocks, and doesn't get stuck."""
-    async with world() as W:
-        a = await W.page('strollA'); await join(a)
+    # This world has no night. At night people away lie down and sleep instead of strolling, and the world's clock is the
+    # real Darwin clock, so this check used to fail whenever it was run between 8 pm and 6 am Darwin time (found 24 Nov 2026).
+    DAY = {'night': {'from': 0, 'to': 0}}
+    async with world(DAY) as W:
+        a = await W.page('strollA', data=DAY); await join(a)
         await a.click('#menuBtn'); await a.wait_for_timeout(300); await a.click('#exitBtn'); await a.wait_for_timeout(1000)
-        b = await W.page('strollB'); await join(b)
+        b = await W.page('strollB', data=DAY); await join(b)
         inside, moved, last, still = 0, 0.0, None, 0
         for _ in range(90):
             await b.wait_for_timeout(500)
