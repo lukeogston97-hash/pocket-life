@@ -558,17 +558,21 @@ Object.assign(TASK_KINDS, {
    (menuActions in input.js), placing there is refused, and autopilot leaves their things alone. */
 const CLAIMS = { radius: 10, spawnRadius: 16, placeable: 'campfire', ringShowsWithin: 25, ...(DATA.claims || {}) };
 const claimOn = (th) => !!th.claim && isLit(th);
-const claimName = (th) => (th.claim.who === net.myId ? 'Your claim' : `${th.claim.name}'s claim`);
+// yours to use: your own claim, or your society's (0.1.4: a society's claim is 's:<id>', society.js)
+const claimMine = (th) => !!th.claim && (th.claim.who === net.myId || (!!you.soc && th.claim.who === `s:${you.soc.id}`));
+const claimName = (th) => (th.claim.who === net.myId ? 'Your claim' : claimMine(th) ? "Your society's claim" : `${th.claim.name}'s claim`);
 const claimAt = (x, z) => { for (const th of placed.values()) if (claimOn(th) && Math.hypot(th.x - x, th.z - z) <= CLAIMS.radius) return th; return null; };
 // someone else's claim at x, z (the admin can do anything anywhere)
-const notMineAt = (x, z) => { const c = claimAt(x, z); return c && c.claim.who !== net.myId ? c : null; };
+const notMineAt = (x, z) => { const c = claimAt(x, z); return c && !claimMine(c) ? c : null; };
 // placing a campfire: would lighting it there claim the land? { ok, text } (the server has the final say)
 function claimHere(x, z) {
+  const soc = you.soc;
+  if (soc && !soc.lead) return { ok: false, text: `Just a fire: only ${soc.name}'s leader can claim land` }; // (one claim per society: the leader's fire)
   const all = [...placed.values()].filter(claimOn);
-  const no = claimProblem(x, z, { radius: CLAIMS.radius, spawnRadius: CLAIMS.spawnRadius, pond: POND, hasClaim: all.some((th) => th.claim.who === net.myId),
+  const no = claimProblem(x, z, { radius: CLAIMS.radius, spawnRadius: CLAIMS.spawnRadius, pond: POND, hasClaim: all.some(claimMine),
     claims: all.map((th) => ({ x: th.x, z: th.z, name: th.claim.name })) }); // rules.js, the same on the server
-  if (!no) return { ok: true, text: 'Light it to claim the land round it' };
-  return { ok: false, text: no.why === 'has' ? 'Just a fire: you already have a claim' : no.why === 'pond' ? 'Just a fire: too close to the pond to claim' : `Just a fire: too close to ${no.name}'s claim` };
+  if (!no) return { ok: true, text: soc ? `Light it to claim the land round it for ${soc.name}` : 'Light it to claim the land round it' };
+  return { ok: false, text: no.why === 'has' ? (soc ? `Just a fire: ${soc.name} already has a claim` : 'Just a fire: you already have a claim') : no.why === 'pond' ? 'Just a fire: too close to the pond to claim' : `Just a fire: too close to ${no.name}'s claim` };
 }
 // a soft ring on the ground at a claim's edge, following the hills
 const ringMats = { mine: new THREE.MeshBasicMaterial({ color: '#9fd88a', transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide }),
@@ -593,7 +597,7 @@ function claimRingMesh(x, z, material) {
   return mesh;
 }
 function drawClaimRing(th) {
-  const want = claimOn(th) ? (th.claim.who === net.myId ? 'mine' : 'theirs') : null;
+  const want = claimOn(th) ? (claimMine(th) ? 'mine' : 'theirs') : null;
   if (th.ring && th.ring.userData.kind === want && th.ring.userData.x === th.x && th.ring.userData.z === th.z) return;
   if (th.ring) { scene.remove(th.ring); th.ring.geometry.dispose(); th.ring = null; }
   if (!want) return;

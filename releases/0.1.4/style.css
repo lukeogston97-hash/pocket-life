@@ -230,6 +230,8 @@ button.craft-head { padding: 0; border: 0; background: none; color: inherit; fon
 .modal { position: absolute; inset: 0; z-index: 40; display: grid; place-items: center; padding: 20px; background: rgba(8, 12, 10, 0.4); }
 .modal[hidden] { display: none; }
 #maint { z-index: 60; }
+#adminLogin { z-index: 62; } /* over Back soon: the admin's way in while maintenance is on */
+#maintTitle { -webkit-user-select: none; user-select: none; touch-action: manipulation; } /* 5 taps on it are that way in: taps, never a zoom or a selection */
 .modal-card { width: 100%; max-width: 340px; border-radius: 18px; padding: 18px; }
 .modal-card h2 { margin: 0 0 6px; font: 800 19px/1.2 var(--font-ui); }
 .modal-card p { margin: 0 0 14px; font-size: 13.5px; font-weight: 600; color: var(--ink-soft); }
@@ -240,6 +242,9 @@ button.craft-head { padding: 0; border: 0; background: none; color: inherit; fon
 .lbl { font-size: 11.5px; font-weight: 700; color: var(--ink-soft); line-height: 1.1; }
 .feedback-text, .admin-input { width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 12px; background: var(--hover); font: 600 15px/1.35 var(--font-ui); color: var(--ink); }
 .feedback-text { margin: 0 0 12px; resize: vertical; }
+/* an iPhone zooms the whole page in when a box with text under 16 px is tapped, and stays zoomed: on touch screens the
+   feedback box and the report note are 16 px, like the Say and name boxes */
+@media (pointer: coarse) { .feedback-text { font-size: 16px; } }
 .feedback-text::placeholder, .admin-input::placeholder { color: var(--ink-faint); }
 .maint-note { color: var(--ink-faint); font-size: 12.5px; margin-top: 4px; }
 .reason-list { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 4px 0 12px; }
@@ -262,13 +267,25 @@ button.craft-head { padding: 0; border: 0; background: none; color: inherit; fon
 .admin-btns { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
 .admin-btns .small-btn { min-height: 32px; padding: 4px 10px; font-size: 12.5px; }
 .admin-empty { color: var(--ink-faint); text-align: center; font-size: 13px; }
-.news-list .admin-head { font-size: 13px; font-weight: 800; color: var(--ink); }
-.news-list ul { margin: 4px 0 0; padding-left: 18px; font-size: 13.5px; color: var(--ink-soft); }
-.news-list li { margin: 2px 0; }
-.news-entry summary { cursor: pointer; list-style: none; }
-.news-entry summary::-webkit-details-marker { display: none; }
-.news-entry summary::before { content: "▸ "; color: var(--ink-faint); }
-.news-entry[open] summary::before { content: "▾ "; }
+/* What's new: a small key, then each version with its release date and + added, ~ improved, − fixed lines */
+.news-key { display: flex; gap: 14px; padding: 0 0 9px; font-size: 11.5px; font-weight: 700; color: var(--ink-faint); }
+.news-key .news-sym { display: inline-block; margin-right: 4px; }
+.news-sec { padding: 14px 0 6px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-faint); }
+.news-entry { padding: 9px 0; border-top: 1px solid var(--line); }
+.news-sec + .news-entry { border-top: 0; padding-top: 2px; }
+.news-head { display: flex; align-items: baseline; gap: 6px; cursor: pointer; list-style: none; font-size: 13.5px; }
+.news-head::-webkit-details-marker { display: none; }
+.news-head::before { content: "▸"; width: 10px; flex: none; font-size: 11px; color: var(--ink-faint); }
+.news-entry[open] .news-head::before { content: "▾"; }
+.news-ver { font-weight: 800; color: var(--ink); white-space: nowrap; }
+.news-title { font-weight: 700; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.news-date { margin-left: auto; padding-left: 8px; font-size: 12px; font-weight: 600; color: var(--ink-faint); white-space: nowrap; }
+.news-lines { list-style: none; margin: 6px 0 0; padding: 0 0 0 16px; display: flex; flex-direction: column; gap: 4px; }
+.news-lines li { display: flex; gap: 8px; font-size: 13.5px; line-height: 1.35; color: var(--ink-soft); }
+.news-sym { flex: none; width: 10px; text-align: center; font-weight: 800; }
+.news-added .news-sym { color: var(--accent); }
+.news-improved .news-sym { color: #8ec5ee; }
+.news-fixed .news-sym { color: var(--warn); }
 .admin-sec { display: flex; flex-direction: column; gap: 6px; margin: 0 0 12px; }
 .admin-row { display: flex; justify-content: space-between; align-items: center; }
 .admin-state { font-size: 12.5px; color: var(--ink-soft); }
@@ -282,9 +299,9 @@ button.craft-head { padding: 0; border: 0; background: none; color: inherit; fon
 .admin-usage { margin: -2px 0 10px !important; font-size: 12px !important; font-weight: 700; color: var(--ink-soft); }
 .admin-usage.warn { color: var(--warn); }
 .admin-usage:empty { display: none; }
-.admin-tabs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; margin-bottom: 12px; overflow-x: auto; }
-.admin-tabs .seg-btn { white-space: nowrap; padding-inline: 6px; } /* "Feedback (0)" stays on one line */
-.admin-tabs .seg-btn { font-size: 11.5px; padding: 6px 2px; min-height: 32px; }
+/* the tabs sit in rows of four, so each stays big enough to read and tap on a phone, and a new tab just joins the last row */
+.admin-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; margin-bottom: 12px; border-radius: 20px; }
+.admin-tabs .seg-btn { white-space: nowrap; font-size: 12.5px; padding: 6px 2px; min-height: 32px; }
 
 /* making your person */
 .creator { --row: clamp(34px, 5.3vh, 42px); position: absolute; inset: 0; display: flex; flex-direction: column; pointer-events: none; }
@@ -389,9 +406,9 @@ button.craft-head { padding: 0; border: 0; background: none; color: inherit; fon
 .modal-card .bag-head { margin: -8px -10px 4px 0; }
 .modal-card .bag-head h2 { margin: 0; }
 .pause-list .menu-tile { min-height: 58px; }
+.pause-list .menu-row { grid-template-columns: repeat(2, 1fr); } /* four tiles: Society, What's new, Settings, Feedback */
 /* the Admin panel keeps one height as you switch tabs; the tab's page scrolls inside it */
-.admin-panel { display: flex; flex-direction: column; height: min(78vh, 580px); }
-@supports (height: 1dvh) { .admin-panel { height: min(78dvh, 580px); } }
+.admin-panel { display: flex; flex-direction: column; min-height: 0; }
 .admin-panel .admin-tabs { flex: none; }
 .admin-panel .admin-page { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; margin-bottom: 0; }
 .admin-panel .admin-page .admin-list { max-height: none; overflow: visible; flex: none; }
@@ -415,3 +432,92 @@ button.craft-head { padding: 0; border: 0; background: none; color: inherit; fon
 .drag-ghost { position: fixed; left: 0; top: 0; width: 56px; height: 56px; z-index: 60; pointer-events: none; opacity: 0.92; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5)); }
 .drag-ghost .pic { width: 100%; height: 100%; border: 0; background: none; }
 .bag-tile .pic, .drag-ghost .pic { -webkit-user-drag: none; user-drag: none; }
+
+/* ---------- admin mode: no person, a free camera over the live world, panels floating over it (game/admin-mode.js) ---------- */
+.menu-ver { padding: 12px 6px 12px 14px; margin: -12px -6px -12px -14px; cursor: default; -webkit-user-select: none; user-select: none; touch-action: manipulation; } /* a bigger target for the 5 taps; looks the same. manipulation: quick taps are taps, never a double-tap zoom (iPhones) */
+.admin-login-actions { margin-top: 12px; }
+.is-admin .hud-top, .is-admin .hud-bottom, .is-admin .hint, .is-admin .bag, .is-admin .queue, .is-admin .chat, .is-admin .auto-chip, .is-admin .place-bar { display: none; }
+.admin-bar { position: absolute; z-index: 27; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; right: 10px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; pointer-events: none; }
+.admin-bar[hidden] { display: none; }
+.admin-bar > * { pointer-events: auto; }
+.admin-pill { display: flex; align-items: center; gap: 7px; height: 40px; padding: 0 15px 0 12px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font: 800 14px/1 var(--font-ui); }
+.admin-pill svg { width: 19px; height: 19px; }
+.admin-world, .admin-stats { display: flex; align-items: center; gap: 9px; height: 40px; padding: 0 14px; border-radius: 999px; font: 800 13.5px/1 var(--font-ui); white-space: nowrap; }
+.admin-world-time { font-weight: 700; font-size: 12.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.admin-stats { gap: 14px; font-weight: 700; font-size: 12.5px; }
+.admin-stats:empty { display: none; }
+.admin-exit { display: flex; align-items: center; gap: 7px; height: 40px; padding: 0 15px; border-radius: 999px; color: var(--ink); font: 700 13px/1 var(--font-ui); cursor: pointer; }
+.admin-exit svg { display: none; width: 20px; height: 20px; flex: none; }
+.admin-dash { margin-left: auto; }
+.admin-dash[aria-expanded="true"] { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+/* what a tool answers ("Gave Mia 5", "Moved"): a line under the bar, always in view (a note in the world could sit behind a panel) */
+.admin-toast { position: absolute; z-index: 28; top: var(--below-hud, 60px); left: 50%; transform: translateX(-50%); width: max-content; max-width: calc(100% - 24px); margin: 0; padding: 8px 14px; border-radius: 999px; font: 700 13px/1.25 var(--font-ui); text-align: center; pointer-events: none; }
+.admin-toast[hidden] { display: none; }
+/* the dashboard: docked down the left on a computer, a sheet up from the bottom on a phone. Never a pop-up: the world stays live behind it. */
+.admin-dock { position: absolute; z-index: 26; left: 10px; top: var(--below-hud, 60px); bottom: calc(10px + env(safe-area-inset-bottom, 0px)); width: 372px; max-width: calc(100% - 20px);
+  padding: 12px; border-radius: 22px; background: var(--glass-strong); color: var(--ink); border: 1px solid var(--line); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
+.admin-dock[hidden] { display: none; }
+.admin-dock .admin-panel { height: 100%; }
+.admin-dock .bag-head { margin: 0 0 8px; }
+.admin-grab { display: none; }
+@media (max-width: 700px) {
+  /* a phone: one row along the top. The two buttons become round icon buttons like the game's own, the clock goes, and
+     the counts go (the Players tab shows them on its chips), so as much of the world as possible stays in view. */
+  .admin-bar { flex-wrap: nowrap; }
+  .admin-stats, .admin-world-time { display: none; }
+  .admin-world { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .admin-exit { width: 44px; height: 44px; padding: 0; justify-content: center; flex: none; }
+  .admin-exit svg { display: block; }
+  .admin-exit span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .admin-pill, .admin-world { height: 44px; }
+  .admin-dock { left: 0; right: 0; top: auto; bottom: 0; width: auto; max-width: none; height: 58%; padding: 6px 12px calc(12px + env(safe-area-inset-bottom, 0px)); border-radius: 18px 18px 0 0; border-bottom: 0; }
+  .admin-grab { display: block; }
+  .dash-open .admin-follow { bottom: calc(58% + 10px); } /* above the open sheet, not over what's in it */
+}
+.admin-copy { margin: 0; font-size: 12.5px; line-height: 1.4; }
+.admin-copy[hidden] { display: none; }
+.admin-item-head { padding: 10px 0 2px; font-size: 13.5px; font-weight: 800; color: var(--ink); border-top: 1px solid var(--line); }
+.admin-item-head:first-child { border-top: 0; padding-top: 2px; }
+.admin-item-head + .admin-entry { border-top: 0; }
+/* following someone: a chip at the bottom of the view, like the game's own autopilot chip; tap it to stop */
+.admin-follow { position: absolute; z-index: 27; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); min-height: 40px; padding: 0 16px; border-radius: 999px; color: var(--ink); font: 700 13px/1 var(--font-ui); white-space: nowrap; cursor: pointer; }
+.admin-follow[hidden] { display: none; }
+/* a row with a box to type in and its button, inside an entry (fuel, a new name, a message) */
+.admin-entry .admin-inline { margin-top: 6px; }
+.admin-entry .admin-inline .admin-input { padding: 7px 10px; font-size: 14px; }
+select.admin-input { appearance: none; -webkit-appearance: none; }
+/* a person's needs and age as boxes to type in */
+.admin-edit { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
+.admin-edit label { display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; font-weight: 700; color: var(--ink-soft); }
+.admin-edit .admin-input { padding: 6px 8px; font-size: 14px; }
+/* the Log: one line each, when and what */
+.admin-logday { padding: 10px 0 4px; font-size: 12px; font-weight: 800; color: var(--ink-soft); }
+.admin-logday:first-child { padding-top: 2px; }
+.admin-logline { display: grid; grid-template-columns: 66px 1fr; gap: 8px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; }
+.admin-logday + .admin-logline { border-top: 0; }
+.admin-logtime { color: var(--ink-faint); font-size: 11.5px; font-weight: 700; padding-top: 1px; white-space: nowrap; }
+.admin-logline.admin span:last-child { color: var(--ink-soft); }
+.admin-logline.guard span:last-child { color: var(--warn); }
+/* iPhones zoom the whole page in when a box with text under 16 px is tapped, and stay zoomed. So on touch screens every
+   box the admin types in is 16 px, like the game's own Say and name boxes. */
+@media (pointer: coarse) {
+  .admin-input, .admin-entry .admin-inline .admin-input, .admin-edit .admin-input, .admin-setting .admin-input, .admin-copy { font-size: 16px; }
+}
+
+/* ---------- societies (0.1.4): the Society panel and the invite card ---------- */
+.soc-err { margin: -6px 0 10px; }
+.soc-members { display: flex; flex-direction: column; margin: -4px 0 8px; }
+.soc-member { display: flex; align-items: center; gap: 8px; min-height: 44px; border-top: 1px solid var(--line); }
+.soc-member:first-child { border-top: 0; }
+.soc-member .soc-who { flex: 1; min-width: 0; font: 700 14.5px/1.2 var(--font-ui); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.soc-member .soc-who small { display: block; font-size: 11.5px; font-weight: 700; color: var(--ink-soft); }
+.soc-member .small-btn { min-height: 34px; padding: 0 11px; font-size: 12.5px; }
+#socFoot { justify-content: space-between; }
+#socFoot[hidden] { display: none; }
+#socFoot small { font-size: 11.5px; font-weight: 700; color: var(--ink-soft); }
+.soc-invite { position: absolute; top: var(--below-hud, 90px); left: 50%; transform: translateX(-50%); z-index: 56; width: max-content; max-width: calc(100% - 32px); border-radius: 16px; padding: 10px 12px 6px 15px; font: 700 14px/1.3 var(--font-ui); display: grid; gap: 2px; }
+.soc-invite[hidden] { display: none; }
+.soc-invite small { font-size: 12px; font-weight: 700; color: var(--warn); }
+.soc-invite small[hidden] { display: none; }
+.soc-invite-btns { display: flex; justify-content: flex-end; align-items: center; gap: 6px; }
+.soc-invite-btns .action-btn { min-height: 36px; padding: 0 16px; }

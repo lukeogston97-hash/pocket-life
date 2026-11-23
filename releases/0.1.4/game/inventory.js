@@ -125,9 +125,14 @@ function bagDragOn(b, s) {
       document.body.appendChild(ghost);
       $('bag').classList.add('dragging');
       bagDragging = true;
+      dragPoint = { x: e.clientX, y: e.clientY, armed: false };
       move(e);
     };
-    const move = (m) => { if (ghost) ghost.style.transform = `translate(${m.clientX - 28}px, ${m.clientY - 28}px)`; };
+    const move = (m) => {
+      if (!ghost) return;
+      ghost.style.transform = `translate(${m.clientX - 28}px, ${m.clientY - 28}px)`;
+      if (dragPoint) { dragPoint.x = m.clientX; dragPoint.y = m.clientY; }
+    };
     const onMove = (m) => {
       if (!ghost) {
         const far = Math.hypot(m.clientX - x0, m.clientY - y0) > (touch ? 10 : 8);
@@ -145,6 +150,7 @@ function bagDragOn(b, s) {
       ghost.remove();
       $('bag').classList.remove('dragging');
       bagDragging = false;
+      dragPoint = null;
       bagDragged = Date.now();
       if (m && !over) bagDropAt(s, m);
       if (!bagOpen()) openBag();
@@ -157,45 +163,50 @@ function bagDragOn(b, s) {
   });
 }
 let bagDragging = false;
+let dragPoint = null; // where a drag is now ({x, y}): near the edge of the screen the view slides that way (edgePan in input.js)
 document.addEventListener('touchmove', (e) => { if (bagDragging && e.cancelable) e.preventDefault(); }, { passive: false });
-// where a drag let go decides what happens. s: the tile ({kind, i}); loose: a lone item lying on the ground (picked up first)
+// where a drag let go decides what happens, as a task at the end of your list. s: the tile ({kind, i}); loose: a lone item
+// lying on the ground (picked up first; what comes after only happens if that pick-up does)
 function bagDropAt(s, e, loose) {
   const kind = s.kind, it = ITEMS[kind];
   if (ui.mode !== 'world' || !player || you.dead || (!loose && !you.carry[kind])) return;
   const r = canvas.getBoundingClientRect();
   if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return; // let go off the world: nothing
   const t = pickTarget(...toCanvas(e));
-  const pick = () => { if (loose) queueTask({ type: 'pickup', id: loose.id }); };
+  const say = (text) => showTag(text, headTop(), 2);
+  const pick = () => {
+    if (!loose) return true;
+    queueTask({ type: 'pickup', id: loose.id });
+    return allTasks().some((q) => q.type === 'pickup' && q.id === loose.id);
+  };
+  const then = (task) => { if (pick()) queueTask(loose ? { ...task, from: loose.id } : task); };
   if (t && t.kind === 'you') {
     if (loose) pick(); // (picks it up; eat it from the bag)
-    else if (it.eat) eatOne(kind); else showTag(`Can't eat ${it.name.toLowerCase()}`);
+    else if (it.eat) eatOne(kind); else say(`Can't eat ${it.name.toLowerCase()}`);
     return;
   }
   if (t && t.kind === 'placed' && t.th.built) {
     const th = t.th, P = PLACEABLES[th.kind];
     if (P.fire && P.fire.fuels[kind]) {
-      if (roomFor(th, kind) < 1) showTag('Fire is full'); else { pick(); queueTask({ type: 'tend', id: th.id, do: 'add', n: 1, fuel: kind }); }
+      if (roomFor(th, kind) < 1) say('Fire is full'); else then({ type: 'tend', id: th.id, do: 'add', n: 1, fuel: kind });
       return;
     }
     const r2 = RECIPES.find((q) => q.near === th.kind && q.needs[kind] && recipeKnown(q));
     if (r2) {
-      if (P.fire && !isLit(th)) { showTag('Light the fire first'); return; }
+      if (P.fire && !isLit(th)) { say('Light the fire first'); return; }
       const why = loose ? '' : cantMake(r2);
-      if (why && why !== 'Not here') showTag(why); else { pick(); queueTask({ type: 'make', id: th.id, recipe: r2.id }); }
+      if (why && why !== 'Not here') say(why); else then({ type: 'make', id: th.id, recipe: r2.id });
       return;
     }
+    // (storage, later: a placed thing that holds items gets a "put in" task here)
   }
   ray.setFromCamera(ndc, camera);
   const gh = ray.intersectObject(terrain, false)[0]; // the ground under your finger (past grass, trees and the like)
   const at = t && t.kind === 'item' ? { x: t.item.x + 0.3, z: t.item.z + 0.3 } : t && t.kind === 'ground' ? { x: t.point.x, z: t.point.z }
     : gh && !['shore', 'use'].includes(t && t.kind) ? { x: gh.point.x, z: gh.point.z } : null;
-  if (loose) {
-    if (!at) return; // dropped on something else: stays where it was
-    pick();
-    queueTask({ type: 'drop', kind, n: 1, x: at.x, z: at.z });
-    return;
-  }
-  dropItems(kind, 1, it.uses ? s.i : undefined, at);
+  if (!at) { say("Can't put it there"); return; } // the pond, a bush
+  if (!loose && spareInBag(kind) < 1) { say('Already in your queue'); return; } // every one you carry is already queued to go somewhere
+  then({ type: 'drop', kind, n: 1, ...(!loose && it.uses ? { which: s.i } : {}), x: at.x, z: at.z });
 }
 // the bar under the grid: what it is, and what you can do with it (the main thing in green)
 function drawBagInfo(s) {

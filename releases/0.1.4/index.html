@@ -120,7 +120,7 @@
         <button id="menuSettingsBtn" type="button" class="menu-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Settings</button>
         <button id="menuFeedbackBtn" type="button" class="menu-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/></svg>Feedback</button>
       </div>
-      <div class="menu-foot"><span class="net-line" id="menuNet" data-state="connecting"><i class="net-dot" aria-hidden="true"></i><span id="menuNetText">Connecting…</span></span><span class="menu-ver">v<span class="ver"></span></span></div>
+      <div class="menu-foot"><span class="net-line" id="menuNet" data-state="connecting"><i class="net-dot" aria-hidden="true"></i><span id="menuNetText">Connecting…</span></span><span id="menuVer" class="menu-ver">v<span class="ver"></span></span></div>
     </div>
   </section>
 
@@ -144,12 +144,12 @@
       <div class="pause-list">
         <button id="resumeBtn" type="button" class="action-btn">Resume</button>
         <div class="menu-row">
+          <button id="pauseSocietyBtn" type="button" class="menu-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="16.5" cy="9" r="2.6"/><path d="M15.6 14.1c2.5-.2 4.4 1.3 4.9 4.4"/></svg>Society</button>
           <button id="pauseNewsBtn" type="button" class="menu-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.4 5.6 6.1.5-4.6 4 1.4 5.9L12 16l-5.3 3 1.4-5.9-4.6-4 6.1-.5z"/></svg>What's new</button>
           <button id="pauseSettingsBtn" type="button" class="menu-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Settings</button>
           <button id="pauseFeedbackBtn" type="button" class="menu-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/></svg>Feedback</button>
         </div>
         <button id="exitBtn" type="button" class="small-btn">Exit</button>
-        <button id="pauseAdminBtn" type="button" class="small-btn" hidden>Admin</button>
       </div>
     </div>
   </div>
@@ -186,15 +186,18 @@
     </form>
   </div>
 
-  <div id="adminPanel" class="modal" hidden>
-    <div class="modal-card admin-card admin-panel" role="dialog" aria-modal="true" aria-labelledby="adminTitle">
-      <div class="bag-head"><h2 id="adminTitle">Admin</h2><button id="adminClose" class="text-btn" type="button">Close</button></div>
+  <section id="adminPanel" class="admin-dock" aria-labelledby="adminTitle" hidden>
+    <div class="admin-panel">
+      <div class="grab admin-grab" aria-hidden="true"></div>
+      <div class="bag-head"><h2 id="adminTitle">Dashboard</h2><button id="adminClose" class="text-btn" type="button">Hide</button></div>
       <div class="seg admin-tabs" role="group" aria-label="Admin">
         <button type="button" class="seg-btn" data-admin-tab="server" data-label="Server">Server</button>
         <button type="button" class="seg-btn" data-admin-tab="players" data-label="Players">Players</button>
         <button type="button" class="seg-btn" data-admin-tab="inbox" data-label="Inbox">Inbox</button>
         <button type="button" class="seg-btn" data-admin-tab="world" data-label="World">World</button>
         <button type="button" class="seg-btn" data-admin-tab="settings" data-label="Settings">Settings</button>
+        <button type="button" class="seg-btn" data-admin-tab="items" data-label="Items">Items</button>
+        <button type="button" class="seg-btn" data-admin-tab="log" data-label="Log">Log</button>
       </div>
       <div class="admin-page" data-admin-page="server">
         <p id="adminUsage" class="admin-usage"></p>
@@ -212,7 +215,6 @@
           <div class="admin-chips" id="adminSpeedMins"></div>
           <button id="adminSpeedBtn" type="button" class="small-btn">Start</button>
         </div>
-        <button id="adminTagBtn" type="button" class="small-btn admin-wide">Admin tag: on</button>
       </div>
       <div class="admin-page" data-admin-page="players" hidden>
         <input id="adminFind" class="admin-input" maxlength="30" placeholder="Search by name" autocomplete="off">
@@ -231,9 +233,17 @@
         <div id="adminCounts" class="admin-counts"></div>
         <button id="adminRegrowBtn" type="button" class="small-btn admin-wide">Regrow everything</button>
         <div class="admin-sec">
+          <div class="admin-row"><span class="lbl">Fires and claims</span><span id="adminFiresState" class="admin-state"></span></div>
+          <div id="adminFires" class="admin-list"></div>
+        </div>
+        <div class="admin-sec">
+          <div class="admin-row"><span class="lbl">Societies</span><span id="adminSocsState" class="admin-state"></span></div>
+          <div id="adminSocs" class="admin-list"></div>
+        </div>
+        <div class="admin-sec">
           <span class="lbl">Clear loose items</span>
           <div class="admin-grid">
-            <button id="adminClearNearBtn" type="button" class="small-btn">Near me (10 m)</button>
+            <button id="adminClearNearBtn" type="button" class="small-btn">Middle of view (10 m)</button>
             <button id="adminClearAllBtn" type="button" class="small-btn">Whole world</button>
           </div>
         </div>
@@ -253,8 +263,18 @@
       <div class="admin-page" data-admin-page="settings" hidden>
         <div id="adminSettings" class="admin-list"></div>
       </div>
+      <div class="admin-page" data-admin-page="log" hidden>
+        <div class="admin-chips" id="adminLogShow"></div>
+        <div id="adminLog" class="admin-list"></div>
+      </div>
+      <div class="admin-page" data-admin-page="items" hidden>
+        <input id="adminItemsFind" class="admin-input" maxlength="30" placeholder="Search items and recipes" autocomplete="off">
+        <div class="admin-row"><span id="adminItemsState" class="admin-state"></span><button id="adminItemsCopy" type="button" class="small-btn">Copy my changes</button></div>
+        <textarea id="adminItemsText" class="feedback-text admin-copy" rows="4" readonly aria-label="Your changes, to copy" hidden></textarea>
+        <div id="adminItems" class="admin-list"></div>
+      </div>
     </div>
-  </div>
+  </section>
 
   <div id="adminPick" class="modal" hidden>
     <div class="modal-card admin-card" role="dialog" aria-modal="true" aria-labelledby="adminPickTitle">
@@ -265,6 +285,29 @@
       <div id="adminPickList" class="admin-list admin-pick-list"></div>
     </div>
   </div>
+
+  <div id="adminLogin" class="modal" hidden>
+    <form id="adminLoginForm" class="modal-card" role="dialog" aria-modal="true" aria-labelledby="adminLoginTitle" autocomplete="off">
+      <h2 id="adminLoginTitle">Admin</h2>
+      <p id="adminLoginNote">Enter the admin password.</p>
+      <label for="adminLoginCode" class="sr-only">Admin password</label>
+      <input id="adminLoginCode" class="admin-input" type="password" maxlength="100" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go">
+      <div class="modal-actions admin-login-actions">
+        <button id="adminLoginCancel" type="button" class="text-btn">Cancel</button>
+        <button id="adminLoginGo" type="submit" class="action-btn">Open</button>
+      </div>
+    </form>
+  </div>
+
+  <header id="adminBar" class="admin-bar" hidden>
+    <div class="admin-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>Admin</div>
+    <div class="admin-world glass"><span id="adminWorldName">Oceania</span><span id="adminWorldTime" class="admin-world-time"></span></div>
+    <div id="adminCountsBar" class="admin-stats glass" aria-live="polite"></div>
+    <button id="adminDashBtn" type="button" class="admin-exit admin-dash glass" aria-controls="adminPanel" aria-expanded="false" aria-label="Dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4" width="17" height="16" rx="3"/><path d="M9.5 4v16M13 9h4.5M13 13h4.5"/></svg><span>Dashboard</span></button>
+    <button id="adminExit" type="button" class="admin-exit glass" aria-label="Exit admin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 16l4-4-4-4M14 12H4"/></svg><span>Exit admin</span></button>
+  </header>
+  <p id="adminToast" class="admin-toast glass" role="status" hidden></p>
+  <button id="adminFollow" type="button" class="admin-follow glass" hidden></button>
 
   <div id="announce" class="announce" hidden><span id="announceText"></span></div>
 
@@ -282,6 +325,27 @@
       <p id="backText"></p>
       <div class="modal-actions"><button id="backBtn" type="button" class="action-btn">Carry on</button></div>
     </div>
+  </div>
+
+  <div id="society" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="socTitle">
+      <div class="bag-head"><h2 id="socTitle">Society</h2><button id="socClose" class="text-btn" type="button">Close</button></div>
+      <p id="socText"></p>
+      <form id="socStartForm" novalidate>
+        <label for="socName" class="sr-only">Society name</label>
+        <input id="socName" class="feedback-text" type="text" maxlength="20" autocomplete="off" placeholder="Society name" enterkeyhint="go">
+        <p id="socErr" class="err soc-err" hidden></p>
+        <div class="modal-actions"><button type="submit" class="action-btn">Start a society</button></div>
+      </form>
+      <div id="socMembers" class="soc-members"></div>
+      <div id="socFoot" class="modal-actions" hidden><button id="socLeave" type="button" class="text-btn">Leave</button></div>
+    </div>
+  </div>
+
+  <div id="socInvite" class="soc-invite glass" role="alertdialog" aria-labelledby="socInviteText" hidden>
+    <span id="socInviteText"></span>
+    <small id="socInviteNote" hidden></small>
+    <div class="soc-invite-btns"><button id="socNo" type="button" class="text-btn">No thanks</button><button id="socYes" type="button" class="action-btn">Join</button></div>
   </div>
 
   <div id="news" class="modal" hidden>
@@ -332,6 +396,11 @@ if (brought) {
   if (!localStorage.getItem(PID_KEY)) localStorage.setItem(PID_KEY, brought.slice(0, 64)); // a person you already have here stays yours
   history.replaceState(null, '', location.pathname + location.search);
 }
+// ?v=... is only there to get past the phone's cache when the game updated itself: take it out of the address
+if (new URLSearchParams(location.search).has('v')) {
+  const url = new URL(location.href); url.searchParams.delete('v');
+  history.replaceState(null, '', url.pathname + url.search + url.hash);
+}
 try {
   const res = await fetch('game-data.json', { cache: 'no-store' });
   if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -352,7 +421,7 @@ document.documentElement.style.visibility = '';
 // The game's code is kept in small files by topic (game/*.js, in this order). They share one scope, so they're
 // joined into one module here and run together, exactly as if they were one file.
 const PARTS = ['rules', 'core', 'land', 'nature', 'plants', 'world-build', 'items', 'people', 'world-items', 'you', 'needs',
-  'inventory', 'camera', 'moving', 'placeables', 'input', 'screens', 'loop', 'online', 'admin', 'others', 'start'];
+  'inventory', 'camera', 'moving', 'placeables', 'input', 'screens', 'loop', 'online', 'admin', 'others', 'society', 'admin-mode', 'start'];
 let code;
 try {
   code = await Promise.all(PARTS.map(async (p) => {
