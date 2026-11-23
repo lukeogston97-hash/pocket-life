@@ -233,7 +233,7 @@ export class World extends DurableObject {
     const p = this.persons.get(me.who);
     const save = () => { this.touch(p); this.flush(p.who); }; // what they did is saved straight away
     if (m.t.startsWith('a.')) { if (isAdmin) await this.adminDo(ws, me, m); return; } // the admin's tools (admin.js)
-    const action = ACTIONS[m.t]; // everything else (actions.js)
+    const action = Object.hasOwn(ACTIONS, m.t) ? ACTIONS[m.t] : null; // everything else (actions.js); only its own handlers, nothing every object has
     if (!action) return;
     if (action.when !== 'any') {
       if (!this.alive(p)) return;

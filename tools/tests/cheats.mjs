@@ -115,6 +115,33 @@ expect(JSON.stringify(await says('hello \u202ethere')) === '["hello there"]', 't
 expect((await says('\u200b\u2060')).length === 0 && (await says('\u3164')).length === 0, 'a line with nothing to see in it is not sent to anyone');
 expect(JSON.stringify(await says('ça va? 🙂 ok')) === '["ça va? 🙂 ok"]', 'ordinary chat with accents and an emoji is kept as typed');
 
+console.log('G. names every object has (constructor, toString...) are not kinds of message, recipes, items or fuels');
+S = await start(LAYOUT());
+S.w.world.placed = [{ id: 1, kind: 'campfire', x: 31, z: 31, rot: 0, built: true, fuel: 3600000, lit: true, at: Date.now(), by: 'hax' }];
+S.p.x = 30; S.p.z = 30;
+Object.assign(S.p, { carry: { stick: 5, 'stone-axe': 2, berry: 1 }, wear: { 'stone-axe': [5] } });
+const had = JSON.stringify(S.p.carry), fuelWas = S.w.world.placed[0].fuel;
+let threw = 0;
+const quietly = async (m) => { try { await S.ask(m); } catch (e) { threw++; console.log('       threw:', e.message, 'on', JSON.stringify(m)); } };
+const hush = console.error; console.error = () => {}; // (an error the server notes is printed as well: the notes are counted below)
+for (const k of ['__proto__', 'constructor', 'toString', 'valueOf', 'hasOwnProperty', 'isPrototypeOf']) {
+  await quietly({ t: k }); await quietly({ t: k, id: k, kind: k });
+  await quietly({ t: 'craft', id: k }); await quietly({ t: 'eat', kind: k }); await quietly({ t: 'drink', source: k });
+  await quietly({ t: 'drop', items: [{ kind: k, x: 30, z: 30 }] }); await quietly({ t: 'place', kind: k, x: 30.5, z: 30.5 });
+  await quietly({ t: 'chop', what: k, idx: 0, id: 1 }); await quietly({ t: 'quarry', what: k, idx: 0 });
+  await quietly({ t: 'cut', plant: k, i: 0 }); await quietly({ t: 'take', id: k }); await quietly({ t: 'sit', id: k, seat: k }); await quietly({ t: 'report', id: k, reason: k });
+}
+console.error = hush;
+await wait(20);
+const errorNotes = ((await S.w.ctx.storage.get('feedback')) || []).filter((x) => x.auto);
+expect(threw === 0, 'none of them makes the server throw', `${threw} threw`);
+expect(errorNotes.length === 0, "none of them puts a Server error note in the admin's Inbox", errorNotes.map((x) => x.text.slice(0, 70)).join(' | '));
+expect(JSON.stringify(S.p.carry) === had && S.w.world.items.length === 0, 'and the person carries what they did, with nothing new on the ground', JSON.stringify(S.p.carry));
+// feeding a fire with a fuel called constructor: taken as the fire's usual fuel (sticks), as any unknown fuel is
+await quietly({ t: 'fire', id: 1, do: 'add', fuel: 'constructor', n: 2 });
+const fed = S.w.world.placed[0].fuel - fuelWas;
+expect(threw === 0 && S.p.carry.stick === 3 && Math.abs(fed - 2 * 300000) < 30000, 'a fuel called constructor feeds the fire with 2 of its usual fuel, sticks, and nothing odd', `${S.p.carry.stick} sticks left, fuel up ${Math.round(fed / 60000)} min`);
+
 const failed = results.filter((ok) => !ok).length;
 console.log(`\n${results.length - failed} of ${results.length} as they should be${failed ? `, ${failed} NOT` : ''}`);
 process.exit(failed ? 1 : 0);

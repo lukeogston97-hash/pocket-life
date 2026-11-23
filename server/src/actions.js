@@ -95,7 +95,7 @@ export const ACTIONS = {
   } },
   // making something from a recipe; one with "near" (cooking) needs a built one of that close by, a fire lit
   craft: { when: 'alive', async run({ ws, me, m, p, w, reply, save }) {
-    const r = (G.recipes || {})[m.id];
+    const r = Object.hasOwn(G.recipes || {}, String(m.id)) ? G.recipes[m.id] : null; // (only a real recipe: a name every object has, like 'constructor', isn't one)
     if (r && (!r.near || this.stationFor(p, r.near)) && craft(p, r, G)) { spend(p, 'craft', G); save(); }
     reply(this.mine(p));
   } },
@@ -146,7 +146,7 @@ export const ACTIONS = {
   drop: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
     const added = [];
     for (const it of (Array.isArray(m.items) ? m.items : []).slice(0, 60)) {
-      if (!it || !kindOk(it.kind) || !p.carry[it.kind]) continue;
+      if (!it || !kindOk(it.kind) || !Object.hasOwn(G.items, it.kind) || !Object.hasOwn(p.carry, it.kind) || !p.carry[it.kind]) continue; // a real item they really carry
       const full = (G.items[it.kind] || {}).uses, which = Number.isInteger(it.which) && it.which >= 0 && it.which < p.carry[it.kind] ? it.which : undefined; // which tool (0 is the one in use)
       const uses = full ? wearList(p, it.kind, G)[which ?? p.carry[it.kind] - 1] : null;
       if (!takeCarry(p, it.kind, 1, which)) continue;
@@ -345,7 +345,7 @@ export const ACTIONS = {
     if (cl) { reply({ t: 'placeNo', why: this.claimNo(cl) }); this.sendPlaced(th, reply, {}); reply(this.mine(p)); return; }
     let note = '';
     if (m.do === 'add') {
-      const kind = m.fuel && f.fuels[m.fuel] ? m.fuel : f.fuel, each = f.fuels[kind]; // sticks, or another fuel like logs
+      const kind = typeof m.fuel === 'string' && Object.hasOwn(f.fuels, m.fuel) ? m.fuel : f.fuel, each = f.fuels[kind]; // sticks, or another fuel like logs
       const room = fuelRoom(f, th.fuel, kind); // one that only part fits still goes on (rules.js)
       const n = Math.min(Math.max(1, Math.floor(m.n) || 1), room, p.carry[kind] || 0);
       if (n > 0) { takeCarry(p, kind, n); th.fuel = Math.min(f.max, th.fuel + n * each); }

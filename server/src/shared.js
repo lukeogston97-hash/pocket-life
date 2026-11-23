@@ -62,7 +62,7 @@ export const AWAY_SAVE_EVERY = 60 * MINUTE;
 export const FREE = { writes: 100000, requests: 100000 };
 export const TURN_MS = 60000; // how long someone at the front of the line has to take their spot
 export function allowed(ws, me, t) {
-  const lim = LIMITS[t];
+  const lim = Object.hasOwn(LIMITS, t) ? LIMITS[t] : null; // (a kind of message called 'constructor' has no limit of its own: it isn't a kind of message)
   if (!lim || (me.admin && me.watch && !me.who)) return true; // (the admin: a connection that only watches, index.js isAdmin)
   const [rate, burst] = lim, now = Date.now() / 1000;
   let b = buckets.get(ws);
