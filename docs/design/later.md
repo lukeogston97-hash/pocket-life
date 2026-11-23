@@ -20,6 +20,5 @@ Fixed on this branch (see docs/design/code.md): things that aren't in the world,
 - Loose items never go away by themselves (sticks top up to their cap, but dropped and chopped things stay for ever). Over weeks the ground fills and every phone has to draw it. The admin's Clear loose items is the only broom. Idea: things left lying for some days fade.
 - A ban is by the phone's id (a random id the browser keeps). Clearing the site's data makes a new one. Known limit of having no sign-in.
 - The feedback box has 15 px text. An iPhone zooms the whole page in when a box under 16 px is tapped (the Say and name boxes are 16 px, and the admin's boxes are now too). One line of CSS if wanted: it is a player's screen, so not changed without asking.
-- The layout check has failed since 0.3.4: that update moved the 46 standing spots at the pond's edge on purpose (so walking to the water never gets stuck) and no new baseline was saved. Trees, bushes, rocks, grass, old stumps and open ground are unchanged. `UPDATE_LAYOUT=1 python3 tools/tests/run.py layout` saves a new baseline: left for Luke to say, because the rule is that the layout never moves.
 - At the player limit (20 playing all day, 300 away) the server uses about 81,000 of the free 100,000 storage writes a day (tools/tests/load.py 300). Fine for now; see docs/design/code.md for the ideas if it grows.
 
