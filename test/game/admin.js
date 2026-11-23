@@ -28,7 +28,8 @@ function adminMessage(m) {
     drawAdmin();
     if (!was) adminSend({ t: 'a.list' }); // (the list: for the Inbox count)
     if (m.text) adminSay(m.text);
-  } else if (m.t === 'adminList') { inboxData = m; drawInbox(); }
+  } else if (m.t === 'adminItems') { itemsData = m.list || []; if (adminTab === 'items') drawItems(); }
+  else if (m.t === 'adminList') { inboxData = m; drawInbox(); }
   else if (m.t === 'adminPlayers') { playersData = m; drawPlayers(); }
   else if (m.t === 'adminPlayer') { playerData = m; if (adminTab === 'player') drawPlayer(); }
   else if (m.t === 'adminNew') { // new feedback or a report just came in: the Inbox count goes up straight away
@@ -234,6 +235,7 @@ function showAdminTab(tab) {
   if (tab === 'inbox') drawInbox();
   if (tab === 'world') { drawCounts(); drawRestore(); }
   if (tab === 'settings') drawSettings();
+  if (tab === 'items') { adminSend({ t: 'a.items' }); drawItems(); }
   if (tab === 'player') drawPlayer();
 }
 for (const b of document.querySelectorAll('[data-admin-tab]')) b.addEventListener('click', () => showAdminTab(b.dataset.adminTab));
@@ -489,3 +491,61 @@ function drawSettings() {
   $('adminSettings').replaceChildren(...(out.length ? out : [emptyNote('Loading…')]));
 }
 drawAdmin();
+
+/* ---------- Items tab: an item's and a recipe's numbers, changed live (server/src/live-items.js) ----------
+   The list comes from the server (every number that can be changed, what the game file says, and whether it's been
+   changed), so a new item or recipe shows up here by itself. A changed number wins over the game file until Reset. */
+let itemsData = null;
+// which heading a number sits under, and what it's called
+function itemPlace(at) {
+  const [what, id, field, sub] = at, plural = (k) => (ITEMS[k] ? ITEMS[k].plural.toLowerCase() : k);
+  if (what === 'items') {
+    const it = ITEMS[id], head = it ? it.name : id;
+    if (field === 'weight') return { head, label: 'Weight', step: 1 };
+    if (field === 'uses') return { head, label: 'Uses before it wears out', step: 1 };
+    return { head, label: `Fills ${(STAT[sub] ? STAT[sub].name : sub).toLowerCase()} by`, step: 0.1 };
+  }
+  const r = RECIPES.find((x) => x.id === id), head = r ? recipeName(r) : id;
+  return { head, label: `Recipe ${field === 'needs' ? 'needs' : 'makes'}: ${plural(sub)}`, step: 1 };
+}
+function drawItems() {
+  const box = $('adminItems');
+  if (!itemsData) { box.replaceChildren(emptyNote('Loading…')); return; }
+  const q = $('adminItemsFind').value.trim().toLowerCase(), changed = itemsData.filter((e) => e.changed);
+  $('adminItemsState').textContent = changed.length ? `${changed.length} changed from the game file` : 'All as the game file has them';
+  $('adminItemsCopy').disabled = !changed.length;
+  const typing = document.activeElement && document.activeElement.tagName === 'INPUT' && box.contains(document.activeElement);
+  if (typing) return; // (not while a number is being typed: the list would lose it)
+  const out = [];
+  let head = null;
+  // an item's own numbers and its recipe's sit together under one heading, headings in A to Z order
+  const rows = itemsData.map((e, i) => ({ e, i, pl: itemPlace(e.at) })).sort((a, b) => a.pl.head.localeCompare(b.pl.head) || a.i - b.i);
+  for (const { e, pl } of rows) {
+    if (q && !pl.head.toLowerCase().includes(q) && !pl.label.toLowerCase().includes(q)) continue;
+    if (pl.head !== head) { head = pl.head; out.push(el('div', 'admin-item-head', head)); }
+    const row = el('div', 'admin-entry admin-setting'), input = el('input', 'admin-input');
+    Object.assign(input, { type: 'number', inputMode: 'decimal', min: 0, step: pl.step, value: String(e.value) });
+    input.setAttribute('aria-label', `${pl.head}: ${pl.label}`);
+    const label = el('div');
+    label.append(el('div', 'admin-body', pl.label), el('div', 'admin-tag', e.changed ? `Changed (was ${e.base})` : `Game file: ${e.base}`));
+    const bar = el('div', 'admin-btns');
+    bar.append(button('Save', () => { const v = Number(input.value); if (input.value !== '' && Number.isFinite(v)) adminSend({ t: 'a.liveItem', at: e.at, value: v }); }),
+      ...(e.changed ? [button('Reset', () => adminSend({ t: 'a.liveItem', at: e.at, value: null }))] : []));
+    row.append(label, input, bar);
+    out.push(row);
+  }
+  box.replaceChildren(...(out.length ? out : [emptyNote(q ? 'Nothing called that' : 'Nothing to change yet')]));
+}
+$('adminItemsFind').addEventListener('input', drawItems);
+// Copy my changes: a plain list of what's been changed, to paste so it can be written into game-data.json
+// (after that the file and the admin agree, and the changes clear by themselves).
+function itemsChangesText() {
+  const lines = (itemsData || []).filter((e) => e.changed).map((e) => `${e.at.join('.')}: ${e.base} -> ${e.value}`);
+  return lines.length ? `Pocket Life admin changes (${VERSION_LABEL})\n${lines.join('\n')}` : '';
+}
+$('adminItemsCopy').addEventListener('click', async () => {
+  const text = itemsChangesText(), box = $('adminItemsText');
+  if (!text) return;
+  box.value = text; box.hidden = false; // shown as well, in case this phone won't let a page copy by itself
+  try { await navigator.clipboard.writeText(text); adminSay('Copied. Paste it to have the game file updated'); } catch (err) { box.focus(); box.select(); adminSay('Select the text and copy it'); }
+});

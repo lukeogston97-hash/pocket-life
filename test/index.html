@@ -195,6 +195,7 @@
         <button type="button" class="seg-btn" data-admin-tab="inbox" data-label="Inbox">Inbox</button>
         <button type="button" class="seg-btn" data-admin-tab="world" data-label="World">World</button>
         <button type="button" class="seg-btn" data-admin-tab="settings" data-label="Settings">Settings</button>
+        <button type="button" class="seg-btn" data-admin-tab="items" data-label="Items">Items</button>
       </div>
       <div class="admin-page" data-admin-page="server">
         <p id="adminUsage" class="admin-usage"></p>
@@ -251,6 +252,12 @@
       </div>
       <div class="admin-page" data-admin-page="settings" hidden>
         <div id="adminSettings" class="admin-list"></div>
+      </div>
+      <div class="admin-page" data-admin-page="items" hidden>
+        <input id="adminItemsFind" class="admin-input" maxlength="30" placeholder="Search items and recipes" autocomplete="off">
+        <div class="admin-row"><span id="adminItemsState" class="admin-state"></span><button id="adminItemsCopy" type="button" class="small-btn">Copy my changes</button></div>
+        <textarea id="adminItemsText" class="feedback-text admin-copy" rows="4" readonly aria-label="Your changes, to copy" hidden></textarea>
+        <div id="adminItems" class="admin-list"></div>
       </div>
     </div>
   </section>

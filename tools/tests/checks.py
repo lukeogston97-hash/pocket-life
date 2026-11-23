@@ -1195,7 +1195,55 @@ async def live_items_game():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game}
+async def admin_items():
+    """The Items tab in admin mode: find an item, change a number with the real box and Save, see it marked changed with what it was, a player's game follows, Copy my changes lists it, Reset puts it back."""
+    rows = """(() => [...document.querySelectorAll('#adminItems > *')].map((r) => r.classList.contains('admin-item-head') ? { head: r.textContent }
+      : { label: r.querySelector('.admin-body').textContent, tag: r.querySelector('.admin-tag').textContent, value: r.querySelector('input').value, btns: [...r.querySelectorAll('button')].map((b) => b.textContent) }))()"""
+    async with world(TESTKIT=1) as W:
+        p = await W.page('itemsP'); await join(p)
+        a = await W.page('itemsA', 1440, 900); await open_admin(a)
+        await a.click('#adminDashBtn'); await a.wait_for_timeout(300)
+        await a.click('[data-admin-tab="items"]')
+        await a.wait_for_function("document.querySelectorAll('#adminItems .admin-setting').length > 20", timeout=20000)
+        all_rows = await a.evaluate(rows)
+        heads = [r['head'] for r in all_rows if 'head' in r]
+        expect(len(heads) == len(set(heads)) and heads == sorted(heads, key=str.lower) and 'Stone knife' in heads and 'Berry' in heads, f'every item is listed once, A to Z ({len(heads)} headings, {len(all_rows) - len(heads)} numbers)')
+        expect('All as the game file has them' in await text(a, '#adminItemsState') and await a.evaluate("document.getElementById('adminItemsCopy').disabled"), 'to start nothing is changed, and there is nothing to copy')
+        # find the stone knife: its own numbers and its recipe's, together
+        await a.fill('#adminItemsFind', 'stone knife'); await a.wait_for_timeout(500)
+        kn = await a.evaluate(rows)
+        labels = [r['label'] for r in kn if 'label' in r]
+        expect([r.get('head') for r in kn if 'head' in r] == ['Stone knife'] and labels == ['Weight', 'Uses before it wears out', 'Recipe needs: sticks', 'Recipe needs: stones', 'Recipe needs: twine', 'Recipe makes: stone knives'], f'search finds the stone knife with its own numbers and its recipe ({labels})')
+        # change its weight in the real box
+        w0 = await p.evaluate("Number(document.getElementById('carryWeight').textContent)")
+        await a.fill('#adminItems .admin-setting >> nth=0 >> input', '4')
+        await a.click('#adminItems .admin-setting >> nth=0 >> text=Save')
+        await a.wait_for_function(f"(({rows}).find((r) => r.label === 'Weight') || {{}}).tag === 'Changed (was 1)'", timeout=20000)
+        row = [r for r in await a.evaluate(rows) if r.get('label') == 'Weight'][0]
+        expect(row['value'] == '4' and row['tag'] == 'Changed (was 1)' and row['btns'] == ['Save', 'Reset'], f'Save marks it changed with what it was, and offers Reset ({row})')
+        expect('1 changed' in await text(a, '#adminItemsState'), f"the tab says how many are changed ({await text(a, '#adminItemsState')})")
+        # a player carrying nothing that changed is unaffected; give them a knife and it weighs 4
+        await a.evaluate(f"window.__sock.send(JSON.stringify({{ t: 'a.give', id: '{await p.evaluate('__pl.net.myId')}', kind: 'knife', n: 1 }}))")
+        carried = "Number(document.getElementById('carryWeight').textContent)"
+        try: await p.wait_for_function(f"{carried} === {w0 + 4}", timeout=20000)
+        except Exception: pass  # (the line below says what it was instead)
+        w1 = await p.evaluate(carried)
+        expect(w1 == w0 + 4, f"a knife in a player's bag now weighs 4 in their own game ({w0} to {w1} carried)")
+        # Copy my changes
+        await a.click('#adminItemsCopy'); await a.wait_for_timeout(600)
+        copied = await a.evaluate("document.getElementById('adminItemsText').hidden ? '' : document.getElementById('adminItemsText').value")
+        expect('items.knife.weight: 1 -> 4' in copied and copied.count('->') == 1, f'Copy my changes lists exactly that change ({copied!r})')
+        # Reset
+        await a.click('#adminItems .admin-setting >> nth=0 >> text=Reset')
+        await a.wait_for_function(f"(({rows}).find((r) => r.label === 'Weight') || {{}}).tag === 'Game file: 1'", timeout=20000)
+        row = [r for r in await a.evaluate(rows) if r.get('label') == 'Weight'][0]
+        expect(row['value'] == '1' and row['btns'] == ['Save'], f'Reset puts the game file\'s number back ({row})')
+        await p.wait_for_function(f"Number(document.getElementById('carryWeight').textContent) === {w0 + 1}", timeout=20000)
+        expect('All as the game file has them' in await text(a, '#adminItemsState'), "and the player's knife weighs 1 again; nothing is marked changed")
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'admin_items': admin_items}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}
