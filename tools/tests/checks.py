@@ -634,12 +634,11 @@ async def maintenance():
 
 
 async def restore():
-    """Admin, Restore: the whole world goes back to an earlier time (bags and the ground too), everyone rejoins by themselves, and Undo puts it back."""
+    """Restore, from admin mode: the whole world goes back to an earlier time (bags and the ground too), everyone rejoins by themselves, the admin comes back still in admin mode, and Undo puts it back."""
     async with world() as W:
         b = await W.page('restoreB'); await join(b)
-        a = await W.page('restoreA'); await join(a)
-        await a.click('#sayBtn'); await a.fill('#sayInput', '/admin secret123456'); await a.press('#sayInput', 'Enter'); await a.wait_for_timeout(800)
-        await a.mouse.click(195, 300); await a.wait_for_timeout(300)
+        a = await W.page('restoreA'); await open_admin(a)  # the admin is not a person
+        in_admin = lambda: a.evaluate("__pl.ui.mode === 'admin' && __pl.adminMode.on && __pl.admin.on && !__pl.player && document.getElementById('mainMenu').hidden")
         send = "(m) => window.__sock.send(JSON.stringify(m))"
         logs = "__pl.world.items.filter((it) => it.kind === 'log').length"
         sticks = '(__pl.you.carry.stick || 0)'
@@ -648,10 +647,10 @@ async def restore():
         # after t0: B is given 5 sticks and 3 logs go on the ground
         bid = await b.evaluate('__pl.net.myId')
         await a.evaluate(f"({send})({{ t: 'a.give', id: {json.dumps(bid)}, kind: 'stick', n: 5 }})")
-        await a.evaluate(f"({send})({{ t: 'a.add', kind: 'log', n: 3, x: __pl.player.position.x + 2, z: __pl.player.position.z }})"); await a.wait_for_timeout(900)
+        await a.evaluate(f"({send})({{ t: 'a.add', kind: 'log', n: 3, x: 6, z: 8 }})"); await a.wait_for_timeout(1500)
         expect(await b.evaluate(sticks) == before + 5 and await b.evaluate(logs) == 3, 'after the chosen time: 5 sticks given and 3 logs on the ground')
         # the panel: quick picks, Pick a time, and one tap only asks again
-        await a.click('#menuBtn'); await a.click('#pauseAdminBtn'); await a.wait_for_timeout(400)
+        await a.click('#adminDashBtn'); await a.wait_for_timeout(400)
         await a.click('[data-admin-tab="world"]'); await a.wait_for_timeout(400)
         picks = await text(a, '#adminRestoreWhen')
         expect(all(k in picks for k in ['10 min', '1 hour', '6 hours', '1 day', 'Pick a time']), 'quick picks and Pick a time show')
@@ -668,12 +667,16 @@ async def restore():
         await b.wait_for_function('!__pl.net.myId', timeout=15000)  # the world restarts: everyone's connection drops
         await b.wait_for_function("__pl.net.myId && document.getElementById('joining').hidden", timeout=30000); await b.wait_for_timeout(1500)
         expect(await b.evaluate(sticks) == before and await b.evaluate(logs) == 0, f'restored: the sticks and logs are gone again ({await b.evaluate(sticks)} sticks, {await b.evaluate(logs)} logs)')
-        expect(await b.evaluate('!!__pl.player') and await a.evaluate('!!__pl.player'), 'both players are back in the world by themselves')
-        expect(await a.evaluate('__pl.admin.on'), 'the admin is still the admin')
+        expect(await b.evaluate('!!__pl.player'), 'the player is back in the world by themselves')
+        await a.wait_for_function("__pl.net.myId && __pl.admin.on", timeout=60000); await a.wait_for_timeout(1500)
+        expect(await in_admin(), 'the admin is back by itself too, still in admin mode (with the password it holds), with no person')
+        expect(await a.evaluate(logs) == 0, 'and the admin sees the restored world (no logs)')
         expect(await a.evaluate("!!localStorage.getItem('pocket-life:restoreUndo')"), "the admin's phone keeps an undo point")
+        stored = await a.evaluate("JSON.stringify(Object.fromEntries(Object.entries(localStorage)))")
+        expect('secret123456' not in stored, 'which is not the password (that is never kept on the device)')
         # Undo: back to how it was just before the restore
         await a.evaluate("document.getElementById('announce').hidden = true")
-        await a.click('#menuBtn'); await a.click('#pauseAdminBtn'); await a.wait_for_timeout(400)
+        await a.click('#adminDashBtn'); await a.wait_for_timeout(400)
         await a.click('[data-admin-tab="world"]'); await a.wait_for_timeout(400)
         expect(await shown(a, '#adminRestoreUndo'), f'Undo shows ({await text(a, "#adminRestoreUndoText")})')
         tap = "document.getElementById('adminUndoBtn').click()"  # (taps in the page itself, so a slow software-drawn page can't squeeze them together)
@@ -682,6 +685,8 @@ async def restore():
         await b.wait_for_function("__pl.net.myId && document.getElementById('joining').hidden", timeout=30000); await b.wait_for_timeout(1500)
         expect(await b.evaluate(sticks) == before + 5 and await b.evaluate(logs) == 3, f'undone: the sticks and logs are back ({await b.evaluate(sticks)} sticks, {await b.evaluate(logs)} logs)')
         expect(await a.evaluate("!localStorage.getItem('pocket-life:restoreUndo')"), 'and the undo point is used up')
+        await a.wait_for_function("__pl.net.myId && __pl.admin.on", timeout=60000); await a.wait_for_timeout(1000)
+        expect(await in_admin(), 'the admin is still in admin mode after the undo')
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 

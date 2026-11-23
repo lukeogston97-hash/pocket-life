@@ -424,8 +424,8 @@ function drawRestore() {
 }
 function doRestore() {
   const t = restoreTime(), now = Date.now();
-  if (!t || t > now - 5000) { showTag('Pick a time in the past', headTop(), 2.5); return; }
-  if (t < now - RESTORE_DAYS * DAY_MS + 60000) { showTag(`Only the last ${RESTORE_DAYS} days can be restored`, headTop(), 2.5); return; }
+  if (!t || t > now - 5000) { adminSay('Pick a time in the past'); return; }
+  if (t < now - RESTORE_DAYS * DAY_MS + 60000) { adminSay(`Only the last ${RESTORE_DAYS} days can be restored`); return; }
   adminSend({ t: 'a.restore', at: t });
 }
 const resetRestore = twoTaps($('adminRestoreBtn'), doRestore, 'Tap again: everything after it goes', 1000);
@@ -436,7 +436,7 @@ function restoreAnswer(m) {
   restoreUndo = m.undone ? null : { undo: m.undo, to: m.to, at: m.at };
   try { if (restoreUndo) localStorage.setItem(RESTORE_KEY, JSON.stringify(restoreUndo)); else localStorage.removeItem(RESTORE_KEY); } catch (err) { /* full */ }
   closeAdminPanel();
-  showTag(m.undone ? 'Undoing the restore…' : 'Restoring the world…', headTop(), 3);
+  adminSay(m.undone ? 'Undoing the restore…' : 'Restoring the world…', 4);
 }
 
 /* ---------- Settings tab: live numbers (they stay until you tap Reset) ---------- */
