@@ -204,6 +204,9 @@ export class World extends DurableObject {
     if (m.t === 'ping') return;
     if (this.restoring) return; // a restore is on its way and the world restarts in a moment, so nothing else is done (restore.js)
     const me = ws.deserializeAttachment() || {};
+    // Nobody playing a person is ever the admin. A connection from before admin moved out of the game (23 Nov 2026) could
+    // still carry the old flag, so it's dropped here, before anything reads it (the reach, claim and name checks in actions.js).
+    if (me.admin && !this.isAdmin(me)) { me.admin = false; this.attach(ws, me); }
     const reply = (msg) => { try { ws.send(JSON.stringify(msg)); } catch (err) { /* gone */ } };
     if (m.t === 'hello') { if (me.id && !allowed(ws, me, 'hello')) { reply({ t: 'slow' }); return; } await this.hello(ws, me, m, reply); return; }
     if (m.t === 'bye') { try { ws.close(1000, 'bye'); } catch (err) { /* gone */ } this.webSocketClose(ws); return; }

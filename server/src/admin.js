@@ -93,7 +93,7 @@ export const adminMethods = {
           await this.flush(null, true);
           if (w) { await this.save(); for (const th of this.placedList()) if (th.lit) this.sendPlaced(th, null); }
         }
-        if (on) for (const { ws: s, p } of this.sockets()) if (!p.admin && p.link !== 'test') this.boot(s, { t: 'maintenance', text: this.admin.message });
+        if (on) for (const { ws: s, p } of this.sockets()) if (!this.isAdmin(p) && p.link !== 'test') this.boot(s, { t: 'maintenance', text: this.admin.message });
         return done(on ? 'Maintenance on' : 'Maintenance off');
       }
       case 'a.announce': {
