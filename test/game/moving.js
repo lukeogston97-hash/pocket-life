@@ -215,7 +215,9 @@ const MAX_QUEUE = 30;
 // in the queue, spot is where its number goes, and stop (optional) is called when it's stopped part way.
 const TASK_KINDS = {};
 const allTasks = () => (tasks.current ? [tasks.current, ...tasks.list] : [...tasks.list]);
-const shownTasks = () => allTasks().filter((t) => t.type !== 'drop');
+const listed = (t) => t.type !== 'drop' || Number.isFinite(t.x); // a drop with a spot (from a drag) is a task like any other; Drop 1 happens by your feet
+const shownTasks = () => allTasks().filter(listed);
+const took = new Set(); // loose items you've picked up, so the second half of moving one knows the pick-up happened
 // the weight you'll be carrying once everything queued is picked up or harvested
 const plannedWeight = () => carried() + allTasks().reduce((sum, t) => {
   if (t.type === 'pickup') { const it = getItem(t.id); return sum + (it ? ITEMS[it.kind].weight : 0); }
@@ -284,6 +286,7 @@ function nextTask() {
   drawQueue();
   const t = tasks.current;
   if (!t || !player || you.dead) return;
+  if (t.from != null && !took.delete(t.from)) { nextTask(); return; } // moving a loose item that someone else took first: skip the rest
   if (t.type === 'pickup') {
     const item = getItem(t.id);
     if (!item) { nextTask(); return; }
@@ -427,6 +430,7 @@ function doPickup(item) {
   startAction({ pose: 'bend', mid: () => {
     if (!getItem(item.id)) return;
     removeWorldItem(item.id);
+    took.add(item.id);
     addToCarry(item.kind);
     spendEnergy('pickup');
     shareTake(item); // online: tell the world (if someone beat you to it, it comes back out of your inventory)
@@ -595,10 +599,12 @@ function doDrop(t) {
     startAction({ pose: 'bend', mid: () => {
       const taken = takeFromCarry(t.kind, t.n);
       const out = [];
-      for (let i = 0; i < taken; i++) { const s = dropSpot(i, at); out.push({ kind: t.kind, x: s.x, z: s.z, rot: rand() * Math.PI, ...(i === 0 && t.which != null ? { which: t.which } : {}) }); }
+      for (let i = 0; i < taken; i++) { const s = dropSpot(i, at); out.push({ kind: t.kind, x: s.x, z: s.z, rot: i === 0 && Number.isFinite(t.rot) ? t.rot : rand() * Math.PI, ...(i === 0 && t.which != null ? { which: t.which } : {}) }); }
       placeItems(out);
+      t.landed = true; // its see-through copy goes
       drawHeld();
       drawCarry();
+      drawQueue();
     } });
   };
   if (at) approach(at.x, at.z, 1.6, 2.4, go); else go(); // put it down where you let go: walk over first if it's far
@@ -622,9 +628,25 @@ let badges = [];
 function taskSpot(t) {
   if (t.type === 'pickup') { const v = itemViews.get(t.id); return v ? V(v.position.x, v.position.y + 0.22, v.position.z) : null; }
   if (t.type === 'use') return t.water ? V(POND.x, WATER_Y + 0.5, POND.z) : V(t.x, t.top + 0.15, t.z);
-  if (t.type === 'walk') return V(t.x, groundY(t.x, t.z) + 0.3, t.z);
+  if (t.type === 'walk' || t.type === 'drop') return Number.isFinite(t.x) ? V(t.x, groundY(t.x, t.z) + 0.3, t.z) : null;
   if (TASK_KINDS[t.type]) return TASK_KINDS[t.type].spot(t);
   return null;
+}
+// a see-through copy where each queued drop will land (and turned the way it will lie), until it's down
+const dropGhosts = new Map(); // task -> its see-through model
+function drawDropGhosts() {
+  const want = ui.mode === 'world' && player && !you.dead ? allTasks().filter((t) => t.type === 'drop' && Number.isFinite(t.x) && !t.landed && ITEMS[t.kind]) : [];
+  for (const [t, g] of dropGhosts) if (!want.includes(t)) { scene.remove(g); disposeMaterials(g); dropGhosts.delete(t); }
+  for (const t of want) {
+    if (dropGhosts.has(t)) continue;
+    if (!Number.isFinite(t.rot)) t.rot = Math.random() * Math.PI;
+    const { model, rest } = buildItem(t.kind);
+    seeThrough(model);
+    model.position.set(t.x, groundY(t.x, t.z) + rest, t.z);
+    model.rotation.y = t.rot;
+    scene.add(model);
+    dropGhosts.set(t, model);
+  }
 }
 // what a task is called in the queue list: "Pick up Stick" next, "Picking up Stick" now
 function taskName(t, now) {
@@ -645,16 +667,17 @@ function taskName(t, now) {
 // the list above the bottom bar: what your person is doing now, then what's next
 let queueOpen = false; // the full list is showing
 function drawQueue() {
+  drawDropGhosts();
   for (const b of badges) removeLabel(b);
   badges = [];
   const cur = tasks.current;
   // only shown while your person has something to do
-  const show = ui.mode === 'world' && !!player && !you.dead && !!(cur || tasks.list.some((t) => t.type !== 'drop'));
+  const show = ui.mode === 'world' && !!player && !you.dead && !!(cur || tasks.list.some(listed));
   $('queue').hidden = !show;
   if (!show) return;
   $('queueNow').textContent = cur ? taskName(cur, true) : 'Waiting for something to do';
   $('queueNowRow').classList.toggle('idle', !cur);
-  const next = tasks.list.map((t, i) => ({ t, i })).filter(({ t }) => t.type !== 'drop');
+  const next = tasks.list.map((t, i) => ({ t, i })).filter(({ t }) => listed(t));
   const shown = queueOpen ? 25 : 2; // folded: the next 2; tap the list to see them all
   const rows = next.slice(0, shown).map(({ t, i }, k) => {
     const li = document.createElement('li');

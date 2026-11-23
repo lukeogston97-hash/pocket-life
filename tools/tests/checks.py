@@ -726,7 +726,7 @@ async def crowd():
 
 
 async def bagdrag():
-    """Drag a tile out of the bag: onto the ground drops one, onto a built campfire adds fuel; the bag comes back after."""
+    """Drag a tile out of the bag: onto a built campfire adds fuel, onto the ground is a drop task (with a see-through copy) that puts one there; the bag comes back after."""
     async with world({}, FISHKIT=1) as W:
         a = await W.page('dragA'); await join(a)
         await a.click('#bagBtn'); await a.wait_for_timeout(400)
@@ -756,7 +756,11 @@ async def bagdrag():
         P = await a.evaluate('[__pl.player.position.x, __pl.player.position.z]')
         tgt = [P[0] + 3.5, P[1] + 3.5]
         near = "(() => { const p = __pl.player.position; let best = 99, at = null; for (const v of __pl.itemViews.values()) { const d = Math.hypot(v.position.x - %s, v.position.z - %s); if (d < best) { best = d; at = [v.position.x, v.position.z]; } } return [best, at]; })()"
-        await drag('stick', await a.evaluate(f"({scr})([{tgt[0]}, 0, {tgt[1]}])")); await idle(a, 60); await a.wait_for_timeout(800)
+        await drag('stick', await a.evaluate(f"({scr})([{tgt[0]}, 0, {tgt[1]}])"))
+        g = await a.evaluate('__pl.dropGhosts.size'); listed = await a.evaluate("document.getElementById('queueNow').textContent")
+        expect(g == 1 and listed == 'Putting down', f'the drop is a task with a see-through copy where it will land ({g} copies, "{listed}")')
+        await idle(a, 60); await a.wait_for_timeout(800)
+        expect(await a.evaluate('__pl.dropGhosts.size') == 0, 'the see-through copy goes once it is down')
         left2 = await a.evaluate('__pl.you.carry.stick')
         d = await a.evaluate(near % (tgt[0], tgt[1]))
         expect(left2 == left - 1 and d[0] < 3.0, f'a stick dragged onto far ground was put down there ({left} -> {left2}, {d[0]:.1f} m from where I let go)')
