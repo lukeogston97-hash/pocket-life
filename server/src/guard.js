@@ -104,11 +104,15 @@ export const guardMethods = {
 
   /* ---------- feedback ---------- */
   // at most 5 from one address in ten minutes, and 60 an hour from everyone, so the Inbox can't be flooded
-  feedbackOk(from = '') {
+  feedbackOk(from = '') { return this.inboxOk('feedbackLog', from); },
+  // The same for reports about players. They used to be limited per connection only, so reconnecting over and over got
+  // round it (found in the 24 Nov 2026 whole-game check). Their count is kept apart from feedback's.
+  reportOk(from = '') { return this.inboxOk('reportLog', from); },
+  inboxOk(log, from) {
     const now = Date.now();
-    this.feedbackLog = this.feedbackLog.filter(([t]) => now - t < HOUR);
-    if (this.feedbackLog.length >= 60 || this.feedbackLog.filter(([t, a]) => a === from && now - t < 10 * MINUTE).length >= 5) return false;
-    this.feedbackLog.push([now, from]);
+    this[log] = (this[log] || []).filter(([t]) => now - t < HOUR);
+    if (this[log].length >= 60 || this[log].filter(([t, a]) => a === from && now - t < 10 * MINUTE).length >= 5) return false;
+    this[log].push([now, from]);
     return true;
   },
 };

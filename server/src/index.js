@@ -41,6 +41,7 @@ export class World extends DurableObject {
     this.activity = []; // the admin's activity log (activity.js)
     this.adminFails = new Map(); // wrong admin codes, by address (guard.js); kept in memory only
     this.feedbackLog = []; // when feedback came in and from where, to stop floods (guard.js)
+    this.reportLog = []; // the same for reports about players
     this.socks = null; this.byWho = null; // who's connected, worked out once per message or tick (sockets, socketOf)
     this.restoring = false; // a restore is on its way (restore.js)
     ctx.blockConcurrencyWhile(async () => {

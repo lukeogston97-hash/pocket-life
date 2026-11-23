@@ -1,6 +1,6 @@
 {
   "version": "0.1.2",
-  "build": 4,
+  "build": 5,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -919,7 +919,8 @@
         "Smoother dragging and inventory management"
       ],
       "fixed": [
-        "Queued items can't be moved or tapped again until their task is done"
+        "Queued items can't be moved or tapped again until their task is done",
+        "Tapping the feedback box no longer zooms the page in on iPhones"
       ]
     },
     {

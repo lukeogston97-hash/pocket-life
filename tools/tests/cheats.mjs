@@ -4,6 +4,7 @@
 // near your person. This checks the other half: a number that isn't in the layout at all isn't a thing, so it can't be
 // chopped, mined or picked from wherever you stand. And that ordinary play next to real things still works.
 // Also names and chat: marks that hide text or make it read backwards are taken out, and a name nobody could see is refused.
+// And reports about players are limited per address, the way feedback is.
 import { readFileSync } from 'node:fs';
 import { World } from './build/server.mjs';
 
@@ -141,6 +142,30 @@ expect(JSON.stringify(S.p.carry) === had && S.w.world.items.length === 0, 'and t
 await quietly({ t: 'fire', id: 1, do: 'add', fuel: 'constructor', n: 2 });
 const fed = S.w.world.placed[0].fuel - fuelWas;
 expect(threw === 0 && S.p.carry.stick === 3 && Math.abs(fed - 2 * 300000) < 30000, 'a fuel called constructor feeds the fire with 2 of its usual fuel, sticks, and nothing odd', `${S.p.carry.stick} sticks left, fuel up ${Math.round(fed / 60000)} min`);
+
+console.log('H. reports about players: limited per address, however many times it reconnects');
+S = await start(LAYOUT());
+const reportFrom = async (addr, k) => { // a new connection every time, as someone reconnecting over and over would have
+  const c = { att: { id: `r-${addr}-${k}`, who: `r-${addr}-${k}`, watch: false, admin: false, alive: false, from: addr, v: DATA.version, b: DATA.build, e: DATA.era, link: 'test' }, got: [], send(t) { this.got.push(JSON.parse(t)); }, close() {}, serializeAttachment(a) { this.att = structuredClone(a); }, deserializeAttachment() { return structuredClone(this.att); } };
+  S.socks.push(c);
+  await S.w.webSocketMessage(c, JSON.stringify({ t: 'report', id: 'hax', reason: 'spam', note: `report ${k}` })); await wait(2);
+  S.socks.splice(S.socks.indexOf(c), 1);
+  return c.got.map((m) => m.t + (m.ok === false ? ':no' : '')).join();
+};
+const kept = async () => ((await S.w.ctx.storage.get('reports')) || []).length;
+const answers = [];
+for (let k = 0; k < 8; k++) answers.push(await reportFrom('addr-one', k));
+expect(await kept() === 5 && answers.slice(0, 5).every((a) => a === 'reported') && answers.slice(5).every((a) => a === 'slow'), 'one address gets 5 reports in, then is told to slow down, on new connections too', `${await kept()} kept, answers: ${answers.join(' ')}`);
+expect(await reportFrom('addr-two', 0) === 'reported' && await kept() === 6, 'someone else can still report');
+expect(await reportFrom('addr-two', 1) === 'reported' && (await S.ask({ t: 'feedback', text: 'a note', v: '0' })).some((m) => m.t === 'thanks') && ((await S.w.ctx.storage.get('feedback')) || []).length === 1, 'and feedback has its own count: it still gets through');
+const gone = { att: { id: 'r-x', who: 'r-x', watch: false, admin: false, alive: false, from: 'addr-three', v: DATA.version, b: DATA.build, e: DATA.era, link: 'test' }, got: [], send(t) { this.got.push(JSON.parse(t)); }, close() {}, serializeAttachment(a) { this.att = structuredClone(a); }, deserializeAttachment() { return structuredClone(this.att); } };
+S.socks.push(gone);
+for (let k = 0; k < 3; k++) await S.w.webSocketMessage(gone, JSON.stringify({ t: 'report', id: 'nobody-there', reason: 'spam' }));
+S.socks.splice(S.socks.indexOf(gone), 1);
+expect(await reportFrom('addr-three', 9) === 'reported', "reports about someone who isn't there don't use up the count");
+let n60 = 0;
+for (let k = 0; k < 70; k++) if (await reportFrom(`addr-many-${k}`, 0) === 'reported') n60++;
+expect(await kept() === 60 && n60 === 60 - 8, 'and 60 an hour from everyone is the most the Inbox takes', `${await kept()} kept in all`);
 
 const failed = results.filter((ok) => !ok).length;
 console.log(`\n${results.length - failed} of ${results.length} as they should be${failed ? `, ${failed} NOT` : ''}`);

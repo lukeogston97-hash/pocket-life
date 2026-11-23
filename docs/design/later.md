@@ -15,10 +15,8 @@ Fixed and published that morning (see docs/design/code.md): things that aren't i
 - A campfire can be put in the pond or inside a tree by a changed game (the server checks distance, claims and other placed things, not the land). Looks only.
 - Building and cooking take time in the game but the server doesn't time them, so a changed game could skip the wait.
 - A rock can be mined "as a boulder" and a boulder "as a rock" (the game says which; the server doesn't know which rocks are boulders). A boulder mined as a rock vanishes for everyone until rocks come back (one every 4 hours). Fix: the layout carries which rocks are boulders.
-- Reports are limited per connection (3, then one every 30 seconds), not per address the way feedback is, so someone reconnecting over and over can add Inbox lines and storage writes. Fix: the same per-address limit as feedback.
 - A brand new world takes how many berries a bush holds (1 to 15) and how fast they grow back from the first game in. From admin mode the admin's game is first in after a reset, which covers it in practice. Fix: the server uses its own numbers.
 - Loose items never go away by themselves (sticks top up to their cap, but dropped and chopped things stay for ever). Over weeks the ground fills and every phone has to draw it. The admin's Clear loose items is the only broom. Idea: things left lying for some days fade.
 - A ban is by the phone's id (a random id the browser keeps). Clearing the site's data makes a new one. Known limit of having no sign-in.
-- The feedback box has 15 px text. An iPhone zooms the whole page in when a box under 16 px is tapped (the Say and name boxes are 16 px, and the admin's boxes are now too). One line of CSS if wanted: it is a player's screen, so not changed without asking.
 - At the player limit (20 playing all day, 300 away) the server uses about 81,000 of the free 100,000 storage writes a day (tools/tests/load.py 300). Fine for now; see docs/design/code.md for the ideas if it grows.
 

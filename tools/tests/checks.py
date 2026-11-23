@@ -55,7 +55,10 @@ async def menu():
         # the pause menu has What's new, Settings and Feedback too, each closed with the same Close link
         await a.click('#pauseNewsBtn'); expect(await shown(a, '#news') and not await shown(a, '#pause'), "What's new opens from the pause menu"); await a.click('#newsClose')
         await a.click('#menuBtn'); await a.click('#pauseSettingsBtn'); expect(await shown(a, '#settings'), 'Settings opens from the pause menu'); await a.click('#settingsClose')
-        await a.click('#menuBtn'); await a.click('#pauseFeedbackBtn'); expect(await shown(a, '#feedback'), 'Feedback opens from the pause menu'); await a.click('#feedbackCancel')
+        await a.click('#menuBtn'); await a.click('#pauseFeedbackBtn'); expect(await shown(a, '#feedback'), 'Feedback opens from the pause menu')
+        px = await a.evaluate("[parseFloat(getComputedStyle(document.getElementById('feedbackText')).fontSize), parseFloat(getComputedStyle(document.getElementById('reportNote')).fontSize)]")
+        expect(min(px) >= 16, f'on a touch screen the feedback box and the report note are 16 px or more, so an iPhone does not zoom the page ({px})')
+        await shot(a, 'menu_feedback'); await a.click('#feedbackCancel')
         await a.click('#menuBtn'); await a.wait_for_timeout(300)
         await a.click('#exitBtn'); await a.wait_for_timeout(2500)
         expect(await shown(a, '#mainMenu'), 'Exit goes back to the menu')

@@ -18,6 +18,7 @@ export const ACTIONS = {
   report: { when: 'any', async run({ ws, me, m, p, w, reply, save }) {
     const them = this.persons.get(m.id), sock = this.socketOf(m.id);
     if (!them) { reply({ t: 'reported', ok: false }); return; }
+    if (!this.reportOk(me.from)) { reply({ t: 'slow' }); return; } // too many from one address, however many connections it opens (guard.js)
     const list = (await this.ctx.storage.get('reports')) || [];
     list.push({ at: new Date().toISOString(), by: { name: p ? p.name : '', who: me.who }, about: { name: them.name, who: them.who, v: sock ? sock.p.v : '' },
       reason: clean(m.reason, 30), note: clean(m.note, 500), said: (sock && sock.p.said) || [], x: num(them.x), z: num(them.z) });
