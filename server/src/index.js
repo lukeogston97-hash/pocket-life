@@ -258,12 +258,12 @@ export class World extends DurableObject {
       const locked = this.adminLocked(me), wrong = locked || !this.codeOk(m.adminCode); // (the right code sent while playing is refused too, but isn't a wrong password)
       this.adminFail(me);
       if (wrong) this.note('guard', locked ? 'Admin password tried from an address that is locked out' : this.adminLocked(me) ? 'Wrong admin password 5 times: that address is locked out for 15 minutes' : 'Wrong admin password');
+      reply({ t: 'adminNo' }); // said before anything below can send the game away (maintenance, an update), so it never keeps trying a refused password
     }
     const who = await this.whoFor(m);
     if (!isAdmin && this.admin.banned.includes(who)) { this.boot(ws, { t: 'banned' }); return; }
     if (!isAdmin && this.admin.maintenance && link !== 'test') { this.boot(ws, { t: 'maintenance', text: this.admin.message }); return; }
     if (min && tooOld(m.v, m.b, min, m.e, (WORLDS.era || {})[link])) { this.boot(ws, { t: 'update', min }); return; }
-    if (m.adminCode && !isAdmin) reply({ t: 'adminNo' });
     if (me.who) this.leave(ws, me); // was playing on this connection (Exit to the main menu): their person goes away
     // the world is full: watch from the main menu and wait in line (the admin always gets in)
     const full = !m.watch && !isAdmin && !this.mayPlay(ws, me, who);

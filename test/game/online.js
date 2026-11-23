@@ -41,7 +41,7 @@ function goOnline() {
     try { m = JSON.parse(e.data); } catch (err) { return; }
     if (m.t === 'count') setNet('online', m.n);
     else if (m.t === 'update') getUpdate(m.min);
-    else if (m.t === 'maintenance') showMaintenance(m.text);
+    else if (m.t === 'maintenance') { if (adminMode.asking) adminLoginAnswer(false); showMaintenance(m.text); } // (a password on its way was refused too: never keep sending it)
     else if (m.t === 'thanks') showTag('Thanks for the feedback!', headTop(), 2.5);
     else if (m.t === 'adminNo') adminLoginAnswer(false); // the admin password wasn't accepted (admin-mode.js)
     else if (m.t.startsWith('admin') || ['announce', 'kicked', 'banned', 'reset', 'restoring'].includes(m.t)) {
@@ -113,7 +113,7 @@ function goOnline() {
     if (ui.mode === 'menu') drawMenu();
     shared.on = false;
     for (const id of [...others.keys()]) removeOther(id);
-    if (net.wanted && !net.stopped) { setTimeout(goOnline, maint.on ? 20000 : net.retry); net.retry = Math.min(30000, net.retry * 2); }
+    if (net.wanted && !net.stopped) { setTimeout(goOnline, maint.on && !adminMode.asking ? 20000 : net.retry); net.retry = Math.min(30000, net.retry * 2); } // (Back soon: look in every 20 s; sooner if the admin's password is on its way)
   };
   sock.onerror = () => {};
 }
@@ -365,7 +365,7 @@ function showMaintenance(text, title = 'Back soon', note = 'Your person is safe.
   showJoining(false);
   $('maintTitle').textContent = title;
   $('maintNote').textContent = note;
-  $('adminPanel').hidden = true; $('adminPick').hidden = true; closeAdminLogin();
+  $('adminPanel').hidden = true; $('adminPick').hidden = true; // (the admin's password box stays if it's open: it's the way in while maintenance is on)
   closeFeedback(); closeReport(); closeSay(); closeMenu(); $('pause').hidden = true;
   paused = true; // needs don't drain while the world is closed
   $('maintText').textContent = text || 'Pocket Life is being updated. It will be back in a few minutes.';

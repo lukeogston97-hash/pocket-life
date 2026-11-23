@@ -617,7 +617,7 @@ async def guards():
 
 
 async def maintenance():
-    """Maintenance pauses people who aren't playing: their needs stop, then carry on afterwards. It's run from admin mode, which stays in; someone playing on the release link is shut out."""
+    """Maintenance pauses people who aren't playing: their needs stop, then carry on afterwards. It's run from admin mode, which stays in; someone playing on the release link is shut out; and the admin can still get in from the release link (5 taps on Back soon) to turn it off."""
     async with world() as W:
         b = await W.page('pausedB'); await join(b); await b.wait_for_timeout(500)
         who = await b.evaluate('__pl.net.myId')
@@ -643,6 +643,43 @@ async def maintenance():
         expect(-0.1 < h3 - h4 < 2.5, f'ending maintenance costs them nothing ({h3:.1f} to {h4:.1f})')
         await a.wait_for_timeout(8000); h5 = await a.evaluate(hunger)
         expect(h5 < h4 - 1, f'afterwards it carries on dropping ({h4:.1f} to {h5:.1f})')
+        # The admin has to be able to get in from the release link while maintenance is on (to turn it off): there the main
+        # menu is behind Back soon, so 5 taps on those words open the password box. The new game is opened under an address
+        # without /test/ in it, which makes it a release-link game, as it will be once released.
+        nxt = os.path.join(HERE, '..', '..', 'release-next')
+        if not os.path.lexists(nxt): os.symlink('test', nxt)
+        try:
+            await a.evaluate(f"({send})({{ t: 'a.maintenance', on: true, text: 'Tidying up' }})"); await a.wait_for_timeout(600)
+            d = await W.page('adminOnRelease', path='release-next/')
+            st = await d.evaluate("({ maint: !document.getElementById('maint').hidden, mode: __pl.ui.mode, link: window.__sent.filter((m) => m.t === 'hello')[0].link })")
+            expect(st == {'maint': True, 'mode': 'menu', 'link': 'release'}, f'on the release link during maintenance, the admin sees Back soon like everyone ({st})')
+            for attempt in range(4):
+                await tap_version(d, 5, 'maintTitle')
+                if await shown(d, '#adminLogin'): break
+                await d.wait_for_timeout(4500)
+            expect(await shown(d, '#adminLogin'), '5 taps on the words Back soon ask for the password')
+            # a wrong password: refused, still Back soon, and never sent again when the game next looks in
+            await d.fill('#adminLoginCode', 'not-the-password'); await d.click('#adminLoginGo')
+            await d.wait_for_function('!__pl.adminMode.asking', timeout=40000); await d.wait_for_timeout(500)
+            st = await d.evaluate("({ on: __pl.adminMode.on, kept: __pl.adminMode.hasCode, maint: !document.getElementById('maint').hidden, box: !document.getElementById('adminLogin').hidden, note: document.getElementById('adminLoginNote').textContent })")
+            expect(not st['on'] and not st['kept'] and st['maint'] and st['box'] and "didn't work" in st['note'], f"a wrong password there is refused and forgotten, and Back soon stays ({st})")
+            hellos = "window.__sent.filter((m) => m.t === 'hello')"
+            n0, c0 = await d.evaluate(f'[{hellos}.length, {hellos}.filter((m) => m.adminCode).length]')
+            await d.wait_for_timeout(24000)  # (it looks in again every 20 seconds while Back soon is up)
+            n1, c1 = await d.evaluate(f'[{hellos}.length, {hellos}.filter((m) => m.adminCode).length]')
+            expect(n1 > n0 and c1 == c0, f'when the game looks in again it does not send the refused password ({n1 - n0} more looks, {c1 - c0} with a password)')
+            # the right password: in, Back soon gone, and maintenance can be turned off from there
+            await d.fill('#adminLoginCode', 'secret123456'); await d.click('#adminLoginGo')
+            await d.wait_for_function('__pl.adminMode.on', timeout=40000); await d.wait_for_timeout(600)
+            st = await d.evaluate("({ mode: __pl.ui.mode, maint: !document.getElementById('maint').hidden, person: !!__pl.player, box: !document.getElementById('adminLogin').hidden })")
+            expect(st == {'mode': 'admin', 'maint': False, 'person': False, 'box': False}, f'the right password opens admin mode over the live world, with Back soon gone ({st})')
+            await d.click('#adminDashBtn'); await d.click('[data-admin-tab="server"]'); await d.wait_for_timeout(600)
+            expect(await d.evaluate("document.getElementById('adminMaintBtn').textContent") == 'Turn off', 'its dashboard knows maintenance is on')
+            await d.click('#adminMaintBtn'); await d.wait_for_timeout(1500)
+            await a.evaluate(f"({send})({{ t: 'a.state' }})"); await a.wait_for_timeout(1200)
+            expect(await a.evaluate('__pl.admin.maintenance') is False, 'and turns it off from there (the other admin screen sees it is off)')
+        finally:
+            if os.path.islink(nxt): os.remove(nxt)
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
@@ -879,9 +916,14 @@ async def fishing():
         await a.evaluate(f"__pl.queueTask({{ type: 'make', id: {fid}, recipe: 'cooked-fish' }})"); await idle(a, 40); await a.wait_for_timeout(800)
         made = await a.evaluate("[__pl.you.carry.fish || 0, __pl.you.carry['cooked-fish'] || 0]")
         expect(made == [1, 1], f'cooking uses a fish and makes cooked fish ({made})')
-        await a.evaluate("__pl.sendAct({ t: 'eat', kind: 'cooked-fish' })"); await a.wait_for_timeout(800)
+        # (wait for the server's answer, not a set time: on a slow computer with two games open it can take over a second)
+        t0 = await a.evaluate('performance.now()')
+        await a.evaluate("__pl.sendAct({ t: 'eat', kind: 'cooked-fish' })")
+        try: await a.wait_for_function("!(__pl.you.carry['cooked-fish'])", timeout=10000, polling=50)
+        except Exception: pass
+        took = await a.evaluate('performance.now()') - t0
         ate = await a.evaluate("[__pl.you.carry['cooked-fish'] || 0, __pl.you.stats.hunger]")
-        expect(ate[0] == 0 and ate[1] > 95, f'eating cooked fish fills you up ({ate})')
+        expect(ate[0] == 0 and ate[1] > 95, f'eating cooked fish fills you up ({ate}, the answer took {took:.0f} ms)')
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
@@ -1018,10 +1060,10 @@ async def frames(pg, n, timeout=120000):
     await pg.wait_for_function(f'window.__frames >= {f0 + n}', timeout=timeout)
 
 
-async def tap_version(pg, n):
-    """Tap the version number n times the way a person does: a finger on a phone, a mouse on a computer, one after another.
+async def tap_version(pg, n, what='menuVer'):
+    """Tap the version number (or another thing, by id) n times the way a person does: a finger on a phone, a mouse on a computer, one after another.
     (pg.click waits for the page to settle before each one, which takes seconds on this computer's software 3D: not how anyone taps.)"""
-    x, y = await pg.evaluate("(() => { const r = document.getElementById('menuVer').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()")
+    x, y = await pg.evaluate(f"(() => {{ const r = document.getElementById('{what}').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }})()")
     touch = await pg.evaluate("'ontouchstart' in window")
     for _ in range(n):
         if touch: await pg.touchscreen.tap(x, y)
@@ -1458,6 +1500,41 @@ async def admin_extras():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
+async def admin_phone():
+    """Admin mode on a touch screen: quick taps on the version number never zoom the page, ?admin on the end of the address also opens the password box (it is not a way round the password), and every box the admin types in is 16 px or more (an iPhone zooms the whole page in on a smaller one)."""
+    async with world() as W:
+        b = await W.page('phoneBoxPlayer'); await join(b)  # (someone for the admin to open a page for)
+        expect(await b.evaluate("document.getElementById('adminLogin').hidden"), 'an ordinary address never shows the password box')
+        a = await W.page('phoneBoxAdmin', path='test/?admin&z=')
+        st = await a.evaluate("({ box: !document.getElementById('adminLogin').hidden, mode: __pl.ui.mode, on: __pl.adminMode.on, touch: getComputedStyle(document.getElementById('menuVer')).touchAction })")
+        expect(st['box'] and st['mode'] == 'menu' and not st['on'], f"?admin on the address opens the password box on the main menu, and that is all it does ({st})")
+        expect(st['touch'] == 'manipulation', f"quick taps on the version number are taps, never a zoom ({st['touch']})")
+        boxes = lambda sel: a.evaluate(f"[...document.querySelectorAll('{sel}')].filter((e) => e.getClientRects().length).map((e) => [e.id || e.getAttribute('aria-label') || e.placeholder || e.tagName, parseFloat(getComputedStyle(e).fontSize)])")
+        small = lambda rows: [r for r in rows if r[1] < 16]
+        rows = await boxes('#adminLogin input')
+        expect(len(rows) == 1 and not small(rows), f'the password box is 16 px or more ({rows})')
+        await shot(a, 'admin_phone_1_password')
+        await a.fill('#adminLoginCode', 'not-it'); await a.click('#adminLoginGo'); await a.wait_for_function('!__pl.adminMode.asking', timeout=8000); await a.wait_for_timeout(300)
+        expect(not await a.evaluate('__pl.adminMode.on') and await a.evaluate('__pl.ui.mode') == 'menu', 'a wrong password from that address is refused like anywhere else')
+        await a.fill('#adminLoginCode', 'secret123456'); await a.click('#adminLoginGo'); await a.wait_for_function('__pl.adminMode.on', timeout=8000)
+        await a.click('#adminDashBtn')
+        ALL = '#adminPanel input, #adminPanel select, #adminPanel textarea'
+        for tab, least in [('server', 2), ('players', 1), ('settings', 3), ('items', 5)]:
+            await a.click(f'[data-admin-tab="{tab}"]'); await a.wait_for_timeout(1200)
+            rows = await boxes(ALL)
+            expect(len(rows) >= least and not small(rows), f'{tab}: all {len(rows)} boxes are 16 px or more' + (f' (too small: {small(rows)[:4]})' if small(rows) else ''))
+            if tab == 'settings': await shot(a, 'admin_phone_3_settings')
+        await a.click('[data-admin-tab="players"]'); await a.wait_for_timeout(1200)
+        await a.click('#adminPlayers .admin-entry'); await a.wait_for_function("document.querySelector('#adminPlayer .admin-stat')", timeout=8000)
+        await a.click('#adminPlayer >> text=Edit needs and age'); await a.wait_for_timeout(400)
+        rows = await boxes(ALL)
+        expect(len(rows) >= 7 and not small(rows), f"a person's page: all {len(rows)} boxes (needs, age, name, message) are 16 px or more" + (f' (too small: {small(rows)[:4]})' if small(rows) else ''))
+        await shot(a, 'admin_phone_2_person')
+        out = await a.evaluate(f"(() => {{ const p = document.getElementById('adminPanel').getBoundingClientRect(); return [...document.querySelectorAll('{ALL}')].filter((e) => e.getClientRects().length).filter((e) => {{ const r = e.getBoundingClientRect(); return r.right > p.right + 1 || r.left < p.left - 1 || r.width < 40; }}).map((e) => e.id || e.getAttribute('aria-label') || e.tagName); }})()")
+        expect(out == [], f'and none of them sticks out of the dashboard or is squashed ({out})')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
 async def server_tests():
     """The server's own code, tested with no browser (quick): the admin's fire, claim, Log, rename and message tools, live item numbers, and that an old admin flag gives a player nothing."""
     import subprocess
@@ -1470,7 +1547,7 @@ async def server_tests():
         expect(r.returncode == 0, f'{f}: {last[:160]}')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'server_tests': server_tests}
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'server_tests': server_tests}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

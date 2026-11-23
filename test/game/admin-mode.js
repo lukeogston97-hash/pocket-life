@@ -5,21 +5,31 @@
    The password is asked for every time. It is kept only in this page's memory while admin mode is open (so a dropped
    connection can rejoin by itself), never on the device, and it's forgotten on Exit admin or when the page closes. The
    real check is on the server (the Cloudflare secret ADMIN_CODE); the 5 taps only keep the box out of players' way. */
-const adminMode = { on: false, code: '', asking: false, saved: null, follow: null }; // follow: the id of the person the camera is following
+const adminMode = { on: false, code: '', asking: false, saved: null, follow: null, wait: null }; // follow: the id of the person the camera is following; wait: the timer for no answer to the password
 // 5 taps in a row: each within ADMIN_TAP_GAP of the one before (a longer pause starts the count again). It's a gap between
 // taps, not a time limit for all five, and a generous one: the main menu is when a phone is busiest (the world is loading
 // behind it), and this is the only way in. The taps only keep the box out of players' way; the password is the real lock.
 const ADMIN_TAPS = 5, ADMIN_TAP_GAP = 4000;
-const verTaps = { n: 0, last: 0 };
-$('menuVer').addEventListener('click', (e) => {
-  if (ui.mode !== 'menu' || adminMode.on) return;
-  const now = e.timeStamp || performance.now(); // when the finger tapped, not when the game got round to it
-  verTaps.n = now - verTaps.last <= ADMIN_TAP_GAP ? verTaps.n + 1 : 1;
-  verTaps.last = now;
-  if (verTaps.n < ADMIN_TAPS) return;
-  verTaps.n = 0;
-  openAdminLogin();
-});
+function fiveTaps(el, allowed, open) {
+  const taps = { n: 0, last: 0 };
+  el.addEventListener('click', (e) => {
+    if (adminMode.on || !allowed()) return;
+    const now = e.timeStamp || performance.now(); // when the finger tapped, not when the game got round to it
+    taps.n = now - taps.last <= ADMIN_TAP_GAP ? taps.n + 1 : 1;
+    taps.last = now;
+    if (taps.n < ADMIN_TAPS) return;
+    taps.n = 0;
+    open();
+  });
+}
+fiveTaps($('menuVer'), () => ui.mode === 'menu', () => openAdminLogin());
+// While maintenance is on, the main link shows "Back soon" to everyone and the main menu can't be reached. The admin still
+// has to be able to get in (to turn it off): 5 taps on the words "Back soon" open the same password box. (Not on the other
+// notices that use this card, like Playing somewhere else: there the game has stopped looking in.)
+fiveTaps($('maintTitle'), () => maint.on && !net.stopped, () => { if (ui.mode !== 'menu') toMenu(); openAdminLogin(); });
+// A second way to the password box, for a device where five quick taps are awkward: ?admin on the end of the address
+// (start.js opens the box once the main menu is up). It only opens the box. The password is the lock, and the server checks it.
+const ADMIN_LINK = /[?&]admin(=|&|$)/.test(location.search);
 function openAdminLogin(note = 'Enter the admin password.') {
   $('adminLoginNote').textContent = note;
   $('adminLoginCode').value = '';
@@ -34,16 +44,27 @@ $('adminLoginForm').addEventListener('submit', (e) => {
   e.preventDefault();
   const code = $('adminLoginCode').value;
   if (!code) return;
-  if (!net.sock || net.sock.readyState !== 1) { $('adminLoginNote').textContent = "You're offline. Try again when the dot is green."; return; }
+  const open = !!net.sock && net.sock.readyState === 1;
+  // Not connected: on the Back soon screen that's normal (the game only looks in every 20 seconds), so it looks in now,
+  // with the password. Anywhere else it means the phone is offline.
+  if (!open && (!maint.on || net.stopped)) { $('adminLoginNote').textContent = "You're offline. Try again when the dot is green."; return; }
   adminMode.code = code;
   adminMode.asking = true;
   $('adminLoginGo').disabled = true;
   $('adminLoginNote').textContent = 'Checking…';
   net.mode = 'watch';
-  sendHello(); // the same connection asks to watch as the admin (screens.js)
+  if (open) sendHello(); // the same connection asks to watch as the admin (screens.js)
+  else goOnline(); // (it says hello by itself once it's through: online.js)
+  clearTimeout(adminMode.wait); // no answer at all: say so, and forget the password
+  adminMode.wait = setTimeout(() => {
+    if (!adminMode.asking || adminMode.on) return;
+    adminMode.code = ''; adminMode.asking = false;
+    if (!$('adminLogin').hidden) openAdminLogin('No answer from the server. Try again in a moment.');
+  }, 20000);
 });
 // the server's answer to the password: in, or not
 function adminLoginAnswer(ok) {
+  clearTimeout(adminMode.wait);
   if (ok) {
     adminMode.asking = false;
     closeAdminLogin();
