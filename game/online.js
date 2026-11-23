@@ -41,9 +41,15 @@ function goOnline() {
     try { m = JSON.parse(e.data); } catch (err) { return; }
     if (m.t === 'count') setNet('online', m.n);
     else if (m.t === 'update') getUpdate(m.min);
-    else if (m.t === 'maintenance') showMaintenance(m.text);
+    else if (m.t === 'maintenance') { if (adminMode.asking) adminLoginAnswer(false); showMaintenance(m.text); } // (a password on its way was refused too: never keep sending it)
     else if (m.t === 'thanks') showTag('Thanks for the feedback!', headTop(), 2.5);
-    else if (m.t.startsWith('admin') || ['announce', 'kicked', 'banned', 'badge', 'reset', 'restoring'].includes(m.t)) adminMessage(m);
+    else if (m.t === 'adminNo') adminLoginAnswer(false); // the admin password wasn't accepted (admin-mode.js)
+    else if (m.t.startsWith('admin') || ['announce', 'kicked', 'banned', 'reset', 'restoring'].includes(m.t)) {
+      // 'admin' is both the answer to the password and what every admin tool answers with. It only lets you in while the
+      // password is being checked: a late answer arriving after Exit admin must never put the game back into admin mode.
+      if (m.t === 'admin' && adminMode.asking) adminLoginAnswer(true);
+      adminMessage(m);
+    }
     else if (m.t === 'slow') { menuJoining = false; if (ui.mode === 'menu') drawMenu(); showTag('Slow down a little', headTop(), 2); }
     else if (m.t === 'reported') showTag(m.ok ? 'Thanks, your report was sent' : "They've left, so it couldn't be sent", headTop(), 2.5);
     else if (m.t === 'welcome') welcome(m);
@@ -71,6 +77,7 @@ function goOnline() {
     else if (m.t === 'graves') drawGraves(m.graves);
     else if (m.t === 'speed') setSpeed(m.speed);
     else if (m.t === 'live') applyLive(m.live);
+    else if (m.t === 'liveItems') applyLiveItems(m.liveItems);
     else if (m.t === 'claimNote') showTag(m.text, headTop(), 3.5);
     else if (m.t === 'pos') snapTo(m.x, m.z);
     else if (m.t === 'moved') moveLayoutThing(m.what, m.idx, m.x, m.z);
@@ -106,7 +113,7 @@ function goOnline() {
     if (ui.mode === 'menu') drawMenu();
     shared.on = false;
     for (const id of [...others.keys()]) removeOther(id);
-    if (net.wanted && !net.stopped) { setTimeout(goOnline, maint.on ? 20000 : net.retry); net.retry = Math.min(30000, net.retry * 2); }
+    if (net.wanted && !net.stopped) { setTimeout(goOnline, maint.on && !adminMode.asking ? 20000 : net.retry); net.retry = Math.min(30000, net.retry * 2); } // (Back soon: look in every 20 s; sooner if the admin's password is on its way)
   };
   sock.onerror = () => {};
 }
@@ -139,12 +146,15 @@ function welcome(m) {
   setNet('online', m.count);
   setSpeed(m.speed);
   applyLive(m.live);
+  applyLiveItems(m.liveItems);
   for (const id of [...others.keys()]) removeOther(id);
   for (const p of m.people || []) addOther(p);
   if (m.watch) { // watching from the main menu (or waiting in line because the world is full)
-    if (m.world) useSharedWorld(m.world);
+    if (m.world) { useSharedWorld(m.world); if (m.needLayout) sendLayout(); } // (the admin's game is asked for the layout once per build)
+    else if (m.needSeed) seedWorld(); // admin mode and there's no world (it was just reset): the admin's game lays it out, as the first player back would
     menuYours = m.yours || null;
     menuLine = m.line || 0;
+    if (adminMode.on) return; // admin mode rejoined after a break in the connection: it stays as it was
     if (ui.mode !== 'menu') { dropPlayer(); enterMenu(); }
     menuJoining = false;
     if (menuLine) net.mode = 'play'; // still wanting to play: the server calls us in when there's a spot
@@ -193,6 +203,8 @@ function applyMe(m, spawn = false) {
   }
   // a birthday while you're playing: a year older (once a real year, on the day you made your person)
   if (you.look && Number(m.age) > you.look.age) { you.look.age = Math.round(Number(m.age)); drawHud(); if (player) showTag(`Happy birthday! ${you.look.age} today`, headTop(), 4); }
+  // the admin gave them a new name: it shows straight away
+  if (you.look && m.name && String(m.name).slice(0, 20) !== you.look.name) { you.look.name = String(m.name).slice(0, 20); drawHud(); }
   you.stats = { ...freshStats(), ...(m.stats || {}) };
   you.statsAt = m.statsAt || Date.now();
   // what you carry: the server's word, plus anything you're picking up that it hasn't confirmed yet
@@ -353,7 +365,7 @@ function showMaintenance(text, title = 'Back soon', note = 'Your person is safe.
   showJoining(false);
   $('maintTitle').textContent = title;
   $('maintNote').textContent = note;
-  $('adminPanel').hidden = true; $('adminPick').hidden = true;
+  $('adminPanel').hidden = true; $('adminPick').hidden = true; // (the admin's password box stays if it's open: it's the way in while maintenance is on)
   closeFeedback(); closeReport(); closeSay(); closeMenu(); $('pause').hidden = true;
   paused = true; // needs don't drain while the world is closed
   $('maintText').textContent = text || 'Pocket Life is being updated. It will be back in a few minutes.';

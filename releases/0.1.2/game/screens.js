@@ -220,7 +220,8 @@ function menuCamera(dt) {
   camera.lookAt(t);
 }
 function sendHello() {
-  net.sock.send(JSON.stringify({ t: 'hello', proto: 2, watch: net.mode === 'watch', v: VERSION, b: DATA.build || 0, e: DATA.era || 0, link: TEST_BUILD ? 'test' : 'release', pid, adminCode: admin.code || undefined, adminTag: admin.tag }));
+  net.sock.send(JSON.stringify({ t: 'hello', proto: 2, watch: net.mode === 'watch', v: VERSION, b: DATA.build || 0, e: DATA.era || 0, link: TEST_BUILD ? 'test' : 'release', pid,
+    ...(adminMode.code && net.mode === 'watch' ? { admin: true, adminCode: adminMode.code } : {}) })); // admin mode: only ever while watching, never with a person (admin-mode.js)
 }
 // Play: the same connection now plays your person (or makes a new one)
 function play() {
