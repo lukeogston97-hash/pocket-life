@@ -1,5 +1,5 @@
 {
-  "version": "0.3.2",
+  "version": "0.3.4",
   "build": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -120,7 +120,8 @@
     "chop": 10,
     "walkPerMetre": 0.15,
     "build": 8,
-    "tend": 1
+    "tend": 1,
+    "fish": 3
   },
   "chopping": {
     "tool": "stone-axe",
@@ -223,6 +224,35 @@
         "hunger": 10
       }
     },
+    "fish": {
+      "name": "Fish",
+      "about": "Caught at the pond with a fishing spear. Cook it on a lit campfire before you eat it.",
+      "plural": "Fish",
+      "weight": 1,
+      "look": {
+        "shape": "fish",
+        "length": 0.3,
+        "colour": "#8fa7b0",
+        "belly": "#dfe2d6"
+      },
+      "startInWorld": 0
+    },
+    "cooked-fish": {
+      "name": "Cooked fish",
+      "about": "Cooked on a campfire. Fills you up.",
+      "plural": "Cooked fish",
+      "weight": 1,
+      "look": {
+        "shape": "fish",
+        "length": 0.3,
+        "colour": "#b98a58",
+        "belly": "#e0bd8e"
+      },
+      "eat": {
+        "hunger": 35
+      },
+      "startInWorld": 0
+    },
     "knife": {
       "name": "Stone knife",
       "plural": "Stone knives",
@@ -271,6 +301,24 @@
       },
       "tool": {
         "uses": 30
+      },
+      "startInWorld": 0
+    },
+    "fishing-spear": {
+      "name": "Fishing spear",
+      "about": "For fishing. Tap the pond, then Fish.",
+      "plural": "Fishing spears",
+      "weight": 2,
+      "look": {
+        "shape": "spear",
+        "length": 1.0,
+        "thickness": 0.024,
+        "colour": "#8a6847",
+        "head": "#8f8a80",
+        "lashing": "#c9b77a"
+      },
+      "tool": {
+        "uses": 20
       },
       "startInWorld": 0
     },
@@ -344,6 +392,19 @@
       "about": "Breaks rocks and mines boulders for stones"
     },
     {
+      "id": "fishing-spear",
+      "name": "Fishing spear",
+      "needs": {
+        "stick": 2,
+        "stone": 1,
+        "twine": 1
+      },
+      "makes": {
+        "fishing-spear": 1
+      },
+      "about": "Catches fish at the pond"
+    },
+    {
       "id": "campfire",
       "name": "Campfire",
       "needs": {
@@ -355,6 +416,19 @@
         "campfire": 1
       },
       "about": "Place it, build it, then light it"
+    },
+    {
+      "id": "cooked-fish",
+      "name": "Cooked fish",
+      "needs": {
+        "fish": 1
+      },
+      "makes": {
+        "cooked-fish": 1
+      },
+      "near": "campfire",
+      "seconds": 20,
+      "about": "Raw fish can't be eaten. Cook it by a lit campfire (about 20 s)"
     }
   ],
   "placeables": {
@@ -390,7 +464,17 @@
         "thirst": 15
       },
       "pose": "kneel",
-      "water": true
+      "water": true,
+      "fish": {
+        "action": "Fish",
+        "verb": "Fishing",
+        "seconds": 8,
+        "tool": "fishing-spear",
+        "catch": "fish",
+        "chance": 0.5,
+        "holds": 10,
+        "regrowMinutes": 60
+      }
     },
     "berryBush": {
       "name": "Berry bush",
@@ -712,11 +796,11 @@
   },
   "help": {
     "settings": "carryCapacity is the most weight a person can carry. walkSpeed is in metres per second. worldSize is how wide the square world is in metres (100 makes it 100 m x 100 m, with the clearing in the middle); it can be 40 to 300, and the bigger it is the more your phone has to draw. needsSpeed is 1 for real time; set it higher to test, for example 60 makes an hour of hunger and thirst pass in a minute. autoName fills in a name from testNames on the Make your person screen (handy while testing; set it to false for the real game). respawnMinutes is how often (online) the world adds one stick and one stone, if there are fewer on the ground than startInWorld: sticks under trees, stones by boulders. maxPlaying is how many people can play at once (20 for now, to stay inside Cloudflare's free plan); anyone else waits in line on the main menu and joins by themselves when a spot opens. Run tools/worlds.py test-build after changing it. worldTimeZone is the one clock the whole world runs on (date, time, day and night), the same for every player: Australia/Darwin for the Oceania world. craftSearchFrom: Craft shows a search box once you know this many recipes.",
-    "items": "To add an item, copy one of the items above, give it a new id (lower case, no spaces) and set its name, plural, weight and look. It then shows up by itself in the Inventory, in Craft (if a recipe makes it) and in the admin's Add list, with a picture drawn from its look. Shapes and their looks: rod (length, thickness, colour, twig), rock (size, colour), ball (size, colour, leaf: a colour or false), axe (length, thickness, colour, head, lashing), log (length, radius, colour, end), knife (length, thickness, colour, blade, lashing), coil (size, colour), campfire (size, colour, stone, ash), box (width, height, depth, colour). An unknown shape is drawn as a rock. eat is what eating one gives (a berry gives hunger 10), which adds an Eat button in the inventory. tool: {\"uses\": 20} makes it a tool that wears out after that many uses (a wear bar in the inventory); a tool shows in your hand only while you use it (chopping, cutting). startInWorld is how many lie around when the world starts (0 for things you can only make), and startNear is how many of those start close to where you appear. After changing items, run python3 tools/worlds.py test-build so the server knows about them. about (optional) is a short line shown when you tap it in the Inventory; without it, the about of the recipe that makes it is used. startInWorld: how many lie about the world; while there are fewer, one more turns up every settings.respawnMinutes, at a spot by spawnsNear (trees or boulders). A new item with startInWorld and spawnsNear starts turning up by itself, no reset needed (run tools/worlds.py test-build).",
-    "recipes": "To add a recipe, put it in the recipes list like this: {\"id\": \"stone-axe\", \"name\": \"Stone axe\", \"needs\": {\"stick\": 2, \"stone\": 3}, \"makes\": {\"stone-axe\": 1}, \"about\": \"Chops trees\"}. Every item in needs and makes must exist in items. Recipes show up in the Craft sheet (the hammer button) automatically. about is a short line on the recipe card (optional). The server checks crafting too, so run python3 tools/worlds.py test-build after changing recipes. near (optional) is a placeable id, like campfire: the recipe can then only be made close to a built one (a fire has to be lit), Craft shows a 'By a lit campfire' chip, and it's listed in that thing's tap menu under its craftLabel (Cook). Use it for cooking. A recipe shows in Craft once you've had all but one of the things it needs (at least one), so players discover recipes as they find new things. group (optional) puts it under a button in Craft (Tools, Food, Building, Clothes, Materials); without it tools go under Tools, food under Food, things you place under Building and the rest under Materials.",
+    "items": "To add an item, copy one of the items above, give it a new id (lower case, no spaces) and set its name, plural, weight and look. It then shows up by itself in the Inventory, in Craft (if a recipe makes it) and in the admin's Add list, with a picture drawn from its look. Shapes and their looks: rod (length, thickness, colour, twig), rock (size, colour), ball (size, colour, leaf: a colour or false), axe (length, thickness, colour, head, lashing), log (length, radius, colour, end), knife (length, thickness, colour, blade, lashing), coil (size, colour), campfire (size, colour, stone, ash), spear (length, thickness, colour, head, lashing), fish (length, colour, belly), box (width, height, depth, colour). An unknown shape is drawn as a rock. eat is what eating one gives (a berry gives hunger 10), which adds an Eat button in the inventory. tool: {\"uses\": 20} makes it a tool that wears out after that many uses (a wear bar in the inventory); a tool shows in your hand only while you use it (chopping, cutting). startInWorld is how many lie around when the world starts (0 for things you can only make), and startNear is how many of those start close to where you appear. After changing items, run python3 tools/worlds.py test-build so the server knows about them. about (optional) is a short line shown when you tap it in the Inventory; without it, the about of the recipe that makes it is used. startInWorld: how many lie about the world; while there are fewer, one more turns up every settings.respawnMinutes, at a spot by spawnsNear (trees or boulders). A new item with startInWorld and spawnsNear starts turning up by itself, no reset needed (run tools/worlds.py test-build).",
+    "recipes": "To add a recipe, put it in the recipes list like this: {\"id\": \"stone-axe\", \"name\": \"Stone axe\", \"needs\": {\"stick\": 2, \"stone\": 3}, \"makes\": {\"stone-axe\": 1}, \"about\": \"Chops trees\"}. Every item in needs and makes must exist in items. Recipes show up in the Craft sheet (the hammer button) automatically. about is a short line on the recipe card (optional). The server checks crafting too, so run python3 tools/worlds.py test-build after changing recipes. near (optional) is a placeable id, like campfire: the recipe can then only be made close to a built one (a fire has to be lit), Craft shows a 'By a lit campfire' chip, and it's listed in that thing's tap menu under its craftLabel (Cook). Use it for cooking. seconds (optional) is how long making it takes, like cooking at a fire (20): the things are used up when it finishes. A recipe shows in Craft once you've had all but one of the things it needs (at least one), so players discover recipes as they find new things. group (optional) puts it under a button in Craft (Tools, Food, Building, Clothes, Materials); without it tools go under Tools, food under Food, things you place under Building and the rest under Materials.",
     "looks": "Each list here is a set of choices on the Make your person screen. Add an entry to add a choice.",
     "stats": "Stats run in real time. Every stat goes from 0 to 100. perHour is how much it changes each real hour, and whileAsleep is used instead while sleeping. lowAt shows the warning (the ring pulses red, and under 10 it flashes). atZero is what happens to other stats each hour while this one is empty. Health heals (4 an hour, 8 asleep, so about a day to full) when nothing is empty, and the person dies when health reaches 0. fullLabel is shown when you try to eat or drink but don't need to. Hunger lasts about a day (a berry fills 10), thirst about 16 hours awake (a drink fills 15), Rest about 16 hours awake and 8 asleep (whileAsleepAtNight: faster at night, about 6 hours). With no water you die in about 3 days, with no food in about a week. collapseAtZero (Rest): when it runs out your person collapses asleep where they stand and can't be woken until it's back to wakeAt (25). Energy is not deadly. icon: heart, food, drop, moon or bolt. The server uses the same numbers (copied by tools/worlds.py).",
-    "sources": "Things in the world you can use, matched by name (\"Pond\", \"Berry bush\"). action is the button in the tap menu, like \"Drink\". gives adds to stats each time (one drink at the pond gives 15 thirst). harvest is what one pick puts in your inventory (1 berry), holds is how many a full bush has (up to 15), and regrowHours is how long a picked-bare bush takes to grow them all back; picked berries grow back one at a time. seconds is how long it takes. pose is kneel, pick or bend. tool and toolHarvest: with that tool you get toolHarvest per pick instead (a knife picks 2 berries), and the tool wears.",
+    "sources": "Things in the world you can use, matched by name (\"Pond\", \"Berry bush\"). action is the button in the tap menu, like \"Drink\". gives adds to stats each time (one drink at the pond gives 15 thirst). harvest is what one pick puts in your inventory (1 berry), holds is how many a full bush has (up to 15), and regrowHours is how long a picked-bare bush takes to grow them all back; picked berries grow back one at a time. seconds is how long it takes. pose is kneel, pick or bend. fish (the pond has it): action and verb are the tap menu button and the busy word, seconds how long a try takes, tool what you need to carry (it wears each try), catch what a catch gives, chance the share of tries that catch one (0.5), holds how many fish the pond has for everyone and regrowMinutes how often one comes back; the server keeps the count (run tools/worlds.py test-build after changing it). tool and toolHarvest: with that tool you get toolHarvest per pick instead (a knife picks 2 berries), and the tool wears.",
     "defaultLook": "How a new person starts on the Make your person screen.",
     "daylight": "Day and night follow the player's real local time. Each entry is how the world looks at that hour, and the game blends between them. sky is the haze colour, skyLight and groundLight light things from above and below, brightness is how strong that is, sun is the sun or moon colour, sunStrength how strong, sunHeight its angle in degrees.",
     "version": "version is the game version and build counts the test copies of that version (start build at 1 for each new version, count up for each test copy). Both only need changing here.",
@@ -824,6 +908,23 @@
   },
   "devlog": [
     {
+      "version": "0.3.4",
+      "date": "2026-11-23",
+      "notes": [
+        "Fishing: with a fishing spear, tap the pond and choose Fish. Each try takes about 8 seconds and about half of them catch a fish.",
+        "The pond holds about 10 fish for everyone, and one comes back every hour. When they're gone you'll get 'No fish left'.",
+        "Raw fish can't be eaten. Cook it by a lit campfire (about 20 seconds) to get cooked fish, which fills you up much more than a berry.",
+        "Fixed: walking to the pond to drink no longer gets stuck with \"Can't get there\"."
+      ]
+    },
+    {
+      "version": "0.3.3",
+      "date": "2026-11-23",
+      "notes": [
+        "You can now make a fishing spear (2 sticks, 1 stone and 1 twine). Fishing at the pond is coming next."
+      ]
+    },
+    {
       "version": "0.3.2",
       "date": "2026-11-23",
       "notes": [
@@ -853,7 +954,8 @@
         "The Menu now has What's new, Settings and Feedback, so you don't have to leave the world for them.",
         "A short break in your connection no longer loses what you were doing: your person waits for you, and what you finished is sent when you're back.",
         "Fair play: the world now checks you're next to what you pick up, chop, mine or drink from.",
-        "Tidier wording (Pick berries, Too heavy), and lots of sticks and stones on the ground no longer slow phones down.", "Fixed: the note when placing a campfire no longer squashes into a narrow column on some phones."
+        "Tidier wording (Pick berries, Too heavy), and lots of sticks and stones on the ground no longer slow phones down.",
+        "Fixed: the note when placing a campfire no longer squashes into a narrow column on some phones."
       ]
     },
     {

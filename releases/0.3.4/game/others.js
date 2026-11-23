@@ -15,19 +15,26 @@ document.addEventListener('visibilitychange', () => {
 });
 setInterval(() => { if (online() && !document.hidden) net.sock.send(JSON.stringify({ t: 'ping' })); }, 25000);
 const online = () => net.sock && net.sock.readyState === 1 && net.myId;
+// Everyone else in the world is kept as a small marker (where they are and which way they face). Their body is only built
+// while they're one of the people being drawn (the nearest few: pickShown) and thrown away again when they aren't, so a
+// world with a thousand people costs a phone no more than a world with thirty. (Found in the 23 Nov 2026 growth check:
+// every person used to get a full body, about 19 meshes and 77 KB each, drawn or not.)
 function addOther(p) {
   if (!p || !p.id || p.id === net.myId) return;
   removeOther(p.id);
-  const mesh = makePerson(cleanLook({ ...p.look, name: p.name }));
+  const mesh = new THREE.Group(); // the marker; showBody puts their body inside it
   let x = Number(p.x) || 0, z = Number(p.z) || 0;
   [x, z] = onDryLand(x, z); // never start in the pond or inside a tree or rock
   mesh.position.set(x, groundY(x, z), z);
   mesh.rotation.y = Number(p.ry) || 0;
   mesh.userData.label = p.name || 'Someone';
+  mesh.visible = false;
   scene.add(mesh);
   const name = addLabel({ cls: 'name-tag', text: '', anchor: mesh.position, offset: V(0, 2.0, 0), gap: 0 });
-  const o = { id: p.id, who: p.who || p.id, title: p.name || 'Someone', badge: !!p.badge, state: p.state || 'online', mesh, tx: x, tz: z, tr: mesh.rotation.y, phase: 0, name, bubble: null,
-    speed: p.speed || null, due: p.ms ? elapsed + p.ms / 1000 : null, shown: true, sit: Array.isArray(p.sit) ? p.sit : null };
+  name.off = true; name.el.style.display = 'none'; // until they're picked to be drawn
+  const o = { id: p.id, who: p.who || p.id, title: p.name || 'Someone', badge: !!p.badge, state: p.state || 'online', look: cleanLook({ ...p.look, name: p.name }), mesh, body: null,
+    tx: x, tz: z, tr: mesh.rotation.y, phase: 0, name, bubble: null,
+    speed: p.speed || null, due: p.ms ? elapsed + p.ms / 1000 : null, shown: false, sit: Array.isArray(p.sit) ? p.sit : null };
   shownAt = -1; // work out again who's drawn
   if (p.tx != null) Object.assign(o, { tx: p.tx, tz: p.tz });
   others.set(p.id, o);
@@ -85,6 +92,21 @@ function setOtherState(m) {
   drawTag(o);
   poseOther(o);
 }
+// build someone's body (they're now one of the people drawn), or take it away again
+function showBody(o, on) {
+  const m = o.mesh;
+  if (on && !o.body) {
+    o.body = makePerson(o.look);
+    m.scale.copy(o.body.scale); o.body.scale.set(1, 1, 1); // the marker carries their height, which the sitting and lying poses use
+    m.userData.parts = o.body.userData.parts;
+    m.add(o.body);
+  } else if (!on && o.body) {
+    m.remove(o.body);
+    disposeMaterials(o.body);
+    o.body = null;
+    m.userData.parts = null;
+  }
+}
 function removeOther(id) {
   const o = others.get(id);
   if (!o) return;
@@ -95,16 +117,19 @@ function removeOther(id) {
   others.delete(id);
 }
 // other people glide to where the server says they are, legs moving while they walk
-// Only the people nearest the middle of the view are drawn (and can be tapped), so a busy world stays smooth on a phone.
+// Only the people nearest the middle of the view are drawn (and can be tapped), so a busy world stays smooth on a phone:
+// 30 on High graphics, 20 on Medium, 12 on Low (GRAPHICS in camera.js).
 const SHOW_PEOPLE = 30;
+const peopleDrawn = () => (GRAPHICS[gfx] || {}).people || SHOW_PEOPLE;
 let shownAt = -1;
 function pickShown() {
   const c = controls.target, d2 = (o) => (o.mesh.position.x - c.x) ** 2 + (o.mesh.position.z - c.z) ** 2;
   const empty = ui.mode === 'menu' && menuRegion && !menuRegion.open; // looking at a world that isn't open yet: nobody there
   [...others.values()].sort((a, b) => d2(a) - d2(b)).forEach((o, i) => {
-    const on = !empty && i < SHOW_PEOPLE;
+    const on = !empty && i < peopleDrawn();
     if (o.shown === on) return;
     o.shown = on;
+    showBody(o, on);
     o.mesh.visible = on;
     for (const L of [o.name, o.bubble]) if (L) { L.off = !on; L.el.style.display = on ? '' : 'none'; }
   });

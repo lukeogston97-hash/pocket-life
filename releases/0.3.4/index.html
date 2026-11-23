@@ -238,6 +238,13 @@
           </div>
         </div>
         <div class="admin-sec admin-danger-zone">
+          <div class="admin-row"><span class="lbl">Restore an earlier time</span><span class="admin-state">Last 30 days</span></div>
+          <div class="admin-chips" id="adminRestoreWhen"></div>
+          <input id="adminRestoreAt" class="admin-input" type="datetime-local" aria-label="Restore to this time" hidden>
+          <button id="adminRestoreBtn" type="button" class="small-btn admin-danger">Restore</button>
+          <div id="adminRestoreUndo" hidden><div class="admin-row"><span id="adminRestoreUndoText" class="admin-state"></span><button id="adminUndoBtn" type="button" class="small-btn">Undo</button></div></div>
+        </div>
+        <div class="admin-sec admin-danger-zone">
           <span class="lbl">Danger zone</span>
           <button id="adminResetBtn" type="button" class="small-btn admin-danger">Reset the world</button>
           <button id="adminResetAllBtn" type="button" class="small-btn admin-danger">Reset everything</button>

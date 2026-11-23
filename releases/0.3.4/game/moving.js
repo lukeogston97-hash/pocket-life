@@ -7,7 +7,7 @@ function shorePointToward(from) {
   for (let k = 0.6; k < 2; k += 0.02) {
     const baseR = POND.r * (1 + 0.13 * Math.sin(a * 3 + 1.1) + 0.06 * Math.sin(a * 5 - 0.7));
     const x = POND.x + Math.cos(a) * baseR * k, z = POND.z + (Math.sin(a) * baseR * k) / 1.22;
-    if (heightAt(x, z) > WATER_Y + 0.12) return V(x, 0, z);
+    if (heightAt(x, z) > WATER_Y + 0.12 && pondShape(x, z) >= 0.9) return V(x, 0, z); // dry ground that walking allows (it won't step into pondShape < 0.86), so the walk to the edge never gets stuck
   }
   return V(from.x, 0, from.z);
 }
@@ -15,14 +15,14 @@ const inWorld = (v) => Math.max(-WALK_LIMIT, Math.min(WALK_LIMIT, v)); // the fo
 // Solid things your person walks round: rocks, bushes, logs, stumps and tree trunks.
 // Returns the thing you'd be standing in at x, z (or null), and how far into it.
 const BODY_R = 0.22;
-function solidAt(x, z) {
+function solidAt(x, z, pad = 0) { // pad: keep that much further away
   let best = null;
   for (let i = -1; i <= 1; i++) {
     for (let j = -1; j <= 1; j++) {
       const a = spots.get(spotKey(x + i * 4, z + j * 4));
       if (!a) continue;
       for (let k = 0; k < a.length; k += 4) {
-        const r = (a[k + 3] ? 0.3 : a[k + 2] * 0.8) + BODY_R; // a tree's trunk, not its crown
+        const r = (a[k + 3] ? 0.3 : a[k + 2] * 0.8) + BODY_R + pad; // a tree's trunk, not its crown
         const d = Math.hypot(a[k] - x, a[k + 1] - z);
         if (d < r && (!best || r - d > best.depth)) best = { x: a[k], z: a[k + 1], r, depth: r - d };
       }
@@ -70,10 +70,18 @@ function clearCellsNear(x, z, r) {
     if (ix >= 0 && iz >= 0 && ix < GRID_N && iz < GRID_N) cellFree[iz * GRID_N + ix] = 0;
   }
 }
-// is the straight line from a to b clear? (checked every quarter metre)
+// is the straight line from a to b clear? (checked every quarter metre). The grid's half-metre cells can let a line
+// clip the edge of a rock or bush, so a line the grid allows is checked again at the exact spots, with a little room
+// to spare. Not near its two ends, where someone may already stand close to something (picking a bush, say).
 function clearLine(ax, az, bx, bz) {
   const d = Math.hypot(bx - ax, bz - az), n = Math.ceil(d / 0.25);
   for (let i = 1; i <= n; i++) { const t = i / n; if (!freeAt(ax + (bx - ax) * t, az + (bz - az) * t)) return false; }
+  for (let i = 1; i < n; i++) {
+    const t = i / n, s = t * d;
+    if (s < 0.5 || d - s < 0.5) continue;
+    const x = ax + (bx - ax) * t, z = az + (bz - az) * t;
+    if (pondShape(x, z) < 0.9 || solidAt(x, z, 0.05)) return false;
+  }
   return true;
 }
 // the nearest free cell to a spot (for a goal that's inside a bush, say), within about 3 metres
@@ -545,6 +553,29 @@ Object.assign(TASK_KINDS, {
     },
     name(t, now) { const b = rocks[t.idx] && rocks[t.idx].boulder; return b ? (now ? 'Mining a boulder' : 'Mine boulder') : (now ? 'Breaking a rock' : 'Break rock'); },
     spot(t) { const r = rocks[t.idx]; return r ? V(r.x, groundY(r.x, r.z) + r.r * 0.6 + 0.3, r.z) : null; },
+  },
+});
+// fishing (0.3.4): walk to the shore, kneel with the spear, then the server says whether something bit (and wears the spear)
+const fishSource = () => Object.values(SOURCES).find((s) => s.fish);
+Object.assign(TASK_KINDS, {
+  fish: {
+    start() {
+      const F = (fishSource() || {}).fish;
+      if (!F) { nextTask(); return; }
+      if (!you.carry[F.tool]) { showTag(`You need a ${ITEMS[F.tool].name.toLowerCase()}`, headTop(), 2); nextTask(); return; }
+      if (carried() + ITEMS[F.catch].weight > SETTINGS.carryCapacity) { showTag('Too heavy', headTop(), 2); nextTask(); return; }
+      const go = () => {
+        face(POND.x, POND.z);
+        showTag(`${F.verb}…`, headTop(), 2, F.seconds + 0.3);
+        tagLabel.busy = true;
+        startAction({ pose: 'kneel', seconds: F.seconds, tool: F.tool, end: () => { spendEnergy('fish'); sendAct({ t: 'fish' }); } });
+      };
+      const shore = shorePointToward(player.position);
+      if (Math.hypot(shore.x - player.position.x, shore.z - player.position.z) < 0.35) go();
+      else walkTo(shore, go, nextTask);
+    },
+    name: (t, now) => { const F = (fishSource() || {}).fish || {}; return now ? F.verb || 'Fishing' : F.action || 'Fish'; },
+    spot: () => V(POND.x, WATER_Y + 0.5, POND.z),
   },
 });
 // where dropped things land: one in front of you, more in a small pile around it

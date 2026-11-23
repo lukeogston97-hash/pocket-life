@@ -2,7 +2,7 @@
    Type "/admin" and the code in the Say box once; the phone remembers it. "/admin off" forgets it.
    The code itself is a Cloudflare secret (ADMIN_CODE), so it never sits in the game's files.
    Menu > Admin opens the Admin panel, with tabs: Server (maintenance, messages, speed), Players (find someone and
-   open their page), Inbox (feedback and reports), World (counts, regrow, clear, reset the world or everything) and Settings (live numbers).
+   open their page), Inbox (feedback and reports), World (counts, regrow, clear, restore an earlier time, reset the world or everything) and Settings (live numbers).
    Single things are moved, regrown and removed from their own tap menus, under Admin. */
 const ADMIN_KEY = 'pocket-life:admin', ADMIN_TAG_KEY = 'pocket-life:adminTag';
 const admin = { on: false, code: '', tag: true, maintenance: false, message: '', live: [] };
@@ -53,6 +53,10 @@ function adminMessage(m) {
   } else if (m.t === 'reset') {
     if (m.all) { stopQueue(); outbox.length = 0; } // your person is gone too: nothing left to do or send
     showTag(m.all ? 'Everything was reset' : 'The world was reset', headTop(), 3);
+  } else if (m.t === 'adminRestore') restoreAnswer(m);
+  else if (m.t === 'restoring') { // the admin is restoring the world: it restarts in a moment and everyone rejoins where the server has them
+    stopQueue(); outbox.length = 0; net.restored = true;
+    announce(m.text);
   }
 }
 // a banner across everyone's screen
@@ -189,11 +193,10 @@ function entry(head, body, buttons = [], cls = '') {
 // a button that needs a second tap within a few seconds (for things that can't be undone). With wait, the second tap
 // only counts after that long, so a double tap by mistake does nothing.
 function twoTaps(btn, run, again = 'Tap again to be sure', wait = 0) {
-  const label = btn.textContent;
-  let armed = null, at = 0;
-  const reset = () => { clearTimeout(armed); armed = null; btn.textContent = label; };
+  let label = btn.textContent, armed = null, at = 0; // (label: what it said when first tapped, so a label that changes comes back right)
+  const reset = () => { if (armed) btn.textContent = label; clearTimeout(armed); armed = null; };
   btn.addEventListener('click', () => {
-    if (!armed) { btn.textContent = again; at = performance.now(); armed = setTimeout(reset, 4000 + wait); return; }
+    if (!armed) { label = btn.textContent; btn.textContent = again; at = performance.now(); armed = setTimeout(reset, 4000 + wait); return; }
     if (performance.now() - at < wait) return;
     reset(); run();
   });
@@ -219,7 +222,7 @@ function showAdminTab(tab) {
   for (const p of document.querySelectorAll('[data-admin-page]')) p.hidden = p.dataset.adminPage !== tab;
   if (tab === 'players') findPlayers();
   if (tab === 'inbox') drawInbox();
-  if (tab === 'world') drawCounts();
+  if (tab === 'world') { drawCounts(); drawRestore(); }
   if (tab === 'settings') drawSettings();
   if (tab === 'player') drawPlayer();
 }
@@ -379,7 +382,7 @@ function drawInbox() {
   const mark = (x) => [x.done ? 'Not done' : 'Done', () => adminSend({ t: 'a.done', list: inboxList, at: x.at, on: !x.done })];
   const del = (x) => ['Delete', () => adminSend({ t: 'a.delete', list: inboxList, at: x.at })];
   const rows = list.map((x) => {
-    if (inboxList === 'feedback') return entry(`${when(x.at)} · ${x.name || 'Someone'} · v${x.v}`, x.text, [mark(x), del(x)], x.done ? 'done' : '');
+    if (inboxList === 'feedback') return entry(`${when(x.at)} · ${x.name || 'Someone'} · v${x.v}${x.count > 1 ? ` · ${x.count} times, last ${when(x.lastAt)}` : ''}`, x.text, [mark(x), del(x)], x.done ? 'done' : '');
     const said = (x.said || []).map(([, t]) => `"${t}"`).join('  ');
     return entry(`${when(x.at)} · ${x.by.name} reported ${x.about.name} · ${x.reason}`, [x.note, said && `They said: ${said}`].filter(Boolean).join('\n'),
       [mark(x), ['Their page', () => openPlayerPage(x.about.who)], del(x)], x.done ? 'done' : '');
@@ -414,7 +417,55 @@ const resetClearAll = twoTaps($('adminClearAllBtn'), () => { adminSend({ t: 'a.c
 // everyone's past people and the Inbox go too (settings, bans and maintenance stay). Neither can be undone.
 const resetReset = twoTaps($('adminResetBtn'), () => { adminSend({ t: 'a.reset' }); closeAdminPanel(); }, 'Tap again: the land starts again', 1000);
 const resetResetAll = twoTaps($('adminResetAllBtn'), () => { adminSend({ t: 'a.reset', all: true }); closeAdminPanel(); }, 'Tap again: deletes every person', 1000);
-function resetDanger() { resetClearAll(); resetReset(); resetResetAll(); }
+function resetDanger() { resetClearAll(); resetReset(); resetResetAll(); resetRestore(); resetUndo(); }
+
+/* ---------- Restore (World tab): the whole world back to an earlier time (server/src/restore.js) ---------- */
+// Cloudflare keeps the last 30 days. Everything goes back together (land, people, bags, claims, Inbox, bans, settings),
+// so it's for emergencies, like a bad update or a reset by mistake. The server sends back an undo point (the moment
+// just before the restore), kept on this phone, so a wrong pick can be put back with Undo.
+const RESTORE_KEY = 'pocket-life:restoreUndo', RESTORE_DAYS = 30, DAY_MS = 24 * 3600000;
+const RESTORE_PICKS = [[10, '10 min'], [60, '1 hour'], [360, '6 hours'], [1440, '1 day'], ['pick', 'Pick a time']];
+const restorePick = { mins: 60 };
+let restoreUndo = null;
+try { restoreUndo = JSON.parse(localStorage.getItem(RESTORE_KEY) || 'null'); } catch (err) { /* none */ }
+const inputTime = (t) => new Date(t - new Date(t).getTimezoneOffset() * 60000).toISOString().slice(0, 16); // a datetime-local box's value, in this phone's time
+function restoreTime() {
+  if (restorePick.mins !== 'pick') return Date.now() - restorePick.mins * 60000;
+  const t = new Date($('adminRestoreAt').value).getTime();
+  return Number.isFinite(t) ? t : 0;
+}
+function drawRestore() {
+  resetRestore(); resetUndo();
+  chips($('adminRestoreWhen'), RESTORE_PICKS, restorePick.mins, (v) => {
+    restorePick.mins = v;
+    if (v === 'pick' && !$('adminRestoreAt').value) $('adminRestoreAt').value = inputTime(Date.now() - 3600000);
+    drawRestore();
+  });
+  const box = $('adminRestoreAt'), now = Date.now();
+  box.hidden = restorePick.mins !== 'pick';
+  if (document.activeElement !== box) { box.min = inputTime(now - RESTORE_DAYS * DAY_MS + 60000); box.max = inputTime(now); } // (not while picking)
+  const t = restoreTime();
+  $('adminRestoreBtn').textContent = t ? `Restore to ${when(t)}` : 'Pick a time';
+  const u = restoreUndo && restoreUndo.at > now - RESTORE_DAYS * DAY_MS ? restoreUndo : null;
+  $('adminRestoreUndo').hidden = !u;
+  if (u) $('adminRestoreUndoText').textContent = `Restored ${when(u.at)}, back to ${when(u.to)}`;
+}
+function doRestore() {
+  const t = restoreTime(), now = Date.now();
+  if (!t || t > now - 5000) { showTag('Pick a time in the past', headTop(), 2.5); return; }
+  if (t < now - RESTORE_DAYS * DAY_MS + 60000) { showTag(`Only the last ${RESTORE_DAYS} days can be restored`, headTop(), 2.5); return; }
+  adminSend({ t: 'a.restore', at: t });
+}
+const resetRestore = twoTaps($('adminRestoreBtn'), doRestore, 'Tap again: everything after it goes', 1000);
+const resetUndo = twoTaps($('adminUndoBtn'), () => { if (restoreUndo) adminSend({ t: 'a.restore', undo: restoreUndo.undo }); }, 'Tap again: back to before it', 1000);
+for (const ev of ['input', 'change']) $('adminRestoreAt').addEventListener(ev, drawRestore);
+// the server's answer, just before the world restarts and everyone rejoins
+function restoreAnswer(m) {
+  restoreUndo = m.undone ? null : { undo: m.undo, to: m.to, at: m.at };
+  try { if (restoreUndo) localStorage.setItem(RESTORE_KEY, JSON.stringify(restoreUndo)); else localStorage.removeItem(RESTORE_KEY); } catch (err) { /* full */ }
+  closeAdminPanel();
+  showTag(m.undone ? 'Undoing the restore…' : 'Restoring the world…', headTop(), 3);
+}
 
 /* ---------- Settings tab: live numbers (they stay until you tap Reset) ---------- */
 function drawSettings() {

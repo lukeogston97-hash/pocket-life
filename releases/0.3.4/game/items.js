@@ -212,6 +212,38 @@ const SHAPES = {
     }
     return { model: g, rest: 0.04, hold: 'axe', grip: len / 2 - 0.06, hit: [len + 0.3, 0.3, 0.42] };
   },
+  // a fishing spear: a long thin shaft with a flat pointed stone tip, lashed on with twine
+  spear(look) {
+    const len = look.length ?? 1.0, t = look.thickness ?? 0.024;
+    const g = new THREE.Group();
+    const wood = tinted(look.colour || '#8a6847', 0.04);
+    g.add(new THREE.Mesh(new THREE.CylinderGeometry(t * 0.85, t * 1.05, len, 6).rotateZ(Math.PI / 2), wood)); // the shaft
+    const tx = len / 2 - 0.02;
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(t * 3.4, 0.24, 4).rotateZ(-Math.PI / 2), tinted(look.head || '#8f8a80', 0.06)); // the stone point
+    tip.scale.z = 0.5;
+    tip.position.set(tx + 0.1, 0, 0);
+    g.add(tip);
+    const twine = matFor(look.lashing || '#c9b77a');
+    for (const dx of [-0.04, 0.0]) { // twine wrapped round where the point is tied on
+      const lash = new THREE.Mesh(new THREE.CylinderGeometry(t * 1.5, t * 1.5, 0.02, 7).rotateZ(Math.PI / 2), twine);
+      lash.position.set(tx + dx, 0, 0);
+      g.add(lash);
+    }
+    return { model: g, rest: 0.03, hold: 'axe', grip: len / 2 - 0.2, hit: [len + 0.3, 0.25, 0.3] };
+  },
+  // a fish: a flattened oval body with a paler belly, a fin on top, a tail and a dark eye (raw is silvery, cooked is browned)
+  fish(look) {
+    const len = look.length ?? 0.3, h = len * 0.4, g = new THREE.Group();
+    const skin = tinted(look.colour || '#8fa7b0', 0.05);
+    const part = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); g.add(m); return m; };
+    part(new THREE.SphereGeometry(1, 10, 7).scale(len * 0.4, h * 0.3, h * 0.17), skin, 0, 0, 0);
+    part(new THREE.SphereGeometry(1, 10, 7).scale(len * 0.34, h * 0.15, h * 0.16), tinted(look.belly || '#dfe2d6', 0.04), 0.01, -h * 0.12, 0);
+    part(new THREE.ConeGeometry(h * 0.3, len * 0.24, 3).rotateZ(-Math.PI / 2).scale(1, 1, 0.3), skin, -len * 0.46, 0, 0); // the tail
+    part(new THREE.ConeGeometry(h * 0.16, len * 0.18, 3).scale(1, 1, 0.3), skin, -len * 0.04, h * 0.3, 0); // the fin on its back
+    const eye = matFor('#26292b');
+    for (const z of [h * 0.11, -h * 0.11]) part(new THREE.SphereGeometry(h * 0.035, 6, 5), eye, len * 0.27, h * 0.05, z);
+    return { model: g, rest: h * 0.2, hold: 'palm', hit: [len + 0.2, h * 0.7 + 0.2, h * 0.5 + 0.2] };
+  },
   // a stone knife: a short handle that flares at the end you hold, a leaf-shaped stone blade set into the other end,
   // lashed on with twine (the same way as the axe)
   knife(look) {
@@ -356,7 +388,9 @@ for (const [id, raw] of Object.entries(DATA.sources || {})) {
   // harvest: what picking it puts in your inventory; regrowHours: how long until it can be picked again
   const harvest = Object.fromEntries(Object.entries(raw.harvest || {}).filter(([k, v]) => ITEMS[k] && v >= 1).map(([k, v]) => [k, Math.floor(v)]));
   SOURCES[id] = { id, name: raw.name || id, action: raw.action || '', verb: raw.verb || 'Using', seconds: Math.max(0.3, Number(raw.seconds) || 1), pose: raw.pose || 'pick',
-    gives, harvest, holds: Math.floor(Number(raw.holds) || 0), regrowHours: Math.max(0, Number(raw.regrowHours) || 0) };
+    gives, harvest, holds: Math.floor(Number(raw.holds) || 0), regrowHours: Math.max(0, Number(raw.regrowHours) || 0),
+    // fish: fishing here with a tool (the pond): how long a try takes and what it catches; the server holds the fish
+    fish: raw.fish && ITEMS[raw.fish.tool] && ITEMS[raw.fish.catch] ? { action: raw.fish.action || 'Fish', verb: raw.fish.verb || 'Fishing', seconds: Math.max(1, Number(raw.fish.seconds) || 8), tool: raw.fish.tool, catch: raw.fish.catch } : null };
 }
 const harvests = (src) => Object.keys(src.harvest).length > 0;
 // a thing in the world becomes usable when a source has its name, like "Pond" or "Berry bush"
