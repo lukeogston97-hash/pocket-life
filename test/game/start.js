@@ -11,4 +11,7 @@ goOnline();
 requestAnimationFrame(frame);
 // for automated checks only: open the page with ?debug to reach the game's state from the browser console
 if (location.search.includes('debug')) window.__pl = { THREE, renderer, solidAt, walk, tasks, trees, you, others, net, plants, queueTask, camera, berryBushes, buildItem, layoutData, oldStumps, rocks, placed, placedActions, stationNear, placing, movePlacing, finishPlacing, cantPlaceAt, fuelLeft, isLit, endSit, get player() { return player; }, get heldView() { return heldView; }, get freshLook() { return freshLook; }, itemViews, dropGhosts, findPath, freeAt, die, showWelcomeBack, showGoneCard, showMaintenance, hideMaintenance, admin, STAT, SOURCES, CHOP, MINE, world, menuActions, notMineAt, claimAt, sendAct, outbox, goOnline, getItem, peopleDrawn, get glowOn() { return glowOn; }, get adminData() { return { playersData, playerData, inboxData, adminTab }; },
-  ui, controls, openAdminLogin, get adminMode() { return { on: adminMode.on, asking: adminMode.asking, hasCode: !!adminMode.code }; } }; // (adminMode: never the password itself)
+  ui, controls, openAdminLogin,
+  // what a tap at a spot on the screen would find, and what the admin could do with it (for checks)
+  adminAt(px, py) { const r = canvas.getBoundingClientRect(); ndc.set(((px - r.left) / r.width) * 2 - 1, -((py - r.top) / r.height) * 2 + 1); const t = pickTarget(px - r.left, py - r.top); return { kind: t ? t.kind : null, name: t ? t.name : null, acts: t ? adminActionsFor(t).map((a) => a.label) : [] }; },
+  get adminMode() { return { on: adminMode.on, asking: adminMode.asking, hasCode: !!adminMode.code }; } }; // (adminMode: never the password itself)

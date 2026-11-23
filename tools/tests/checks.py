@@ -1082,7 +1082,65 @@ async def admin_mode():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode}
+# where a spot in the world is on the admin's screen (the same sum the game's name tags use)
+SCREEN = """(x, y, z) => { const v = new __pl.THREE.Vector3(x, y, z).project(__pl.camera), c = document.getElementById('world').getBoundingClientRect();
+  return [c.left + (v.x * 0.5 + 0.5) * c.width, c.top + (-v.y * 0.5 + 0.5) * c.height, v.z < 1]; }"""
+
+
+async def admin_taps():
+    """Admin mode: tapping the world. The ground offers Add item, a person can be moved by tapping where they go, a loose item can be removed. A player's own game is the witness."""
+    async with world() as W:
+        b = await W.page('tapPlayer'); await join(b)
+        a = await W.page('tapAdmin', 1440, 900); await open_admin(a)
+        who = await b.evaluate('__pl.net.myId')
+        name = await b.evaluate('__pl.you.look.name')
+        menu = lambda: a.evaluate("({ shown: !document.getElementById('actMenu').hidden, title: document.getElementById('actTitle').textContent, acts: [...document.querySelectorAll('#actList .act-btn')].map((x) => x.firstChild.textContent) })")
+        toast = lambda: a.evaluate("document.getElementById('adminToast').hidden ? '' : document.getElementById('adminToast').textContent")
+        me = lambda: a.evaluate(f"(() => {{ const o = __pl.others.get('{who}'); return o ? [o.mesh.position.x, o.mesh.position.y, o.mesh.position.z] : null; }})()")
+        p = await me()
+        expect(p is not None, 'the admin sees the player in the world')
+        # the ground, 4 m from them: Add item
+        gx, gz = p[0] + 4, p[2] + 1
+        sx, sy, front = await a.evaluate(f"({SCREEN})({gx}, {p[1]}, {gz})")
+        expect(front and 380 < sx < 1400 and 80 < sy < 860, f'that spot is on screen ({sx:.0f}, {sy:.0f})')
+        await a.mouse.click(sx, sy); await a.wait_for_timeout(600)
+        m = await menu()
+        expect(m['shown'] and 'Add item' in m['acts'] and 'Fly here' in m['acts'], f"tapping the ground offers Add item and Fly here ({m})")
+        stones = await b.evaluate("__pl.world.items.filter((it) => it.kind === 'stone').length")
+        await a.click('#actList >> text=Add item'); await a.wait_for_timeout(400)
+        expect(await shown(a, '#adminPick'), 'Add item opens the list of things')
+        await a.click('#adminPickCount >> text=5'); await a.fill('#adminPickFind', 'stone'); await a.click('#adminPickList >> text=Stone'); await a.wait_for_timeout(1500)
+        near = await b.evaluate(f"__pl.world.items.filter((it) => it.kind === 'stone' && Math.hypot(it.x - {gx}, it.z - {gz}) < 3).length")
+        expect(await b.evaluate("__pl.world.items.filter((it) => it.kind === 'stone').length") == stones + 5 and near >= 5, f"5 stones land where the admin tapped, in the player's game too ({near} within 3 m)")
+        # a person: Move them, then tap where they go
+        p = await me()
+        sx, sy, front = await a.evaluate(f"({SCREEN})({p[0]}, {p[1] + 0.9}, {p[2]})")
+        await a.mouse.click(sx, sy); await a.wait_for_timeout(600)
+        m = await menu()
+        expect(m['shown'] and m['title'] == name and 'Move them' in m['acts'] and 'Open their page' in m['acts'], f"tapping a person offers what the admin can do with them ({m})")
+        await a.click('#actList >> text=Move them'); await a.wait_for_timeout(400)
+        expect(name in await toast(), f'the admin is told to tap where they go ("{await toast()}")')
+        tx, tz = p[0] - 6, p[2] + 5
+        sx, sy, front = await a.evaluate(f"({SCREEN})({tx}, {p[1]}, {tz})")
+        await a.mouse.click(sx, sy); await a.wait_for_timeout(2000)
+        bx, bz = await b.evaluate('[__pl.player.position.x, __pl.player.position.z]')
+        expect(((bx - tx) ** 2 + (bz - tz) ** 2) ** 0.5 < 2.5, f"their own game puts them where the admin tapped (aimed {tx:.1f}, {tz:.1f}; they are at {bx:.1f}, {bz:.1f})")
+        expect('moved' in await toast(), f'and the admin is told ("{await toast()}")')
+        # a loose item: Remove
+        it = await a.evaluate(f"(() => {{ const c = __pl.controls.target; return __pl.world.items.filter((i) => i.kind === 'stone' && Math.hypot(i.x - {gx}, i.z - {gz}) < 3).map((i) => [i.id, i.x, i.z])[0]; }})()")
+        sx, sy, front = await a.evaluate(f"({SCREEN})({it[1]}, {p[1] + 0.05}, {it[2]})")
+        await a.mouse.click(sx, sy); await a.wait_for_timeout(600)
+        m = await menu()
+        expect(m['shown'] and any(x.startswith('Remove') for x in m['acts']), f"tapping a loose item offers Remove ({m})")
+        before = await b.evaluate("__pl.world.items.length")
+        await a.click('#actList >> text=Remove'); await a.wait_for_timeout(1500)
+        expect(await b.evaluate("__pl.world.items.length") == before - 1, "the item is gone in the player's game too")
+        st = await a.evaluate("({ mode: __pl.ui.mode, person: !!__pl.player })")
+        expect(st['mode'] == 'admin' and not st['person'], f'the admin is still in admin mode with no person ({st})')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

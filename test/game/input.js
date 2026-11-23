@@ -150,7 +150,7 @@ function pickTarget(px, py) {
   }
   const useful = hits.find(({ o }) => o === player || o.userData.itemId || o.userData.source || o.userData.placedId != null);
   const { h: hit = null, o: owner = null } = useful || hits[0] || {};
-  if (owner === player) return { kind: 'you' };
+  if (player && owner === player) return { kind: 'you' }; // (with no person, as in admin mode, a tap on bare ground has no owner either: it isn't you)
   const gp = groundHit && groundHit.point;
   // a near miss still counts: within a finger's width on screen, or within about a metre on the ground
   const item = (owner && owner.userData.itemId && getItem(owner.userData.itemId))
