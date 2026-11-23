@@ -212,6 +212,25 @@ const SHAPES = {
     }
     return { model: g, rest: 0.04, hold: 'axe', grip: len / 2 - 0.06, hit: [len + 0.3, 0.3, 0.42] };
   },
+  // a fishing spear: a long thin shaft with a flat pointed stone tip, lashed on with twine
+  spear(look) {
+    const len = look.length ?? 1.0, t = look.thickness ?? 0.024;
+    const g = new THREE.Group();
+    const wood = tinted(look.colour || '#8a6847', 0.04);
+    g.add(new THREE.Mesh(new THREE.CylinderGeometry(t * 0.85, t * 1.05, len, 6).rotateZ(Math.PI / 2), wood)); // the shaft
+    const tx = len / 2 - 0.02;
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(t * 3.4, 0.24, 4).rotateZ(-Math.PI / 2), tinted(look.head || '#8f8a80', 0.06)); // the stone point
+    tip.scale.z = 0.5;
+    tip.position.set(tx + 0.1, 0, 0);
+    g.add(tip);
+    const twine = matFor(look.lashing || '#c9b77a');
+    for (const dx of [-0.04, 0.0]) { // twine wrapped round where the point is tied on
+      const lash = new THREE.Mesh(new THREE.CylinderGeometry(t * 1.5, t * 1.5, 0.02, 7).rotateZ(Math.PI / 2), twine);
+      lash.position.set(tx + dx, 0, 0);
+      g.add(lash);
+    }
+    return { model: g, rest: 0.03, hold: 'axe', grip: len / 2 - 0.2, hit: [len + 0.3, 0.25, 0.3] };
+  },
   // a stone knife: a short handle that flares at the end you hold, a leaf-shaped stone blade set into the other end,
   // lashed on with twine (the same way as the axe)
   knife(look) {

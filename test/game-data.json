@@ -1,5 +1,5 @@
 {
-  "version": "0.3.2",
+  "version": "0.3.3",
   "build": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -274,6 +274,24 @@
       },
       "startInWorld": 0
     },
+    "fishing-spear": {
+      "name": "Fishing spear",
+      "about": "For fishing at the pond. Fishing is coming soon.",
+      "plural": "Fishing spears",
+      "weight": 2,
+      "look": {
+        "shape": "spear",
+        "length": 1.0,
+        "thickness": 0.024,
+        "colour": "#8a6847",
+        "head": "#8f8a80",
+        "lashing": "#c9b77a"
+      },
+      "tool": {
+        "uses": 20
+      },
+      "startInWorld": 0
+    },
     "log": {
       "name": "Log",
       "about": "Chop it into sticks with an axe, or burn it on a campfire.",
@@ -342,6 +360,19 @@
         "stone-pickaxe": 1
       },
       "about": "Breaks rocks and mines boulders for stones"
+    },
+    {
+      "id": "fishing-spear",
+      "name": "Fishing spear",
+      "needs": {
+        "stick": 2,
+        "stone": 1,
+        "twine": 1
+      },
+      "makes": {
+        "fishing-spear": 1
+      },
+      "about": "For fishing at the pond (coming soon)"
     },
     {
       "id": "campfire",
@@ -824,6 +855,13 @@
   },
   "devlog": [
     {
+      "version": "0.3.3",
+      "date": "2026-11-23",
+      "notes": [
+        "You can now make a fishing spear (2 sticks, 1 stone and 1 twine). Fishing at the pond is coming next."
+      ]
+    },
+    {
       "version": "0.3.2",
       "date": "2026-11-23",
       "notes": [
@@ -853,7 +891,8 @@
         "The Menu now has What's new, Settings and Feedback, so you don't have to leave the world for them.",
         "A short break in your connection no longer loses what you were doing: your person waits for you, and what you finished is sent when you're back.",
         "Fair play: the world now checks you're next to what you pick up, chop, mine or drink from.",
-        "Tidier wording (Pick berries, Too heavy), and lots of sticks and stones on the ground no longer slow phones down.", "Fixed: the note when placing a campfire no longer squashes into a narrow column on some phones."
+        "Tidier wording (Pick berries, Too heavy), and lots of sticks and stones on the ground no longer slow phones down.",
+        "Fixed: the note when placing a campfire no longer squashes into a narrow column on some phones."
       ]
     },
     {

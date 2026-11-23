@@ -130,6 +130,14 @@
       "startInWorld": 0,
       "spawnsNear": null
     },
+    "fishing-spear": {
+      "weight": 2,
+      "eat": null,
+      "uses": 20,
+      "places": null,
+      "startInWorld": 0,
+      "spawnsNear": null
+    },
     "log": {
       "weight": 5,
       "eat": null,
@@ -176,6 +184,16 @@
       },
       "makes": {
         "stone-pickaxe": 1
+      }
+    },
+    "fishing-spear": {
+      "needs": {
+        "stick": 2,
+        "stone": 1,
+        "twine": 1
+      },
+      "makes": {
+        "fishing-spear": 1
       }
     },
     "campfire": {
