@@ -27,8 +27,10 @@ Branch: `admin-mode`. Never push unfinished work to main (the server deploys fro
 - [ ] 7. Checks: update old ones, add new ones, lint, full run.py
 - [ ] 8. Look review from screenshots (PC + phone)
 - [ ] 9. Docs: CLAUDE.md, docs/design/admin.md, docs/adding.md
-- [ ] 10. Release (same version), merge to main, push, confirm live, delete this file, cancel check-ins, morning summary
+- [ ] 10. Release (same version), merge to main, push, confirm live, take this file out of git (keep it on disk), morning summary
+- [ ] 11. Full check of the whole game (Luke, 21:30: he is releasing for public testing). After 10 is published: every automated check, go through each area as a new player on phone and PC, look for ways to break or cheat. Clear bugs: fix on the TEST LINK ONLY (test/ on main), do NOT release them, Luke releases. Design choices (look, how it plays): change nothing, list with a suggestion. Say what was and wasn't checked. Then cancel leftover check-ins and write the morning summary.
 
 ## Progress log (newest last)
 - 21:25 Branch created, notes written.
 - 21:26 Check-ins scheduled (cancel the unfired ones at the end with delete_trigger): trig_01MFHwhkpa4tSebmEMrMSKke (11pm), trig_01CJurrnop76uWLnHagb5J9f (1am), trig_0112iKM78AXZAZMz46fHmjpR (3:30am), trig_013FP6oEBHVHXBqQ6WauqUjp (6am).
+- 21:32 Luke added step 11 (full check of the whole game, fixes to the test link only). Baseline: lint passes on untouched code; tools/tests npm install done.
