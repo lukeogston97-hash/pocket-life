@@ -1,6 +1,6 @@
 {
-  "version": "0.3.0",
-  "build": 2,
+  "version": "0.3.1",
+  "build": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,
@@ -823,6 +823,15 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.3.1",
+      "date": "2026-11-23",
+      "notes": [
+        "Busy worlds run more smoothly: only the people near you are drawn in full, and fewer of them on the lower graphics settings.",
+        "If something goes wrong, the game keeps going and quietly lets us know, instead of freezing.",
+        "Behind the scenes: the world saves less often for people who are away, so it copes with lots more people."
+      ]
+    },
     {
       "version": "0.3.0",
       "date": "2026-11-23",

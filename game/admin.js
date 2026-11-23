@@ -379,7 +379,7 @@ function drawInbox() {
   const mark = (x) => [x.done ? 'Not done' : 'Done', () => adminSend({ t: 'a.done', list: inboxList, at: x.at, on: !x.done })];
   const del = (x) => ['Delete', () => adminSend({ t: 'a.delete', list: inboxList, at: x.at })];
   const rows = list.map((x) => {
-    if (inboxList === 'feedback') return entry(`${when(x.at)} · ${x.name || 'Someone'} · v${x.v}`, x.text, [mark(x), del(x)], x.done ? 'done' : '');
+    if (inboxList === 'feedback') return entry(`${when(x.at)} · ${x.name || 'Someone'} · v${x.v}${x.count > 1 ? ` · ${x.count} times, last ${when(x.lastAt)}` : ''}`, x.text, [mark(x), del(x)], x.done ? 'done' : '');
     const said = (x.said || []).map(([, t]) => `"${t}"`).join('  ');
     return entry(`${when(x.at)} · ${x.by.name} reported ${x.about.name} · ${x.reason}`, [x.note, said && `They said: ${said}`].filter(Boolean).join('\n'),
       [mark(x), ['Their page', () => openPlayerPage(x.about.who)], del(x)], x.done ? 'done' : '');

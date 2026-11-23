@@ -15,14 +15,14 @@ const inWorld = (v) => Math.max(-WALK_LIMIT, Math.min(WALK_LIMIT, v)); // the fo
 // Solid things your person walks round: rocks, bushes, logs, stumps and tree trunks.
 // Returns the thing you'd be standing in at x, z (or null), and how far into it.
 const BODY_R = 0.22;
-function solidAt(x, z) {
+function solidAt(x, z, pad = 0) { // pad: keep that much further away
   let best = null;
   for (let i = -1; i <= 1; i++) {
     for (let j = -1; j <= 1; j++) {
       const a = spots.get(spotKey(x + i * 4, z + j * 4));
       if (!a) continue;
       for (let k = 0; k < a.length; k += 4) {
-        const r = (a[k + 3] ? 0.3 : a[k + 2] * 0.8) + BODY_R; // a tree's trunk, not its crown
+        const r = (a[k + 3] ? 0.3 : a[k + 2] * 0.8) + BODY_R + pad; // a tree's trunk, not its crown
         const d = Math.hypot(a[k] - x, a[k + 1] - z);
         if (d < r && (!best || r - d > best.depth)) best = { x: a[k], z: a[k + 1], r, depth: r - d };
       }
@@ -70,10 +70,18 @@ function clearCellsNear(x, z, r) {
     if (ix >= 0 && iz >= 0 && ix < GRID_N && iz < GRID_N) cellFree[iz * GRID_N + ix] = 0;
   }
 }
-// is the straight line from a to b clear? (checked every quarter metre)
+// is the straight line from a to b clear? (checked every quarter metre). The grid's half-metre cells can let a line
+// clip the edge of a rock or bush, so a line the grid allows is checked again at the exact spots, with a little room
+// to spare. Not near its two ends, where someone may already stand close to something (picking a bush, say).
 function clearLine(ax, az, bx, bz) {
   const d = Math.hypot(bx - ax, bz - az), n = Math.ceil(d / 0.25);
   for (let i = 1; i <= n; i++) { const t = i / n; if (!freeAt(ax + (bx - ax) * t, az + (bz - az) * t)) return false; }
+  for (let i = 1; i < n; i++) {
+    const t = i / n, s = t * d;
+    if (s < 0.5 || d - s < 0.5) continue;
+    const x = ax + (bx - ax) * t, z = az + (bz - az) * t;
+    if (pondShape(x, z) < 0.9 || solidAt(x, z, 0.05)) return false;
+  }
   return true;
 }
 // the nearest free cell to a spot (for a goal that's inside a bush, say), within about 3 metres

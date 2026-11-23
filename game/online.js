@@ -384,6 +384,27 @@ $('feedbackForm').addEventListener('submit', async (e) => {
     showTag('Thanks for the feedback!', headTop(), 2.5);
   } catch (err) { showTag("Couldn't send it, try again later", headTop(), 2.5); }
 });
+/* ---------- when something goes wrong ----------
+   An error in the game is caught so the game carries on, and a short note goes to the admin's Inbox by itself (as
+   feedback starting "Game error", with the version and device): each problem once, 5 a visit at most. The server counts
+   repeats of the same note instead of listing them all. The line numbers are in the game's parts joined in PARTS order. */
+const errorsSeen = new Set();
+function reportError(err, where) {
+  const what = `${where}: ${err && err.message ? err.message : String(err)}`.slice(0, 200);
+  if (errorsSeen.has(what) || errorsSeen.size >= 5) return;
+  errorsSeen.add(what);
+  console.error(err);
+  try {
+    const trace = String((err && err.stack) || '').split('\n').slice(1, 4).map((l) => l.trim().replace(/\(?(?:blob:|https?:)\S*?([\w.-]+:\d+:\d+)\)?$/, '$1')).join(' | ').slice(0, 300);
+    const note = { t: 'feedback', auto: true, text: `Game error (${what})${trace ? `\n${trace}` : ''}`, v: `${VERSION}${TEST_BUILD ? ` test ${DATA.build}` : ''}`, device: navigator.userAgent.slice(0, 200),
+      x: player ? Math.round(player.position.x) : null, z: player ? Math.round(player.position.z) : null, name: you.look ? you.look.name : '' };
+    if (online()) net.sock.send(JSON.stringify(note));
+    else if (HTTP_BASE) fetch(`${HTTP_BASE}/feedback?world=live`, { method: 'POST', body: JSON.stringify(note), headers: { 'Content-Type': 'text/plain' } }).catch(() => {});
+    if (where === 'frame' && player) showTag('Something went wrong. If the game looks stuck, reload the page.', headTop(), 6);
+  } catch (e) { /* nothing more to do */ }
+}
+window.addEventListener('error', (e) => reportError(e.error || e.message, 'error'));
+window.addEventListener('unhandledrejection', (e) => reportError(e.reason, 'promise'));
 // What's new: the dev log from game-data.json, newest first
 function openNews() {
   closePause();

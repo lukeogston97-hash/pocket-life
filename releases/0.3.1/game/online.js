@@ -12,30 +12,7 @@ function cleanLook(look) {
   l.name = String(l.name || 'Someone').slice(0, 20);
   return l;
 }
-// Chat filter (the same code is in the game and on the server): bad words become stars, bad names are refused.
-const LEET = { 0: 'o', 1: 'i', 3: 'e', 4: 'a', 5: 's', 7: 't', 8: 'b', '@': 'a', $: 's', '!': 'i', '|': 'i', '+': 't' };
-const leet = (s) => s.toLowerCase().replace(/[0134578@$!|+]/g, (c) => LEET[c]);
-const ENDINGS = ['', 's', 'es', 'ed', 'ing', 'y', 'er', 'ers'];
-function badWord(token, F) {
-  const n = leet(token).replace(/[^a-z]/g, '');
-  if (!n) return false;
-  for (const f of new Set([n, n.replace(/(.)\1+/g, '$1')])) { // also with doubled letters squashed (fuuuck)
-    if ((F.anywhere || []).some((r) => f.includes(r))) return true;
-    if ((F.words || []).some((w) => ENDINGS.some((e) => f === w + e))) return true;
-  }
-  return false;
-}
-function starText(text, F) {
-  let out = String(text).replace(/\S+/g, (tok) => (badWord(tok, F) ? '*'.repeat(tok.length) : tok));
-  for (const p of F.phrases || []) {
-    const re = new RegExp(`\\b${p.split(/\s+/).map((w) => w.replace(/[^a-z]/gi, '')).join('[\\s\\W_]+')}\\b`, 'gi');
-    out = out.replace(re, (m) => m.replace(/\S/g, '*'));
-  }
-  return out;
-}
-const badNameIn = (name, F) => String(name).split(/[\s._-]+/).some((t) => badWord(t, F))
-  || (F.anywhere || []).some((r) => leet(name).replace(/[^a-z]/g, '').includes(r)) || starText(name, F) !== String(name);
-const badName = (name, F) => badNameIn(name, F) || (!!F.names && badNameIn(name, F.names)); // names also can't say admin, mod and so on
+// the chat filter itself (starText, badName) is in rules.js, shared with the server
 const FILTER = DATA.chatFilter || {};
 // a random id for this phone, so mutes and reports stick to the same person (others only see a scrambled tag)
 const PID_KEY = 'pocket-life:pid', MUTE_KEY = 'pocket-life:muted';
@@ -86,12 +63,18 @@ function goOnline() {
       let back = false;
       for (const [k, n] of Object.entries((PLANTS[m.plant] || {}).gives || {})) back = takeFromCarry(k, n) || back;
       if (back) { drawHeld(); drawCarry(); }
-      showTag('Someone cut it first', headTop(), 2);
+      showTag(m.why || 'Someone cut it first', headTop(), 2);
     }
     else if (m.t === 'oldStump') removeOldStump(m.idx);
+    else if (m.t === 'rock') setRockState(m.idx, m.state || 'whole', m.at);
     else if (m.t === 'broke') { showTag(`Your ${(ITEMS[m.kind] || { name: 'tool' }).name.toLowerCase()} broke`, headTop(), 3); drawHeld(); }
     else if (m.t === 'graves') drawGraves(m.graves);
     else if (m.t === 'speed') setSpeed(m.speed);
+    else if (m.t === 'live') applyLive(m.live);
+    else if (m.t === 'claimNote') showTag(m.text, headTop(), 3.5);
+    else if (m.t === 'pos') snapTo(m.x, m.z);
+    else if (m.t === 'moved') moveLayoutThing(m.what, m.idx, m.x, m.z);
+    else if (m.t === 'removed') removeLayoutThing(m.what, m.idx);
     else if (m.t === 'world') useSharedWorld(m.world);
     else if (m.t === 'gone') removeWorldItem(m.id);
     else if (m.t === 'placed') { setPlaced(m.thing); if (m.mine && m.thing && !m.thing.built) { tasks.list.unshift({ type: 'build', id: m.thing.id }); if (!tasks.current && !action) nextTask(); else drawQueue(); } } // put it down: build it next
@@ -102,8 +85,8 @@ function goOnline() {
     else if (m.t === 'took') tookBack(m);
     else if (m.t === 'bush') { const b = berryBushes[m.bush]; if (b) { b.userData.count = m.count; b.userData.growFrom = m.growFrom; drawBerries(b); } }
     else if (m.t === 'picked' && !m.ok) {
-      if (takeFromCarry('berry', you.lastPick || 1)) { drawHeld(); drawCarry(); }
-      showTag('Someone picked it first', headTop(), 2);
+      if (takeFromCarry(Object.keys((BERRY_SOURCE() || {}).harvest || {})[0], you.lastPick || 1)) { drawHeld(); drawCarry(); }
+      showTag(m.why || 'Someone picked it first', headTop(), 2);
     }
     else if (m.t === 'join') addOther(m.person);
     else if (m.t === 'leave') removeOther(m.id);
@@ -152,6 +135,7 @@ function welcome(m) {
   showJoining(false);
   setNet('online', m.count);
   setSpeed(m.speed);
+  applyLive(m.live);
   for (const id of [...others.keys()]) removeOther(id);
   for (const p of m.people || []) addOther(p);
   if (m.watch) { // watching from the main menu (or waiting in line because the world is full)
@@ -169,22 +153,18 @@ function welcome(m) {
   else if (m.needSeed) seedWorld();
   if (m.me) {
     forgetSit(); // the server says whether you're still sitting (below)
+    forgetOldTakes();
     if (!player) { applyMe(m.me, true); enterWorld(); }
     else {
       applyMe(m.me);
-      if (m.away && Number.isFinite(m.me.x)) { // they may have strolled off while you were gone
-        stopQueue();
-        let bx = inWorld(m.me.x), bz = inWorld(m.me.z);
-        if (heightAt(bx, bz) < WATER_Y + 0.1) { const sp = shorePointToward(V(bx + (bx - POND.x), 0, bz + (bz - POND.z))); bx = sp.x; bz = sp.z; }
-        [bx, bz] = outsideSolid(bx, bz);
-        playerGround = groundY(bx, bz);
-        player.position.set(bx, playerGround, bz);
-        net.last = null;
-      }
+      // Gone a while: they may have strolled off, so you're where the server has them. A short break in the connection
+      // (under away.comeBackSeconds): they stayed put, so you carry on from where you are and whatever you were doing.
+      if (m.away && !(m.away.ms < BLIP_MS)) snapTo(m.me.x, m.me.z);
     }
     if (m.me.sit) resumeSit(m.me.sit); // left sitting by the fire, and the time isn't up yet
     else if (!tasks.current && tasks.list.length && !action) nextTask();
     if (m.away) showWelcomeBack(m.away);
+    flushOutbox(); // what you did while the connection was down
   } else if (!(player && you.dead)) {
     // no person yet (or the world was reset): make one
     removePlayer();
@@ -240,7 +220,12 @@ function layoutData() {
     if (pondShape(x, z) < 1.3 || !roomAt(x, z, 0.6, 0.5)) continue;
     open.push([+x.toFixed(2), +z.toFixed(2)]);
   }
-  return { bushes: berryBushes.map((b) => [+b.position.x.toFixed(2), +b.position.z.toFixed(2)]), shore, open };
+  // where everything was laid out (not where the admin may have moved it to: the server keeps those moves itself), in the
+  // game's own order, so the server can check your person is near what they chop, mine, pick or cut (server/src/guard.js)
+  const at = (x, z) => [+x.toFixed(2), +z.toFixed(2)], laid = (t) => (t.from ? at(t.from[0], t.from[1]) : at(t.x, t.z));
+  return { bushes: berryBushes.map((b) => (b.userData.from ? at(b.userData.from[0], b.userData.from[1]) : at(b.position.x, b.position.z))), shore, open,
+    trees: trees.map(laid), rocks: rocks.map(laid), oldStumps: oldStumps.map(laid),
+    plants: Object.fromEntries(Object.entries(plants).map(([k, P]) => [k, P.clumps.map((c) => at(c.x, c.z))])) };
 }
 function sendLayout() { if (net.sock) net.sock.send(JSON.stringify({ t: 'layout', ...layoutData() })); }
 // The shared world: what lies on the ground and how far each berry bush has grown back.
@@ -254,6 +239,8 @@ function useSharedWorld(w) {
   const ts = w.trees || {};
   trees.forEach((t, i) => setTreeState(i, ts[i] ? ts[i][0] : 'tree', ts[i] && ts[i][1]));
   for (const i of Object.keys(w.oldStumps || {})) removeOldStump(Number(i));
+  const rs = w.rocks || {};
+  rocks.forEach((r, i) => setRockState(i, rs[i] ? rs[i][0] : 'whole', rs[i] && rs[i][1]));
   for (const [kind, P] of Object.entries(plants)) for (const c of P.clumps) setPlant(kind, c.i, ((w.plants || {})[kind] || {})[c.i] || 0);
   berryBushes.forEach((b, i) => {
     const s = (w.bushes || [])[i];
@@ -261,22 +248,25 @@ function useSharedWorld(w) {
     b.userData.growFrom = s && s[1] != null ? s[1] : null;
     drawBerries(b);
   });
+  useWorldEdits(w); // what the admin moved or took out
   for (const t of allTasks()) if (t.type === 'pickup' && !getItem(t.id)) t.gone = true; // queued things that aren't there any more get skipped
 }
 // the first player into a brand new world lays it out: the starting sticks and stones, plus where new ones can turn up
 function seedWorld() {
-  const caps = {}, spotsFor = { stick: [], stone: [] };
+  const caps = {}, spotsFor = {};
   for (const it of Object.values(ITEMS)) if (it.startInWorld) caps[it.id] = it.startInWorld;
+  const near = (place) => Object.keys(DATA.items).filter((k) => DATA.items[k].spawnsNear === place); // items that turn up by trees or boulders
+  for (const k of [...near('trees'), ...near('boulders')]) spotsFor[k] = [];
   let n = 0;
   for (const a of spots.values()) {
     for (let k = 0; k < a.length; k += 4, n++) {
       const tree = a[k + 3], r = a[k + 2];
-      const kind = tree ? 'stick' : r > 0.45 ? 'stone' : null; // sticks fall under trees, stones turn up by boulders
-      if (!kind || !spotsFor[kind] || spotsFor[kind].length >= 400) continue;
+      const kinds = near(tree ? 'trees' : r > 0.45 ? 'boulders' : '').filter((kind) => spotsFor[kind].length < 400); // sticks fall under trees, stones turn up by boulders
+      if (!kinds.length) continue;
       const ang = hash(n, 77) * Math.PI * 2, d = tree ? r + 0.4 : r + 0.35;
       const x = a[k] + Math.cos(ang) * d, z = a[k + 1] + Math.sin(ang) * d;
       if (squareDist(x, z) > WALK_LIMIT - 1 || pondShape(x, z) < 1.3 || solidAt(x, z)) continue;
-      spotsFor[kind].push([x, z]);
+      for (const kind of kinds) spotsFor[kind].push([x, z]);
     }
   }
   const src = Object.values(SOURCES).find(harvests);
@@ -286,25 +276,57 @@ function seedWorld() {
     layout: layoutData(),
   }));
 }
+// Telling the server what you did (picked up, chopped, ate...). It's told where you are first, because it checks you're
+// near enough (server/src/guard.js). If the connection is down, what you did is kept and sent once it's back (within
+// half a minute; after that the server's word stands and the game shows the world as the server has it).
+const outbox = []; // [when, message]
+const OUTBOX_MS = 30000, BLIP_MS = ((DATA.away || {}).comeBackSeconds || 0) * 1000; // BLIP_MS: your person stays put on the server this long after the connection goes
+function sendAct(msg) {
+  if (online()) { sendMove(); net.sock.send(JSON.stringify(msg)); return true; }
+  if (msg.t !== 'sit') { outbox.push([Date.now(), msg]); if (outbox.length > 8) outbox.shift(); }
+  return false;
+}
+// The connection is back. First, pick-ups the server never answered (and ones too old to send) are forgotten: its word
+// on what you carry stands. Then what's still waiting is sent, and the server says how your person is now.
+function forgetOldTakes() {
+  const waiting = new Set(outbox.filter(([at, msg]) => msg.t === 'take' && Date.now() - at < OUTBOX_MS).map(([, msg]) => msg.id));
+  for (const id of [...shared.taking.keys()]) if (!waiting.has(id)) shared.taking.delete(id);
+}
+function flushOutbox() {
+  const fresh = outbox.splice(0).filter(([at]) => Date.now() - at < OUTBOX_MS);
+  if (!fresh.length || !online()) return;
+  net.last = null;
+  sendMove(); // where you are now (the server checks you're near what you did)
+  for (const [, msg] of fresh) net.sock.send(JSON.stringify(msg));
+  net.sock.send(JSON.stringify({ t: 'sync' })); // then your person as the server has them now
+}
 function shareTake(item) {
-  if (!online() || !shared.on) return;
   shared.taking.set(item.id, item.kind);
-  net.sock.send(JSON.stringify({ t: 'take', id: item.id }));
+  sendAct({ t: 'take', id: item.id });
 }
 function tookBack(m) {
   const kind = shared.taking.get(m.id);
   shared.taking.delete(m.id);
-  if (m.ok || !kind) return;
+  if (m.ok) { if (getItem(m.id)) removeWorldItem(m.id); return; } // (it was back on the ground if this was sent after a reconnect)
+  if (!kind) return;
   if (takeFromCarry(kind, 1)) { drawHeld(); drawCarry(); }
-  showTag('Someone got there first', headTop(), 2);
+  showTag(m.why || 'Someone got there first', headTop(), 2);
 }
-function sharePick(bush) {
-  if (online() && shared.on) net.sock.send(JSON.stringify({ t: 'pick', bush }));
-}
-// putting things on the ground: online, the world adds them (for everyone, you included)
+function sharePick(bush) { sendAct({ t: 'pick', bush }); }
+// putting things on the ground: the world adds them (for everyone, you included)
 function placeItems(list) {
-  if (!list.length) return;
-  if (online() && shared.on) net.sock.send(JSON.stringify({ t: 'drop', items: list }));
+  if (list.length) sendAct({ t: 'drop', items: list });
+}
+// the server says where your person really is (the game had them somewhere they couldn't have got to): go there
+function snapTo(x, z) {
+  if (!player || !Number.isFinite(x) || !Number.isFinite(z)) return;
+  stopQueue();
+  let bx = inWorld(x), bz = inWorld(z);
+  if (heightAt(bx, bz) < WATER_Y + 0.1) { const sp = shorePointToward(V(bx + (bx - POND.x), 0, bz + (bz - POND.z))); bx = sp.x; bz = sp.z; }
+  [bx, bz] = outsideSolid(bx, bz);
+  playerGround = groundY(bx, bz);
+  player.position.set(bx, playerGround, bz);
+  net.last = null;
 }
 // The server can close the world for maintenance, and send out-of-date games to the newest version.
 // The new version can take a minute or two to reach the link, so if a reload still gets the old one,
@@ -328,7 +350,7 @@ function showMaintenance(text, title = 'Back soon', note = 'Your person is safe.
   showJoining(false);
   $('maintTitle').textContent = title;
   $('maintNote').textContent = note;
-  $('adminPanel').hidden = true; $('adminList').hidden = true;
+  $('adminPanel').hidden = true; $('adminPick').hidden = true;
   closeFeedback(); closeReport(); closeSay(); closeMenu(); $('pause').hidden = true;
   paused = true; // needs don't drain while the world is closed
   $('maintText').textContent = text || 'Pocket Life is being updated. It will be back in a few minutes.';
@@ -362,6 +384,27 @@ $('feedbackForm').addEventListener('submit', async (e) => {
     showTag('Thanks for the feedback!', headTop(), 2.5);
   } catch (err) { showTag("Couldn't send it, try again later", headTop(), 2.5); }
 });
+/* ---------- when something goes wrong ----------
+   An error in the game is caught so the game carries on, and a short note goes to the admin's Inbox by itself (as
+   feedback starting "Game error", with the version and device): each problem once, 5 a visit at most. The server counts
+   repeats of the same note instead of listing them all. The line numbers are in the game's parts joined in PARTS order. */
+const errorsSeen = new Set();
+function reportError(err, where) {
+  const what = `${where}: ${err && err.message ? err.message : String(err)}`.slice(0, 200);
+  if (errorsSeen.has(what) || errorsSeen.size >= 5) return;
+  errorsSeen.add(what);
+  console.error(err);
+  try {
+    const trace = String((err && err.stack) || '').split('\n').slice(1, 4).map((l) => l.trim().replace(/\(?(?:blob:|https?:)\S*?([\w.-]+:\d+:\d+)\)?$/, '$1')).join(' | ').slice(0, 300);
+    const note = { t: 'feedback', auto: true, text: `Game error (${what})${trace ? `\n${trace}` : ''}`, v: `${VERSION}${TEST_BUILD ? ` test ${DATA.build}` : ''}`, device: navigator.userAgent.slice(0, 200),
+      x: player ? Math.round(player.position.x) : null, z: player ? Math.round(player.position.z) : null, name: you.look ? you.look.name : '' };
+    if (online()) net.sock.send(JSON.stringify(note));
+    else if (HTTP_BASE) fetch(`${HTTP_BASE}/feedback?world=live`, { method: 'POST', body: JSON.stringify(note), headers: { 'Content-Type': 'text/plain' } }).catch(() => {});
+    if (where === 'frame' && player) showTag('Something went wrong. If the game looks stuck, reload the page.', headTop(), 6);
+  } catch (e) { /* nothing more to do */ }
+}
+window.addEventListener('error', (e) => reportError(e.error || e.message, 'error'));
+window.addEventListener('unhandledrejection', (e) => reportError(e.reason, 'promise'));
 // What's new: the dev log from game-data.json, newest first
 function openNews() {
   closePause();

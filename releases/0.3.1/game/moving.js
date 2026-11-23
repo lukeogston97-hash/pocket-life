@@ -15,14 +15,14 @@ const inWorld = (v) => Math.max(-WALK_LIMIT, Math.min(WALK_LIMIT, v)); // the fo
 // Solid things your person walks round: rocks, bushes, logs, stumps and tree trunks.
 // Returns the thing you'd be standing in at x, z (or null), and how far into it.
 const BODY_R = 0.22;
-function solidAt(x, z) {
+function solidAt(x, z, pad = 0) { // pad: keep that much further away
   let best = null;
   for (let i = -1; i <= 1; i++) {
     for (let j = -1; j <= 1; j++) {
       const a = spots.get(spotKey(x + i * 4, z + j * 4));
       if (!a) continue;
       for (let k = 0; k < a.length; k += 4) {
-        const r = (a[k + 3] ? 0.3 : a[k + 2] * 0.8) + BODY_R; // a tree's trunk, not its crown
+        const r = (a[k + 3] ? 0.3 : a[k + 2] * 0.8) + BODY_R + pad; // a tree's trunk, not its crown
         const d = Math.hypot(a[k] - x, a[k + 1] - z);
         if (d < r && (!best || r - d > best.depth)) best = { x: a[k], z: a[k + 1], r, depth: r - d };
       }
@@ -70,10 +70,18 @@ function clearCellsNear(x, z, r) {
     if (ix >= 0 && iz >= 0 && ix < GRID_N && iz < GRID_N) cellFree[iz * GRID_N + ix] = 0;
   }
 }
-// is the straight line from a to b clear? (checked every quarter metre)
+// is the straight line from a to b clear? (checked every quarter metre). The grid's half-metre cells can let a line
+// clip the edge of a rock or bush, so a line the grid allows is checked again at the exact spots, with a little room
+// to spare. Not near its two ends, where someone may already stand close to something (picking a bush, say).
 function clearLine(ax, az, bx, bz) {
   const d = Math.hypot(bx - ax, bz - az), n = Math.ceil(d / 0.25);
   for (let i = 1; i <= n; i++) { const t = i / n; if (!freeAt(ax + (bx - ax) * t, az + (bz - az) * t)) return false; }
+  for (let i = 1; i < n; i++) {
+    const t = i / n, s = t * d;
+    if (s < 0.5 || d - s < 0.5) continue;
+    const x = ax + (bx - ax) * t, z = az + (bz - az) * t;
+    if (pondShape(x, z) < 0.9 || solidAt(x, z, 0.05)) return false;
+  }
   return true;
 }
 // the nearest free cell to a spot (for a goal that's inside a bush, say), within about 3 metres
@@ -225,7 +233,7 @@ function cantUse(t, planning) {
     // berries you've already queued to pick count as gone
     const queued = planning && b ? allTasks().filter((q) => q.type === 'use' && q.bush === t.bush).length : 0;
     if (b && berriesOn(b) - queued < 1) return queued ? 'No more berries' : `Next ${ITEMS[Object.keys(src.harvest)[0]].name.toLowerCase()} in ${readyIn(b)}`;
-    if ((planning ? plannedWeight() : carried()) + weightOf(src.harvest) > SETTINGS.carryCapacity) return 'Inventory full';
+    if ((planning ? plannedWeight() : carried()) + weightOf(src.harvest) > SETTINGS.carryCapacity) return 'Too heavy';
     return null;
   }
   return useHelps(src) ? null : fullLabel(src);
@@ -235,8 +243,8 @@ function queueTask(t) {
   if (t.type === 'pickup') {
     if (allTasks().some((q) => q.type === 'pickup' && q.id === t.id)) return;
     const w = ITEMS[getItem(t.id).kind].weight;
-    if (w > SETTINGS.carryCapacity) { showTag('Too heavy to carry', headTop(), 2); return; }
-    if (plannedWeight() + w > SETTINGS.carryCapacity) { showTag('Inventory full', headTop(), 2); return; }
+    if (w > SETTINGS.carryCapacity) { showTag('Too heavy', headTop(), 2); return; }
+    if (plannedWeight() + w > SETTINGS.carryCapacity) { showTag('Too heavy', headTop(), 2); return; }
   }
   if (t.type === 'use') {
     const why = cantUse(t, true);
@@ -279,7 +287,7 @@ function nextTask() {
   if (t.type === 'pickup') {
     const item = getItem(t.id);
     if (!item) { nextTask(); return; }
-    if (carried() + ITEMS[item.kind].weight > SETTINGS.carryCapacity) { showTag('Inventory full', headTop(), 2); stopQueue(); return; }
+    if (carried() + ITEMS[item.kind].weight > SETTINGS.carryCapacity) { showTag('Too heavy', headTop(), 2); stopQueue(); return; }
     approach(item.x, item.z, 0.5, 0.75, () => doPickup(item));
   } else if (t.type === 'use') {
     if (t.water) {
@@ -345,7 +353,7 @@ function autopilot() {
   auto.drinking = false;
   const hasFood = Object.keys(you.carry).some((k) => ITEMS[k] && ITEMS[k].eat);
   if (!hasFood && st.hunger < AWAY.eatBelow + 20) { // getting peckish with nothing to eat: go and pick some
-    const near = berryBushes.filter((b) => ripe(b)).sort((a, b) => a.position.distanceTo(player.position) - b.position.distanceTo(player.position))[0];
+    const near = berryBushes.filter((b) => ripe(b) && !b.userData.removed && !notMineAt(b.position.x, b.position.z)).sort((a, b) => a.position.distanceTo(player.position) - b.position.distanceTo(player.position))[0];
     if (near) { queueTask(bushTask(near)); return; }
   }
   // rest a little, then stroll somewhere near where you left off
@@ -440,7 +448,7 @@ function doUse(t) {
     else {
       applyGives(src.gives);
       spendEnergy('drink');
-      if (online()) net.sock.send(JSON.stringify({ t: 'drink', source: src.id }));
+      sendAct({ t: 'drink', source: src.id });
     }
   } });
 }
@@ -478,7 +486,7 @@ function eatOne(kind) {
   if (!useHelps({ gives })) { showTag(fullLabel({ gives }), headTop(), 2); return; }
   takeFromCarry(kind, 1);
   applyGives(gives);
-  if (online()) net.sock.send(JSON.stringify({ t: 'eat', kind }));
+  sendAct({ t: 'eat', kind });
   drawHeld();
   drawCarry();
 }
@@ -488,7 +496,7 @@ function doCut(t) {
   const def = PLANTS[t.plant], c = plants[t.plant] && plants[t.plant].clumps[t.i];
   if (!def || !c) { nextTask(); return; }
   if (!plantReady(c)) { showTag(`Grows back in ${growsIn(c)}`, headTop(), 2); nextTask(); return; }
-  if (carried() + weightOf(def.gives) > SETTINGS.carryCapacity) { showTag('Inventory full', headTop(), 2); stopQueue(); return; }
+  if (carried() + weightOf(def.gives) > SETTINGS.carryCapacity) { showTag('Too heavy', headTop(), 2); stopQueue(); return; }
   const tool = def.tool && you.carry[def.tool] ? def.tool : null;
   if (tool) { you.tool = tool; drawHeld(); }
   const secs = tool ? def.toolSeconds || def.seconds : def.seconds || 6;
@@ -500,7 +508,7 @@ function doCut(t) {
     for (const [k, n] of Object.entries(def.gives || {})) addToCarry(k, n);
     setPlant(t.plant, t.i, Date.now() + 2 * 3600000); // the server sends the real time it grows back
     spendEnergy('harvest');
-    if (online()) net.sock.send(JSON.stringify({ t: 'cut', plant: t.plant, i: t.i }));
+    sendAct({ t: 'cut', plant: t.plant, i: t.i });
     drawHeld();
     drawCarry();
     showGain(Object.entries(def.gives || {}).map(([k, n]) => `+${countLabel(k, n)}`).join(', '));
@@ -518,9 +526,35 @@ function doChop(t) {
   tagLabel.busy = true;
   startAction({ pose: 'chop', seconds: rule.seconds || 10, tool: CHOP.tool, end: () => {
     spendEnergy('chop');
-    if (online()) net.sock.send(JSON.stringify({ t: 'chop', what: t.what, idx: t.idx, id: t.id, x: t.x, z: t.z }));
+    sendAct({ t: 'chop', what: t.what, idx: t.idx, id: t.id, x: t.x, z: t.z });
   } });
 }
+// mining (0.2.9): swing the pickaxe at a rock or boulder, then the server drops the stones round it
+function doMine(t) {
+  const r = rocks[t.idx];
+  if (!r || r.state !== 'whole') { nextTask(); return; }
+  const rule = MINE[r.boulder ? 'boulder' : 'rock'] || {};
+  if (MINE.tool && !you.carry[MINE.tool]) { showTag(`You need a ${ITEMS[MINE.tool].name.toLowerCase()}`, headTop(), 2); nextTask(); return; }
+  face(r.x, r.z);
+  showTag(r.boulder ? 'Mining the boulder…' : 'Breaking the rock…', headTop(), 2, (rule.seconds || 10) + 0.3);
+  tagLabel.busy = true;
+  startAction({ pose: 'chop', seconds: rule.seconds || 10, tool: MINE.tool, end: () => {
+    spendEnergy('chop');
+    sendAct({ t: 'quarry', what: r.boulder ? 'boulder' : 'rock', idx: t.idx, x: Math.round(player.position.x * 100) / 100, z: Math.round(player.position.z * 100) / 100 });
+  } });
+}
+Object.assign(TASK_KINDS, {
+  mine: {
+    start(t) {
+      const r = rocks[t.idx];
+      if (!r || r.state !== 'whole') { nextTask(); return; }
+      const stop = r.r * 0.8 + 0.45;
+      approach(r.x, r.z, stop, stop + 0.35, () => doMine(t));
+    },
+    name(t, now) { const b = rocks[t.idx] && rocks[t.idx].boulder; return b ? (now ? 'Mining a boulder' : 'Mine boulder') : (now ? 'Breaking a rock' : 'Break rock'); },
+    spot(t) { const r = rocks[t.idx]; return r ? V(r.x, groundY(r.x, r.z) + r.r * 0.6 + 0.3, r.z) : null; },
+  },
+});
 // where dropped things land: one in front of you, more in a small pile around it
 function dropSpot(i) {
   const fx = Math.sin(player.rotation.y), fz = Math.cos(player.rotation.y);
@@ -570,7 +604,7 @@ function taskName(t, now) {
     const src = SOURCES[t.source];
     if (!src) return 'Use';
     if (now) return src.verb;
-    return harvests(src) ? `Harvest ${ITEMS[Object.keys(src.harvest)[0]].name}` : src.action || `Use ${src.name.toLowerCase()}`;
+    return src.action || (harvests(src) ? `Pick ${ITEMS[Object.keys(src.harvest)[0]].plural.toLowerCase()}` : `Use ${src.name.toLowerCase()}`);
   }
   if (t.type === 'drop') return now ? 'Putting down' : `Drop ${countLabel(t.kind, t.n)}`;
   if (t.type === 'cut') return now ? `${(PLANTS[t.plant] || {}).verb || 'Cutting'}` : (PLANTS[t.plant] || {}).action || 'Cut';

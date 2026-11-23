@@ -34,9 +34,9 @@ function followPlayer(dt) {
 }
 /* ---------- graphics: High, Medium or Low, chosen in the Menu and kept on this device ---------- */
 const GRAPHICS = {
-  high: { label: 'High', pixels: 2, shadows: 2048, detail: 1 },
-  medium: { label: 'Medium', pixels: 1.5, shadows: 1024, detail: 0.8 },
-  low: { label: 'Low', pixels: 1, shadows: 0, detail: 0.6 },
+  high: { label: 'High', pixels: 2, shadows: 2048, detail: 1, people: 30 },
+  medium: { label: 'Medium', pixels: 1.5, shadows: 1024, detail: 0.8, people: 20 },
+  low: { label: 'Low', pixels: 1, shadows: 0, detail: 0.6, people: 12 }, // people: how many others are drawn at once (the nearest; each costs about 38 draws with shadows)
 };
 const GFX_KEY = 'pocket-life:graphics';
 let gfx = (() => { try { return localStorage.getItem(GFX_KEY); } catch (err) { return null; } })();

@@ -12,6 +12,7 @@ let DRY = false; // while true, put() works a copy out but doesn't keep it (so t
 let recording = null; // while a tree is being placed: [set, chunk, index] of every copy it's made of (so it can be chopped down)
 const trees = []; // every tree you can walk up to: { x, z, s, parts, state }
 const oldStumps = []; // the old stumps already in the world when it was made: { x, z, parts, proxy, gone }
+const rocks = []; // every rock and boulder you can mine (0.2.9): { x, z, r, boulder, parts, proxy, state: whole | mined | gone }
 function IM(geo, material, n, shadow = true) {
   const m = new THREE.InstancedMesh(geo, material, n);
   m.count = 0;
@@ -140,6 +141,13 @@ function removeSpotNear(x, z) {
   const a = spots.get(spotKey(x, z));
   if (!a) return;
   for (let k = 0; k < a.length; k += 4) if (Math.abs(a[k] - x) < 0.01 && Math.abs(a[k + 1] - z) < 0.01) { a.splice(k, 4); return; }
+}
+// take the spot at x, z off the map and say how big it was: [r, tree] (for moving something)
+function takeSpot(x, z) {
+  const a = spots.get(spotKey(x, z));
+  if (!a) return null;
+  for (let k = 0; k < a.length; k += 4) if (Math.abs(a[k] - x) < 0.01 && Math.abs(a[k + 1] - z) < 0.01) { const out = [a[k + 2], !!a[k + 3]]; a.splice(k, 4); return out; }
+  return null;
 }
 function addSpot(x, z, r, tree = false) {
   const k = spotKey(x, z);
@@ -430,7 +438,10 @@ function bush(x, z, s = 1, withBerries = true) {
     blobs.push({ ox, oz, r, y: r * 0.6 });
   }
   scene.add(g);
+  recording = withBerries ? [] : null; // a berry bush remembers its drawn copies, so the admin can move or remove it
   for (const m of g.children) drawAlong(drawnTogether.bushes, m);
+  if (withBerries) g.userData.parts = recording;
+  recording = null;
   if (withBerries) {
     // each berry bush remembers which berries are its own, so they can be picked and grow back
     g.userData.berries = { start: berries.count, n: 15 };
@@ -445,6 +456,7 @@ function bush(x, z, s = 1, withBerries = true) {
     }
   }
   g.userData.label = withBerries ? 'Berry bush' : 'Bush';
+  g.userData.r = s * 0.85;
   addSpot(x, z, s * 0.85);
   interactive.push(g);
   return g;
@@ -458,8 +470,12 @@ function rock(x, z, s, label = 'Boulder', color) {
   m.rotation.set(rr(-0.2, 0.2), rand() * 6, rr(-0.2, 0.2));
   m.castShadow = m.receiveShadow = true;
   m.userData.label = label;
+  m.userData.rock = rocks.length;
   scene.add(m);
+  recording = [];
   drawAlong(drawnTogether.rocks[rockGeos.indexOf(m.geometry)], m);
+  rocks.push({ x, z, r: s * 1.1, boulder: label === 'Boulder', parts: recording, proxy: m, state: 'whole' });
+  recording = null;
   addSpot(x, z, s * 1.1);
   interactive.push(m);
   return m;
@@ -542,8 +558,14 @@ withWorldRand(() => {
     if (pair) wildBush(...pair);
   }
   // boulders, sometimes with a smaller rock or two beside them
-  const stone = (set, x, z, s) => put(set, x, groundY(x, z) + s * 0.16, z, rr(-0.2, 0.2), rand() * 6, rr(-0.2, 0.2),
-    s * rr(0.9, 1.3), s * rr(0.55, 0.8), s * rr(0.9, 1.2), tint(pick(ROCK_COLOURS)));
+  // each one is remembered (rocks) so it can be mined; recording only notes which copy it is, nothing in the layout moves
+  const stone = (set, x, z, s) => {
+    recording = [];
+    put(set, x, groundY(x, z) + s * 0.16, z, rr(-0.2, 0.2), rand() * 6, rr(-0.2, 0.2),
+      s * rr(0.9, 1.3), s * rr(0.55, 0.8), s * rr(0.9, 1.2), tint(pick(ROCK_COLOURS)));
+    rocks.push({ x, z, r: s * 1.1, boulder: set !== wild.rock, parts: recording, state: 'whole' });
+    recording = null;
+  };
   for (let i = 0, n = Math.round(area / 260); i < n; i++) {
     const s = rr(0.5, 1.2);
     const at = findRoom(14, s * 1.1 + 0.4, 0.5);
