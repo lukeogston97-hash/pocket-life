@@ -906,7 +906,52 @@ async def admin_login():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login}
+async def admin_people():
+    """Admin mode and people: moving someone, typing their needs and age. The person's own game follows."""
+    async with world() as W:
+        a = await W.page('movedOne'); await join(a)
+        boss = await W.page('rawhost2')
+        await boss.evaluate(RAW)
+        ev = boss.evaluate
+        await ev("conn('boss', { watch: true, admin: true, adminCode: 'secret123456' })")
+        expect(len(await ev("heard('boss', 'admin')")) == 1, 'admin mode is on')
+        who = await a.evaluate('__pl.net.myId')
+        at = lambda: a.evaluate('[__pl.player.position.x, __pl.player.position.z]')
+        # (what a tool answers: the server sends it as an 'admin' message with the words in text, as it always has)
+        last = lambda: ev("(() => { const d = heard('boss', 'admin'); return d.length ? d[d.length - 1].text || '' : ''; })()")
+        x0, z0 = await at()
+        # move them 20 m away: their own game goes there, and stays there
+        await ev(f"say('boss', {{ t: 'a.movePerson', id: '{who}', x: 22, z: 14 }})"); await boss.wait_for_timeout(900)
+        x1, z1 = await at()
+        expect('moved' in await last(), f'the admin is told it worked ("{await last()}")')
+        expect(abs(x1 - 22) < 1.5 and abs(z1 - 14) < 1.5, f'their game put them where the admin moved them ({x1:.1f}, {z1:.1f}; was {x0:.1f}, {z0:.1f})')
+        await a.wait_for_timeout(3500)  # (their game says where it is now and then: it mustn't walk them back)
+        x2, z2 = await at()
+        expect(abs(x2 - x1) < 0.5 and abs(z2 - z1) < 0.5, f'and they stay there ({x2:.1f}, {z2:.1f})')
+        page = lambda: ev(f"(async () => {{ say('boss', {{ t: 'a.player', id: '{who}' }}); await new Promise((r) => setTimeout(r, 500)); const d = heard('boss', 'adminPlayer'); return d[d.length - 1]; }})()")
+        pg = await page()
+        expect(abs(pg['x'] - 22) < 1.5 and abs(pg['z'] - 14) < 1.5, f"the server has them there too ({pg['x']}, {pg['z']})")
+        # not into the pond, not off the map
+        await ev(f"say('boss', {{ t: 'a.movePerson', id: '{who}', x: -5.6, z: -0.9 }})"); await boss.wait_for_timeout(500)
+        expect('pond' in await last(), f'not into the pond ("{await last()}")')
+        await ev(f"say('boss', {{ t: 'a.movePerson', id: '{who}', x: 400, z: 0 }})"); await boss.wait_for_timeout(500)
+        expect('outside' in await last(), f'not off the map ("{await last()}")')
+        x3, z3 = await at()
+        expect(abs(x3 - x2) < 0.5 and abs(z3 - z2) < 0.5, 'a refused move leaves them where they were')
+        # needs and age, typed in
+        await ev(f"say('boss', {{ t: 'a.setStats', id: '{who}', stats: {{ hunger: 12, thirst: 34.5, health: 0, bogus: 50 }}, age: 41 }})"); await boss.wait_for_timeout(900)
+        st = await a.evaluate('__pl.you.stats')
+        expect(abs(st['hunger'] - 12) < 1 and abs(st['thirst'] - 34.5) < 1, f"their game shows the typed needs (hunger {st['hunger']:.1f}, thirst {st['thirst']:.1f})")
+        expect(st['health'] >= 1 and 'bogus' not in st, f"health can't be typed down to death, and unknown needs are ignored (health {st['health']})")
+        expect(not await a.evaluate('__pl.you.dead'), 'they are still alive')
+        pg = await page()
+        expect(pg['age'] == 41 and await a.evaluate('__pl.you.look.age') == 41, f"age changed for the admin and for them ({pg['age']})")
+        await ev(f"say('boss', {{ t: 'a.setStats', id: '{who}', age: 5 }})"); await boss.wait_for_timeout(600)
+        expect((await page())['age'] == 13, 'age never goes below 13')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

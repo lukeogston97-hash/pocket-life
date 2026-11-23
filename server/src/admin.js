@@ -66,6 +66,8 @@ export const adminMethods = {
   // Each admin message starts with 'a.' and only works for the admin.
   async adminDo(ws, me, m) {
     const reply = (msg) => { try { ws.send(JSON.stringify(msg)); } catch (err) { /* gone */ } };
+    // what a tool answers: the fresh admin numbers with a few words in `text`. (It goes out as t: 'admin', not 'adminDone':
+    // adminState's own t wins the spread, and the game has always read it that way. Checks should listen for 'admin'.)
     const done = (text) => reply({ t: 'adminDone', text, ...this.adminState(me) });
     const w = this.world;
     const them = m.id ? this.persons.get(m.id) : null;
@@ -194,6 +196,41 @@ export const adminMethods = {
         this.touch(them); await this.flush(them.who);
         this.send({ t: 'state', id: them.who, state: 'asleep', x: num(them.x), z: num(them.z) }, null);
         return done(`${them.name} is asleep`);
+      case 'a.movePerson': { // put someone somewhere else (admin mode has no person of its own to teleport)
+        if (!this.alive(them)) return done("They've gone");
+        const edge = (G.worldSize || 100) / 2 - 2, x = num(m.x), z = num(m.z), pond = G.pond || { x: 0, z: 0, r: 5 };
+        if (!Number.isFinite(m.x) || !Number.isFinite(m.z) || Math.abs(x) > edge || Math.abs(z) > edge) return done("That's outside the world");
+        if (Math.hypot(x - pond.x, z - pond.z) < (pond.r || 5)) return done("Can't put them in the pond");
+        this.catchUp(them); // needs and any stroll up to now, at the old spot
+        if (!this.alive(them)) return done("They've gone");
+        this.standUp(them); // a seat belongs to a fire
+        Object.assign(them, { x, z, plan: null, home: [x, z] }); // someone away carries on from here (their away clock isn't restarted)
+        if (them.leftAt) them.simAt = Date.now();
+        this.touch(them); await this.flush(them.who);
+        if (sock) { try { sock.ws.send(JSON.stringify({ t: 'pos', x, z })); } catch (err) { /* gone */ } } // their own game goes there
+        this.send({ t: 'state', id: them.who, state: this.stateOf(them), x, z }, them.who);
+        return done(`${them.name} moved`);
+      }
+      case 'a.setStats': { // type someone's needs and age directly
+        if (!this.alive(them)) return done("They've gone");
+        this.catchUp(them);
+        if (!this.alive(them)) return done("They've gone");
+        for (const s of G.needs) {
+          const v = (m.stats || {})[s.id];
+          if (!Number.isFinite(v)) continue;
+          them.stats[s.id] = Math.max(s.deadAtZero ? 1 : 0, Math.min(100, Math.round(v * 10) / 10)); // (never to death: Remove from world is its own button)
+        }
+        them.statsAt = Date.now();
+        if (Number.isFinite(m.age)) { // age is the age they started at plus birthdays since (ageOf), so the starting age moves
+          const want = Math.max(G.age.min, Math.min(120, Math.round(m.age)));
+          them.age = want - (ageOf(them) - them.age);
+        }
+        this.collapse(them); // Rest typed down to nothing: they drop asleep, as they would
+        this.touch(them); await this.flush(them.who);
+        this.tell(them.who, this.mine(them));
+        reply(await this.playerPage(them.who));
+        return done(`${them.name} changed`);
+      }
       case 'a.removePerson': // take someone out of the world; their things drop where they are
         if (!this.alive(them)) return done("They've gone");
         if (sock) return done("They're playing right now");
