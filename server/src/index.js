@@ -17,6 +17,7 @@ import { natureMethods } from './nature.js';
 import { adminMethods } from './admin.js';
 import { placedMethods } from './placed.js';
 import { liveMethods, maxPlaying } from './live.js';
+import { liveItemsMethods } from './live-items.js';
 import { claimsMethods } from './claims.js';
 import { restoreMethods } from './restore.js';
 import { guardMethods } from './guard.js';
@@ -35,6 +36,7 @@ export class World extends DurableObject {
     this.speed = null; // the admin's "speed up time": { x, until }
     this.admin = { maintenance: false, message: '', banned: [], muted: [] }; // set by the admin player in the game
     this.live = {}; // live settings the admin changed (live.js)
+    this.liveItems = {}; // item and recipe numbers the admin changed (live-items.js)
     this.adminFails = new Map(); // wrong admin codes, by address (guard.js); kept in memory only
     this.feedbackLog = []; // when feedback came in and from where, to stop floods (guard.js)
     this.socks = null; this.byWho = null; // who's connected, worked out once per message or tick (sockets, socketOf)
@@ -45,6 +47,8 @@ export class World extends DurableObject {
       this.speed = (await ctx.storage.get('speed')) || null;
       this.live = (await ctx.storage.get('live')) || {};
       this.applyLive();
+      this.liveItems = (await ctx.storage.get('liveItems')) || {};
+      this.applyLiveItems();
       Object.assign(this.usage, (await ctx.storage.get('usage')) || {});
       for (const [k, p] of await ctx.storage.list({ prefix: 'p:' })) this.persons.set(k.slice(2), p);
       if (!(await ctx.storage.getAlarm())) await ctx.storage.setAlarm(Date.now() + TICK_MS);
@@ -261,7 +265,7 @@ export class World extends DurableObject {
       Object.assign(me, { id: me.watch && me.id ? me.id : `w:${crypto.randomUUID().slice(0, 8)}`, who: null, watch: true, queued, turnAt: 0, admin: isAdmin, v: clean(m.v, 20), b: Math.floor(Number(m.b)) || 0, e: Math.floor(Number(m.e)) || 0, link, alive: false });
       this.attach(ws, me);
       const p = this.persons.get(who);
-      reply({ t: 'welcome', watch: true, id: me.id, people: this.people(null), world: this.view(), count: this.playing(), speed: this.speed, live: this.live,
+      reply({ t: 'welcome', watch: true, id: me.id, people: this.people(null), world: this.view(), count: this.playing(), speed: this.speed, live: this.live, liveItems: this.liveItems,
         yours: this.alive(p) ? { name: p.name, age: ageOf(p) } : null, line: full ? this.placeOf(ws) : 0, needLayout: isAdmin && this.needLayout(me), needSeed: isAdmin && !this.world });
       if (isAdmin) reply(this.adminState(me)); // admin mode is on: the panels get their numbers
       if (full) this.callLine();
@@ -296,7 +300,7 @@ export class World extends DurableObject {
     if (p) await this.flush(who);
     const w = this.world;
     reply({ t: 'welcome', id: who, people: this.people(who), world: this.view(), needSeed: !w, needLayout: this.needLayout(me),
-      count: this.playing(), me: me.alive ? this.mine(p) : null, away, dead, speed: this.speed, live: this.live });
+      count: this.playing(), me: me.alive ? this.mine(p) : null, away, dead, speed: this.speed, live: this.live, liveItems: this.liveItems });
     if (me.alive) this.send({ t: 'join', person: this.pub(p) }, who);
     this.sendCount();
   }
@@ -400,7 +404,7 @@ export class World extends DurableObject {
 
 }
 // the rest of the world's methods, kept in their own files by topic
-Object.assign(World.prototype, lineMethods, personsMethods, awayMethods, natureMethods, adminMethods, placedMethods, liveMethods, claimsMethods, guardMethods, restoreMethods);
+Object.assign(World.prototype, lineMethods, personsMethods, awayMethods, natureMethods, adminMethods, placedMethods, liveMethods, liveItemsMethods, claimsMethods, guardMethods, restoreMethods);
 
 export default {
   async fetch(request, env) {

@@ -380,6 +380,15 @@ export const adminMethods = {
       case 'a.live':
         if (!(await this.setLive(m.id, m.value))) return done("That didn't work");
         return done(m.value == null ? 'Back to normal' : 'Changed');
+
+      /* ---------- Items: an item's or a recipe's numbers, changed live (live-items.js) ---------- */
+      case 'a.items': return reply({ t: 'adminItems', list: this.liveItemsView() }); // every number, what it started as, and whether it's changed
+      case 'a.liveItem': {
+        const v = await this.setLiveItem(m.at, m.value);
+        reply({ t: 'adminItems', list: this.liveItemsView() });
+        if (v === undefined) return done("That can't be changed");
+        return done(v == null ? 'Back to what the game file says' : `Changed to ${v}`);
+      }
     }
   },
 };
