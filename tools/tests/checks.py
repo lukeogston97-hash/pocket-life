@@ -194,6 +194,9 @@ async def screens():
             await ad.click('#adminClose')
             await pg.evaluate("__pl.showWelcomeBack({ ms: 5 * 3600000, ate: 3, drank: 2, picked: 4, slept: true })"); await shot(pg, f'{tag}_11_welcome_back'); await pg.click('#backBtn')
             await pg.evaluate("__pl.die({ name: __pl.you.look.name, age: 25, cause: 'thirst' })"); await shot(pg, f'{tag}_12_death')
+            # this size is done: its two games close, so the next size isn't drawn alongside them (four games at once is more
+            # than this computer's software 3D can keep up with: a click then took over 30 seconds, 24 Nov 2026)
+            await ad.context.close(); await pg.context.close()
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
@@ -1093,8 +1096,13 @@ async def admin_mode():
                 turned = ((t2[2] - t2[0] - (t1[2] - t1[0])) ** 2 + (t2[3] - t2[1] - (t1[3] - t1[1])) ** 2) ** 0.5
                 stayed = ((t2[0] - t1[0]) ** 2 + (t2[1] - t1[1]) ** 2) ** 0.5
                 expect(turned > 1 and stayed < 0.5, f'pc: holding Q turns the view round the spot it looks at ({turned:.1f} m swing, the spot moved {stayed:.2f} m)')
+            # (something for the dashboard to hold: the Log, which has at least "Admin mode opened")
+            await pg.click('#adminDashBtn'); await pg.click('[data-admin-tab="log"]')
+            await pg.wait_for_function("document.querySelectorAll('#adminLog .admin-logline').length > 0 && __pl.adminData.logData", timeout=8000)
             # Exit: the main menu again, the password forgotten, the camera as a player has it
             await pg.click('#adminExit'); await pg.wait_for_timeout(1200)
+            left = await pg.evaluate("({ shown: ['adminLog', 'adminInbox', 'adminPlayers', 'adminPlayer', 'adminFires', 'adminItems'].filter((id) => document.getElementById(id).childElementCount), kept: Object.entries(__pl.adminData).filter(([k, v]) => k !== 'adminTab' && v != null).map(([k]) => k), panel: !document.getElementById('adminPanel').hidden })")
+            expect(left == {'shown': [], 'kept': [], 'panel': False}, f'{tag}: nothing the dashboard showed stays on the page after Exit ({left})')
             st = await pg.evaluate("({ mode: __pl.ui.mode, m: __pl.adminMode, menu: !document.getElementById('mainMenu').hidden, cls: document.getElementById('app').className, admin: __pl.admin.on })")
             expect(st['mode'] == 'menu' and not st['m']['on'] and not st['m']['hasCode'] and not st['admin'] and st['menu'] and 'is-admin' not in st['cls'], f'{tag}: Exit admin goes back to the main menu and forgets the password ({st})')
             after = await pg.evaluate(CAM)

@@ -662,3 +662,11 @@ $('adminItemsCopy').addEventListener('click', async () => {
   box.value = text; box.hidden = false; // shown as well, in case this phone won't let a page copy by itself
   try { await navigator.clipboard.writeText(text); adminSay('Copied. Paste it to have the game file updated'); } catch (err) { box.focus(); box.select(); adminSay('Select the text and copy it'); }
 });
+
+/* ---------- leaving admin mode: nothing the dashboard was showing stays on the page (names, feedback, reports, the Log) ---------- */
+function forgetAdminData() {
+  playersData = null; playerData = null; inboxData = null; itemsData = null; firesData = null; logData = null; editStats = null; openFire = null;
+  for (const id of ['adminPlayers', 'adminPlayer', 'adminInbox', 'adminItems', 'adminFires', 'adminLog']) $(id).replaceChildren();
+  $('adminItemsText').value = ''; $('adminItemsText').hidden = true;
+}
+

@@ -90,6 +90,7 @@ function exitAdmin(rejoin = true) {
   admin.on = false;
   adminFollow(null);
   $('adminPanel').hidden = true; $('adminPick').hidden = true;
+  forgetAdminData(); // (admin.js) what the dashboard held goes with the password
   closeMenu();
   keysDown.clear();
   app.classList.remove('is-admin');
