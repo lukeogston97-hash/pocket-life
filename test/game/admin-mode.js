@@ -7,8 +7,9 @@
    real check is on the server (the Cloudflare secret ADMIN_CODE); the 5 taps only keep the box out of players' way. */
 const adminMode = { on: false, code: '', asking: false, saved: null };
 // 5 taps in a row: each within ADMIN_TAP_GAP of the one before (a longer pause starts the count again). It's a gap between
-// taps, not a time limit for all five, so a slow or stuttering phone still gets in; the password is the real lock.
-const ADMIN_TAPS = 5, ADMIN_TAP_GAP = 2500;
+// taps, not a time limit for all five, and a generous one: the main menu is when a phone is busiest (the world is loading
+// behind it), and this is the only way in. The taps only keep the box out of players' way; the password is the real lock.
+const ADMIN_TAPS = 5, ADMIN_TAP_GAP = 4000;
 const verTaps = { n: 0, last: 0 };
 $('menuVer').addEventListener('click', (e) => {
   if (ui.mode !== 'menu' || adminMode.on) return;
@@ -143,6 +144,18 @@ function adminCamera(dt) {
   const dy = (groundY(t.x, t.z) + 1.0 - t.y) * Math.min(1, dt * 4);
   t.y += dy; camera.position.y += dy;
 }
+// Fly to: the camera goes to look at a spot, from the same height and angle. On a phone the dashboard is put away first,
+// as it covers the lower half of the screen, where the spot would be.
+const adminNarrow = () => app.clientWidth <= 700;
+function adminFlyTo(x, z) {
+  if (!adminMode.on || !Number.isFinite(x) || !Number.isFinite(z)) return;
+  if (adminNarrow()) closeAdminPanel();
+  const t = controls.target;
+  adminPanBy(x - t.x, z - t.z);
+  const dy = groundY(t.x, t.z) + 1.0 - t.y;
+  t.y += dy; camera.position.y += dy;
+  panVel.set(0, 0, 0);
+}
 // slide the view over the ground, kept inside the world (and a little past its edge)
 function adminPanBy(mx, mz) {
   const t = controls.target, lim = WORLD_HALF + 4;
@@ -169,4 +182,34 @@ function adminFrame(dt, raw, w, h) {
   renderWorld(w, h, raw);
   adminBarTimer += raw;
   if (adminBarTimer > 1) { adminBarTimer = 0; drawAdminBar(); applyDaylight(); for (const b of berryBushes) drawBerries(b); drawPlants(); }
+}
+
+/* ---------- tapping the world: what the admin can do with what's there ---------- */
+// A tap on a person, a tree, a rock, a berry bush, a campfire, a loose item or the ground opens the same small menu the
+// players get, holding the admin's options for it. While moving something, the tap says where it goes instead.
+function adminTap(px, py) {
+  if (!online()) { adminSay('Reconnecting…', 1.5); return; }
+  if (adminMoving) { adminMoveTap(); return; }
+  const t = pickTarget(px, py);
+  if (!t) { closeMenu(); return; }
+  const acts = adminActionsFor(t);
+  if (!acts.length) { closeMenu(); return; }
+  $('actTitle').textContent = t.name || (t.kind === 'ground' ? 'Ground' : '');
+  showActs(acts);
+  const menu = $('actMenu');
+  menu.hidden = false;
+  const w = menu.offsetWidth, h = menu.offsetHeight;
+  menu.style.left = `${Math.round(Math.min(Math.max(8, px + 8), app.clientWidth - w - 8))}px`;
+  menu.style.top = `${Math.round(Math.max(hudZone.top + 6, Math.min(app.clientHeight - h - 8, py + 8)))}px`;
+}
+function adminActionsFor(t) {
+  if (t.kind === 'person') return adminPersonActions(t.person);
+  if (t.kind === 'placed') return adminPlacedActions(t.th);
+  if (t.kind === 'item') return [{ label: `Remove ${ITEMS[t.item.kind].name.toLowerCase()}`, run: () => adminSend({ t: 'a.remove', id: t.item.id }) }, ...adminGroundActions({ x: t.item.x, z: t.item.z })];
+  if (t.kind === 'tree') return adminThingActions('tree', t.idx, false);
+  if (t.kind === 'stump') return adminThingActions('tree', t.idx, true);
+  if (t.kind === 'rock') return adminThingActions('rock', t.idx, rocks[t.idx].state === 'mined');
+  if (t.kind === 'use' && t.task.bush != null) { const b = berryBushes[t.task.bush], src = SOURCES[t.task.source]; return adminThingActions('bush', t.task.bush, !!b && berriesOn(b) < bushHolds(src)); }
+  const p = t.point || (t.hit && t.hit.point) || (Number.isFinite(t.x) ? { x: t.x, z: t.z } : null);
+  return p ? adminGroundActions(p) : []; // the ground, the shore, a grave, an old stump, tall grass: what can be done at that spot
 }

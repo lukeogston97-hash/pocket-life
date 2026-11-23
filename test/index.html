@@ -149,7 +149,6 @@
           <button id="pauseFeedbackBtn" type="button" class="menu-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/></svg>Feedback</button>
         </div>
         <button id="exitBtn" type="button" class="small-btn">Exit</button>
-        <button id="pauseAdminBtn" type="button" class="small-btn" hidden>Admin</button>
       </div>
     </div>
   </div>
@@ -186,9 +185,10 @@
     </form>
   </div>
 
-  <div id="adminPanel" class="modal" hidden>
-    <div class="modal-card admin-card admin-panel" role="dialog" aria-modal="true" aria-labelledby="adminTitle">
-      <div class="bag-head"><h2 id="adminTitle">Admin</h2><button id="adminClose" class="text-btn" type="button">Close</button></div>
+  <section id="adminPanel" class="admin-dock" aria-labelledby="adminTitle" hidden>
+    <div class="admin-panel">
+      <div class="grab admin-grab" aria-hidden="true"></div>
+      <div class="bag-head"><h2 id="adminTitle">Dashboard</h2><button id="adminClose" class="text-btn" type="button">Hide</button></div>
       <div class="seg admin-tabs" role="group" aria-label="Admin">
         <button type="button" class="seg-btn" data-admin-tab="server" data-label="Server">Server</button>
         <button type="button" class="seg-btn" data-admin-tab="players" data-label="Players">Players</button>
@@ -232,7 +232,7 @@
         <div class="admin-sec">
           <span class="lbl">Clear loose items</span>
           <div class="admin-grid">
-            <button id="adminClearNearBtn" type="button" class="small-btn">Near me (10 m)</button>
+            <button id="adminClearNearBtn" type="button" class="small-btn">Middle of view (10 m)</button>
             <button id="adminClearAllBtn" type="button" class="small-btn">Whole world</button>
           </div>
         </div>
@@ -253,7 +253,7 @@
         <div id="adminSettings" class="admin-list"></div>
       </div>
     </div>
-  </div>
+  </section>
 
   <div id="adminPick" class="modal" hidden>
     <div class="modal-card admin-card" role="dialog" aria-modal="true" aria-labelledby="adminPickTitle">
@@ -282,8 +282,10 @@
     <div class="admin-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>Admin</div>
     <div class="admin-world glass"><span id="adminWorldName">Oceania</span><span id="adminWorldTime" class="admin-world-time"></span></div>
     <div id="adminCountsBar" class="admin-stats glass" aria-live="polite"></div>
+    <button id="adminDashBtn" type="button" class="admin-exit admin-dash glass" aria-controls="adminPanel" aria-expanded="false">Dashboard</button>
     <button id="adminExit" type="button" class="admin-exit glass">Exit admin</button>
   </header>
+  <p id="adminToast" class="admin-toast glass" role="status" hidden></p>
 
   <div id="announce" class="announce" hidden><span id="announceText"></span></div>
 

@@ -7,7 +7,16 @@
 // Before 23 Nov 2026 the admin code was kept on the phone that typed /admin. It isn't any more: any copy left behind is deleted.
 try { localStorage.removeItem('pocket-life:admin'); localStorage.removeItem('pocket-life:adminTag'); } catch (err) { /* none */ }
 const admin = { on: false, maintenance: false, message: '', live: [] }; // on: admin mode is open (adminMode.on) and the server has said yes
-const adminSend = (msg) => { if (online()) net.sock.send(JSON.stringify(msg)); else showTag("You're offline", headTop(), 2); };
+// what a tool answers, and short notes: a line under the admin's bar (a note out in the world could sit behind a panel)
+let adminToastTimer = null;
+function adminSay(text, secs = 2.8) {
+  if (!adminMode.on) { showTag(text, headTop(), secs); return; }
+  $('adminToast').textContent = text;
+  $('adminToast').hidden = false;
+  clearTimeout(adminToastTimer);
+  adminToastTimer = setTimeout(() => { $('adminToast').hidden = true; }, secs * 1000);
+}
+const adminSend = (msg) => { if (online()) net.sock.send(JSON.stringify(msg)); else adminSay("You're offline"); };
 function adminMessage(m) {
   if (m.t.startsWith('admin') && !adminMode.on) return; // admin news only means something while admin mode is open
   if (m.t === 'admin') { // the admin's numbers: sent on the way in, and as every tool's answer (with a few words in text)
@@ -18,13 +27,13 @@ function adminMessage(m) {
     if ('speed' in m) timeSpeed = m.speed && m.speed.until > Date.now() ? m.speed : null;
     drawAdmin();
     if (!was) adminSend({ t: 'a.list' }); // (the list: for the Inbox count)
-    if (m.text) showTag(m.text, headTop(), 2.5);
+    if (m.text) adminSay(m.text);
   } else if (m.t === 'adminList') { inboxData = m; drawInbox(); }
   else if (m.t === 'adminPlayers') { playersData = m; drawPlayers(); }
   else if (m.t === 'adminPlayer') { playerData = m; if (adminTab === 'player') drawPlayer(); }
   else if (m.t === 'adminNew') { // new feedback or a report just came in: the Inbox count goes up straight away
     adminSend({ t: 'a.list' });
-    if (player && ui.mode === 'world') showTag(m.list === 'reports' ? 'New report in your Inbox' : 'New feedback in your Inbox', headTop(), 3);
+    adminSay(m.list === 'reports' ? 'New report in the Inbox' : 'New feedback in the Inbox', 3.5);
   }
   else if (m.t === 'announce') announce(m.text);
   else if (m.t === 'kicked' || m.t === 'banned') {
@@ -49,15 +58,6 @@ function announce(text) {
   bannerTimer = setTimeout(() => { $('announce').hidden = true; }, 10000);
 }
 $('announce').addEventListener('click', () => { $('announce').hidden = true; });
-// jump straight somewhere (stops whatever you were doing)
-function teleportTo(x, z) {
-  stopQueue();
-  const L = WALK_LIMIT - 0.5;
-  x = Math.max(-L, Math.min(L, x)); z = Math.max(-L, Math.min(L, z));
-  [x, z] = onDryLand(x, z);
-  player.position.set(x, groundY(x, z), z);
-  net.last = null;
-}
 
 /* ---------- live settings (Settings tab): the server sends the numbers it changed, and the game uses them too ---------- */
 const BERRY_SOURCE = () => Object.values(SOURCES).find(harvests);
@@ -80,13 +80,13 @@ function applyLive(live) {
   for (const [id, set] of Object.entries(LIVE_SET)) { const v = live && live[id] != null ? live[id] : LIVE_BASE[id]; if (v != null) set(v); }
 }
 
-/* ---------- Admin in the tap menus ---------- */
-const adminMore = (acts) => (acts.length ? [{ label: 'Admin', admin: true, sub: acts }] : []); // admin: always shown (showActs)
+/* ---------- what the admin can do with the thing they tapped (admin-mode.js adminTap opens these as its menu) ---------- */
 const sure = (label, run, note = '') => ({ label, note, sub: [{ label: `Yes, ${label.toLowerCase()}`, run }] }); // asks once more first
 function adminPersonActions(o) {
   if (!admin.on) return [];
   return [{ label: 'Open their page', run: () => openPlayerPage(o.id) },
-    { label: 'Teleport to them', run: () => teleportTo(o.mesh.position.x + 1, o.mesh.position.z) },
+    { label: 'Fly to them', run: () => adminFlyTo(o.mesh.position.x, o.mesh.position.z) },
+    { label: 'Move them', note: 'Then tap where they go', run: () => startMove({ person: o.id, name: o.title }) },
     { label: 'Fill their needs', run: () => adminSend({ t: 'a.fill', id: o.id }) },
     { label: 'Mute for everyone', note: 'Unmute on their page', run: () => adminSend({ t: 'a.mute', id: o.id, on: true }) },
     { label: 'Kick', run: () => adminSend({ t: 'a.kick', id: o.id }) },
@@ -95,7 +95,7 @@ function adminPersonActions(o) {
 function adminGroundActions(p) {
   if (!admin.on || !p) return [];
   return [{ label: 'Add item', note: 'Pick from a list', run: () => openPicker('Add item', (kind, n) => adminSend({ t: 'a.add', kind, n, x: p.x, z: p.z })) },
-    { label: 'Teleport here', run: () => teleportTo(p.x, p.z) }];
+    { label: 'Fly here', run: () => adminFlyTo(p.x, p.z) }];
 }
 // a tree, rock or berry bush laid out with the world (what: tree | rock | bush, i: its number); grown: there's something to grow back
 function adminThingActions(what, i, grown) {
@@ -114,16 +114,17 @@ function adminPlacedActions(th) {
 }
 // Move: the next tap on the ground is where it goes (a tap anywhere else stops)
 let adminMoving = null;
-function startMove(m) { adminMoving = m; showTag('Tap where it goes', headTop(), 3); }
+function startMove(m) { adminMoving = m; if (adminNarrow()) closeAdminPanel(); adminSay(m.person ? `Tap where ${m.name} goes` : 'Tap where it goes', 6); }
 function adminMoveTap() {
   const m = adminMoving;
   adminMoving = null;
   ray.setFromCamera(ndc, camera);
   const g = ray.intersectObject(terrain, false)[0];
-  if (!g) { showTag('Move stopped', headTop(), 2); return; }
-  const L = WALK_LIMIT - 0.5, x = Math.max(-L, Math.min(L, g.point.x)), z = Math.max(-L, Math.min(L, g.point.z));
-  if (pondShape(x, z) < 1) { showTag("Can't go in the pond", headTop(), 2); return; }
-  adminSend({ t: 'a.move', ...m, x: Math.round(x * 100) / 100, z: Math.round(z * 100) / 100 });
+  if (!g) { adminSay('Move stopped'); return; }
+  const L = WALK_LIMIT - 0.5, x = Math.round(Math.max(-L, Math.min(L, g.point.x)) * 100) / 100, z = Math.round(Math.max(-L, Math.min(L, g.point.z)) * 100) / 100;
+  if (pondShape(x, z) < 1) { adminSay("Can't go in the pond"); return; }
+  if (m.person) adminSend({ t: 'a.movePerson', id: m.person, x, z }); // a person (the server has the last word on where they can stand)
+  else adminSend({ t: 'a.move', what: m.what, idx: m.idx, id: m.id, x, z });
 }
 
 /* ---------- the item picker: Add item (on the ground) and Give (into someone's bag) ---------- */
@@ -189,13 +190,14 @@ const minsLeft = (until) => Math.max(1, Math.round((until - Date.now()) / 60000)
 /* ---------- the panel and its tabs ---------- */
 let adminTab = 'server', playersData = null, playerData = null, inboxData = null;
 function openAdminPanel() {
-  closePause(); paused = true;
+  if (!adminMode.on) return;
+  $('adminDashBtn').setAttribute('aria-expanded', 'true');
   adminSend({ t: 'a.state' });
   adminSend({ t: 'a.list' }); // for the Inbox count
   $('adminPanel').hidden = false;
   showAdminTab(adminTab === 'player' ? 'players' : adminTab);
 }
-function closeAdminPanel() { $('adminPanel').hidden = true; paused = false; resetDanger(); }
+function closeAdminPanel() { $('adminPanel').hidden = true; $('adminDashBtn').setAttribute('aria-expanded', 'false'); resetDanger(); }
 function adminEscape() { if (adminTab === 'player') showAdminTab('players'); else closeAdminPanel(); }
 function showAdminTab(tab) {
   adminTab = tab;
@@ -208,10 +210,9 @@ function showAdminTab(tab) {
   if (tab === 'player') drawPlayer();
 }
 for (const b of document.querySelectorAll('[data-admin-tab]')) b.addEventListener('click', () => showAdminTab(b.dataset.adminTab));
-$('pauseAdminBtn').addEventListener('click', openAdminPanel);
+$('adminDashBtn').addEventListener('click', () => ($('adminPanel').hidden ? openAdminPanel() : closeAdminPanel()));
 $('adminClose').addEventListener('click', closeAdminPanel);
 function drawAdmin() {
-  $('pauseAdminBtn').hidden = !admin.on;
   if (!admin.on) { $('adminPanel').hidden = true; $('adminPick').hidden = true; return; }
   $('adminMaintState').textContent = admin.maintenance ? 'On: release-link players see Back soon' : 'Off';
   $('adminMaintBtn').textContent = admin.maintenance ? 'Turn off' : 'Turn on';
@@ -262,7 +263,7 @@ function drawPlayers() {
     .map(([v, l]) => [v, c[v] != null ? `${l} ${c[v]}` : l]), showPlayers, (v) => { showPlayers = v; findPlayers(); });
   if (!playersData) { $('adminPlayers').replaceChildren(emptyNote('Loading…')); return; }
   const rows = d.rows.map((r) => {
-    const tags = [STATE_WORDS[r.state] || r.state, r.age != null ? `${r.age} yrs` : '', r.muted ? 'muted' : '', r.banned ? 'banned' : '', r.id === net.myId ? 'you' : ''].filter(Boolean).join(' · ');
+    const tags = [STATE_WORDS[r.state] || r.state, r.age != null ? `${r.age} yrs` : '', r.muted ? 'muted' : '', r.banned ? 'banned' : ''].filter(Boolean).join(' · ');
     const head = el('div');
     head.append(el('div', 'admin-name', r.name), el('div', 'admin-tag', tags));
     const e = entry(head, '', [], 'tap');
@@ -275,7 +276,7 @@ function drawPlayers() {
 
 /* ---------- someone's page: stats, bag, give and take, past people, and what can be done ---------- */
 function openPlayerPage(id) {
-  if ($('adminPanel').hidden) { closePause(); paused = true; $('adminPanel').hidden = false; adminSend({ t: 'a.state' }); }
+  if ($('adminPanel').hidden) { $('adminPanel').hidden = false; $('adminDashBtn').setAttribute('aria-expanded', 'true'); adminSend({ t: 'a.state' }); }
   if (!playerData || playerData.id !== id) playerData = { id, loading: true };
   adminSend({ t: 'a.player', id });
   showAdminTab('player');
@@ -286,7 +287,7 @@ $('adminPlayerBack').addEventListener('click', () => showAdminTab('players'));
 function drawPlayer() {
   const p = playerData, box = $('adminPlayer');
   if (!p || p.loading) { box.replaceChildren(emptyNote('Loading…')); return; }
-  const out = [], alive = p.state !== 'gone', you2 = p.id === net.myId;
+  const out = [], alive = p.state !== 'gone';
   const head = el('div');
   head.append(el('div', 'admin-name', p.name),
     el('div', 'admin-tag', [STATE_WORDS[p.state] || p.state, p.age != null ? `${p.age} yrs` : '', p.v ? `v${p.v} ${p.link} link` : '', p.muted ? 'muted' : '', p.banned ? 'banned' : '',
@@ -319,21 +320,19 @@ function drawPlayer() {
     out.push(bag);
   }
   const acts = [];
-  if (alive && !you2 && p.x != null) acts.push(['Teleport to', () => { closeAdminPanel(); teleportTo(p.x + 1, p.z); }]);
+  if (alive && p.x != null) acts.push(['Fly to', () => adminFlyTo(p.x, p.z)]);
   if (alive) acts.push(['Fill needs', () => toPlayer({ t: 'a.fill', id: p.id })]);
-  if (!you2) acts.push([p.muted ? 'Unmute' : 'Mute', () => toPlayer({ t: 'a.mute', id: p.id, on: !p.muted })]);
-  if (p.state === 'online' && !you2) acts.push(['Kick', () => toPlayer({ t: 'a.kick', id: p.id })]);
+  acts.push([p.muted ? 'Unmute' : 'Mute', () => toPlayer({ t: 'a.mute', id: p.id, on: !p.muted })]);
+  if (p.state === 'online') acts.push(['Kick', () => toPlayer({ t: 'a.kick', id: p.id })]);
   if (p.state === 'asleep') acts.push(['Wake up', () => toPlayer({ t: 'a.wake', id: p.id })]);
   if (p.state === 'away') acts.push(['Send to sleep', () => toPlayer({ t: 'a.sleep', id: p.id })]);
   if (acts.length) out.push(entry('', '', acts));
   const careful = el('div', 'admin-entry');
   const bar = el('div', 'admin-btns');
-  if (!you2) {
-    const ban = button(p.banned ? 'Unban' : 'Ban', () => {});
-    if (p.banned) ban.addEventListener('click', () => toPlayer({ t: 'a.unban', who: p.id }));
-    else twoTaps(ban, () => toPlayer({ t: 'a.ban', id: p.id }), 'Tap again to ban');
-    bar.appendChild(ban);
-  }
+  const ban = button(p.banned ? 'Unban' : 'Ban', () => {}); // (a ban keeps that phone from playing; it never keeps anyone out of admin mode)
+  if (p.banned) ban.addEventListener('click', () => toPlayer({ t: 'a.unban', who: p.id }));
+  else twoTaps(ban, () => toPlayer({ t: 'a.ban', id: p.id }), 'Tap again to ban');
+  bar.appendChild(ban);
   if (alive && p.state !== 'online') { const rm = button('Remove from world', () => {}); twoTaps(rm, () => toPlayer({ t: 'a.removePerson', id: p.id }), 'Tap again: drops their things'); bar.appendChild(rm); }
   if (bar.children.length) { careful.appendChild(bar); out.push(careful); }
   if ((p.past || []).length) out.push(entry('Past people', p.past.map((q) => `${q.name}, ${q.age} · ${q.cause === 'left' ? 'left' : q.cause ? `died (${q.cause})` : 'died'}${q.until ? ` · ${when(q.until)}` : ''}`).join('\n')));
@@ -347,7 +346,6 @@ function drawInbox() {
   const n = newCount('feedback') + newCount('reports');
   const tab = document.querySelector('[data-admin-tab="inbox"]');
   if (tab) tab.textContent = n ? `Inbox ${n}` : 'Inbox';
-  $('pauseAdminBtn').textContent = n ? `Admin · ${n} new` : 'Admin'; // the Menu's Admin button says when there's something new
   if (adminTab !== 'inbox') return;
   chips($('adminInboxShow'), [['feedback', `Feedback ${newCount('feedback')}`], ['reports', `Reports ${newCount('reports')}`], ['done', inboxDone ? 'Hide done' : 'Show done']],
     inboxList, (v) => { if (v === 'done') inboxDone = !inboxDone; else inboxList = v; drawInbox(); });
@@ -385,7 +383,7 @@ function drawCounts() {
   if (loose.length) { const s = el('span', 'admin-tag', loose.join(', ')); s.style.gridColumn = '1 / -1'; box.appendChild(s); }
 }
 $('adminRegrowBtn').addEventListener('click', () => { adminSend({ t: 'a.regrowAll' }); setTimeout(drawCounts, 800); });
-$('adminClearNearBtn').addEventListener('click', () => { adminSend({ t: 'a.clear', near: true, x: player.position.x, z: player.position.z }); setTimeout(drawCounts, 800); });
+$('adminClearNearBtn').addEventListener('click', () => { adminSend({ t: 'a.clear', near: true, x: controls.target.x, z: controls.target.z }); setTimeout(drawCounts, 800); });
 const resetClearAll = twoTaps($('adminClearAllBtn'), () => { adminSend({ t: 'a.clear', near: false }); setTimeout(drawCounts, 800); }, 'Tap again: clear everything');
 // Reset the world: the land, loose items and placed things start again, people stay. Reset everything: every person,
 // everyone's past people and the Inbox go too (settings, bans and maintenance stay). Neither can be undone.

@@ -216,6 +216,7 @@ function fadeTapRing(dt) {
   if (age >= life) tapRing.visible = false;
 }
 function handleTap(px, py) {
+  if (ui.mode === 'admin') { adminTap(px, py); return; } // admin mode: what the admin can do with it (admin-mode.js)
   if (ui.mode !== 'world' || !player || you.dead || paused) return;
   if (!online()) { showTag('Reconnecting…', headTop(), 1.5); return; }
   if (placing.on) { // choosing where to put something: a tap moves it there

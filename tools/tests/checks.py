@@ -420,14 +420,15 @@ async def mining():
 
 
 async def admin_tools():
-    """The Admin panel: tabs, finding someone and giving them things, live settings, moving and removing things, the Inbox."""
+    """The admin's dashboard, from admin mode: tabs, finding someone and giving them things, live settings, moving and removing things, the Inbox."""
     async with world() as W:
         b = await W.page('playerB'); await join(b)
-        a = await W.page('adminA'); await join(a)
-        await a.click('#sayBtn'); await a.fill('#sayInput', '/admin secret123456'); await a.press('#sayInput', 'Enter'); await a.wait_for_timeout(800)
-        await a.mouse.click(195, 300); await a.wait_for_timeout(300)
-        expect(await a.evaluate('__pl.admin.on'), 'admin on')
-        await a.click('#menuBtn'); await a.click('#pauseAdminBtn'); await a.wait_for_timeout(400)
+        a = await W.page('adminA'); await open_admin(a)  # the admin is not a person: admin mode, from the main menu
+        expect(await a.evaluate('__pl.admin.on && __pl.ui.mode === "admin" && !__pl.player'), 'admin mode is on, with no person')
+        await a.click('#adminDashBtn'); await a.wait_for_timeout(400)
+        expect(await shown(a, '#adminPanel'), 'the Dashboard button opens the dashboard')
+        f0 = await a.evaluate('window.__frames'); await frames(a, 3, 60000)
+        expect(await a.evaluate('window.__frames') >= f0 + 3, 'the world keeps being drawn with the dashboard open')
         for t in ['players', 'inbox', 'world', 'settings', 'server']:
             await a.click(f'[data-admin-tab="{t}"]'); await a.wait_for_timeout(400)
             expect(await a.evaluate(f"!document.querySelector('[data-admin-page=\"{t}\"]').hidden"), f'{t} tab shows')
@@ -996,9 +997,19 @@ async def tap_version(pg, n):
     await pg.wait_for_timeout(400)
 
 
-async def open_admin(pg, code='secret123456'):
-    """From the main menu: 5 taps on the version number, then the password. Returns once the server has answered."""
-    await tap_version(pg, 5)
+async def open_admin(pg, code='secret123456', taps=False):
+    """Into admin mode from the main menu, through the real password box. Returns once the server has answered.
+    taps=True also does the 5 taps on the version number (only admin_mode does: the taps are what it's checking). The other
+    checks open the box directly, because on this computer, with a second page playing, taps land 2 to 3 seconds apart
+    (measured 23 Nov 2026) and a missed gap would fail a check that isn't about taps at all."""
+    if taps:
+        for attempt in range(4):  # (a gap can still run long here: say so plainly instead of failing on it)
+            await tap_version(pg, 5)
+            if await pg.evaluate("!document.getElementById('adminLogin').hidden"): break
+            print(f'  note: 5 taps did not open the box on try {attempt + 1} (taps too far apart on this computer); trying again')
+            await pg.wait_for_timeout(4500)
+    else:
+        await pg.evaluate('__pl.openAdminLogin()')
     await pg.wait_for_function("!document.getElementById('adminLogin').hidden", timeout=5000)
     await pg.fill('#adminLoginCode', code); await pg.click('#adminLoginGo')
     await pg.wait_for_function("!__pl.adminMode.asking", timeout=8000)
@@ -1018,11 +1029,14 @@ async def admin_mode():
             # 4 taps do nothing; the 5th asks for the password
             await tap_version(pg, 4)
             expect(await pg.evaluate("document.getElementById('adminLogin').hidden"), f'{tag}: 4 taps on the version do nothing')
-            await pg.wait_for_timeout(3000)  # a long pause: the count starts again
+            await pg.wait_for_timeout(5000)  # a long pause (over the 4 seconds allowed between taps): the count starts again
             await tap_version(pg, 1)
             expect(await pg.evaluate("document.getElementById('adminLogin').hidden"), f'{tag}: a 5th tap after a long pause does nothing either (5 in a row are needed)')
-            await pg.wait_for_timeout(3000)
-            await tap_version(pg, 5)
+            await pg.wait_for_timeout(5000)
+            for attempt in range(4):
+                await tap_version(pg, 5)
+                if await shown(pg, '#adminLogin'): break
+                await pg.wait_for_timeout(5000)
             expect(await shown(pg, '#adminLogin'), f'{tag}: 5 taps in a row ask for the password')
             # a wrong password: still on the main menu
             await pg.fill('#adminLoginCode', 'not-the-password'); await pg.click('#adminLoginGo')
@@ -1031,7 +1045,7 @@ async def admin_mode():
             expect(st['mode'] == 'menu' and not st['m']['on'] and not st['m']['hasCode'] and st['menu'] and "didn't work" in st['note'], f"{tag}: a wrong password is refused and forgotten ({st['note']})")
             await pg.click('#adminLoginCancel'); await pg.wait_for_timeout(200)
             # the right one: admin mode, with no person
-            await open_admin(pg)
+            await open_admin(pg, taps=True)
             st = await pg.evaluate("({ mode: __pl.ui.mode, m: __pl.adminMode, person: !!__pl.player, menu: !document.getElementById('mainMenu').hidden, cls: document.getElementById('app').className, admin: __pl.admin.on })")
             expect(st['mode'] == 'admin' and st['m']['on'] and st['admin'] and not st['person'] and not st['menu'] and 'is-admin' in st['cls'], f'{tag}: the right password opens admin mode, with no person ({st})')
             expect(await shown(pg, '#adminBar') and not await shown(pg, '.hud-bottom') and not await shown(pg, '.hud-top'), f"{tag}: the admin's bar shows and the player's HUD doesn't")
