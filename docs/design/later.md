@@ -11,7 +11,7 @@
 - Walking to the pond (0.3.4): the shore point must be dry ground walking allows (pondShape at least 0.9), or the walk to drink or fish could get stuck with Can't get there.
 
 ## From the whole-game check before public testing (24 Nov 2026): not done, for Luke to decide
-Fixed on this branch (see docs/design/code.md): things that aren't in the world, names and chat nobody can read, names every object has. Left as they are, smallest first:
+Fixed and published that morning (see docs/design/code.md): things that aren't in the world, names and chat nobody can read, names every object has. Left as they are, smallest first:
 - A campfire can be put in the pond or inside a tree by a changed game (the server checks distance, claims and other placed things, not the land). Looks only.
 - Building and cooking take time in the game but the server doesn't time them, so a changed game could skip the wait.
 - A rock can be mined "as a boulder" and a boulder "as a rock" (the game says which; the server doesn't know which rocks are boulders). A boulder mined as a rock vanishes for everyone until rocks come back (one every 4 hours). Fix: the layout carries which rocks are boulders.
