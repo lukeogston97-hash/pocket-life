@@ -476,10 +476,9 @@ function forgetSit() {
 function placedActions(th) {
   const P = PLACEABLES[th.kind], name = P.name.toLowerCase();
   const walkHere = { label: 'Walk here', foot: true, run: () => walkFirst(V(th.x + P.solid + 0.8, 0, th.z)) };
-  const adminRemove = adminMore(adminPlacedActions(th));
   if (!th.built) {
     return [{ label: `Build ${name}`, note: `${P.buildSeconds} s`, run: () => queueTask({ type: 'build', id: th.id }) },
-      { label: `Pick up ${name}`, note: 'Not built yet', run: () => queueTask({ type: 'unplace', id: th.id }) }, ...adminRemove, walkHere];
+      { label: `Pick up ${name}`, note: 'Not built yet', run: () => queueTask({ type: 'unplace', id: th.id }) }, walkHere];
   }
   const out = [];
   const F = P.fire, lit = !!F && isLit(th);
@@ -512,7 +511,6 @@ function placedActions(th) {
     out.push({ label: 'Pack up', disabled: heavy, note: heavy ? 'Too heavy' : F && fuelLeft(th) > 0 ? 'Fuel left is lost' : 'Into your inventory', run: () => queueTask({ type: 'unplace', id: th.id }) });
     out.push({ label: 'Take apart', note: takeApartNote(th), run: () => queueTask({ type: 'apart', id: th.id }) });
   }
-  out.push(...adminRemove);
   out.push({ label: 'Inspect', foot: true, run: () => showTag(fireState(th) || P.name, V(th.x, groundY(th.x, th.z) + 1.1, th.z), 2, 5) }, walkHere);
   return out;
 }
@@ -563,7 +561,7 @@ const claimOn = (th) => !!th.claim && isLit(th);
 const claimName = (th) => (th.claim.who === net.myId ? 'Your claim' : `${th.claim.name}'s claim`);
 const claimAt = (x, z) => { for (const th of placed.values()) if (claimOn(th) && Math.hypot(th.x - x, th.z - z) <= CLAIMS.radius) return th; return null; };
 // someone else's claim at x, z (the admin can do anything anywhere)
-const notMineAt = (x, z) => { if (admin.on) return null; const c = claimAt(x, z); return c && c.claim.who !== net.myId ? c : null; };
+const notMineAt = (x, z) => { const c = claimAt(x, z); return c && c.claim.who !== net.myId ? c : null; };
 // placing a campfire: would lighting it there claim the land? { ok, text } (the server has the final say)
 function claimHere(x, z) {
   const all = [...placed.values()].filter(claimOn);

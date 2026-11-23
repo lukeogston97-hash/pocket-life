@@ -1,42 +1,24 @@
-/* ---------- the admin player (Luke) ----------
-   Type "/admin" and the code in the Say box once; the phone remembers it. "/admin off" forgets it.
-   The code itself is a Cloudflare secret (ADMIN_CODE), so it never sits in the game's files.
-   Menu > Admin opens the Admin panel, with tabs: Server (maintenance, messages, speed), Players (find someone and
-   open their page), Inbox (feedback and reports), World (counts, regrow, clear, restore an earlier time, reset the world or everything) and Settings (live numbers).
-   Single things are moved, regrown and removed from their own tap menus, under Admin. */
-const ADMIN_KEY = 'pocket-life:admin', ADMIN_TAG_KEY = 'pocket-life:adminTag';
-const admin = { on: false, code: '', tag: true, maintenance: false, message: '', live: [] };
-try { admin.code = localStorage.getItem(ADMIN_KEY) || ''; admin.tag = localStorage.getItem(ADMIN_TAG_KEY) !== 'off'; } catch (err) { /* none */ }
+/* ---------- the admin's tools (Luke) ----------
+   The admin is not a person: admin mode is opened from the main menu (5 taps on the version number, then the password)
+   and watches the world with a free camera (game/admin-mode.js). Nobody playing can be the admin, and there is no
+   /admin in the Say box any more (23 Nov 2026). The password is a Cloudflare secret (ADMIN_CODE): it never sits in the
+   game's files and is never kept on the device.
+   This file holds the admin's tools and what the server tells everyone (announcements, being removed, resets). */
+// Before 23 Nov 2026 the admin code was kept on the phone that typed /admin. It isn't any more: any copy left behind is deleted.
+try { localStorage.removeItem('pocket-life:admin'); localStorage.removeItem('pocket-life:adminTag'); } catch (err) { /* none */ }
+const admin = { on: false, maintenance: false, message: '', live: [] }; // on: admin mode is open (adminMode.on) and the server has said yes
 const adminSend = (msg) => { if (online()) net.sock.send(JSON.stringify(msg)); else showTag("You're offline", headTop(), 2); };
-const tagText = (name, badge) => (badge ? `${name} · Admin` : name);
-function adminCommand(arg) {
-  if (/^off$/i.test(arg)) {
-    try { localStorage.removeItem(ADMIN_KEY); } catch (err) { /* none */ }
-    admin.code = ''; admin.on = false; drawAdmin();
-    showTag('Admin off on this phone', headTop(), 2.5);
-    if (net.sock) net.sock.close(); // rejoin as a normal player
-    return;
-  }
-  if (!arg) { showTag(admin.on ? 'You are the admin' : 'Type /admin and your code', headTop(), 2.5); return; }
-  admin.code = arg;
-  if (online()) net.sock.send(JSON.stringify({ t: 'adminLogin', code: arg }));
-  else showTag("You're offline, try again when the dot is green", headTop(), 2.5);
-}
 function adminMessage(m) {
-  if (m.t === 'admin' || m.t === 'adminDone') {
+  if (m.t.startsWith('admin') && !adminMode.on) return; // admin news only means something while admin mode is open
+  if (m.t === 'admin') { // the admin's numbers: sent on the way in, and as every tool's answer (with a few words in text)
     const was = admin.on;
-    Object.assign(admin, { on: true, tag: m.tag, maintenance: m.maintenance, message: m.message || '' });
+    Object.assign(admin, { on: true, maintenance: m.maintenance, message: m.message || '' });
     if (m.usage) admin.usage = m.usage;
     if (m.live) admin.live = m.live;
     if ('speed' in m) timeSpeed = m.speed && m.speed.until > Date.now() ? m.speed : null;
-    try { localStorage.setItem(ADMIN_KEY, admin.code); } catch (err) { /* full */ }
     drawAdmin();
-    if (!was) { showTag('Admin on. Open the Menu for admin tools', headTop(), 3); adminSend({ t: 'a.list' }); } // (the list: for the Inbox count on the Admin button)
+    if (!was) adminSend({ t: 'a.list' }); // (the list: for the Inbox count)
     if (m.text) showTag(m.text, headTop(), 2.5);
-  } else if (m.t === 'adminNo') {
-    try { localStorage.removeItem(ADMIN_KEY); } catch (err) { /* none */ }
-    admin.code = ''; admin.on = false; drawAdmin();
-    showTag("That code didn't work", headTop(), 2.5);
   } else if (m.t === 'adminList') { inboxData = m; drawInbox(); }
   else if (m.t === 'adminPlayers') { playersData = m; drawPlayers(); }
   else if (m.t === 'adminPlayer') { playerData = m; if (adminTab === 'player') drawPlayer(); }
@@ -45,7 +27,6 @@ function adminMessage(m) {
     if (player && ui.mode === 'world') showTag(m.list === 'reports' ? 'New report in your Inbox' : 'New feedback in your Inbox', headTop(), 3);
   }
   else if (m.t === 'announce') announce(m.text);
-  else if (m.t === 'badge') { const o = others.get(m.id); if (o) { o.badge = m.on; drawTag(o); } }
   else if (m.t === 'kicked' || m.t === 'banned') {
     net.stopped = true;
     showMaintenance(m.t === 'kicked' ? 'You were removed from the world by the admin. Reload the page to join again.' : "You can't join this world.",
@@ -235,7 +216,6 @@ function drawAdmin() {
   $('adminMaintState').textContent = admin.maintenance ? 'On: release-link players see Back soon' : 'Off';
   $('adminMaintBtn').textContent = admin.maintenance ? 'Turn off' : 'Turn on';
   if (document.activeElement !== $('adminMaintText')) $('adminMaintText').value = admin.message || '';
-  $('adminTagBtn').textContent = admin.tag ? 'Admin tag: on' : 'Admin tag: off';
   // today's use of Cloudflare's free plan (it resets at 9:30 am Darwin time); past 80% shows red
   const u = admin.usage;
   if (u) {
@@ -269,12 +249,6 @@ function drawSpeed() {
 $('adminSpeedBtn').addEventListener('click', () => {
   const fast = timeSpeed && timeSpeed.until > Date.now();
   adminSend({ t: 'a.speed', x: fast ? 1 : speedPick.x, minutes: speedPick.mins });
-});
-$('adminTagBtn').addEventListener('click', () => {
-  admin.tag = !admin.tag;
-  try { localStorage.setItem(ADMIN_TAG_KEY, admin.tag ? 'on' : 'off'); } catch (err) { /* full */ }
-  adminSend({ t: 'a.tag', on: admin.tag });
-  drawAdmin();
 });
 
 /* ---------- Players tab: search by name, filters, tap someone for their page ---------- */

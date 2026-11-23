@@ -120,7 +120,7 @@
         <button id="menuSettingsBtn" type="button" class="menu-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Settings</button>
         <button id="menuFeedbackBtn" type="button" class="menu-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/></svg>Feedback</button>
       </div>
-      <div class="menu-foot"><span class="net-line" id="menuNet" data-state="connecting"><i class="net-dot" aria-hidden="true"></i><span id="menuNetText">Connecting…</span></span><span class="menu-ver">v<span class="ver"></span></span></div>
+      <div class="menu-foot"><span class="net-line" id="menuNet" data-state="connecting"><i class="net-dot" aria-hidden="true"></i><span id="menuNetText">Connecting…</span></span><span id="menuVer" class="menu-ver">v<span class="ver"></span></span></div>
     </div>
   </section>
 
@@ -212,7 +212,6 @@
           <div class="admin-chips" id="adminSpeedMins"></div>
           <button id="adminSpeedBtn" type="button" class="small-btn">Start</button>
         </div>
-        <button id="adminTagBtn" type="button" class="small-btn admin-wide">Admin tag: on</button>
       </div>
       <div class="admin-page" data-admin-page="players" hidden>
         <input id="adminFind" class="admin-input" maxlength="30" placeholder="Search by name" autocomplete="off">
@@ -265,6 +264,26 @@
       <div id="adminPickList" class="admin-list admin-pick-list"></div>
     </div>
   </div>
+
+  <div id="adminLogin" class="modal" hidden>
+    <form id="adminLoginForm" class="modal-card" role="dialog" aria-modal="true" aria-labelledby="adminLoginTitle" autocomplete="off">
+      <h2 id="adminLoginTitle">Admin</h2>
+      <p id="adminLoginNote">Enter the admin password.</p>
+      <label for="adminLoginCode" class="sr-only">Admin password</label>
+      <input id="adminLoginCode" class="admin-input" type="password" maxlength="100" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go">
+      <div class="modal-actions admin-login-actions">
+        <button id="adminLoginCancel" type="button" class="text-btn">Cancel</button>
+        <button id="adminLoginGo" type="submit" class="action-btn">Open</button>
+      </div>
+    </form>
+  </div>
+
+  <header id="adminBar" class="admin-bar" hidden>
+    <div class="admin-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>Admin</div>
+    <div class="admin-world glass"><span id="adminWorldName">Oceania</span><span id="adminWorldTime" class="admin-world-time"></span></div>
+    <div id="adminCountsBar" class="admin-stats glass" aria-live="polite"></div>
+    <button id="adminExit" type="button" class="admin-exit glass">Exit admin</button>
+  </header>
 
   <div id="announce" class="announce" hidden><span id="announceText"></span></div>
 
@@ -357,7 +376,7 @@ document.documentElement.style.visibility = '';
 // The game's code is kept in small files by topic (game/*.js, in this order). They share one scope, so they're
 // joined into one module here and run together, exactly as if they were one file.
 const PARTS = ['rules', 'core', 'land', 'nature', 'plants', 'world-build', 'items', 'people', 'world-items', 'you', 'needs',
-  'inventory', 'camera', 'moving', 'placeables', 'input', 'screens', 'loop', 'online', 'admin', 'others', 'start'];
+  'inventory', 'camera', 'moving', 'placeables', 'input', 'screens', 'loop', 'online', 'admin', 'others', 'admin-mode', 'start'];
 let code;
 try {
   code = await Promise.all(PARTS.map(async (p) => {

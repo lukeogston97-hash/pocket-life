@@ -975,7 +975,100 @@ async def admin_people():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people}
+CAM = "(() => { const c = __pl.controls; return { pan: c.enablePan, min: c.minDistance, max: c.maxDistance, lo: +c.minPolarAngle.toFixed(4), hi: +c.maxPolarAngle.toFixed(4), one: c.touches.ONE, two: c.touches.TWO, on: c.enabled }; })()"
+
+
+async def frames(pg, n, timeout=120000):
+    """Wait until the game has drawn n more frames. This computer draws the 3D world in software at about 1 to 2 frames a
+    second (measured 23 Nov 2026: the untouched main menu and admin mode alike), so checks count frames, never milliseconds."""
+    f0 = await pg.evaluate('window.__frames')
+    await pg.wait_for_function(f'window.__frames >= {f0 + n}', timeout=timeout)
+
+
+async def tap_version(pg, n):
+    """Tap the version number n times the way a person does: a finger on a phone, a mouse on a computer, one after another.
+    (pg.click waits for the page to settle before each one, which takes seconds on this computer's software 3D: not how anyone taps.)"""
+    x, y = await pg.evaluate("(() => { const r = document.getElementById('menuVer').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()")
+    touch = await pg.evaluate("'ontouchstart' in window")
+    for _ in range(n):
+        if touch: await pg.touchscreen.tap(x, y)
+        else: await pg.mouse.click(x, y)
+    await pg.wait_for_timeout(400)
+
+
+async def open_admin(pg, code='secret123456'):
+    """From the main menu: 5 taps on the version number, then the password. Returns once the server has answered."""
+    await tap_version(pg, 5)
+    await pg.wait_for_function("!document.getElementById('adminLogin').hidden", timeout=5000)
+    await pg.fill('#adminLoginCode', code); await pg.click('#adminLoginGo')
+    await pg.wait_for_function("!__pl.adminMode.asking", timeout=8000)
+    await pg.wait_for_timeout(300)
+
+
+async def admin_mode():
+    """Admin mode: 5 taps on the version number and the password, no person, a free camera over the live world, and Exit puts everything back. On a phone and a computer."""
+    async with world() as W:
+        for tag, (w, h) in {'phone': (390, 844), 'pc': (1440, 900)}.items():
+            pg = await W.page(f'adm-{tag}', w, h)
+            # a password an older build left on the device is deleted, and nothing keeps one now
+            await pg.evaluate("localStorage.setItem('pocket-life:admin', 'old-code-left-behind'); localStorage.setItem('pocket-life:adminTag', 'on')")
+            await pg.reload(); await pg.wait_for_function('window.__frames >= 3', timeout=180000); await pg.wait_for_timeout(1500)
+            expect(await pg.evaluate("localStorage.getItem('pocket-life:admin') === null && localStorage.getItem('pocket-life:adminTag') === null"), f'{tag}: an old password left on the device is deleted')
+            before = await pg.evaluate(CAM)
+            # 4 taps do nothing; the 5th asks for the password
+            await tap_version(pg, 4)
+            expect(await pg.evaluate("document.getElementById('adminLogin').hidden"), f'{tag}: 4 taps on the version do nothing')
+            await pg.wait_for_timeout(3000)  # a long pause: the count starts again
+            await tap_version(pg, 1)
+            expect(await pg.evaluate("document.getElementById('adminLogin').hidden"), f'{tag}: a 5th tap after a long pause does nothing either (5 in a row are needed)')
+            await pg.wait_for_timeout(3000)
+            await tap_version(pg, 5)
+            expect(await shown(pg, '#adminLogin'), f'{tag}: 5 taps in a row ask for the password')
+            # a wrong password: still on the main menu
+            await pg.fill('#adminLoginCode', 'not-the-password'); await pg.click('#adminLoginGo')
+            await pg.wait_for_function("!__pl.adminMode.asking", timeout=8000); await pg.wait_for_timeout(300)
+            st = await pg.evaluate("({ mode: __pl.ui.mode, m: __pl.adminMode, note: document.getElementById('adminLoginNote').textContent, menu: !document.getElementById('mainMenu').hidden })")
+            expect(st['mode'] == 'menu' and not st['m']['on'] and not st['m']['hasCode'] and st['menu'] and "didn't work" in st['note'], f"{tag}: a wrong password is refused and forgotten ({st['note']})")
+            await pg.click('#adminLoginCancel'); await pg.wait_for_timeout(200)
+            # the right one: admin mode, with no person
+            await open_admin(pg)
+            st = await pg.evaluate("({ mode: __pl.ui.mode, m: __pl.adminMode, person: !!__pl.player, menu: !document.getElementById('mainMenu').hidden, cls: document.getElementById('app').className, admin: __pl.admin.on })")
+            expect(st['mode'] == 'admin' and st['m']['on'] and st['admin'] and not st['person'] and not st['menu'] and 'is-admin' in st['cls'], f'{tag}: the right password opens admin mode, with no person ({st})')
+            expect(await shown(pg, '#adminBar') and not await shown(pg, '.hud-bottom') and not await shown(pg, '.hud-top'), f"{tag}: the admin's bar shows and the player's HUD doesn't")
+            stored = await pg.evaluate("JSON.stringify(Object.fromEntries(Object.entries(localStorage))) + JSON.stringify(Object.fromEntries(Object.entries(sessionStorage)))")
+            expect('secret123456' not in stored, f'{tag}: the password is not kept on the device')
+            # the world is live underneath
+            f0 = await pg.evaluate('window.__frames'); await frames(pg, 4, 60000)
+            expect(await pg.evaluate('window.__frames') >= f0 + 4, f'{tag}: the world keeps being drawn (4 more frames)')
+            if tag == 'pc':  # keys: W slides the view, Q turns it
+                t0 = await pg.evaluate('[__pl.controls.target.x, __pl.controls.target.z, __pl.camera.position.x, __pl.camera.position.z]')
+                fwd0 = await pg.evaluate("(() => { const c = __pl.controls.target, p = __pl.camera.position, d = Math.hypot(c.x - p.x, c.z - p.z); return [(c.x - p.x) / d, (c.z - p.z) / d]; })()")
+                await pg.keyboard.down('KeyW'); await frames(pg, 14); await pg.keyboard.up('KeyW'); await frames(pg, 12)  # (then let it glide to a stop)
+                t1 = await pg.evaluate('[__pl.controls.target.x, __pl.controls.target.z, __pl.camera.position.x, __pl.camera.position.z]')
+                along = (t1[0] - t0[0]) * fwd0[0] + (t1[1] - t0[1]) * fwd0[1]
+                side = abs((t1[0] - t0[0]) * -fwd0[1] + (t1[1] - t0[1]) * fwd0[0])
+                expect(along > 1 and side < along * 0.2, f'pc: holding W slides the view forward, the way the camera faces ({along:.1f} m forward, {side:.1f} m sideways)')
+                await pg.keyboard.down('KeyQ'); await frames(pg, 14); await pg.keyboard.up('KeyQ'); await frames(pg, 12)
+                t2 = await pg.evaluate('[__pl.controls.target.x, __pl.controls.target.z, __pl.camera.position.x, __pl.camera.position.z]')
+                turned = ((t2[2] - t2[0] - (t1[2] - t1[0])) ** 2 + (t2[3] - t2[1] - (t1[3] - t1[1])) ** 2) ** 0.5
+                stayed = ((t2[0] - t1[0]) ** 2 + (t2[1] - t1[1]) ** 2) ** 0.5
+                expect(turned > 1 and stayed < 0.5, f'pc: holding Q turns the view round the spot it looks at ({turned:.1f} m swing, the spot moved {stayed:.2f} m)')
+            # Exit: the main menu again, the password forgotten, the camera as a player has it
+            await pg.click('#adminExit'); await pg.wait_for_timeout(1200)
+            st = await pg.evaluate("({ mode: __pl.ui.mode, m: __pl.adminMode, menu: !document.getElementById('mainMenu').hidden, cls: document.getElementById('app').className, admin: __pl.admin.on })")
+            expect(st['mode'] == 'menu' and not st['m']['on'] and not st['m']['hasCode'] and not st['admin'] and st['menu'] and 'is-admin' not in st['cls'], f'{tag}: Exit admin goes back to the main menu and forgets the password ({st})')
+            after = await pg.evaluate(CAM)
+            expect(after == before, f"{tag}: the camera is as a player has it again ({after})")
+            # and playing afterwards is ordinary: a person, no admin
+            await join(pg)
+            st = await pg.evaluate("({ mode: __pl.ui.mode, person: !!__pl.player, admin: __pl.admin.on, m: __pl.adminMode })")
+            expect(st['mode'] == 'world' and st['person'] and not st['admin'] and not st['m']['on'], f'{tag}: playing afterwards is ordinary, not the admin ({st})')
+            expect(not await shown(pg, '#adminBar') and await shown(pg, '.hud-bottom'), f"{tag}: the player's HUD is back and the admin's bar is gone")
+            await pg.close()
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

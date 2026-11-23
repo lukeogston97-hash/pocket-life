@@ -43,7 +43,13 @@ function goOnline() {
     else if (m.t === 'update') getUpdate(m.min);
     else if (m.t === 'maintenance') showMaintenance(m.text);
     else if (m.t === 'thanks') showTag('Thanks for the feedback!', headTop(), 2.5);
-    else if (m.t.startsWith('admin') || ['announce', 'kicked', 'banned', 'badge', 'reset', 'restoring'].includes(m.t)) adminMessage(m);
+    else if (m.t === 'adminNo') adminLoginAnswer(false); // the admin password wasn't accepted (admin-mode.js)
+    else if (m.t.startsWith('admin') || ['announce', 'kicked', 'banned', 'reset', 'restoring'].includes(m.t)) {
+      // 'admin' is both the answer to the password and what every admin tool answers with. It only lets you in while the
+      // password is being checked: a late answer arriving after Exit admin must never put the game back into admin mode.
+      if (m.t === 'admin' && adminMode.asking) adminLoginAnswer(true);
+      adminMessage(m);
+    }
     else if (m.t === 'slow') { menuJoining = false; if (ui.mode === 'menu') drawMenu(); showTag('Slow down a little', headTop(), 2); }
     else if (m.t === 'reported') showTag(m.ok ? 'Thanks, your report was sent' : "They've left, so it couldn't be sent", headTop(), 2.5);
     else if (m.t === 'welcome') welcome(m);
@@ -142,9 +148,10 @@ function welcome(m) {
   for (const id of [...others.keys()]) removeOther(id);
   for (const p of m.people || []) addOther(p);
   if (m.watch) { // watching from the main menu (or waiting in line because the world is full)
-    if (m.world) useSharedWorld(m.world);
+    if (m.world) { useSharedWorld(m.world); if (m.needLayout) sendLayout(); } // (the admin's game is asked for the layout once per build)
     menuYours = m.yours || null;
     menuLine = m.line || 0;
+    if (adminMode.on) return; // admin mode rejoined after a break in the connection: it stays as it was
     if (ui.mode !== 'menu') { dropPlayer(); enterMenu(); }
     menuJoining = false;
     if (menuLine) net.mode = 'play'; // still wanting to play: the server calls us in when there's a spot
@@ -353,7 +360,7 @@ function showMaintenance(text, title = 'Back soon', note = 'Your person is safe.
   showJoining(false);
   $('maintTitle').textContent = title;
   $('maintNote').textContent = note;
-  $('adminPanel').hidden = true; $('adminPick').hidden = true;
+  $('adminPanel').hidden = true; $('adminPick').hidden = true; closeAdminLogin();
   closeFeedback(); closeReport(); closeSay(); closeMenu(); $('pause').hidden = true;
   paused = true; // needs don't drain while the world is closed
   $('maintText').textContent = text || 'Pocket Life is being updated. It will be back in a few minutes.';
