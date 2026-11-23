@@ -760,7 +760,7 @@ async def bagdrag():
         expect(await a.evaluate("document.getElementById('bag').classList.contains('open')"), 'the bag is open again after a drop')
 
 async def glow():
-    """A mouse over a loose item or a campfire gives it a faint outline; moving away takes it off."""
+    """A mouse over a loose item gives it a faint outline, a campfire gets none; moving away takes it off."""
     async with world({}, FISHKIT=1) as W:
         a = await W.page('glow'); await join(a)
         scr = """(([x, y, z]) => { const v = new __pl.THREE.Vector3(x, y, z).project(__pl.camera), r = document.getElementById('world').getBoundingClientRect();
@@ -775,7 +775,7 @@ async def glow():
         fire = await a.evaluate(f"({scr})([{spot[0]}, 0.3, {spot[1]}])")
         await a.mouse.move(fire[0], fire[1], steps=4); await a.wait_for_timeout(500)
         fid = await a.evaluate('[...__pl.placed.keys()][0]')
-        expect(await a.evaluate(f'__pl.glowOn === __pl.placed.get({fid}).view'), 'the campfire glows under the mouse')
+        expect(await a.evaluate('__pl.glowOn === null'), 'a campfire doesn\'t glow (only loose items do)')
         it = await a.evaluate("""(() => { const p = __pl.player.position; let b = null, bd = 1e9;
           for (const it of __pl.world.items) { const d = Math.hypot(it.x - p.x, it.z - p.z); if (d < bd) { bd = d; b = it; } } return b && [b.id, b.x, b.z]; })()""")
         pt = await a.evaluate(f"({scr})(((v) => [v.x, v.y, v.z])(__pl.itemViews.get({it[0]}).position))")
