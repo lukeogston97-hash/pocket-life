@@ -10,7 +10,7 @@ const admin = { on: false, maintenance: false, message: '', live: [] }; // on: a
 // what a tool answers, and short notes: a line under the admin's bar (a note out in the world could sit behind a panel)
 let adminToastTimer = null;
 function adminSay(text, secs = 2.8) {
-  if (!adminMode.on) { showTag(text, headTop(), secs); return; }
+  if (!adminMode.on) { showTag(text, headTop(), 3); return; } // (a player hears some of this too, like a reset: a note in the world, as before)
   $('adminToast').textContent = text;
   $('adminToast').hidden = false;
   clearTimeout(adminToastTimer);
@@ -42,7 +42,7 @@ function adminMessage(m) {
       m.t === 'kicked' ? 'Removed' : 'Not allowed', '');
   } else if (m.t === 'reset') {
     if (m.all) { stopQueue(); outbox.length = 0; } // your person is gone too: nothing left to do or send
-    showTag(m.all ? 'Everything was reset' : 'The world was reset', headTop(), 3);
+    adminSay(m.all ? 'Everything was reset' : 'The world was reset', 4);
   } else if (m.t === 'adminRestore') restoreAnswer(m);
   else if (m.t === 'restoring') { // the admin is restoring the world: it restarts in a moment and everyone rejoins where the server has them
     stopQueue(); outbox.length = 0; net.restored = true;

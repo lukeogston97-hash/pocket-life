@@ -149,6 +149,7 @@ function welcome(m) {
   for (const p of m.people || []) addOther(p);
   if (m.watch) { // watching from the main menu (or waiting in line because the world is full)
     if (m.world) { useSharedWorld(m.world); if (m.needLayout) sendLayout(); } // (the admin's game is asked for the layout once per build)
+    else if (m.needSeed) seedWorld(); // admin mode and there's no world (it was just reset): the admin's game lays it out, as the first player back would
     menuYours = m.yours || null;
     menuLine = m.line || 0;
     if (adminMode.on) return; // admin mode rejoined after a break in the connection: it stays as it was

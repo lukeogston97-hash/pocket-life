@@ -477,19 +477,19 @@ async def admin_tools():
 
 
 async def reset_all():
-    """Admin, Reset everything: every person, their past people, the Inbox and the world go, settings stay, everyone starts again."""
+    """Reset everything, from admin mode: every person, their past people, the Inbox and the world go, settings stay, everyone playing starts again, the admin stays in admin mode and the new world is laid out straight away."""
     keys = "() => new Promise((done) => { const keep = window.__sock, s = new WebSocket(keep.url); s.onopen = () => { s.send(JSON.stringify({ t: '__keys' })); window.__sock = keep; }; s.onmessage = (e) => { const m = JSON.parse(e.data); if (m.t === '__keys') { s.close(); done(m.keys); } }; })"
     has = lambda ks, start: [k for k in ks if k == start or (start.endswith(':') and k.startswith(start))]
     async with world() as W:
         b = await W.page('resetB'); await join(b)
-        a = await W.page('resetA'); await join(a)
-        await a.click('#sayBtn'); await a.fill('#sayInput', '/admin secret123456'); await a.press('#sayInput', 'Enter'); await a.wait_for_timeout(800)
-        await a.mouse.click(195, 300); await a.wait_for_timeout(300)
+        c = await W.page('resetC'); await join(c)  # someone who is playing when it happens
+        a = await W.page('resetA'); await open_admin(a)  # the admin is not a person
         send = "(m) => window.__sock.send(JSON.stringify(m))"
+        in_admin = lambda: a.evaluate("__pl.ui.mode === 'admin' && __pl.adminMode.on && !__pl.player && document.getElementById('creator').hidden && document.getElementById('mainMenu').hidden")
         # things a reset should clear: a note in the Inbox, a log on the ground, a person who left (a past person)
         await b.evaluate(f"({send})({{ t: 'feedback', text: 'a note before the reset', v: '0' }})")
         bid = await b.evaluate('__pl.net.myId')
-        await a.evaluate(f"({send})({{ t: 'a.add', kind: 'log', n: 3, x: __pl.player.position.x + 2, z: __pl.player.position.z }})")
+        await a.evaluate(f"({send})({{ t: 'a.add', kind: 'log', n: 3, x: 6, z: 8 }})")
         await a.evaluate(f"({send})({{ t: 'a.live', id: 'maxPlaying', value: 7 }})")  # a setting: this one stays
         await a.evaluate(f"({send})({{ t: 'a.mute', who: 'someone', on: true }})")  # a mute: this one goes
         await b.context.close(); await a.wait_for_timeout(1000)  # B leaves (only someone away can be removed)
@@ -498,28 +498,40 @@ async def reset_all():
         before = await a.evaluate(keys)
         expect(has(before, 'p:') and has(before, 'past:') and has(before, 'feedback') and has(before, 'live') and has(before, 'world'), f'before: people, a past person, a note and a setting are stored ({sorted(set(k.split(":")[0] for k in before))})')
         expect(await a.evaluate("__pl.world.items.filter((it) => it.kind === 'log').length") == 3, 'and 3 logs lie on the ground')
-        await a.click('#menuBtn'); await a.click('#pauseAdminBtn'); await a.wait_for_timeout(400)
+        await a.click('#adminDashBtn'); await a.wait_for_timeout(400)
         await a.click('[data-admin-tab="world"]'); await a.wait_for_timeout(400)
         tap = "document.getElementById('adminResetAllBtn').click()"
         await a.evaluate(f'{tap}; {tap}'); await a.wait_for_timeout(1200)  # a double tap by mistake
-        expect(await a.evaluate('!!__pl.player') and has(await a.evaluate(keys), 'p:'), 'a double tap by mistake resets nothing')
+        expect(await in_admin() and has(await a.evaluate(keys), 'p:') and await c.evaluate('!!__pl.player'), 'a double tap by mistake resets nothing')
         expect('Tap again' in await text(a, '#adminResetAllBtn'), 'the button asks for a second tap')
-        await a.evaluate(tap)  # the second tap that counts
-        await a.wait_for_function("!document.getElementById('creator').hidden", timeout=30000); await a.wait_for_timeout(1500)
-        expect(await a.evaluate('!__pl.player'), 'after the second tap your person is gone and you make a new one')
+        # The button only stays ready for a few seconds. The looks above take longer than that on this computer (the first
+        # run of this check missed it and never reset anything), so wait for it to go back to normal, then tap twice on
+        # purpose with nothing in between: once, a pause of over a second, and again.
+        await a.wait_for_function("!document.getElementById('adminResetAllBtn').textContent.includes('Tap again')", timeout=20000)
+        await a.evaluate(f"(async () => {{ {tap}; await new Promise((r) => setTimeout(r, 1300)); {tap}; }})()")
+        await c.wait_for_function("!document.getElementById('creator').hidden", timeout=60000)
+        expect(await c.evaluate('!__pl.player'), "after the second tap, someone who was playing has no person and makes a new one")
+        # the admin's connection is dropped with everyone's and comes back by itself, still the admin, with the password it holds
+        await a.wait_for_function("__pl.net.myId && __pl.admin.on", timeout=60000); await a.wait_for_timeout(2500)
+        expect(await in_admin(), 'the admin is still in admin mode afterwards, with no person (not sent to make one)')
         after = await a.evaluate(keys)
         expect(not has(after, 'p:') and not has(after, 'past:') and not has(after, 'feedback') and not has(after, 'reports'), f'no people, past people or Inbox left ({sorted(after)})')
         expect(has(after, 'live'), 'the settings stay')
         admin = await a.evaluate(keys.replace("{ t: '__keys' }", "{ t: '__keys', get: 'admin' }").replace('done(m.keys)', 'done(m.value)'))
         expect(admin and not admin['muted'] and not admin['banned'], f'bans and mutes are cleared ({admin})')
-        await b.wait_for_function("!document.getElementById('creator').hidden", timeout=30000)
+        await b.wait_for_function("!document.getElementById('creator').hidden", timeout=60000)
         expect(True, 'the other player makes a new person too')
-        await a.click('.start-btn')
-        await a.wait_for_function("document.getElementById('mainMenu').hidden && !document.getElementById('app').classList.contains('is-creating')", timeout=30000); await a.wait_for_timeout(1500)
-        expect(await a.evaluate('!!__pl.player'), 'a new person starts in the new world')
-        expect(await a.evaluate("__pl.world.items.filter((it) => it.kind === 'log').length") == 0, 'the world is fresh (the logs are gone)')
-        expect(await a.evaluate('__pl.world.items.length') > 0, 'and laid out again')
+        # nobody has started a new person yet: the admin's own game has laid the new world out, so the admin isn't left looking at the old one
+        expect(has(after, 'world'), "the new world is laid out straight away (by the admin's game), before any player comes back")
+        expect(await a.evaluate("__pl.world.items.filter((it) => it.kind === 'log').length") == 0, "the admin sees the fresh world (the logs are gone)")
+        expect(await a.evaluate('__pl.world.items.length') > 0, 'and it is laid out again')
+        expect(len(has(await a.evaluate(keys), 'p:')) == 0, 'nobody is stored yet')
+        await c.click('.start-btn')
+        await c.wait_for_function("document.getElementById('mainMenu').hidden && !document.getElementById('app').classList.contains('is-creating')", timeout=60000); await c.wait_for_timeout(1500)
+        expect(await c.evaluate('!!__pl.player'), 'a new person starts in the new world')
+        expect(await c.evaluate("__pl.world.items.filter((it) => it.kind === 'log').length") == 0 and await c.evaluate('__pl.world.items.length') > 0, 'and they see the same fresh world')
         expect(len(has(await a.evaluate(keys), 'p:')) == 1, 'one person stored: the new one')
+        expect(await in_admin(), 'the admin is still in admin mode at the end')
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 

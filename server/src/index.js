@@ -212,7 +212,10 @@ export class World extends DurableObject {
     if (m.t === 'bye') { try { ws.close(1000, 'bye'); } catch (err) { /* gone */ } this.webSocketClose(ws); return; }
     if (!me.id) return;
     const isAdmin = this.isAdmin(me);
-    if (me.watch && m.t !== 'feedback' && !(isAdmin && (m.t.startsWith('a.') || m.t === 'layout'))) return; // on the main menu: only watching the world (the admin: their tools, and the layout)
+    // on the main menu: only watching the world. The admin (who also only watches) can use their tools, and their game can
+    // send the layout and lay out a brand new world: after a reset there may be no player about to do it, and the admin
+    // would be looking at what's left of the old one.
+    if (me.watch && m.t !== 'feedback' && !(isAdmin && (m.t.startsWith('a.') || m.t === 'layout' || m.t === 'seed'))) return;
     if (!allowed(ws, me, m.t)) {
       if (m.t === 'take') reply({ t: 'took', id: m.id, ok: false });
       else if (m.t === 'pick') reply({ t: 'picked', bush: m.bush, ok: false });
@@ -259,7 +262,7 @@ export class World extends DurableObject {
       this.attach(ws, me);
       const p = this.persons.get(who);
       reply({ t: 'welcome', watch: true, id: me.id, people: this.people(null), world: this.view(), count: this.playing(), speed: this.speed, live: this.live,
-        yours: this.alive(p) ? { name: p.name, age: ageOf(p) } : null, line: full ? this.placeOf(ws) : 0, needLayout: isAdmin && this.needLayout(me) });
+        yours: this.alive(p) ? { name: p.name, age: ageOf(p) } : null, line: full ? this.placeOf(ws) : 0, needLayout: isAdmin && this.needLayout(me), needSeed: isAdmin && !this.world });
       if (isAdmin) reply(this.adminState(me)); // admin mode is on: the panels get their numbers
       if (full) this.callLine();
       return;
