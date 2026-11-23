@@ -1,5 +1,5 @@
 {
-  "version": "0.1.1",
+  "version": "0.1.2",
   "build": 1,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
@@ -909,6 +909,13 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.1.2",
+      "date": "2026-11-23",
+      "notes": [
+        "Tidier link: the bit added after an update (like ?v=0.3.8.1.50991) is taken out of the address."
+      ]
+    },
     {
       "version": "0.1.1",
       "date": "2026-11-23",
