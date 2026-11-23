@@ -440,7 +440,8 @@ button.craft-head { padding: 0; border: 0; background: none; color: inherit; fon
 .admin-world-time { font-weight: 700; font-size: 12.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 .admin-stats { gap: 14px; font-weight: 700; font-size: 12.5px; }
 .admin-stats:empty { display: none; }
-.admin-exit { height: 40px; padding: 0 15px; border-radius: 999px; color: var(--ink); font: 700 13px/1 var(--font-ui); cursor: pointer; }
+.admin-exit { display: flex; align-items: center; gap: 7px; height: 40px; padding: 0 15px; border-radius: 999px; color: var(--ink); font: 700 13px/1 var(--font-ui); cursor: pointer; }
+.admin-exit svg { display: none; width: 20px; height: 20px; flex: none; }
 .admin-dash { margin-left: auto; }
 .admin-dash[aria-expanded="true"] { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
 /* what a tool answers ("Gave Mia 5", "Moved"): a line under the bar, always in view (a note in the world could sit behind a panel) */
@@ -454,6 +455,15 @@ button.craft-head { padding: 0; border: 0; background: none; color: inherit; fon
 .admin-dock .bag-head { margin: 0 0 8px; }
 .admin-grab { display: none; }
 @media (max-width: 700px) {
+  /* a phone: one row along the top. The two buttons become round icon buttons like the game's own, the clock goes, and
+     the counts go (the Players tab shows them on its chips), so as much of the world as possible stays in view. */
+  .admin-bar { flex-wrap: nowrap; }
+  .admin-stats, .admin-world-time { display: none; }
+  .admin-world { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .admin-exit { width: 44px; height: 44px; padding: 0; justify-content: center; flex: none; }
+  .admin-exit svg { display: block; }
+  .admin-exit span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .admin-pill, .admin-world { height: 44px; }
   .admin-dock { left: 0; right: 0; top: auto; bottom: 0; width: auto; max-width: none; height: 58%; padding: 6px 12px calc(12px + env(safe-area-inset-bottom, 0px)); border-radius: 18px 18px 0 0; border-bottom: 0; }
   .admin-grab { display: block; }
 }
