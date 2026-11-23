@@ -16,6 +16,15 @@ export const natureMethods = {
       reply({ t: 'broke', kind: tool });
     }
   },
+  // the pond's fish are shared (0.3.4): w.pond = { fish, at }; one comes back every regrowMinutes, worked out when someone fishes
+  pondFish(F, now = Date.now()) {
+    const w = this.world, per = (F.regrowMinutes || 60) * 60000, max = F.holds || 10;
+    let f = w.pond ? w.pond.fish : max, at = w.pond ? w.pond.at : now;
+    if (f >= max) { f = max; at = now; }
+    else { const n = Math.floor((now - at) / per); if (n > 0) { f = Math.min(max, f + n); at = f >= max ? now : at + n * per; } }
+    w.pond = { fish: f, at };
+    return f;
+  },
   berriesOn(i, t = Date.now()) {
     const w = this.world, b = w.bushes[i] || [null, null];
     if ((w.removed || {})[`bush:${i}`]) return 0; // the admin took this bush out

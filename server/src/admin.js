@@ -217,6 +217,7 @@ export const adminMethods = {
         w.nextRockBack = 0;
         w.bushes = [];
         w.plants = {};
+        delete w.pond; // the pond is full of fish again
         this.topUp();
         await everyoneSees();
         return done('Everything grown back');

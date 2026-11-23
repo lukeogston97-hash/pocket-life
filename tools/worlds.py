@@ -68,6 +68,9 @@ def problems(d):
         counts(s.get('harvest'), f'{w}.harvest'); counts(s.get('toolHarvest'), f'{w}.toolHarvest')
         for x in (s.get('gives') or {}): known(x, f'{w}.gives', stats, 'need')
         if s.get('tool') is not None: known(s['tool'], f'{w}.tool')
+        if s.get('fish'):
+            known(s['fish'].get('tool'), f'{w}.fish.tool'); known(s['fish'].get('catch'), f'{w}.fish.catch')
+            if not 0 < s['fish'].get('chance', 0) <= 1: out.append(f'{w}.fish.chance: needs a number above 0 and up to 1')
     seeds = [p.get('seed') for p in d.get('plants', {}).values()]
     if len(set(seeds)) != len(seeds) or None in seeds: out.append('plants: each plant needs its own "seed" number (so the rest of the world never moves)')
     for k, p in d.get('plants', {}).items():
@@ -105,7 +108,7 @@ def server_files(d):
         'items': {k: {'weight': v.get('weight', 1), 'eat': v.get('eat'), 'uses': (v.get('tool') or {}).get('uses', 0), 'places': v.get('places'),
                        'startInWorld': v.get('startInWorld', 0), 'spawnsNear': v.get('spawnsNear')} for k, v in d['items'].items()},
         'recipes': {r['id']: {'needs': r['needs'], 'makes': r['makes'], **({'near': r['near']} if r.get('near') else {})} for r in d.get('recipes', [])},
-        'sources': {k: {'gives': v.get('gives'), 'harvest': v.get('harvest'), 'water': bool(v.get('water')), 'tool': v.get('tool'), 'toolHarvest': v.get('toolHarvest'), 'regrowHours': v.get('regrowHours', 0)} for k, v in srcs.items()},
+        'sources': {k: {'gives': v.get('gives'), 'harvest': v.get('harvest'), 'water': bool(v.get('water')), 'tool': v.get('tool'), 'toolHarvest': v.get('toolHarvest'), 'regrowHours': v.get('regrowHours', 0), 'fish': v.get('fish')} for k, v in srcs.items()},
         'plants': {k: {'gives': v.get('gives', {}), 'count': v.get('count', 40), 'regrowHours': v.get('regrowHours', 2), 'tool': v.get('tool')} for k, v in d.get('plants', {}).items()},
         'berryKind': berry,
         'carryCapacity': d['settings']['carryCapacity'],

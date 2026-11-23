@@ -119,6 +119,20 @@ export const ACTIONS = {
     if (src && src.gives && src.water && (me.admin || this.nearWater(p))) { applyGives(p, src.gives); spend(p, 'drink', G); save(); }
     reply(this.mine(p));
   } },
+  // fishing at the pond (0.3.4): the spear wears, the pond holds a shared number of fish, and some tries catch nothing
+  fish: { when: 'alive', async run({ me, p, w, reply, save }) {
+    const F = (Object.values(G.sources).find((s) => s.water && s.fish) || {}).fish;
+    if (!F || !p.carry[F.tool]) { reply(this.mine(p)); return; }
+    if (!me.admin && !this.nearWater(p)) { reply({ t: 'fished', why: 'Too far away' }); reply(this.mine(p)); return; }
+    spend(p, 'fish', G);
+    this.wearTool(p, F.tool, reply);
+    if (this.pondFish(F) < 1) reply({ t: 'fished', why: 'No fish left. Try again later' });
+    else if (Math.random() >= F.chance) reply({ t: 'fished', why: 'Nothing bites' });
+    else if (!addCarry(p, F.catch, 1, G)) reply({ t: 'fished', why: 'Too heavy' });
+    else { w.pond.fish -= 1; reply({ t: 'fished', caught: F.catch }); await this.save(); }
+    save();
+    reply(this.mine(p));
+  } },
   // picking something up off the ground
   take: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
     const i = w.items.findIndex((it) => it.id === m.id);

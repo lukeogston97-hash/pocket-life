@@ -301,7 +301,7 @@ async def smoke():
             out.push([document.querySelectorAll('#craftList .craft-card').length, document.querySelectorAll('#craftChips .craft-chip').length]);
             document.getElementById('craftClose').click(); }
           return out; })()""")
-        expect(found == [[0, 0], [0, 0], [4, 3]], f'recipes are discovered (all but one thing had), with Tools and Building buttons ({found})')
+        expect(found == [[0, 0], [0, 0], [5, 3]], f'recipes are discovered (all but one thing had), with Tools and Building buttons ({found})')
         await a.evaluate("(() => { const p = __pl.player.position; __pl.queueTask({ type: 'walk', x: p.x + 1.5, z: p.z + 1 }); })()")
         await idle(a, 20)
         await a.click('#menuBtn'); await a.wait_for_timeout(300); await a.click('#exitBtn'); await a.wait_for_timeout(1500)
@@ -725,7 +725,56 @@ async def crowd():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd}
+async def fishing():
+    """Fish at the pond with a spear: catches go in the bag, the spear wears, the pond runs dry for everyone, raw fish can't be eaten,
+    cooking takes a lit campfire and makes cooked fish that fills you up."""
+    import copy
+    srv = copy.deepcopy(json.load(open(os.path.join(HERE, '..', '..', 'server', 'game.json')))['sources'])
+    srv['pond']['fish'].update(chance=1.0, holds=2)  # every try catches, and the pond holds only 2
+    D = json.load(open(os.path.join(HERE, '..', '..', 'test', 'game-data.json')))
+    src = copy.deepcopy(D['sources']); src['pond']['fish'].update(seconds=1, chance=1.0, holds=2)
+    recipes = copy.deepcopy(D['recipes'])
+    for r in recipes:
+        if r['id'] == 'cooked-fish': r['seconds'] = 2
+    async with world({'sources': srv}, FISHKIT=1) as W:
+        a = await W.page('fishA', data={'sources': src, 'recipes': recipes}); await join(a)
+        acts = await a.evaluate("__pl.menuActions({ kind: 'use', task: { type: 'use', source: 'pond', water: true }, name: 'Pond' }).map((x) => x.label + (x.disabled ? '!' : ''))")
+        expect(acts == ['Drink', 'Fish', 'Walk here'], f'the pond menu has Fish when you carry a spear ({acts})')
+        # a campfire by the start, built and lit
+        await a.click('#bagBtn'); await a.wait_for_timeout(400)
+        await a.click('#bagList .bag-tile[data-kind="campfire"]'); await a.wait_for_timeout(200)
+        await a.click('#bagInfo button.go'); await a.wait_for_timeout(400)
+        spot = await a.evaluate("""(() => { const p = __pl.player.position;
+          for (let r = 2; r < 8; r += 0.5) for (let k = 0; k < 16; k++) { const x = p.x + Math.cos(k / 16 * 6.28) * r, z = p.z + Math.sin(k / 16 * 6.28) * r;
+            if (!__pl.cantPlaceAt(x, z, 'campfire')) { __pl.movePlacing(x, z); return [x, z]; } } return null; })()""")
+        expect(spot is not None, f'found a spot for the fire ({spot})')
+        await a.evaluate('__pl.finishPlacing()'); await idle(a, 40); await a.wait_for_timeout(1500)
+        fid = await a.evaluate('[...__pl.placed.keys()][0]')
+        await a.evaluate(f"__pl.queueTask({{ type: 'tend', id: {fid}, do: 'add', n: 5 }})"); await idle(a, 15)
+        await a.evaluate(f"__pl.queueTask({{ type: 'tend', id: {fid}, do: 'light' }})"); await idle(a, 15); await a.wait_for_timeout(800)
+        expect(await a.evaluate(f'__pl.isLit(__pl.placed.get({fid}))'), 'the fire is lit')
+        # three tries (walking to the shore first), the pond holds two
+        for _ in range(3): await a.evaluate("__pl.queueTask({ type: 'fish' })")
+        await idle(a, 90); await a.wait_for_timeout(800)
+        got = await a.evaluate("[__pl.you.carry.fish || 0, (__pl.you.wear['fishing-spear'] || [])[0]]")
+        expect(got == [2, 17], f'2 fish caught, the third try finds none, and the spear wore 3 uses ({got})')
+        b = await W.page('fishB'); await join(b)
+        for _ in range(2): await b.evaluate("__pl.queueTask({ type: 'fish' })")
+        await idle(b, 60); await b.wait_for_timeout(800)
+        expect(not await b.evaluate('__pl.you.carry.fish'), 'the pond ran out of fish for everyone, not just the first person')
+        # raw fish can't be eaten; cooking by the lit fire takes a moment and makes cooked fish
+        await a.evaluate("__pl.sendAct({ t: 'eat', kind: 'fish' })"); await a.wait_for_timeout(800)
+        expect(await a.evaluate('__pl.you.carry.fish') == 2, "raw fish can't be eaten")
+        await a.evaluate(f"__pl.queueTask({{ type: 'make', id: {fid}, recipe: 'cooked-fish' }})"); await idle(a, 40); await a.wait_for_timeout(800)
+        made = await a.evaluate("[__pl.you.carry.fish || 0, __pl.you.carry['cooked-fish'] || 0]")
+        expect(made == [1, 1], f'cooking uses a fish and makes cooked fish ({made})')
+        await a.evaluate("__pl.sendAct({ t: 'eat', kind: 'cooked-fish' })"); await a.wait_for_timeout(800)
+        ate = await a.evaluate("[__pl.you.carry['cooked-fish'] || 0, __pl.you.stats.hunger]")
+        expect(ate[0] == 0 and ate[1] > 95, f'eating cooked fish fills you up ({ate})')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

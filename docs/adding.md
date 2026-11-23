@@ -10,6 +10,7 @@ The short way to add each kind of thing. Most are one edit to test/game-data.jso
 - **Something that lies about and respawns** (like sticks and stones): give the item `startInWorld` (how many) and `spawnsNear` (`trees` or `boulders`). It starts turning up by itself, no world reset needed.
 - **Cuttable plant** (like tall grass): an entry in `plants`, with its own `seed` so nothing else in the world moves.
 - **Placeable** (like the campfire): an entry in `placeables`, plus an item with `"places": "<id>"`. Fires, seats, Pack up, Take apart and the admin's Move, Remove and Fill with fuel all come with it. Its look needs a shape in game/placeables.js (makePlacedView).
+- **Fishing at a water source**: `fish` on the source (see `sources.pond.fish`): tool, catch, seconds, chance, holds, regrowMinutes. The server keeps the fish count. A recipe with `seconds` (like cooking) takes that long and uses its things up at the end.
 - **A new item shape**: add it to SHAPES in game/items.js, then items can use it by name. If lots of them will lie on the ground, build its geometry with sharedGeo (as sticks, stones and logs do) so they're drawn together and stay cheap on phones.
 
 - **Before pushing**: `python3 tools/tests/lint.py` checks game-data.json for mistakes first (an item name that doesn't exist, a shape that isn't there, a weight that isn't a whole number...) and says what's wrong in plain words.

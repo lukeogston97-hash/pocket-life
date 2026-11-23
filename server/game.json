@@ -106,6 +106,24 @@
       "startInWorld": 0,
       "spawnsNear": null
     },
+    "fish": {
+      "weight": 1,
+      "eat": null,
+      "uses": 0,
+      "places": null,
+      "startInWorld": 0,
+      "spawnsNear": null
+    },
+    "cooked-fish": {
+      "weight": 1,
+      "eat": {
+        "hunger": 35
+      },
+      "uses": 0,
+      "places": null,
+      "startInWorld": 0,
+      "spawnsNear": null
+    },
     "knife": {
       "weight": 1,
       "eat": null,
@@ -205,6 +223,15 @@
       "makes": {
         "campfire": 1
       }
+    },
+    "cooked-fish": {
+      "needs": {
+        "fish": 1
+      },
+      "makes": {
+        "cooked-fish": 1
+      },
+      "near": "campfire"
     }
   },
   "sources": {
@@ -216,7 +243,17 @@
       "water": true,
       "tool": null,
       "toolHarvest": null,
-      "regrowHours": 0
+      "regrowHours": 0,
+      "fish": {
+        "action": "Fish",
+        "verb": "Fishing",
+        "seconds": 8,
+        "tool": "fishing-spear",
+        "catch": "fish",
+        "chance": 0.5,
+        "holds": 10,
+        "regrowMinutes": 60
+      }
     },
     "berryBush": {
       "gives": null,
@@ -228,7 +265,8 @@
       "toolHarvest": {
         "berry": 2
       },
-      "regrowHours": 4
+      "regrowHours": 4,
+      "fish": null
     }
   },
   "plants": {
@@ -282,7 +320,8 @@
     "chop": 10,
     "walkPerMetre": 0.15,
     "build": 8,
-    "tend": 1
+    "tend": 1,
+    "fish": 3
   },
   "chopping": {
     "tool": "stone-axe",
