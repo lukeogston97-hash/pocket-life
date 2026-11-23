@@ -22,24 +22,65 @@ canvas.addEventListener('pointerdown', (e) => {
   if (swallowTap) { swallowTap = false; down = null; return; } // that press only closed the menu
   if (e.button !== 0) { down = null; return; } // right and middle buttons don't walk
   down = { x: e.clientX, y: e.clientY, t: e.timeStamp };
+  // pressing a loose item can turn into dragging it (mouse: move; touch: hold a moment, then move) onto the ground, a fire or you
+  wdrag = null;
+  if (ui.mode === 'world' && player && !you.dead && !paused && !placing.on) {
+    const hit = pickTarget(...toCanvas(e));
+    if (hit && hit.kind === 'item' && !queuedItem(hit.item.id)) { // (one already queued to move stays put)
+      wdrag = { item: hit.item, x: e.clientX, y: e.clientY, ready: e.pointerType === 'mouse', ghost: null };
+      if (wdrag.ready) controls.enableRotate = false; // a mouse on a loose item drags it, not the view
+      else { const w = wdrag; w.timer = setTimeout(() => { w.ready = true; }, 300); }
+    }
+  }
   if (e.pointerType !== 'mouse') {
     const at = { clientX: e.clientX, clientY: e.clientY };
     pressTimer = setTimeout(() => {
       pressTimer = null;
       if (!down || multi) return;
       const [px, py] = toCanvas(at);
-      if (openMenuAt(px, py)) down = null;
+      if (openMenuAt(px, py)) { down = null; endWorldDrag(); }
     }, 480);
   }
 });
+let wdrag = null;
+function endWorldDrag() {
+  controls.enableRotate = true;
+  if (!wdrag) return;
+  clearTimeout(wdrag.timer);
+  if (wdrag.ghost) { wdrag.ghost.remove(); bagDragging = false; dragPoint = null; }
+  wdrag = null;
+}
 canvas.addEventListener('pointermove', (e) => {
   if (e.pointerType === 'mouse') { hoverAt = e.buttons ? null : { clientX: e.clientX, clientY: e.clientY }; hoverWait = 0; }
+  if (wdrag && wdrag.ready && !wdrag.ghost && Math.hypot(e.clientX - wdrag.x, e.clientY - wdrag.y) > 8 && getItem(wdrag.item.id)) {
+    const g = document.createElement('div');
+    g.className = 'drag-ghost';
+    g.appendChild(itemPic(wdrag.item.kind));
+    document.body.appendChild(g);
+    wdrag.ghost = g;
+    bagDragging = true;
+    dragPoint = { x: e.clientX, y: e.clientY, armed: false };
+    controls.enableRotate = false; // the view holds still while you drag (it slides at the edges instead)
+    down = null; // not a tap any more
+    cancelPress();
+  }
+  if (wdrag && wdrag.ghost) {
+    wdrag.ghost.style.transform = `translate(${e.clientX - 28}px, ${e.clientY - 28}px)`;
+    if (dragPoint) { dragPoint.x = e.clientX; dragPoint.y = e.clientY; }
+  }
   if (pressTimer && down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 10) cancelPress();
 });
-canvas.addEventListener('pointercancel', cancelPress);
+canvas.addEventListener('pointercancel', () => { cancelPress(); endWorldDrag(); });
 canvas.addEventListener('pointerleave', () => { hoverAt = null; });
 canvas.addEventListener('pointerup', (e) => {
   cancelPress();
+  if (wdrag && wdrag.ghost) {
+    const w = wdrag;
+    endWorldDrag();
+    if (getItem(w.item.id)) bagDropAt({ kind: w.item.kind }, e, w.item);
+    return;
+  }
+  endWorldDrag();
   if (!e.isPrimary || multi || !down) return;
   if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > 12 || e.timeStamp - down.t > 550) return;
   down = null;
@@ -313,6 +354,7 @@ function thingActions(t) {
 function openMenuAt(px, py, known) {
   if (ui.mode !== 'world' || !player || you.dead || paused || placing.on) return false;
   const t = known || pickTarget(px, py);
+  if (t && t.kind === 'item' && queuedItem(t.item.id)) { closeMenu(); showTag('Already in your queue', headTop(), 2); return true; } // till it's done or taken off the list
   const acts = menuActions(t);
   hideHint(); // the tip has done its job once you've tapped something
   if (!acts.length) { closeMenu(); return false; }
@@ -467,6 +509,28 @@ function keyCamera(dt) {
   t.z += dz;
   camera.position.x += dx;
   camera.position.z += dz;
+}
+// dragging something near the edge of the screen slides the view that way, so you can take it further than you can see
+// (only once the drag has been away from the edge, so starting in the bag doesn't move it)
+const edgeOf = (p, size, zone) => (p < zone ? Math.max(-1, p / zone - 1) : p > size - zone ? Math.min(1, (p - size + zone) / zone) : 0);
+function edgePan(dt) {
+  if (!dragPoint || ui.mode !== 'world') return;
+  const r = canvas.getBoundingClientRect(), zone = Math.min(r.width, r.height) * 0.12;
+  const ex = edgeOf(dragPoint.x - r.left, r.width, zone), ey = edgeOf(dragPoint.y - r.top, r.height, zone);
+  if (!ex && !ey) { dragPoint.armed = true; return; }
+  if (!dragPoint.armed) return;
+  const t = controls.target;
+  const fwd = V(t.x - camera.position.x, 0, t.z - camera.position.z).normalize();
+  const right = V(-fwd.z, 0, fwd.x);
+  const step = camera.position.distanceTo(t) * 0.45 * dt;
+  const lim = WORLD_HALF + 4;
+  const mx = (right.x * ex - fwd.x * ey) * step, mz = (right.z * ex - fwd.z * ey) * step;
+  const dx = Math.max(-lim, Math.min(lim, t.x + mx)) - t.x, dz = Math.max(-lim, Math.min(lim, t.z + mz)) - t.z;
+  t.x += dx;
+  t.z += dz;
+  camera.position.x += dx;
+  camera.position.z += dz;
+  camFree = true;
 }
 function updatePlayer(dt) {
   const P = player.userData.parts;
@@ -639,7 +703,7 @@ function updateGlow(dt) {
   else if ((hoverWait -= dt) <= 0) {
     hoverWait = 0.12;
     const t = pickTarget(...toCanvas(hoverAt));
-    hoverGlow = glowViewOf(t);
+    hoverGlow = t && t.kind === 'item' && queuedItem(t.item.id) ? null : glowViewOf(t);
   }
   const g = (!$('actMenu').hidden && menuGlow) || hoverGlow;
   if (g && !g.view.parent) { if (g === menuGlow) menuGlow = null; else hoverGlow = null; clearGlow(); return; } // it was picked up

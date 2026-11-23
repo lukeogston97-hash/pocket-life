@@ -1,6 +1,6 @@
 {
-  "version": "0.1.1",
-  "build": 1,
+  "version": "0.1.2",
+  "build": 3,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -909,6 +909,16 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.1.2",
+      "date": "2026-11-23",
+      "notes": [
+        "Dragging things out of the Inventory or along the ground now adds them to your task list, with their number, and a see-through copy shows where each will land.",
+        "The view holds still while you drag something, and slides along when you drag near the edge of the screen.",
+        "A task's number stays on till it's done, even when it's the only one left.",
+        "Something already queued to move can't be moved or tapped again until its task is done or taken off the list."
+      ]
+    },
     {
       "version": "0.1.1",
       "date": "2026-11-23",

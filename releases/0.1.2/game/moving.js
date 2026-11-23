@@ -215,7 +215,12 @@ const MAX_QUEUE = 30;
 // in the queue, spot is where its number goes, and stop (optional) is called when it's stopped part way.
 const TASK_KINDS = {};
 const allTasks = () => (tasks.current ? [tasks.current, ...tasks.list] : [...tasks.list]);
-const shownTasks = () => allTasks().filter((t) => t.type !== 'drop');
+const listed = (t) => t.type !== 'drop' || Number.isFinite(t.x); // a drop with a spot (from a drag) is a task like any other; Drop 1 happens by your feet
+const shownTasks = () => allTasks().filter(listed);
+const took = new Set(); // loose items you've picked up, so the second half of moving one knows the pick-up happened
+const queuedItem = (id) => allTasks().some((q) => q.type === 'pickup' && q.id === id); // already in your queue: can't be tapped or dragged again
+// how many of a kind in your bag aren't already queued to be dropped somewhere
+const spareInBag = (kind) => (you.carry[kind] || 0) - allTasks().reduce((n, q) => n + (q.type === 'drop' && q.kind === kind && !q.landed ? q.n : 0), 0);
 // the weight you'll be carrying once everything queued is picked up or harvested
 const plannedWeight = () => carried() + allTasks().reduce((sum, t) => {
   if (t.type === 'pickup') { const it = getItem(t.id); return sum + (it ? ITEMS[it.kind].weight : 0); }
@@ -284,6 +289,7 @@ function nextTask() {
   drawQueue();
   const t = tasks.current;
   if (!t || !player || you.dead) return;
+  if (t.from != null && !took.delete(t.from)) { nextTask(); return; } // moving a loose item that someone else took first: skip the rest
   if (t.type === 'pickup') {
     const item = getItem(t.id);
     if (!item) { nextTask(); return; }
@@ -427,6 +433,7 @@ function doPickup(item) {
   startAction({ pose: 'bend', mid: () => {
     if (!getItem(item.id)) return;
     removeWorldItem(item.id);
+    took.add(item.id);
     addToCarry(item.kind);
     spendEnergy('pickup');
     shareTake(item); // online: tell the world (if someone beat you to it, it comes back out of your inventory)
@@ -579,30 +586,38 @@ Object.assign(TASK_KINDS, {
   },
 });
 // where dropped things land: one in front of you, more in a small pile around it
-function dropSpot(i) {
+function dropSpot(i, at) { // at: {x, z} where you let go (else just in front of you)
   const fx = Math.sin(player.rotation.y), fz = Math.cos(player.rotation.y);
   const a = i * 2.39996, r = i === 0 ? 0 : 0.16 + Math.sqrt(i) * 0.15;
-  let x = player.position.x + fx * 0.6 + Math.cos(a) * r, z = player.position.z + fz * 0.6 + Math.sin(a) * r;
+  const bx = at ? at.x : player.position.x + fx * 0.6, bz = at ? at.z : player.position.z + fz * 0.6;
+  let x = bx + Math.cos(a) * r, z = bz + Math.sin(a) * r;
   if (pondShape(x, z) < 0.95) { x = player.position.x - fx * 0.5 + Math.cos(a) * r; z = player.position.z - fz * 0.5 + Math.sin(a) * r; }
   return { x, z };
 }
 function doDrop(t) {
   if (!you.carry[t.kind]) { nextTask(); return; }
-  startAction({ pose: 'bend', mid: () => {
-    const taken = takeFromCarry(t.kind, t.n);
-    const out = [];
-    for (let i = 0; i < taken; i++) { const s = dropSpot(i); out.push({ kind: t.kind, x: s.x, z: s.z, rot: rand() * Math.PI, ...(i === 0 && t.which != null ? { which: t.which } : {}) }); }
-    placeItems(out);
-    drawHeld();
-    drawCarry();
-  } });
+  const at = Number.isFinite(t.x) && Number.isFinite(t.z) ? { x: t.x, z: t.z } : null;
+  const go = () => {
+    if (at) face(at.x, at.z);
+    startAction({ pose: 'bend', mid: () => {
+      const taken = takeFromCarry(t.kind, t.n);
+      const out = [];
+      for (let i = 0; i < taken; i++) { const s = dropSpot(i, at); out.push({ kind: t.kind, x: s.x, z: s.z, rot: i === 0 && Number.isFinite(t.rot) ? t.rot : rand() * Math.PI, ...(i === 0 && t.which != null ? { which: t.which } : {}) }); }
+      placeItems(out);
+      t.landed = true; // its see-through copy goes
+      drawHeld();
+      drawCarry();
+      drawQueue();
+    } });
+  };
+  if (at) approach(at.x, at.z, 1.6, 2.4, go); else go(); // put it down where you let go: walk over first if it's far
 }
 // dropping from your inventory happens straight away, then your person carries on with the queue
-function dropItems(kind, n, which) { // which: for a tool, which one (0 is the one in use)
+function dropItems(kind, n, which, at) { // which: for a tool, which one (0 is the one in use); at: {x, z} to put it there
   if (ui.mode !== 'world' || !player || you.dead || !you.carry[kind]) return;
   closeBag();
   closeCraft();
-  const t = { type: 'drop', kind, n, ...(Number.isInteger(which) ? { which } : {}) };
+  const t = { type: 'drop', kind, n, ...(Number.isInteger(which) ? { which } : {}), ...(at ? { x: at.x, z: at.z } : {}) };
   if (action) { tasks.list.unshift(t); return; }
   if (tasks.current) tasks.list.unshift(tasks.current);
   walk.target = null;
@@ -616,9 +631,25 @@ let badges = [];
 function taskSpot(t) {
   if (t.type === 'pickup') { const v = itemViews.get(t.id); return v ? V(v.position.x, v.position.y + 0.22, v.position.z) : null; }
   if (t.type === 'use') return t.water ? V(POND.x, WATER_Y + 0.5, POND.z) : V(t.x, t.top + 0.15, t.z);
-  if (t.type === 'walk') return V(t.x, groundY(t.x, t.z) + 0.3, t.z);
+  if (t.type === 'walk' || t.type === 'drop') return Number.isFinite(t.x) && !t.landed ? V(t.x, groundY(t.x, t.z) + 0.3, t.z) : null;
   if (TASK_KINDS[t.type]) return TASK_KINDS[t.type].spot(t);
   return null;
+}
+// a see-through copy where each queued drop will land (and turned the way it will lie), until it's down
+const dropGhosts = new Map(); // task -> its see-through model
+function drawDropGhosts() {
+  const want = ui.mode === 'world' && player && !you.dead ? allTasks().filter((t) => t.type === 'drop' && Number.isFinite(t.x) && !t.landed && ITEMS[t.kind]) : [];
+  for (const [t, g] of dropGhosts) if (!want.includes(t)) { scene.remove(g); disposeMaterials(g); dropGhosts.delete(t); }
+  for (const t of want) {
+    if (dropGhosts.has(t)) continue;
+    if (!Number.isFinite(t.rot)) t.rot = Math.random() * Math.PI;
+    const { model, rest } = buildItem(t.kind);
+    seeThrough(model);
+    model.position.set(t.x, groundY(t.x, t.z) + rest, t.z);
+    model.rotation.y = t.rot;
+    scene.add(model);
+    dropGhosts.set(t, model);
+  }
 }
 // what a task is called in the queue list: "Pick up Stick" next, "Picking up Stick" now
 function taskName(t, now) {
@@ -639,16 +670,17 @@ function taskName(t, now) {
 // the list above the bottom bar: what your person is doing now, then what's next
 let queueOpen = false; // the full list is showing
 function drawQueue() {
+  drawDropGhosts();
   for (const b of badges) removeLabel(b);
   badges = [];
   const cur = tasks.current;
   // only shown while your person has something to do
-  const show = ui.mode === 'world' && !!player && !you.dead && !!(cur || tasks.list.some((t) => t.type !== 'drop'));
+  const show = ui.mode === 'world' && !!player && !you.dead && !!(cur || tasks.list.some(listed));
   $('queue').hidden = !show;
   if (!show) return;
   $('queueNow').textContent = cur ? taskName(cur, true) : 'Waiting for something to do';
   $('queueNowRow').classList.toggle('idle', !cur);
-  const next = tasks.list.map((t, i) => ({ t, i })).filter(({ t }) => t.type !== 'drop');
+  const next = tasks.list.map((t, i) => ({ t, i })).filter(({ t }) => listed(t));
   const shown = queueOpen ? 25 : 2; // folded: the next 2; tap the list to see them all
   const rows = next.slice(0, shown).map(({ t, i }, k) => {
     const li = document.createElement('li');
@@ -662,7 +694,7 @@ function drawQueue() {
     x.className = 'q-x';
     x.textContent = '\u00d7';
     x.setAttribute('aria-label', `Remove ${taskName(t, false)}`);
-    x.addEventListener('click', () => { const j = tasks.list.indexOf(t); if (j >= 0) tasks.list.splice(j, 1); drawQueue(); });
+    x.addEventListener('click', () => { tasks.list = tasks.list.filter((q) => q !== t && (t.type !== 'pickup' || q.from !== t.id)); drawQueue(); }); // a move's second half goes with it
     li.append(name, x);
     return li;
   });
@@ -682,7 +714,7 @@ function drawQueue() {
   $('queueStop').hidden = !cur && !next.length;
   // numbers over the things you've queued
   const list = shownTasks();
-  if (list.length < 2) return;
+  if (!list.length) return; // (a lone task keeps its 1 till it's done)
   const used = new Set();
   list.forEach((t, i) => {
     const p = taskSpot(t);

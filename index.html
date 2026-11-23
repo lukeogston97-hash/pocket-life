@@ -332,6 +332,11 @@ if (brought) {
   if (!localStorage.getItem(PID_KEY)) localStorage.setItem(PID_KEY, brought.slice(0, 64)); // a person you already have here stays yours
   history.replaceState(null, '', location.pathname + location.search);
 }
+// ?v=... is only there to get past the phone's cache when the game updated itself: take it out of the address
+if (new URLSearchParams(location.search).has('v')) {
+  const url = new URL(location.href); url.searchParams.delete('v');
+  history.replaceState(null, '', url.pathname + url.search + url.hash);
+}
 try {
   const res = await fetch('game-data.json', { cache: 'no-store' });
   if (!res.ok) throw new Error('HTTP ' + res.status);

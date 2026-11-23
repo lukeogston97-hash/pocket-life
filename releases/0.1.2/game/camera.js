@@ -18,7 +18,7 @@ function placeCamera() {
   controls.update();
 }
 function followPlayer(dt) {
-  if (walk.target && !wasWalking) camFree = false; // your person set off: glide back to them
+  if (walk.target && !wasWalking && !dragPoint) camFree = false; // your person set off: glide back to them (not mid-drag)
   wasWalking = !!walk.target;
   const k = Math.min(1, dt * 4);
   const fx = camFree ? controls.target.x : player.position.x, fz = camFree ? controls.target.z : player.position.z;
