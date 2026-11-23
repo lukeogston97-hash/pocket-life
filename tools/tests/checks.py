@@ -863,6 +863,13 @@ RAW = """(() => {
     ws.onopen = () => { ws.send(JSON.stringify({ t: 'hello', proto: 2, v: D.version, b: D.build || 0, e: D.era || 0, link: 'test', pid: 'raw-' + name, ...hello })); setTimeout(done, 700); };
   });
   window.say = (name, m) => window.__raw[name].ws.send(JSON.stringify(m));
+  // send an admin tool and wait for what it answers (an 'admin' message with words in text); '' if nothing came in 5 s
+  window.ask = (name, m) => new Promise((done) => {
+    const got = window.__raw[name].got, from = got.length, t0 = Date.now();
+    window.say(name, m);
+    const look = () => { const a = got.slice(from).find((x) => x.t === 'admin' && x.text); if (a) done(a.text); else if (Date.now() - t0 > 5000) done(''); else setTimeout(look, 40); };
+    look();
+  });
   window.heard = (name, t) => window.__raw[name].got.filter((m) => m.t === t);
 })()"""
 
@@ -948,6 +955,20 @@ async def admin_people():
         expect(pg['age'] == 41 and await a.evaluate('__pl.you.look.age') == 41, f"age changed for the admin and for them ({pg['age']})")
         await ev(f"say('boss', {{ t: 'a.setStats', id: '{who}', age: 5 }})"); await boss.wait_for_timeout(600)
         expect((await page())['age'] == 13, 'age never goes below 13')
+        # someone away: they go to the menu, their person carries on by themselves, and can still be moved
+        await a.evaluate("document.getElementById('menuBtn').click()"); await a.wait_for_timeout(300)
+        await a.click('#exitBtn'); await a.wait_for_timeout(1500)
+        pg = await page()
+        expect(pg['state'] == 'away', f"they're away now ({pg['state']})")
+        told = await ev(f"ask('boss', {{ t: 'a.movePerson', id: '{who}', x: 30, z: -25 }})")
+        pg = await page()
+        expect(abs(pg['x'] - 30) < 0.6 and abs(pg['z'] + 25) < 0.6 and pg['state'] in ('away', 'online'), f"someone away is moved too ({pg['x']}, {pg['z']}, {pg['state']})")
+        expect('carry on by themselves' in told, f'and the admin is told they are not pinned there ("{told}")')
+        await boss.wait_for_timeout(12000)  # two ticks of the world on the test server
+        pg2 = await page()
+        from_old = ((pg2['x'] - 22) ** 2 + (pg2['z'] - 14) ** 2) ** 0.5
+        # (what they do next depends on the time of day in the world: at night they lie down and sleep where they were put)
+        expect(pg2['state'] in ('away', 'online') and from_old > 15, f"two ticks on they're still in the world, and weren't put back where they were moved from (now {pg2['x']}, {pg2['z']}, {pg2['state']})")
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 

@@ -204,12 +204,16 @@ export const adminMethods = {
         this.catchUp(them); // needs and any stroll up to now, at the old spot
         if (!this.alive(them)) return done("They've gone");
         this.standUp(them); // a seat belongs to a fire
-        Object.assign(them, { x, z, plan: null, home: [x, z] }); // someone away carries on from here (their away clock isn't restarted)
+        // Someone away isn't pinned there: what they were doing is dropped and they decide again from the new spot on the next
+        // tick (away.js decide). At night, or if tired, they lie down and sleep where they were put; otherwise they go for
+        // water or berries if they need them, or stroll back toward their claim's fire or the pond. Their away clock isn't
+        // restarted. home only matters if away.near is ever not 'pond'.
+        Object.assign(them, { x, z, plan: null, home: [x, z] });
         if (them.leftAt) them.simAt = Date.now();
         this.touch(them); await this.flush(them.who);
         if (sock) { try { sock.ws.send(JSON.stringify({ t: 'pos', x, z })); } catch (err) { /* gone */ } } // their own game goes there
         this.send({ t: 'state', id: them.who, state: this.stateOf(them), x, z }, them.who);
-        return done(`${them.name} moved`);
+        return done(sock ? `${them.name} moved` : `${them.name} moved. They're away, so they'll carry on by themselves from there`);
       }
       case 'a.setStats': { // type someone's needs and age directly
         if (!this.alive(them)) return done("They've gone");
