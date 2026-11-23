@@ -113,7 +113,7 @@ const sure = (label, run, note = '') => ({ label, note, sub: [{ label: `Yes, ${l
 function adminPersonActions(o) {
   if (!admin.on) return [];
   return [{ label: 'Open their page', run: () => openPlayerPage(o.id) },
-    { label: 'Fly to them', run: () => adminFlyTo(o.mesh.position.x, o.mesh.position.z) },
+    { label: 'Follow them', run: () => adminFollow(o.id) },
     { label: 'Move them', note: 'Then tap where they go', run: () => startMove({ person: o.id, name: o.title }) },
     { label: 'Fill their needs', run: () => adminSend({ t: 'a.fill', id: o.id }) },
     { label: 'Mute for everyone', note: 'Unmute on their page', run: () => adminSend({ t: 'a.mute', id: o.id, on: true }) },
@@ -220,12 +220,13 @@ let adminTab = 'server', playersData = null, playerData = null, inboxData = null
 function openAdminPanel() {
   if (!adminMode.on) return;
   $('adminDashBtn').setAttribute('aria-expanded', 'true');
+  app.classList.add('dash-open');
   adminSend({ t: 'a.state' });
   adminSend({ t: 'a.list' }); // for the Inbox count
   $('adminPanel').hidden = false;
   showAdminTab(adminTab === 'player' ? 'players' : adminTab);
 }
-function closeAdminPanel() { $('adminPanel').hidden = true; $('adminDashBtn').setAttribute('aria-expanded', 'false'); resetDanger(); }
+function closeAdminPanel() { $('adminPanel').hidden = true; $('adminDashBtn').setAttribute('aria-expanded', 'false'); app.classList.remove('dash-open'); resetDanger(); }
 function adminEscape() { if (adminTab === 'player') showAdminTab('players'); else closeAdminPanel(); }
 function showAdminTab(tab) {
   adminTab = tab;
@@ -305,7 +306,7 @@ function drawPlayers() {
 
 /* ---------- someone's page: stats, bag, give and take, past people, and what can be done ---------- */
 function openPlayerPage(id) {
-  if ($('adminPanel').hidden) { $('adminPanel').hidden = false; $('adminDashBtn').setAttribute('aria-expanded', 'true'); adminSend({ t: 'a.state' }); }
+  if ($('adminPanel').hidden) { $('adminPanel').hidden = false; $('adminDashBtn').setAttribute('aria-expanded', 'true'); app.classList.add('dash-open'); adminSend({ t: 'a.state' }); }
   if (!playerData || playerData.id !== id) playerData = { id, loading: true };
   adminSend({ t: 'a.player', id });
   showAdminTab('player');
@@ -350,6 +351,7 @@ function drawPlayer() {
   }
   const acts = [];
   if (alive && p.x != null) acts.push(['Fly to', () => adminFlyTo(p.x, p.z)]);
+  if (alive && others.has(p.id)) acts.push(['Follow', () => adminFollow(p.id)]);
   if (alive) acts.push(['Fill needs', () => toPlayer({ t: 'a.fill', id: p.id })]);
   acts.push([p.muted ? 'Unmute' : 'Mute', () => toPlayer({ t: 'a.mute', id: p.id, on: !p.muted })]);
   if (p.state === 'online') acts.push(['Kick', () => toPlayer({ t: 'a.kick', id: p.id })]);

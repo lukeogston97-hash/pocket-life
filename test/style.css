@@ -466,9 +466,13 @@ button.craft-head { padding: 0; border: 0; background: none; color: inherit; fon
   .admin-pill, .admin-world { height: 44px; }
   .admin-dock { left: 0; right: 0; top: auto; bottom: 0; width: auto; max-width: none; height: 58%; padding: 6px 12px calc(12px + env(safe-area-inset-bottom, 0px)); border-radius: 18px 18px 0 0; border-bottom: 0; }
   .admin-grab { display: block; }
+  .dash-open .admin-follow { bottom: calc(58% + 10px); } /* above the open sheet, not over what's in it */
 }
 .admin-copy { margin: 0; font-size: 12.5px; line-height: 1.4; }
 .admin-copy[hidden] { display: none; }
 .admin-item-head { padding: 10px 0 2px; font-size: 13.5px; font-weight: 800; color: var(--ink); border-top: 1px solid var(--line); }
 .admin-item-head:first-child { border-top: 0; padding-top: 2px; }
 .admin-item-head + .admin-entry { border-top: 0; }
+/* following someone: a chip at the bottom of the view, like the game's own autopilot chip; tap it to stop */
+.admin-follow { position: absolute; z-index: 27; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); min-height: 40px; padding: 0 16px; border-radius: 999px; color: var(--ink); font: 700 13px/1 var(--font-ui); white-space: nowrap; cursor: pointer; }
+.admin-follow[hidden] { display: none; }

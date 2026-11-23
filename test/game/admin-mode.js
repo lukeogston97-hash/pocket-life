@@ -5,7 +5,7 @@
    The password is asked for every time. It is kept only in this page's memory while admin mode is open (so a dropped
    connection can rejoin by itself), never on the device, and it's forgotten on Exit admin or when the page closes. The
    real check is on the server (the Cloudflare secret ADMIN_CODE); the 5 taps only keep the box out of players' way. */
-const adminMode = { on: false, code: '', asking: false, saved: null };
+const adminMode = { on: false, code: '', asking: false, saved: null, follow: null }; // follow: the id of the person the camera is following
 // 5 taps in a row: each within ADMIN_TAP_GAP of the one before (a longer pause starts the count again). It's a gap between
 // taps, not a time limit for all five, and a generous one: the main menu is when a phone is busiest (the world is loading
 // behind it), and this is the only way in. The taps only keep the box out of players' way; the password is the real lock.
@@ -88,6 +88,7 @@ function exitAdmin(rejoin = true) {
   if (!adminMode.on) return;
   adminMode.on = false; adminMode.code = ''; adminMode.asking = false;
   admin.on = false;
+  adminFollow(null);
   $('adminPanel').hidden = true; $('adminPick').hidden = true;
   closeMenu();
   keysDown.clear();
@@ -131,6 +132,7 @@ function adminCamera(dt) {
     camera.position.copy(t).add(off.setFromSpherical(sph));
   }
   const f = keyAxis('KeyW', 'KeyS'), r = keyAxis('KeyD', 'KeyA');
+  if ((f || r) && adminMode.follow) adminFollow(null); // moving the view yourself stops following (turning and tilting don't)
   if (!f && !r && panVel.lengthSq() < 1e-4) panVel.set(0, 0, 0);
   else {
     const fwd = V(t.x - camera.position.x, 0, t.z - camera.position.z);
@@ -143,6 +145,29 @@ function adminCamera(dt) {
   // the camera's focus sits on the ground it is over
   const dy = (groundY(t.x, t.z) + 1.0 - t.y) * Math.min(1, dt * 4);
   t.y += dy; camera.position.y += dy;
+}
+// Follow: the camera keeps someone in the middle of the view as they walk about, until you move the view yourself, tap
+// the chip, or they leave the world. You can still turn, tilt and zoom round them.
+const followAt = { x: 0, z: 0 }; // where following last put the view (if it's somewhere else, you moved it)
+function adminFollow(id) {
+  const o = id ? others.get(id) : null;
+  adminMode.follow = o ? id : null;
+  $('adminFollow').hidden = !o;
+  if (!o) return;
+  $('adminFollow').textContent = `Following ${o.title} · tap to stop`;
+  if (adminNarrow()) closeAdminPanel();
+  adminFlyTo(o.mesh.position.x, o.mesh.position.z);
+  followAt.x = controls.target.x; followAt.z = controls.target.z;
+}
+$('adminFollow').addEventListener('click', () => adminFollow(null));
+function adminFollowStep(dt) {
+  if (!adminMode.follow) return;
+  const o = others.get(adminMode.follow), t = controls.target;
+  if (!o) { adminFollow(null); adminSay("They've left the world"); return; }
+  if (Math.hypot(t.x - followAt.x, t.z - followAt.z) > 0.6) { adminFollow(null); return; } // the view was slid away by hand (a finger or the mouse)
+  const k = Math.min(1, dt * 4);
+  adminPanBy((o.mesh.position.x - t.x) * k, (o.mesh.position.z - t.z) * k);
+  followAt.x = t.x; followAt.z = t.z;
 }
 // Fly to: the camera goes to look at a spot, from the same height and angle. On a phone the dashboard is put away first,
 // as it covers the lower half of the screen, where the spot would be.
@@ -179,6 +204,7 @@ function adminFrame(dt, raw, w, h) {
   adminClaims(Date.now());
   controls.update();
   adminPanBy(0, 0); // a finger can slide the view too: it stays inside the world as well
+  adminFollowStep(dt); // (after the controls: what's left of a slide by hand shows up as the view having moved)
   renderWorld(w, h, raw);
   adminBarTimer += raw;
   if (adminBarTimer > 1) { adminBarTimer = 0; drawAdminBar(); applyDaylight(); for (const b of berryBushes) drawBerries(b); drawPlants(); }

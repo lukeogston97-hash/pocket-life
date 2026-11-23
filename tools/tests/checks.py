@@ -1243,7 +1243,57 @@ async def admin_items():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'admin_items': admin_items}
+async def admin_follow():
+    """Admin mode: following someone. The camera goes with them as they walk, turning doesn't stop it, moving the view yourself does, and so does the chip or them leaving."""
+    async with world() as W:
+        b = await W.page('followed'); await join(b)
+        a = await W.page('follower', 1440, 900); await open_admin(a)
+        who = await b.evaluate('__pl.net.myId'); name = await b.evaluate('__pl.you.look.name')
+        gap = lambda: a.evaluate(f"(() => {{ const o = __pl.others.get('{who}'), t = __pl.controls.target; return o ? Math.hypot(o.mesh.position.x - t.x, o.mesh.position.z - t.z) : -1; }})()")
+        # (on: who the game says it is following. 'none' when nobody, so a missing value can never pass for 'stopped')
+        st = lambda: a.evaluate("(() => { const f = __pl.adminMode.follow; return { on: f === undefined ? 'MISSING' : f === null ? 'none' : f, chip: document.getElementById('adminFollow').hidden ? '' : document.getElementById('adminFollow').textContent }; })()")
+        # from their menu in the world
+        p = await a.evaluate(f"(() => {{ const o = __pl.others.get('{who}'); return [o.mesh.position.x, o.mesh.position.y, o.mesh.position.z]; }})()")
+        sx, sy, front = await a.evaluate(f"({SCREEN})({p[0]}, {p[1] + 0.9}, {p[2]})")
+        await a.mouse.click(sx, sy); await a.wait_for_timeout(600)
+        await a.click('#actList >> text=Follow them'); await frames(a, 3)
+        s0 = await st()
+        expect(s0['on'] == who, f"Follow them starts following that person (following {s0['on']}, they are {who})")
+        expect(s0['chip'] == f'Following {name} · tap to stop', f"and a chip says so ({s0['chip']})")
+        expect(await gap() < 1, f'the view is on them ({await gap():.2f} m off)')
+        # they walk 12 m: once they've stopped, the view is on them again
+        start = await b.evaluate('[__pl.player.position.x, __pl.player.position.z]')
+        await b.evaluate("__pl.queueTask({ type: 'walk', x: __pl.player.position.x + 9, z: __pl.player.position.z + 8 })"); await idle(b, 60)
+        end = await b.evaluate('[__pl.player.position.x, __pl.player.position.z]')
+        walked = ((end[0] - start[0]) ** 2 + (end[1] - start[1]) ** 2) ** 0.5
+        await frames(a, 30, 180000)  # (each frame closes a fifth of the gap, and this computer draws about one or two a second)
+        expect(walked > 8 and (await st())['on'] == who and await gap() < 1.5, f'they walked {walked:.1f} m and the view went with them ({await gap():.2f} m off)')
+        # turning the view doesn't stop it
+        await a.keyboard.down('KeyQ'); await frames(a, 8); await a.keyboard.up('KeyQ'); await frames(a, 8)
+        expect((await st())['on'] == who and await gap() < 1.5, 'turning the view (Q) keeps following')
+        # moving the view yourself does
+        await a.keyboard.down('KeyW'); await frames(a, 6); await a.keyboard.up('KeyW'); await frames(a, 4)
+        s1 = await st()
+        expect(s1['on'] == 'none' and s1['chip'] == '', f'moving the view yourself (W) stops following, and the chip goes ({s1})')
+        # from their page in the dashboard, then the chip stops it
+        await a.click('#adminDashBtn'); await a.click('[data-admin-tab="players"]'); await a.wait_for_function("document.querySelectorAll('#adminPlayers .admin-entry.tap').length > 0", timeout=20000)
+        await a.click('#adminPlayers .admin-entry.tap'); await a.wait_for_function("[...document.querySelectorAll('#adminPlayer button')].some((x) => x.textContent === 'Follow')", timeout=20000)
+        await a.click('#adminPlayer >> text="Follow"'); await frames(a, 3)
+        expect((await st())['on'] == who, 'Follow on their page starts it too')
+        await a.click('#adminFollow'); await a.wait_for_timeout(300)
+        s2 = await st()
+        expect(s2['on'] == 'none' and s2['chip'] == '', f'tapping the chip stops it ({s2})')
+        # they leave the world while being followed
+        await a.click('#adminPlayer >> text="Follow"'); await frames(a, 3)
+        await b.context.close(); await a.wait_for_timeout(1500)
+        await a.evaluate(f"window.__sock.send(JSON.stringify({{ t: 'a.removePerson', id: '{who}' }}))")
+        await a.wait_for_function("__pl.adminMode.follow === null", timeout=60000)
+        s3 = await st()
+        expect(s3['on'] == 'none' and s3['chip'] == '', f'when they leave the world, following stops by itself ({s3})')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'admin_items': admin_items, 'admin_follow': admin_follow}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

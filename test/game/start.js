@@ -14,4 +14,4 @@ if (location.search.includes('debug')) window.__pl = { THREE, renderer, solidAt,
   ui, controls, openAdminLogin,
   // what a tap at a spot on the screen would find, and what the admin could do with it (for checks)
   adminAt(px, py) { const r = canvas.getBoundingClientRect(); ndc.set(((px - r.left) / r.width) * 2 - 1, -((py - r.top) / r.height) * 2 + 1); const t = pickTarget(px - r.left, py - r.top); return { kind: t ? t.kind : null, name: t ? t.name : null, acts: t ? adminActionsFor(t).map((a) => a.label) : [] }; },
-  get adminMode() { return { on: adminMode.on, asking: adminMode.asking, hasCode: !!adminMode.code }; } }; // (adminMode: never the password itself)
+  get adminMode() { return { on: adminMode.on, asking: adminMode.asking, hasCode: !!adminMode.code, follow: adminMode.follow }; } }; // (adminMode: never the password itself)
