@@ -1,6 +1,6 @@
 {
   "version": "0.3.0",
-  "build": 1,
+  "build": 2,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,
@@ -836,7 +836,7 @@
         "The Menu now has What's new, Settings and Feedback, so you don't have to leave the world for them.",
         "A short break in your connection no longer loses what you were doing: your person waits for you, and what you finished is sent when you're back.",
         "Fair play: the world now checks you're next to what you pick up, chop, mine or drink from.",
-        "Tidier wording (Pick berries, Too heavy), and lots of sticks and stones on the ground no longer slow phones down."
+        "Tidier wording (Pick berries, Too heavy), and lots of sticks and stones on the ground no longer slow phones down.", "Fixed: the note when placing a campfire no longer squashes into a narrow column on some phones."
       ]
     },
     {

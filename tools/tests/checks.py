@@ -330,6 +330,11 @@ async def campfire():
           for (let r = 2; r < 8; r += 0.5) for (let k = 0; k < 16; k++) { const x = p.x + Math.cos(k / 16 * 6.28) * r, z = p.z + Math.sin(k / 16 * 6.28) * r;
             if (!__pl.cantPlaceAt(x, z, 'campfire')) { __pl.movePlacing(x, z); return [x, z]; } } return null; })()""")
         expect(spot is not None, f'found a spot to put it ({spot})')
+        # the longest note there is fits on one or two lines across the bar (it once squeezed to a word a line)
+        await a.evaluate("document.getElementById('placeText').textContent = \"Just a fire: too close to Alexandra's claim\"")
+        box = await a.evaluate("(() => { const t = document.getElementById('placeText').getBoundingClientRect(), b = document.getElementById('placeBar').getBoundingClientRect(); return [t.width, t.height, b.width, innerWidth]; })()")
+        expect(box[1] < 40 and box[0] > 120 and box[2] > box[3] * 0.8, f'a long note fits in the place bar on one or two lines (note {box[0]:.0f} x {box[1]:.0f}, bar {box[2]:.0f} of {box[3]})')
+        await a.evaluate(f"__pl.movePlacing({spot[0]}, {spot[1]})")
         await shot(a, 'campfire-placing')
         await a.evaluate('__pl.finishPlacing()')
         await idle(a, 40); await a.wait_for_timeout(1500)
@@ -470,6 +475,53 @@ async def admin_tools():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
+async def reset_all():
+    """Admin, Reset everything: every person, their past people, the Inbox and the world go, settings stay, everyone starts again."""
+    keys = "() => new Promise((done) => { const keep = window.__sock, s = new WebSocket(keep.url); s.onopen = () => { s.send(JSON.stringify({ t: '__keys' })); window.__sock = keep; }; s.onmessage = (e) => { const m = JSON.parse(e.data); if (m.t === '__keys') { s.close(); done(m.keys); } }; })"
+    has = lambda ks, start: [k for k in ks if k == start or (start.endswith(':') and k.startswith(start))]
+    async with world() as W:
+        b = await W.page('resetB'); await join(b)
+        a = await W.page('resetA'); await join(a)
+        await a.click('#sayBtn'); await a.fill('#sayInput', '/admin secret123456'); await a.press('#sayInput', 'Enter'); await a.wait_for_timeout(800)
+        await a.mouse.click(195, 300); await a.wait_for_timeout(300)
+        send = "(m) => window.__sock.send(JSON.stringify(m))"
+        # things a reset should clear: a note in the Inbox, a log on the ground, a person who left (a past person)
+        await b.evaluate(f"({send})({{ t: 'feedback', text: 'a note before the reset', v: '0' }})")
+        bid = await b.evaluate('__pl.net.myId')
+        await a.evaluate(f"({send})({{ t: 'a.add', kind: 'log', n: 3, x: __pl.player.position.x + 2, z: __pl.player.position.z }})")
+        await a.evaluate(f"({send})({{ t: 'a.live', id: 'maxPlaying', value: 7 }})")  # a setting: this one stays
+        await a.evaluate(f"({send})({{ t: 'a.mute', who: 'someone', on: true }})")  # a mute: this one goes
+        await b.context.close(); await a.wait_for_timeout(1000)  # B leaves (only someone away can be removed)
+        await a.evaluate(f"({send})({{ t: 'a.removePerson', id: {json.dumps(bid)} }})"); await a.wait_for_timeout(800)
+        b = await W.page('resetB'); await b.click('#playBtn'); await b.wait_for_timeout(2000)  # the same phone back: the server files their old person as a past person
+        before = await a.evaluate(keys)
+        expect(has(before, 'p:') and has(before, 'past:') and has(before, 'feedback') and has(before, 'live') and has(before, 'world'), f'before: people, a past person, a note and a setting are stored ({sorted(set(k.split(":")[0] for k in before))})')
+        expect(await a.evaluate("__pl.world.items.filter((it) => it.kind === 'log').length") == 3, 'and 3 logs lie on the ground')
+        await a.click('#menuBtn'); await a.click('#pauseAdminBtn'); await a.wait_for_timeout(400)
+        await a.click('[data-admin-tab="world"]'); await a.wait_for_timeout(400)
+        tap = "document.getElementById('adminResetAllBtn').click()"
+        await a.evaluate(f'{tap}; {tap}'); await a.wait_for_timeout(1200)  # a double tap by mistake
+        expect(await a.evaluate('!!__pl.player') and has(await a.evaluate(keys), 'p:'), 'a double tap by mistake resets nothing')
+        expect('Tap again' in await text(a, '#adminResetAllBtn'), 'the button asks for a second tap')
+        await a.evaluate(tap)  # the second tap that counts
+        await a.wait_for_function("!document.getElementById('creator').hidden", timeout=30000); await a.wait_for_timeout(1500)
+        expect(await a.evaluate('!__pl.player'), 'after the second tap your person is gone and you make a new one')
+        after = await a.evaluate(keys)
+        expect(not has(after, 'p:') and not has(after, 'past:') and not has(after, 'feedback') and not has(after, 'reports'), f'no people, past people or Inbox left ({sorted(after)})')
+        expect(has(after, 'live'), 'the settings stay')
+        admin = await a.evaluate(keys.replace("{ t: '__keys' }", "{ t: '__keys', get: 'admin' }").replace('done(m.keys)', 'done(m.value)'))
+        expect(admin and not admin['muted'] and not admin['banned'], f'bans and mutes are cleared ({admin})')
+        await b.wait_for_function("!document.getElementById('creator').hidden", timeout=30000)
+        expect(True, 'the other player makes a new person too')
+        await a.click('.start-btn')
+        await a.wait_for_function("document.getElementById('mainMenu').hidden && !document.getElementById('app').classList.contains('is-creating')", timeout=30000); await a.wait_for_timeout(1500)
+        expect(await a.evaluate('!!__pl.player'), 'a new person starts in the new world')
+        expect(await a.evaluate("__pl.world.items.filter((it) => it.kind === 'log').length") == 0, 'the world is fresh (the logs are gone)')
+        expect(await a.evaluate('__pl.world.items.length') > 0, 'and laid out again')
+        expect(len(has(await a.evaluate(keys), 'p:')) == 1, 'one person stored: the new one')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
 async def claims():
     """Lighting your first campfire away from the pond claims the land round it; others can't use it; putting it out frees it."""
     async with world(CAMPKIT=1) as W:
@@ -584,7 +636,7 @@ async def reconnect():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'claims': claims, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect}
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'claims': claims, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

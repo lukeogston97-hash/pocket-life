@@ -8,7 +8,7 @@ const ctx = {
   storage: {
     async get(k) { return structuredClone(store.get(k)); },
     async put(k, v) { if (typeof k === 'object') { for (const [a, b] of Object.entries(k)) store.set(a, structuredClone(b)); } else store.set(k, structuredClone(v)); },
-    async delete(k) { store.delete(k); },
+    async delete(k) { for (const key of [].concat(k)) store.delete(key); },
     async list({ prefix }) { return new Map([...store].filter(([k]) => k.startsWith(prefix))); },
     async getAlarm() { return 1; }, async setAlarm() {}, async deleteAlarm() {},
   },
@@ -29,6 +29,7 @@ wss.on('connection', (raw) => {
   raw.on('message', (d) => inTurn(async () => {
     const t = String(d), m = JSON.parse(t);
     if (m.t !== 'move' && m.t !== 'ping') console.log('<-', m.t);
+    if (m.t === '__keys') { s.send(JSON.stringify({ t: '__keys', keys: [...store.keys()], value: m.get ? store.get(m.get) : null })); return; } // for checks: what's in storage
     await w.webSocketMessage(s, t);
     if (m.t === 'create') {
       const p = w.persons.get(s.att.who);

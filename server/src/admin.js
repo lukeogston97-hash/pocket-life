@@ -1,7 +1,7 @@
 // The admin player (Luke): every 'a.' message, from maintenance to Reset the world.
 // The Admin panel's tabs: Server (maintenance, announce, speed), Players (find someone, their page: stats, bag,
 // give and take, past people), Inbox (feedback and reports, marked Done and cleared after 30 days), World (counts,
-// regrow everything, clear loose items, reset), Settings (live settings, live.js). Single things in the world
+// regrow everything, clear loose items, reset the world or everything), Settings (live settings, live.js). Single things in the world
 // (trees, rocks, berry bushes, campfires, loose items) are moved, regrown and removed from their tap menus.
 // These are methods of the World (index.js adds them to it), so `this` is the world.
 import { FILTER, G, starText, MINUTE, HOUR, clean, num, kindOk, addCarry, takeCarry, ageOf, pickRandom } from './shared.js';
@@ -229,10 +229,21 @@ export const adminMethods = {
         if (n) await everyoneSees();
         return done(n ? `Cleared ${n} ${n === 1 ? 'thing' : 'things'}` : 'Nothing to clear');
       }
-      case 'a.reset':
+      case 'a.reset': // the land starts again. With all: so does everyone (every person, their past people, the Inbox, bans and mutes go too)
+        if (m.all) {
+          this.persons.clear(); this.dirty.clear(); this.savedAt.clear();
+          this.admin.banned = []; this.admin.muted = []; await this.saveAdmin(); // (maintenance and its message stay)
+          const gone = ['feedback', 'reports'];
+          for (const prefix of ['p:', 'past:']) gone.push(...(await this.ctx.storage.list({ prefix })).keys());
+          this.use('writes', gone.length);
+          for (let i = 0; i < gone.length; i += 100) await this.ctx.storage.delete(gone.slice(i, i + 100));
+        }
         this.world = null;
         await this.ctx.storage.delete('world');
-        for (const { ws: s } of this.sockets()) this.boot(s, { t: 'reset' }); // everyone rejoins and the first one lays it out fresh
+        for (const { ws: s, p: them } of this.sockets()) { // everyone rejoins and the first one lays it out fresh
+          if (m.all) { them.alive = false; s.serializeAttachment(them); } // nobody has a person any more
+          this.boot(s, { t: 'reset', all: !!m.all });
+        }
         return;
 
       /* ---------- single things: add, move, regrow, remove ---------- */

@@ -378,7 +378,7 @@ Object.assign(TASK_KINDS, {
           n = Math.min(t.n || 1, you.carry[kind] || 0, roomFor(th, kind));
           if (n < 1) { showTag(you.carry[kind] ? 'The fire is full' : `You have no ${ITEMS[kind].plural.toLowerCase()}`, headTop(), 2); nextTask(); return; }
         }
-        if (t.do === 'light' && (isLit(th) || fuelLeft(th) <= 0)) { showTag(isLit(th) ? "It's already lit" : `Add ${ITEMS[F.fuel].plural.toLowerCase()} first`, headTop(), 2); nextTask(); return; }
+        if (t.do === 'light' && (isLit(th) || fuelLeft(th) <= 0)) { showTag(isLit(th) ? "It's already lit" : 'Add fuel first', headTop(), 2); nextTask(); return; }
         if (t.do === 'out' && !isLit(th)) { nextTask(); return; }
         face(th.x, th.z);
         const secs = t.do === 'light' ? F.lightSeconds : 1.2;
@@ -483,7 +483,7 @@ function placedActions(th) {
   }
   const out = [];
   const F = P.fire, lit = !!F && isLit(th);
-  if (F && !lit) out.push({ label: 'Light fire', disabled: fuelLeft(th) <= 0, note: fuelLeft(th) > 0 ? `${F.lightSeconds} s` : `Add ${ITEMS[F.fuel].plural.toLowerCase()} first`, run: () => queueTask({ type: 'tend', id: th.id, do: 'light' }) });
+  if (F && !lit) out.push({ label: 'Light fire', disabled: fuelLeft(th) <= 0, note: fuelLeft(th) > 0 ? `${F.lightSeconds} s` : 'Add fuel first', run: () => queueTask({ type: 'tend', id: th.id, do: 'light' }) });
   if (F) { // Add fuel: one list of every fuel it takes that you carry (sticks, logs), one or as many as fit
     const fuels = [];
     let carrying = false;

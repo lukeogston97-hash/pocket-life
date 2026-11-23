@@ -2,7 +2,7 @@
    Type "/admin" and the code in the Say box once; the phone remembers it. "/admin off" forgets it.
    The code itself is a Cloudflare secret (ADMIN_CODE), so it never sits in the game's files.
    Menu > Admin opens the Admin panel, with tabs: Server (maintenance, messages, speed), Players (find someone and
-   open their page), Inbox (feedback and reports), World (counts, regrow, clear, reset) and Settings (live numbers).
+   open their page), Inbox (feedback and reports), World (counts, regrow, clear, reset the world or everything) and Settings (live numbers).
    Single things are moved, regrown and removed from their own tap menus, under Admin. */
 const ADMIN_KEY = 'pocket-life:admin', ADMIN_TAG_KEY = 'pocket-life:adminTag';
 const admin = { on: false, code: '', tag: true, maintenance: false, message: '', live: [] };
@@ -50,7 +50,10 @@ function adminMessage(m) {
     net.stopped = true;
     showMaintenance(m.t === 'kicked' ? 'You were removed from the world by the admin. Reload the page to join again.' : "You can't join this world.",
       m.t === 'kicked' ? 'Removed' : 'Not allowed', '');
-  } else if (m.t === 'reset') showTag('The world was reset', headTop(), 3);
+  } else if (m.t === 'reset') {
+    if (m.all) { stopQueue(); outbox.length = 0; } // your person is gone too: nothing left to do or send
+    showTag(m.all ? 'Everything was reset' : 'The world was reset', headTop(), 3);
+  }
 }
 // a banner across everyone's screen
 let bannerTimer = null;
@@ -183,13 +186,15 @@ function entry(head, body, buttons = [], cls = '') {
   if (buttons.length) { const bar = el('div', 'admin-btns'); for (const [label, run] of buttons) bar.appendChild(button(label, run)); e.appendChild(bar); }
   return e;
 }
-// a button that needs a second tap within a few seconds (for things that can't be undone)
-function twoTaps(btn, run, again = 'Tap again to be sure') {
+// a button that needs a second tap within a few seconds (for things that can't be undone). With wait, the second tap
+// only counts after that long, so a double tap by mistake does nothing.
+function twoTaps(btn, run, again = 'Tap again to be sure', wait = 0) {
   const label = btn.textContent;
-  let armed = null;
+  let armed = null, at = 0;
   const reset = () => { clearTimeout(armed); armed = null; btn.textContent = label; };
   btn.addEventListener('click', () => {
-    if (!armed) { btn.textContent = again; armed = setTimeout(reset, 4000); return; }
+    if (!armed) { btn.textContent = again; at = performance.now(); armed = setTimeout(reset, 4000 + wait); return; }
+    if (performance.now() - at < wait) return;
     reset(); run();
   });
   return reset;
@@ -405,8 +410,11 @@ function drawCounts() {
 $('adminRegrowBtn').addEventListener('click', () => { adminSend({ t: 'a.regrowAll' }); setTimeout(drawCounts, 800); });
 $('adminClearNearBtn').addEventListener('click', () => { adminSend({ t: 'a.clear', near: true, x: player.position.x, z: player.position.z }); setTimeout(drawCounts, 800); });
 const resetClearAll = twoTaps($('adminClearAllBtn'), () => { adminSend({ t: 'a.clear', near: false }); setTimeout(drawCounts, 800); }, 'Tap again: clear everything');
-const resetReset = twoTaps($('adminResetBtn'), () => { adminSend({ t: 'a.reset' }); closeAdminPanel(); }, 'Tap again to reset everything');
-function resetDanger() { resetClearAll(); resetReset(); }
+// Reset the world: the land, loose items and placed things start again, people stay. Reset everything: every person,
+// everyone's past people and the Inbox go too (settings, bans and maintenance stay). Neither can be undone.
+const resetReset = twoTaps($('adminResetBtn'), () => { adminSend({ t: 'a.reset' }); closeAdminPanel(); }, 'Tap again: the land starts again', 1000);
+const resetResetAll = twoTaps($('adminResetAllBtn'), () => { adminSend({ t: 'a.reset', all: true }); closeAdminPanel(); }, 'Tap again: deletes every person', 1000);
+function resetDanger() { resetClearAll(); resetReset(); resetResetAll(); }
 
 /* ---------- Settings tab: live numbers (they stay until you tap Reset) ---------- */
 function drawSettings() {
