@@ -1,5 +1,5 @@
 {
-  "version": "0.3.4",
+  "version": "0.3.7",
   "build": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -908,6 +908,28 @@
   },
   "devlog": [
     {
+      "version": "0.3.7",
+      "date": "2026-11-23",
+      "notes": [
+        "A faint glow round loose items and campfires when your mouse is over them, so you know what you're about to click. The thing a tap menu is open for glows too, on phone and computer."
+      ]
+    },
+    {
+      "version": "0.3.6",
+      "date": "2026-11-23",
+      "notes": [
+        "Tidier What's new: older updates are grouped together.",
+        "Drag things out of the Inventory: onto your person to eat, onto a campfire to add fuel or cook, or onto the ground to drop one. Hold a moment first on a phone. The Inventory comes back after."
+      ]
+    },
+    {
+      "version": "0.3.5",
+      "date": "2026-11-23",
+      "notes": [
+        "Nicer sticks (an arched branch with a snapped end and twigs), stones (chunky rocks), berries (a cap and a stem) and logs (lumpy, with bark marks, a branch stub and growth rings on the cut ends)."
+      ]
+    },
+    {
       "version": "0.3.4",
       "date": "2026-11-23",
       "notes": [
@@ -959,261 +981,39 @@
       ]
     },
     {
-      "version": "0.2.9",
+      "version": "0.2.0 to 0.2.9",
       "date": "2026-11-22",
       "notes": [
-        "The stone pickaxe works now. Tap a rock and Break rock (about 10 s) to get 5 stones. The rock is gone, but broken rocks slowly come back beside boulders.",
-        "Tap a boulder and Mine boulder (about 15 s) for 3 to 5 stones. Boulders stay for good; a mined one looks worn down and can be mined again after 3 days, like a tree stump growing back.",
-        "Tap a mined boulder to see how long until you can mine it again."
+        "Campfires: craft one, place it, add fuel, light it and sit by it (one tap to sit).",
+        "Recipes are found as you go, and Craft has buttons for Tools, Food and Building.",
+        "New grid inventory: each tool gets its own tile and keeps its own wear.",
+        "Stone pickaxe: break rocks for 5 stones, mine boulders for 3 to 5.",
+        "Tree stumps grow back into trees, and tapping one shows how long.",
+        "New weights, longer lasting tools, logs as fuel and faster Stamina, so each visit has room to play.",
+        "Hands stay empty unless you're using a tool, and worlds not open yet look fresh."
       ]
     },
     {
-      "version": "0.2.8",
+      "version": "0.1.0 to 0.1.9",
       "date": "2026-11-22",
       "notes": [
-        "Sit by campfire is one tap now, with no time to pick. Your person sits until you tap Stand up, give them something else to do, or the fire goes out.",
-        "New: the stone pickaxe, made from 2 sticks, 3 stones and 1 twine. What it's for is coming soon.",
-        "Giving your person a task while they're sitting by the fire makes them stand up and do it.",
-        "The stone knife and stone pickaxe have new looks to match the stone axe: shaped stone heads, a grip at the end and twine lashing.",
-        "The old tree stumps and fallen logs are gone from the world. Stumps now only come from trees that have been chopped down, and they grow back into trees.",
-        "Tap a tree stump to see how long until it grows back into a tree."
+        "New look: dark glass panels, small round buttons and your needs as rings.",
+        "Crafting, the stone axe and chopping trees into logs and sticks.",
+        "New needs Rest and Stamina. Sleep, and collapse asleep if Rest runs out.",
+        "Tall grass for twine, and the stone knife.",
+        "New main menu with a world picker, and a new home at pocketlife.pages.dev.",
+        "One Darwin clock for everyone, better sleep at night, and a year older each real birthday.",
+        "Up to 20 players with a waiting line, and 3 days away before your person leaves."
       ]
     },
     {
-      "version": "0.2.7",
-      "date": "2026-11-22",
-      "notes": [
-        "Recipes are found as you go: one shows in Craft once you've had all but one of the things it needs, and Craft says how many are still to find.",
-        "Craft has buttons for Tools, Food and Building, and a search box once you know lots of recipes.",
-        "Tap a recipe's name to see more about it."
-      ]
-    },
-    {
-      "version": "0.2.6",
-      "date": "2026-11-22",
-      "notes": [
-        "You can drop any tool, including the one you're using.",
-        "Campfires can be packed up into your inventory or taken apart once they're out. Only the person who built one can do that, and once a fire has been lit, taking it apart gives back just the stones.",
-        "Each tool keeps its own wear, and a worn tool stays worn when you drop it and pick it up again (it used to come back as new). Tap one on the ground to see its uses left."
-      ]
-    },
-    {
-      "version": "0.2.5",
-      "date": "2026-11-22",
-      "notes": [
-        "New inventory: your things are tiles in a grid, and each tool gets its own. Tap one to see what it is and what you can do with it, and tap it again to hide that.",
-        "Craft with, on an item in your inventory, shows only the recipes that use it.",
-        "Craft shows what you can make right now first.",
-        "Tidier campfire menu: the time left shows at the top, Add fuel has its own list, and Inspect and Walk here sit small along the bottom (the same in every tap menu)."
-      ]
-    },
-    {
-      "version": "0.2.4",
-      "date": "2026-11-22",
-      "notes": [
-        "Sticks and stones turn up on the ground every 5 minutes (was 10), up to the usual amount, so it never gets cluttered.",
-        "The sticks in a campfire look full again at about 50 minutes of fuel."
-      ]
-    },
-    {
-      "version": "0.2.3",
-      "date": "2026-11-22",
-      "notes": [
-        "New weights: logs 5 (was 10), campfires 12 (was 17), twine, berries and the stone knife 1 each.",
-        "Tools last longer: the stone knife 20 uses (was 10), the stone axe 30 (was 20).",
-        "Logs burn on a campfire: 30 minutes each (a stick is 5). A fire now holds up to 2 hours of fuel.",
-        "Chopping a log into sticks gives 5 sticks (was 4)."
-      ]
-    },
-    {
-      "version": "0.2.2",
-      "date": "2026-11-22",
-      "notes": [
-        "Stamina comes back faster: full again in about 10 minutes (was 15).",
-        "Sitting by a campfire fills Stamina in about 2 to 3 minutes, and sleeping in about 4.",
-        "Chopping takes a bit less Stamina (10, was 15)."
-      ]
-    },
-    {
-      "version": "0.2.1",
-      "date": "2026-11-22",
-      "notes": [
-        "A campfire now takes 4 stones too (1 log, 3 sticks and 4 stones), for the ring round the fire.",
-        "Sitting by the fire, your feet stay out of the flames (seats are a bit further back).",
-        "Your hands are empty unless you're using a tool: the axe comes out to chop and the knife to cut, then they're put away.",
-        "On the main menu, worlds that aren't open yet look fresh and untouched: every tree standing, nothing on the ground and nobody there."
-      ]
-    },
-    {
-      "version": "0.2.0",
-      "date": "2026-11-22",
-      "notes": [
-        "Campfires! Craft one from 1 log and 3 sticks (the hammer button).",
-        "Place it from your Inventory: tap the ground to pick a spot, then Place. Your person puts it down and builds it.",
-        "Tap a campfire to add sticks, light it, put it out or check how much fuel is left. Each stick burns for 5 minutes and it holds up to 10.",
-        "The fire keeps burning while you're away and goes out by itself when the sticks run out.",
-        "Sit by a lit campfire for 5 minutes up to an hour. Your person keeps sitting even if you close the game, and others can sit round it too."
-      ]
-    },
-    {
-      "version": "0.1.9",
-      "date": "2026-11-22",
-      "notes": [
-        "You can now be away for 3 days before your person leaves the world (was 2).",
-        "After the first day away your person sleeps on the ground. Hunger and thirst still drop slowly, but stop at 10%, so you come back hungry and thirsty but alive.",
-        "Sleeping at night (8 pm to 6 am) fills Rest faster: about 6 hours instead of 8.",
-        "People away or on autopilot now go to bed when it gets dark and get up in the morning.",
-        "Ageing: your person gets a year older on their birthday each real year, from the day you made them."
-      ]
-    },
-    {
-      "version": "0.1.8",
-      "date": "2026-11-22",
-      "notes": [
-        "World picker: each world shows how many people are in it, and a world that's coming soon shows empty.",
-        "Fixed people getting stuck in the pond: you can always wade out, and nobody comes back or appears standing in the water.",
-        "Twine looks like twine now: a coil of thin cord, tied across, with a loose end."
-      ]
-    },
-    {
-      "version": "0.1.7",
-      "date": "2026-11-22",
-      "notes": [
-        "New home: the game is now at pocketlife.pages.dev. The old address sends you there and you keep your person.",
-        "The main menu has a world picker under Play: Oceania (Darwin time) is open now, with Europe and Americas coming soon. Tap one to see the world at that time of day.",
-        "People away from the game no longer walk through trees or get stuck: they keep to a route round things and keep up with where they're meant to be.",
-        "A big clean-up behind the scenes so lots of new things can be added quickly. Nothing about how the game plays has changed."
-      ]
-    },
-    {
-      "version": "0.1.6",
-      "date": "2026-11-22",
-      "notes": [
-        "One clock for the whole world: it runs on Darwin time for everyone, so day and night are the same for all players (other regions can come later).",
-        "Energy is now short-term stamina: it drains as you work and walk and comes back in about 15 minutes. When it's low you slow down instead of stopping.",
-        "Health heals faster when you're fed, watered and rested: about a day from low to full, quicker asleep.",
-        "New: tall grass. Cut it for twine (6 s by hand, 2 s with a knife); it grows back in 1 to 4 hours.",
-        "New: Stone knife (1 stick, 1 stone, 1 twine). It cuts grass fast and picks 2 berries at a time, and wears out after 10 uses.",
-        "The stone axe now needs 1 twine too, to lash the head on.",
-        "The stone axe looks like an axe now: a flat stone head with a curved cutting edge, lashed on with twine.",
-        "Energy is now called Stamina, the berry bush button says Pick berries, and people away for over a day show 'away · fast asleep'.",
-        "The axe in your hand is turned round so the cutting edge faces the right way."
-      ]
-    },
-    {
-      "version": "0.1.5",
+      "version": "0.0.5 to 0.0.8",
       "date": "2026-11-21",
       "notes": [
-        "Running out of Rest no longer kills you. Your person collapses asleep where they stand, like in real life, and can't be woken until Rest is back to 25%."
-      ]
-    },
-    {
-      "version": "0.1.4",
-      "date": "2026-11-21",
-      "notes": [
-        "Ready for more players: up to 20 can play at once. When the world is full you wait in line on the main menu and join by yourself when a spot opens.",
-        "Walking now sends far fewer messages to the server (where you're going, not every step), so the world stays inside Cloudflare's free plan.",
-        "The server saves less often while people just walk about (what you do is still saved straight away).",
-        "Your phone only draws the 30 people nearest you, so a busy world stays smooth.",
-        "Away for 48 hours and your person leaves the world (a day strolling, then a day asleep). Welcome back tells you how long you have.",
-        "Admin: the Admin panel shows today's server use against the free limit, and how many are playing and waiting."
-      ]
-    },
-    {
-      "version": "0.1.3",
-      "date": "2026-11-21",
-      "notes": [
-        "New main menu: Play, What's new, Settings and Feedback, over a live view of the world slowly circling the main pond.",
-        "Under Play it shows who you'll carry on as, or that you'll make a new person.",
-        "Make your person has a Back button.",
-        "The pause menu is now just Resume and Exit (Exit goes back to the main menu and your person goes away and looks after themselves).",
-        "Graphics moved to Settings on the main menu.",
-        "Tidied up old code and the help notes for adding items.",
-        "The walking tip no longer covers your needs when you open them, the chat or the inventory.",
-        "Admin: the Feedback, reports, players list now opens in place of the Admin panel, and Close (or Escape) goes back to it."
-      ]
-    },
-    {
-      "version": "0.1.2",
-      "date": "2026-11-21",
-      "notes": [
-        "Chopping: with a stone axe, tap a tree and Chop tree (about 10 s). You get a log and 2 sticks, and a stump is left.",
-        "Stumps grow back into trees after 3 days, unless you Remove stump (about 10 s, 1 more log): then the tree is gone for good. The old stumps already in the world can be dug out the same way.",
-        "Tap a log on the ground and Chop into sticks (about 8 s, 4 sticks). Logs weigh 10.",
-        "Each chop wears your axe (20 uses), and it breaks when worn out. Chopping takes a fair bit of energy.",
-        "A need under 10% flashes so you can't miss it."
-      ]
-    },
-    {
-      "version": "0.1.1",
-      "date": "2026-11-21",
-      "notes": [
-        "New need: Rest (the moon ring, between health and hunger). Awake it lasts about 16 hours; sleeping fills it in about 8.",
-        "New need: Energy (the yellow ring on the right). Every task and walk takes a little; it comes back while you take it easy, and twice as fast asleep. Too low and your person needs a breather before doing more.",
-        "Realistic sleep: 8 hours fills Rest (about 12 an hour), and you get hungry and thirsty more slowly while asleep.",
-        "Tap yourself and choose Sleep; tap yourself again (or give your person something to do) to wake up. Others see you lying down, sleeping.",
-        "People who are away or on autopilot sleep by themselves when they get tired.",
-        "No rest for about 3 days and you collapse and die.",
-        "Sticks, stones, berries and the stone axe look better, each with a little variety, and show as small pictures in your Inventory and Craft.",
-        "The stone axe is held properly: by the end of the handle, head up, blade forward."
-      ]
-    },
-    {
-      "version": "0.1.0",
-      "date": "2026-11-21",
-      "notes": [
-        "New look everywhere: dark glass panels, small round buttons, and your needs as rings (tap them for numbers).",
-        "Crafting: tap the hammer at the bottom to see what you can make and what you still need. First up, a stone axe from 2 sticks and 3 stones.",
-        "Your stone axe shows in your hand, with a wear bar in your inventory (20 uses). Chopping comes next.",
-        "Chat: Say opens a chat bar at the bottom with the last few messages. It stays open until you tap the world.",
-        "Walking finds a way round rocks, bushes, trees and the pond, for you and people who are away."
-      ]
-    },
-    {
-      "version": "0.0.8",
-      "date": "2026-11-21",
-      "notes": [
-        "Close or switch away from the game and your person goes 'away' straight away and starts strolling about.",
-        "You can see what others are doing: bending to pick things up, picking berries, kneeling to drink (people who are away too).",
-        "Shorter menus: admin options sit behind one Admin item, a smaller Admin panel, and this list folds older updates.",
-        "Bug fixes: coming back puts you where your person strolled to.",
-        "Patch: the coloured flower dots on the ground are gone.",
-        "Patch: leave the game open without touching it for 3 minutes and your person goes on autopilot (eats, drinks, picks berries, strolls). Tap to take over.",
-        "Patch: people strolling while away walk round the pond, not through it.",
-        "Patch 3: people away (and on autopilot) stay within about 25 m of the pond.",
-        "Patch 3: name tags fade out behind the top and bottom bars, tap menus stay clear of them, and the Say box opens just under the top info.",
-        "Patch 4: the task list only shows while your person is doing something. Inventory and pop-ups sit above the bottom bars again.",
-        "Patch 5: walking finds a way round rocks, bushes, trees and the pond, so people don't get stuck (you, and people strolling while away)."
-      ]
-    },
-    {
-      "version": "0.0.7",
-      "date": "2026-11-21",
-      "notes": [
-        "Your person lives on the server and stays in the world while you're away.",
-        "Away: they stroll about, eat, pick berries and drink. After a day they sleep; after 7 days asleep they leave.",
-        "Welcome back card, 'away' and 'asleep' name tags, graves.",
-        "Realistic needs: hunger lasts a day, thirst about 16 hours. Berries fill 10, drinks fill 15.",
-        "26 more berry bushes. Tap the ground for Walk here. Say button at the bottom. What's new in the Menu.",
-        "Fresh start: everyone makes a new person."
-      ]
-    },
-    {
-      "version": "0.0.6",
-      "date": "2026-11-21",
-      "notes": [
-        "Online: one shared world, other people, speech bubbles.",
-        "Online count, Graphics setting, Send feedback.",
-        "Chat filter, Mute and Report.",
-        "Double-tap to walk."
-      ]
-    },
-    {
-      "version": "0.0.5",
-      "date": "2026-11-20",
-      "notes": [
-        "Berry bushes, tap menus, task list, pause menu.",
-        "Walking round rocks and trees. Saving."
+        "First playable: berry bushes, tap menus, the task list, the pause menu and saving.",
+        "Online: one shared world with other people, speech bubbles, a chat filter, Mute and Report.",
+        "Your person lives on the server and looks after themselves while you're away.",
+        "Autopilot, and seeing what others are doing."
       ]
     }
   ],

@@ -759,6 +759,31 @@ async def bagdrag():
         expect(left2 == left - 1, f'a stick dragged onto the ground was dropped ({left} -> {left2})')
         expect(await a.evaluate("document.getElementById('bag').classList.contains('open')"), 'the bag is open again after a drop')
 
+async def glow():
+    """A mouse over a loose item or a campfire gives it a faint outline; moving away takes it off."""
+    async with world({}, FISHKIT=1) as W:
+        a = await W.page('glow'); await join(a)
+        scr = """(([x, y, z]) => { const v = new __pl.THREE.Vector3(x, y, z).project(__pl.camera), r = document.getElementById('world').getBoundingClientRect();
+          return [r.left + (v.x + 1) / 2 * r.width, r.top + (1 - v.y) / 2 * r.height]; })"""
+        await a.click('#bagBtn'); await a.wait_for_timeout(400)
+        await a.click('#bagList .bag-tile[data-kind="campfire"]'); await a.wait_for_timeout(200)
+        await a.click('#bagInfo button.go'); await a.wait_for_timeout(400)
+        spot = await a.evaluate("""(() => { const p = __pl.player.position;
+          for (let r = 2; r < 8; r += 0.5) for (let k = 0; k < 16; k++) { const x = p.x + Math.cos(k / 16 * 6.28) * r, z = p.z + Math.sin(k / 16 * 6.28) * r;
+            if (!__pl.cantPlaceAt(x, z, 'campfire')) { __pl.movePlacing(x, z); return [x, z]; } } return null; })()""")
+        await a.evaluate('__pl.finishPlacing()'); await idle(a, 40); await a.wait_for_timeout(1500)
+        fire = await a.evaluate(f"({scr})([{spot[0]}, 0.3, {spot[1]}])")
+        await a.mouse.move(fire[0], fire[1], steps=4); await a.wait_for_timeout(500)
+        fid = await a.evaluate('[...__pl.placed.keys()][0]')
+        expect(await a.evaluate(f'__pl.glowOn === __pl.placed.get({fid}).view'), 'the campfire glows under the mouse')
+        it = await a.evaluate("""(() => { const p = __pl.player.position; let b = null, bd = 1e9;
+          for (const it of __pl.world.items) { const d = Math.hypot(it.x - p.x, it.z - p.z); if (d < bd) { bd = d; b = it; } } return b && [b.id, b.x, b.z]; })()""")
+        pt = await a.evaluate(f"({scr})(((v) => [v.x, v.y, v.z])(__pl.itemViews.get({it[0]}).position))")
+        await a.mouse.move(pt[0], pt[1], steps=4); await a.wait_for_timeout(500)
+        expect(await a.evaluate(f'__pl.glowOn === __pl.itemViews.get({it[0]})'), 'a loose item glows under the mouse')
+        await a.mouse.move(5, 5); await a.wait_for_timeout(500)
+        expect(await a.evaluate('__pl.glowOn !== __pl.itemViews.get(%d)' % it[0]), 'the glow goes when the mouse moves off')
+
 async def fishing():
     """Fish at the pond with a spear: catches go in the bag, the spear wears, the pond runs dry for everyone, raw fish can't be eaten,
     cooking takes a lit campfire and makes cooked fish that fills you up."""
@@ -808,7 +833,7 @@ async def fishing():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag}
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

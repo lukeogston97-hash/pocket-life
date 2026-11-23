@@ -1,6 +1,6 @@
 {
-  "version": "0.3.6",
-  "build": 2,
+  "version": "0.3.7",
+  "build": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,
@@ -907,6 +907,13 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.3.7",
+      "date": "2026-11-23",
+      "notes": [
+        "A faint glow round loose items and campfires when your mouse is over them, so you know what you're about to click. The thing a tap menu is open for glows too, on phone and computer."
+      ]
+    },
     {
       "version": "0.3.6",
       "date": "2026-11-23",
