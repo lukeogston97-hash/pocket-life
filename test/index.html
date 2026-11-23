@@ -196,6 +196,7 @@
         <button type="button" class="seg-btn" data-admin-tab="world" data-label="World">World</button>
         <button type="button" class="seg-btn" data-admin-tab="settings" data-label="Settings">Settings</button>
         <button type="button" class="seg-btn" data-admin-tab="items" data-label="Items">Items</button>
+        <button type="button" class="seg-btn" data-admin-tab="log" data-label="Log">Log</button>
       </div>
       <div class="admin-page" data-admin-page="server">
         <p id="adminUsage" class="admin-usage"></p>
@@ -231,6 +232,10 @@
         <div id="adminCounts" class="admin-counts"></div>
         <button id="adminRegrowBtn" type="button" class="small-btn admin-wide">Regrow everything</button>
         <div class="admin-sec">
+          <div class="admin-row"><span class="lbl">Fires and claims</span><span id="adminFiresState" class="admin-state"></span></div>
+          <div id="adminFires" class="admin-list"></div>
+        </div>
+        <div class="admin-sec">
           <span class="lbl">Clear loose items</span>
           <div class="admin-grid">
             <button id="adminClearNearBtn" type="button" class="small-btn">Middle of view (10 m)</button>
@@ -252,6 +257,10 @@
       </div>
       <div class="admin-page" data-admin-page="settings" hidden>
         <div id="adminSettings" class="admin-list"></div>
+      </div>
+      <div class="admin-page" data-admin-page="log" hidden>
+        <div class="admin-chips" id="adminLogShow"></div>
+        <div id="adminLog" class="admin-list"></div>
       </div>
       <div class="admin-page" data-admin-page="items" hidden>
         <input id="adminItemsFind" class="admin-input" maxlength="30" placeholder="Search items and recipes" autocomplete="off">

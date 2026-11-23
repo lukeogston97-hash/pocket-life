@@ -28,7 +28,10 @@ function adminMessage(m) {
     drawAdmin();
     if (!was) adminSend({ t: 'a.list' }); // (the list: for the Inbox count)
     if (m.text) adminSay(m.text);
+    if (m.text && adminTab === 'log' && !$('adminPanel').hidden) adminSend({ t: 'a.log' }); // the Log is open: the line for what was just done shows
   } else if (m.t === 'adminItems') { itemsData = m.list || []; if (adminTab === 'items') drawItems(); }
+  else if (m.t === 'adminFires') { firesData = m; if (adminTab === 'world') drawFires(); }
+  else if (m.t === 'adminLog') { logData = m.list || []; if (adminTab === 'log') drawLog(); }
   else if (m.t === 'adminList') { inboxData = m; drawInbox(); }
   else if (m.t === 'adminPlayers') { playersData = m; drawPlayers(); }
   else if (m.t === 'adminPlayer') { playerData = m; if (adminTab === 'player') drawPlayer(); }
@@ -136,8 +139,13 @@ function adminThingActions(what, i, grown) {
 function adminPlacedActions(th) {
   if (!admin.on) return [];
   const F = PLACEABLES[th.kind] && PLACEABLES[th.kind].fire;
+  const fire = (what) => () => adminSend({ t: 'a.fire', id: th.id, do: what });
+  const whose = th.claim ? `Ends ${th.claim.name}'s claim` : '';
   return [{ label: 'Move', note: 'Then tap where it goes', run: () => startMove({ what: 'placed', id: th.id }) },
-    ...(F && th.built ? [{ label: 'Fill with fuel', run: () => adminSend({ t: 'a.regrow', what: 'placed', id: th.id }) }] : []),
+    ...(F && th.built ? [{ label: 'Fill with fuel', run: () => adminSend({ t: 'a.regrow', what: 'placed', id: th.id }) },
+      th.lit ? (th.claim ? sure('Put out', fire('out'), whose) : { label: 'Put out', run: fire('out') }) : { label: 'Light', run: fire('light') }] : []),
+    ...(th.claim ? [sure('End claim', () => adminSend({ t: 'a.claim', id: th.id, do: 'end' }), 'The fire burns on')] : []),
+    ...(F ? [{ label: 'Fires and claims', note: 'Set fuel, give a claim', run: () => { openFire = th.id; openAdminPanel(); showAdminTab('world'); } }] : []),
     sure('Remove', () => adminSend({ t: 'a.remove', id: th.id }))];
 }
 // Move: the next tap on the ground is where it goes (a tap anywhere else stops)
@@ -216,7 +224,7 @@ const when = (t) => { try { return new Date(t).toLocaleString([], { day: 'numeri
 const minsLeft = (until) => Math.max(1, Math.round((until - Date.now()) / 60000));
 
 /* ---------- the panel and its tabs ---------- */
-let adminTab = 'server', playersData = null, playerData = null, inboxData = null;
+let adminTab = 'server', playersData = null, playerData = null, inboxData = null, editStats = null; // editStats: whose needs are open as boxes to type in
 function openAdminPanel() {
   if (!adminMode.on) return;
   $('adminDashBtn').setAttribute('aria-expanded', 'true');
@@ -234,7 +242,8 @@ function showAdminTab(tab) {
   for (const p of document.querySelectorAll('[data-admin-page]')) p.hidden = p.dataset.adminPage !== tab;
   if (tab === 'players') findPlayers();
   if (tab === 'inbox') drawInbox();
-  if (tab === 'world') { drawCounts(); drawRestore(); }
+  if (tab === 'world') { drawCounts(); drawRestore(); adminSend({ t: 'a.fires' }); drawFires(); }
+  if (tab === 'log') { adminSend({ t: 'a.log' }); drawLog(); }
   if (tab === 'settings') drawSettings();
   if (tab === 'items') { adminSend({ t: 'a.items' }); drawItems(); }
   if (tab === 'player') drawPlayer();
@@ -333,7 +342,39 @@ function drawPlayer() {
       row.append(el('span', '', s.name), bar, el('span', '', String(v)));
       sec.appendChild(row);
     }
+    if (editStats === p.id) { // the same numbers as boxes to type in (the server keeps them inside what's allowed)
+      const grid = el('div', 'admin-edit'), boxes = {};
+      const box = (label, value, max) => { const l = el('label', '', label), i = el('input', 'admin-input'); Object.assign(i, { type: 'number', min: '0', max: String(max), step: '1', inputMode: 'decimal', value: String(value) }); l.appendChild(i); grid.appendChild(l); return i; };
+      for (const s of STATS) if (p.stats[s.id] != null) boxes[s.id] = box(s.name, Math.round(p.stats[s.id]), 100);
+      const age = box('Age', p.age, 120);
+      const bar = el('div', 'admin-btns');
+      bar.append(button('Save', () => {
+        const stats = {};
+        for (const [id, i] of Object.entries(boxes)) { const v = parseFloat(i.value); if (Number.isFinite(v) && v !== Math.round(p.stats[id])) stats[id] = v; } // only the ones that were changed
+        const a = parseFloat(age.value), msg = { t: 'a.setStats', id: p.id, stats };
+        if (Number.isFinite(a) && a !== p.age) msg.age = a;
+        editStats = null;
+        if (Object.keys(stats).length || msg.age != null) adminSend(msg); else drawPlayer();
+      }), button('Cancel', () => { editStats = null; drawPlayer(); }));
+      sec.append(grid, bar);
+    } else { const bar = el('div', 'admin-btns'); bar.appendChild(button('Edit needs and age', () => { editStats = p.id; drawPlayer(); })); sec.appendChild(bar); }
     out.push(sec);
+  }
+  if (alive) { // a new name (for one that shouldn't have got past the filter), and a few words only they see
+    const talk = el('div', 'admin-entry');
+    const line = (holder, most, value, label, run) => {
+      const row = el('form', 'admin-inline'), i = el('input', 'admin-input');
+      Object.assign(i, { maxLength: most, placeholder: holder, value, autocomplete: 'off' });
+      i.setAttribute('aria-label', holder);
+      const b = el('button', 'small-btn', label);
+      b.type = 'submit';
+      row.append(i, b);
+      row.addEventListener('submit', (e) => { e.preventDefault(); const text = i.value.trim(); if (text) run(text); });
+      talk.appendChild(row);
+    };
+    line('Name', 20, p.name, 'Rename', (name) => { if (name !== p.name) adminSend({ t: 'a.rename', id: p.id, name }); });
+    if (p.state === 'online') line('A message only they see', 140, '', 'Send', (text) => { adminSend({ t: 'a.tell', id: p.id, text }); drawPlayer(); });
+    out.push(talk);
   }
   if (alive) { // the bag: take things out, or give more
     const kinds = Object.entries(p.carry || {}).filter(([k, n]) => n > 0 && ITEMS[k]);
@@ -421,6 +462,76 @@ const resetClearAll = twoTaps($('adminClearAllBtn'), () => { adminSend({ t: 'a.c
 const resetReset = twoTaps($('adminResetBtn'), () => { adminSend({ t: 'a.reset' }); closeAdminPanel(); }, 'Tap again: the land starts again', 1000);
 const resetResetAll = twoTaps($('adminResetAllBtn'), () => { adminSend({ t: 'a.reset', all: true }); closeAdminPanel(); }, 'Tap again: deletes every person', 1000);
 function resetDanger() { resetClearAll(); resetReset(); resetResetAll(); resetRestore(); resetUndo(); }
+
+/* ---------- Fires and claims (World tab): every fire, its flame and fuel, and whose land it holds ----------
+   The server sends the list (a.fires) when the tab opens and after each change. A fire's own tap menu has the quick ones
+   (Light, Put out, End claim); here they all are, with the hours of fuel and who a claim goes to. */
+let firesData = null, openFire = null; // openFire: the fire whose fuel and claim boxes are showing
+const hoursText = (ms) => { const m = Math.round(ms / 60000), h = Math.floor(m / 60); return h && m % 60 ? `${h} h ${m % 60} m` : h ? `${h} h` : `${m} m`; };
+function drawFires() {
+  const box = $('adminFires'), d = firesData;
+  if (!d) { $('adminFiresState').textContent = ''; box.replaceChildren(emptyNote('Loading…')); return; }
+  const claims = d.list.filter((f) => f.claim).length;
+  $('adminFiresState').textContent = d.list.length ? `${d.list.length} ${d.list.length === 1 ? 'fire' : 'fires'} · ${claims} ${claims === 1 ? 'claim' : 'claims'}` : '';
+  if (!d.list.length) { box.replaceChildren(emptyNote('No fires yet')); return; }
+  const send = (f, more) => adminSend({ id: f.id, ...more });
+  box.replaceChildren(...[...d.list].sort((a, b) => !!b.claim - !!a.claim || b.lit - a.lit).map((f) => { // claims first, then burning ones
+    const kind = (PLACEABLES[f.kind] || {}).name || f.kind, head = el('div');
+    const state = !f.built ? 'not built yet' : f.lit ? `burning · ${hoursText(f.fuel)} left` : f.fuel > 0 ? `out · ${hoursText(f.fuel)} of fuel` : 'out · no fuel';
+    head.append(el('div', 'admin-name', f.claim ? `${f.claim.name}'s claim` : kind), el('div', 'admin-tag', [state, !f.claim && f.by ? `built by ${f.by}` : '', `at ${Math.round(f.x)}, ${Math.round(f.z)}`].filter(Boolean).join(' · ')));
+    const e = entry(head), bar = el('div', 'admin-btns');
+    e.dataset.fire = f.id;
+    bar.appendChild(button('Fly to', () => adminFlyTo(f.x, f.z)));
+    if (f.built && f.lit) { const b = button('Put out', () => {}); if (f.claim) twoTaps(b, () => send(f, { t: 'a.fire', do: 'out' }), `Tap again: ends ${f.claim.name}'s claim`, 500); else b.addEventListener('click', () => send(f, { t: 'a.fire', do: 'out' })); bar.appendChild(b); }
+    if (f.built && !f.lit) bar.appendChild(button('Light', () => send(f, { t: 'a.fire', do: 'light' })));
+    if (f.claim) { const b = button('End claim', () => {}); twoTaps(b, () => send(f, { t: 'a.claim', do: 'end' }), 'Tap again: the land is free', 500); bar.appendChild(b); }
+    if (f.built) bar.appendChild(button(openFire === f.id ? 'Less' : 'More', () => { openFire = openFire === f.id ? null : f.id; drawFires(); }));
+    e.appendChild(bar);
+    if (f.built && openFire === f.id) {
+      const fuel = el('form', 'admin-inline'), hours = el('input', 'admin-input'), most = Math.round(f.max / 3600000);
+      Object.assign(hours, { type: 'number', min: '0', max: String(most), step: '0.5', inputMode: 'decimal', placeholder: `Hours of fuel (up to ${most})` });
+      hours.setAttribute('aria-label', 'Hours of fuel');
+      const set = el('button', 'small-btn', 'Set fuel');
+      set.type = 'submit';
+      fuel.append(hours, set);
+      fuel.addEventListener('submit', (ev) => { ev.preventDefault(); const h = parseFloat(hours.value); if (Number.isFinite(h) && h >= 0) send(f, { t: 'a.fire', do: 'fuel', hours: h }); else adminSay('Type how many hours'); });
+      e.appendChild(fuel);
+      if (f.canClaim && f.lit) { // a claim lasts only while its fire burns, so only a burning one can be given
+        const give = el('form', 'admin-inline'), who = el('select', 'admin-input');
+        who.setAttribute('aria-label', 'Who the claim goes to');
+        who.append(...d.people.filter((p) => !f.claim || p.id !== f.claim.who).map((p) => { const o = el('option', '', p.name); o.value = p.id; return o; }));
+        const go = el('button', 'small-btn', f.claim ? 'Move claim' : 'Give claim');
+        go.type = 'submit';
+        give.append(who, go);
+        give.addEventListener('submit', (ev) => { ev.preventDefault(); if (who.value) send(f, { t: 'a.claim', do: 'give', to: who.value }); });
+        if (who.options.length) e.appendChild(give);
+      }
+    }
+    return e;
+  }));
+}
+
+/* ---------- Log tab: what happened in the world and what the admin did, newest first (server/src/activity.js) ---------- */
+let logData = null, logShow = 'all';
+function drawLog() {
+  chips($('adminLogShow'), [['all', 'All'], ['world', 'People'], ['admin', 'Admin'], ['guard', 'Refused']], logShow, (v) => { logShow = v; drawLog(); });
+  const box = $('adminLog');
+  if (!logData) { box.replaceChildren(emptyNote('Loading…')); return; }
+  const list = logData.filter((l) => logShow === 'all' || l.kind === logShow);
+  if (!list.length) { box.replaceChildren(emptyNote('Nothing yet')); return; }
+  // each day gets a heading (Today, Yesterday, then the date), so a line only needs its time and fits a phone
+  const dayOf = (t) => new Date(t).toDateString(), today = dayOf(Date.now()), yesterday = dayOf(Date.now() - 86400000);
+  const dayName = (t) => (dayOf(t) === today ? 'Today' : dayOf(t) === yesterday ? 'Yesterday' : new Date(t).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }));
+  const out = [];
+  let day = '';
+  for (const l of list) {
+    if (dayOf(l.at) !== day) { day = dayOf(l.at); out.push(el('div', 'admin-logday', dayName(l.at))); }
+    const row = el('div', `admin-logline ${['world', 'admin', 'guard'].includes(l.kind) ? l.kind : 'world'}`);
+    row.append(el('span', 'admin-logtime', new Date(l.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })), el('span', '', l.n > 1 ? `${l.text} (${l.n} times)` : l.text));
+    out.push(row);
+  }
+  box.replaceChildren(...out);
+}
 
 /* ---------- Restore (World tab): the whole world back to an earlier time (server/src/restore.js) ---------- */
 // Cloudflare keeps the last 30 days. Everything goes back together (land, people, bags, claims, Inbox, bans, settings),

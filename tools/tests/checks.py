@@ -167,7 +167,7 @@ async def collapse():
 
 
 async def screens():
-    """Screenshots of every screen on a phone and a computer, for a look (in tools/tests/shots)."""
+    """Screenshots of every screen on a phone and a computer, for a look (in tools/tests/shots): the game as a player, then admin mode."""
     async with world(TESTKIT=1) as W:
         for tag, w, h in [('phone', 390, 844), ('pc', 1280, 800)]:
             pg = await W.page(f'screens{tag}', w, h)
@@ -177,16 +177,23 @@ async def screens():
             await pg.click('#bagBtn'); await shot(pg, f'{tag}_04_inventory'); await pg.click('#bagClose')
             await pg.click('#craftBtn'); await shot(pg, f'{tag}_05_craft'); await pg.click('#craftClose')
             await pg.click('#sayBtn'); await pg.fill('#sayInput', 'hello there'); await pg.press('#sayInput', 'Enter'); await shot(pg, f'{tag}_06_chat')
-            await pg.fill('#sayInput', '/admin secret123456'); await pg.press('#sayInput', 'Enter'); await pg.wait_for_timeout(800)
             await pg.mouse.click(w // 2, int(h * 0.3)); await pg.wait_for_timeout(300)
-            await pg.click('#menuBtn'); await shot(pg, f'{tag}_07_pause')
-            await pg.click('#pauseAdminBtn'); await pg.wait_for_timeout(300); await shot(pg, f'{tag}_08_admin')
-            for k, t in enumerate(['players', 'inbox', 'world', 'settings']):
-                await pg.click(f'[data-admin-tab="{t}"]'); await pg.wait_for_timeout(400); await shot(pg, f'{tag}_09{"abcd"[k]}_admin_{t}')
-            await pg.click('[data-admin-tab="players"]'); await pg.wait_for_timeout(400); await pg.click('#adminPlayers .admin-entry'); await pg.wait_for_timeout(500); await shot(pg, f'{tag}_09e_admin_player')
-            await pg.click('#adminClose')
-            await pg.evaluate("__pl.showWelcomeBack({ ms: 5 * 3600000, ate: 3, drank: 2, picked: 4, slept: true })"); await shot(pg, f'{tag}_10_welcome_back'); await pg.click('#backBtn')
-            await pg.evaluate("__pl.die({ name: __pl.you.look.name, age: 25, cause: 'thirst' })"); await shot(pg, f'{tag}_11_death')
+            await pg.click('#menuBtn'); await shot(pg, f'{tag}_07_pause'); await pg.click('#resumeBtn')
+            # admin mode, on a second screen of the same size, while the first is still playing (so there is someone to look at)
+            ad = await W.page(f'screensadmin{tag}', w, h)
+            await ad.evaluate('__pl.openAdminLogin()'); await ad.wait_for_function("!document.getElementById('adminLogin').hidden", timeout=5000)
+            await ad.fill('#adminLoginCode', 'secret123456'); await shot(ad, f'{tag}_08_admin_password')
+            await ad.click('#adminLoginGo'); await ad.wait_for_function('!__pl.adminMode.asking', timeout=8000); await frames(ad, 2)
+            await shot(ad, f'{tag}_09_admin_world')
+            await ad.click('#adminDashBtn'); await ad.wait_for_timeout(500); await shot(ad, f'{tag}_10a_admin_server')
+            for k, t in enumerate(['players', 'inbox', 'world', 'settings', 'items', 'log']):
+                await ad.click(f'[data-admin-tab="{t}"]'); await ad.wait_for_timeout(700); await shot(ad, f'{tag}_10{"bcdefg"[k]}_admin_{t}')
+            await ad.click('[data-admin-tab="players"]'); await ad.wait_for_timeout(700); await ad.click('#adminPlayers .admin-entry'); await ad.wait_for_function("document.querySelector('#adminPlayer .admin-stat')", timeout=8000)
+            await shot(ad, f'{tag}_10h_admin_person')
+            await ad.click('#adminPlayer >> text=Edit needs and age'); await shot(ad, f'{tag}_10i_admin_person_edit')
+            await ad.click('#adminClose')
+            await pg.evaluate("__pl.showWelcomeBack({ ms: 5 * 3600000, ate: 3, drank: 2, picked: 4, slept: true })"); await shot(pg, f'{tag}_11_welcome_back'); await pg.click('#backBtn')
+            await pg.evaluate("__pl.die({ name: __pl.you.look.name, age: 25, cause: 'thirst' })"); await shot(pg, f'{tag}_12_death')
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
@@ -1293,7 +1300,145 @@ async def admin_follow():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'admin_items': admin_items, 'admin_follow': admin_follow}
+async def admin_extras():
+    """Admin mode, the tools added last: a fire's fuel, flame and claim from the World tab and from the fire's own menu; a person's needs, age and name typed in and a message only they see; the Log. The player's own game is the witness."""
+    async with world(CAMPKIT=1) as W:
+        b = await W.page('firePlayer'); await join(b)
+        send = "(m) => window.__sock.send(JSON.stringify(m))"
+        # the player makes a campfire away from the pond and lights it, the way a player does: it's their claim
+        await b.evaluate(f"({send})({{ t: 'craft', id: 'campfire' }})"); await b.wait_for_timeout(800)
+        await b.evaluate("__pl.queueTask({ type: 'walk', x: 28, z: 6 })"); await idle(b, 50); await b.wait_for_timeout(1500)
+        spot = await b.evaluate("(() => { const p = __pl.player.position; for (let k = 0; k < 16; k++) { const ang = k / 16 * Math.PI * 2, x = p.x + Math.cos(ang) * 1.8, z = p.z + Math.sin(ang) * 1.8; if (!__pl.cantPlaceAt(x, z, 'campfire')) return [x, z]; } return null; })()")
+        expect(spot is not None, f'a spot for the campfire ({spot})')
+        await b.evaluate(f"({send})({{ t: 'place', kind: 'campfire', x: {spot[0]:.2f}, z: {spot[1]:.2f}, rot: 0 }})"); await b.wait_for_timeout(800)
+        fid = await b.evaluate("[...__pl.placed.keys()][0]")
+        for m in [f"{{ t: 'build', id: {fid} }}", f"{{ t: 'fire', id: {fid}, do: 'add', n: 5, fuel: 'stick' }}", f"{{ t: 'fire', id: {fid}, do: 'light' }}"]:
+            await b.evaluate(f"({send})({m})"); await b.wait_for_timeout(700)
+        who = await b.evaluate('__pl.net.myId')
+        name = await b.evaluate('__pl.you.look.name')
+        fire = lambda: b.evaluate(f"(() => {{ const th = __pl.placed.get({fid}); return {{ lit: __pl.isLit(th), claim: th.claim ? th.claim.name : '', fuel: th.fuel }}; }})()")
+        f = await fire()
+        expect(f['lit'] and f['claim'] == name, f"the player's fire burns and is their claim ({f})")
+
+        a = await W.page('fireAdmin', 1440, 900); await open_admin(a)
+        # what the admin is told: every line shown under the bar is kept as it appears (a line is only up for a few seconds,
+        # and on this computer reading it afterwards can come too late)
+        await a.evaluate("(() => { window.__told = []; const t = document.getElementById('adminToast'); new MutationObserver(() => { if (!t.hidden && t.textContent) window.__told.push(t.textContent); }).observe(t, { childList: true, characterData: true, subtree: true, attributes: true }); })()")
+        toast = lambda: a.evaluate("window.__told[window.__told.length - 1] || ''")
+        row = lambda: a.evaluate("(() => { const e = document.querySelector('#adminFires [data-fire]'); return e ? e.innerText.replace(/\\s+/g, ' ') : ''; })()")
+        tap_twice = lambda label: a.evaluate(f"(async () => {{ const find = () => [...document.querySelectorAll('#adminFires button')].find((x) => x.textContent === '{label}' || x.textContent.startsWith('Tap again')); const b1 = find(); if (!b1) return 'no button'; b1.click(); await new Promise((r) => setTimeout(r, 900)); const b2 = find(); if (!b2) return 'gone'; const said = b2.textContent; b2.click(); return said; }})()")
+        await a.click('#adminDashBtn'); await a.click('[data-admin-tab="world"]')
+        await a.wait_for_function("document.querySelectorAll('#adminFires [data-fire]').length === 1", timeout=8000)
+        r = await row()
+        expect(f"{name}'s claim" in r and 'burning' in r and await a.evaluate("document.getElementById('adminFiresState').textContent") == '1 fire · 1 claim', f'the World tab lists the fire as their claim, burning ("{r}")')
+        await shot(a, 'admin-extras-1-world-pc')
+        # its fuel, typed in hours
+        await a.click('#adminFires >> text=More')
+        await a.fill('#adminFires input[type=number]', '2'); await a.click('#adminFires >> text=Set fuel'); await a.wait_for_timeout(1500)
+        f = await fire()
+        expect(abs(f['fuel'] - 2 * 3600000) < 120000 and f['lit'] and f['claim'] == name, f"Set fuel 2: the player's game has two hours on the fire, still burning, still theirs ({f['fuel'] / 60000:.0f} min)")
+        said = await toast()
+        expect(said == '2 h of fuel', f'the admin is told ("{said}")')
+        # End claim: the land is free, the fire burns on
+        asked = await tap_twice('End claim'); await a.wait_for_timeout(1500)
+        f = await fire()
+        expect(asked.startswith('Tap again') and f['lit'] and f['claim'] == '', f'End claim asks to tap again, then the fire burns on as nobody\'s claim ({f}; button said "{asked}")')
+        r = await row()
+        expect('claim' not in r.split(' · ')[0] and f'built by {name}' in r, f'the list shows it as a plain fire the player built ("{r}")')
+        # give it back
+        await a.select_option('#adminFires select', who); await a.click('#adminFires >> text=Give claim'); await a.wait_for_timeout(1500)
+        f = await fire()
+        expect(f['claim'] == name and f['lit'], f"Give claim: it's the player's claim again ({f})")
+        said = await toast()
+        expect(said == f"Now {name}'s claim", f'the admin is told ("{said}")')
+        # Put out: asks again because it ends their claim
+        asked = await tap_twice('Put out'); await a.wait_for_timeout(1500)
+        f = await fire()
+        expect(name in asked and not f['lit'] and f['claim'] == '', f'Put out warns it ends their claim, then the fire is out and the claim gone ({f}; button said "{asked}")')
+        # the fire's own menu, tapped in the world: Light, then Put out
+        menu = lambda: a.evaluate("({ shown: !document.getElementById('actMenu').hidden, title: document.getElementById('actTitle').textContent, acts: [...document.querySelectorAll('#actList .act-btn')].map((x) => x.firstChild.textContent) })")
+        fx, fy, fz = await a.evaluate(f"(() => {{ const th = __pl.placed.get({fid}); return [th.x, __pl.controls.target.y, th.z]; }})()")
+        await a.click('#adminFires >> text=Fly to'); await frames(a, 3)
+        fx, fy, fz = await a.evaluate(f"(() => {{ const th = __pl.placed.get({fid}); return [th.x, __pl.controls.target.y - 0.8, th.z]; }})()")
+        sx, sy, front = await a.evaluate(f"({SCREEN})({fx}, {fy}, {fz})")
+        expect(front and 400 < sx < 1400 and 80 < sy < 860, f'Fly to puts the fire in view ({sx:.0f}, {sy:.0f})')
+        await a.mouse.click(sx, sy); await a.wait_for_timeout(600)
+        m = await menu()
+        expect(m['shown'] and 'Light' in m['acts'] and 'Fires and claims' in m['acts'] and 'Move' in m['acts'], f"tapping the fire in the world offers Light and the rest ({m})")
+        await a.click('#actList >> text=Light'); await a.wait_for_timeout(1500)
+        f, said = await fire(), await toast()
+        expect(f['lit'] and f['claim'] == '' and said.startswith('Lit'), f'Light from its menu lights it, as nobody\'s claim ({f}; "{said}")')
+        await a.mouse.click(sx, sy); await a.wait_for_timeout(600)
+        m = await menu()
+        expect(m['shown'] and 'Put out' in m['acts'] and 'Light' not in m['acts'], f"now its menu offers Put out ({m['acts']})")
+        await a.click('#actList >> text=Put out'); await a.wait_for_timeout(1500)
+        expect(not (await fire())['lit'], 'and Put out from its menu puts it out')
+
+        # a person's page: needs and age typed in
+        await a.click('[data-admin-tab="players"]'); await a.wait_for_timeout(1200)
+        await a.click(f'#adminPlayers >> text={name}'); await a.wait_for_function("document.querySelector('#adminPlayer .admin-stat')", timeout=8000)
+        st0 = await b.evaluate('__pl.you.stats')
+        await a.click('#adminPlayer >> text=Edit needs and age')
+        labels = await a.evaluate("[...document.querySelectorAll('#adminPlayer .admin-edit label')].map((l) => l.firstChild.textContent)")
+        expect('Hunger' in labels and 'Age' in labels and len(labels) == len(st0) + 1, f'every need and their age can be typed ({labels})')
+        await shot(a, 'admin-extras-2-person-pc')
+        await a.fill('#adminPlayer .admin-edit label:has-text("Hunger") input', '12'); await a.fill('#adminPlayer .admin-edit label:has-text("Age") input', '44')
+        await a.click('#adminPlayer >> text=Save'); await a.wait_for_timeout(1500)
+        st = await b.evaluate('__pl.you.stats')
+        expect(abs(st['hunger'] - 12) < 1.5 and await b.evaluate('__pl.you.look.age') == 44, f"their own game has hunger 12 and age 44 ({st['hunger']:.1f}, {await b.evaluate('__pl.you.look.age')})")
+        expect(abs(st['thirst'] - st0['thirst']) < 3 and abs(st['health'] - st0['health']) < 3, f"the needs that weren't touched stay as they were (thirst {st0['thirst']:.1f} to {st['thirst']:.1f})")
+        expect(await a.evaluate("!document.querySelector('#adminPlayer .admin-edit')"), 'and the boxes close again')
+        # a new name
+        await a.fill('#adminPlayer input[aria-label="Name"]', 'Robin'); await a.click('#adminPlayer >> text=Rename'); await a.wait_for_timeout(1500)
+        got = await b.evaluate("[__pl.you.look.name, document.getElementById('hudName').textContent]")
+        expect(got == ['Robin', 'Robin'], f"Rename: their own game shows the new name straight away ({got})")
+        said = await toast()
+        expect(await a.evaluate(f"__pl.others.get('{who}').title") == 'Robin' and said == f'{name} is now Robin', f'the admin sees it on them in the world too, and is told ("{said}")')
+        expect('Robin' in await a.evaluate("document.querySelector('#adminPlayer .admin-name').textContent"), 'and their page has the new name')
+        # a message only they see
+        await a.fill('#adminPlayer input[aria-label="A message only they see"]', 'Hello from the admin'); await a.click('#adminPlayer >> text=Send'); await a.wait_for_timeout(1500)
+        seen = await b.evaluate("[!document.getElementById('announce').hidden, document.getElementById('announce').textContent]")
+        expect(seen[0] and 'Hello from the admin' in seen[1], f"Message: it shows on their screen ({seen})")
+        expect(await a.evaluate("document.getElementById('announce').hidden"), 'and not on the admin\'s')
+
+        # the Log has it all, newest first, and its filter works
+        await a.click('[data-admin-tab="log"]'); await a.wait_for_function("document.querySelectorAll('#adminLog .admin-logline').length > 5", timeout=8000)
+        lines = await a.evaluate("[...document.querySelectorAll('#adminLog .admin-logline')].map((l) => l.lastChild.textContent)")
+        for want in ['Message: Sent to Robin', f'Rename: {name} is now Robin', f'Edit person: {name} changed', f"Claim (campfire at {round(spot[0])}, {round(spot[1])}): Now {name}'s claim", f'{name} claimed land', f'New person: {name}, ', 'Admin mode opened']:
+            expect(any(l.startswith(want) for l in lines), f'the Log has "{want}"')
+        expect(lines.index('Message: Sent to Robin') < lines.index(f'{name} claimed land'), 'newest first')
+        await shot(a, 'admin-extras-3-log-pc')
+        await a.click('#adminLogShow >> text=People'); await a.wait_for_timeout(400)
+        people = await a.evaluate("[...document.querySelectorAll('#adminLog .admin-logline')].map((l) => l.lastChild.textContent)")
+        expect(len(people) >= 2 and all(not l.startswith(('Rename', 'Message', 'Fire', 'Claim (', 'Admin', 'Edit')) for l in people), f'People shows only what happened to people ({people})')
+        # every tab fits and can be read, on a computer and on a phone
+        fits = "(() => { const box = document.querySelector('.admin-tabs').getBoundingClientRect(); return [...document.querySelectorAll('[data-admin-tab]')].map((t) => { const r = t.getBoundingClientRect(); return [t.textContent, r.left >= box.left - 1 && r.right <= box.right + 1 && r.width > 40 && r.height >= 30 && t.scrollWidth <= t.clientWidth + 1]; }); })()"
+        tabs = await a.evaluate(fits)
+        expect(len(tabs) == 7 and all(ok for _, ok in tabs), f'all 7 tabs fit on a computer ({tabs})')
+        await a.set_viewport_size({'width': 390, 'height': 844}); await frames(a, 2)
+        tabs = await a.evaluate(fits)
+        expect(len(tabs) == 7 and all(ok for _, ok in tabs), f'and at phone size ({tabs})')
+        await shot(a, 'admin-extras-4-log-phone')
+        await a.click('[data-admin-tab="world"]'); await a.wait_for_function("document.querySelectorAll('#adminFires [data-fire]').length === 1", timeout=8000)
+        await shot(a, 'admin-extras-5-world-phone')
+        st = await a.evaluate("({ mode: __pl.ui.mode, person: !!__pl.player })")
+        expect(st['mode'] == 'admin' and not st['person'], f'the admin is still in admin mode with no person ({st})')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
+async def server_tests():
+    """The server's own code, tested with no browser (quick): the admin's fire, claim, Log, rename and message tools, live item numbers, and that an old admin flag gives a player nothing."""
+    import subprocess
+    from lib import bundle
+    bundle()
+    for f in ['admin_extras.mjs', 'live_items.mjs', 'stale_admin.mjs']:
+        r = subprocess.run(['node', f], cwd=HERE, capture_output=True, text=True, timeout=180)
+        last = (r.stdout.strip().splitlines() or ['(nothing printed)'])[-1]
+        if r.returncode: print(r.stdout[-4000:], r.stderr[-2000:])
+        expect(r.returncode == 0, f'{f}: {last[:160]}')
+
+
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'server_tests': server_tests}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

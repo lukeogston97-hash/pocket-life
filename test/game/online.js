@@ -203,6 +203,8 @@ function applyMe(m, spawn = false) {
   }
   // a birthday while you're playing: a year older (once a real year, on the day you made your person)
   if (you.look && Number(m.age) > you.look.age) { you.look.age = Math.round(Number(m.age)); drawHud(); if (player) showTag(`Happy birthday! ${you.look.age} today`, headTop(), 4); }
+  // the admin gave them a new name: it shows straight away
+  if (you.look && m.name && String(m.name).slice(0, 20) !== you.look.name) { you.look.name = String(m.name).slice(0, 20); drawHud(); }
   you.stats = { ...freshStats(), ...(m.stats || {}) };
   you.statsAt = m.statsAt || Date.now();
   // what you carry: the server's word, plus anything you're picking up that it hasn't confirmed yet

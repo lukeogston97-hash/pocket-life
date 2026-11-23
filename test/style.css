@@ -294,9 +294,9 @@ button.craft-head { padding: 0; border: 0; background: none; color: inherit; fon
 .admin-usage { margin: -2px 0 10px !important; font-size: 12px !important; font-weight: 700; color: var(--ink-soft); }
 .admin-usage.warn { color: var(--warn); }
 .admin-usage:empty { display: none; }
-.admin-tabs { display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; margin-bottom: 12px; overflow-x: auto; }
-.admin-tabs .seg-btn { white-space: nowrap; padding-inline: 6px; } /* "Feedback (0)" stays on one line */
-.admin-tabs .seg-btn { font-size: 11.5px; padding: 6px 2px; min-height: 32px; }
+/* the tabs sit in rows of four, so each stays big enough to read and tap on a phone, and a new tab just joins the last row */
+.admin-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; margin-bottom: 12px; border-radius: 20px; }
+.admin-tabs .seg-btn { white-space: nowrap; font-size: 12.5px; padding: 6px 2px; min-height: 32px; }
 
 /* making your person */
 .creator { --row: clamp(34px, 5.3vh, 42px); position: absolute; inset: 0; display: flex; flex-direction: column; pointer-events: none; }
@@ -476,3 +476,19 @@ button.craft-head { padding: 0; border: 0; background: none; color: inherit; fon
 /* following someone: a chip at the bottom of the view, like the game's own autopilot chip; tap it to stop */
 .admin-follow { position: absolute; z-index: 27; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); min-height: 40px; padding: 0 16px; border-radius: 999px; color: var(--ink); font: 700 13px/1 var(--font-ui); white-space: nowrap; cursor: pointer; }
 .admin-follow[hidden] { display: none; }
+/* a row with a box to type in and its button, inside an entry (fuel, a new name, a message) */
+.admin-entry .admin-inline { margin-top: 6px; }
+.admin-entry .admin-inline .admin-input { padding: 7px 10px; font-size: 14px; }
+select.admin-input { appearance: none; -webkit-appearance: none; }
+/* a person's needs and age as boxes to type in */
+.admin-edit { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
+.admin-edit label { display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; font-weight: 700; color: var(--ink-soft); }
+.admin-edit .admin-input { padding: 6px 8px; font-size: 14px; }
+/* the Log: one line each, when and what */
+.admin-logday { padding: 10px 0 4px; font-size: 12px; font-weight: 800; color: var(--ink-soft); }
+.admin-logday:first-child { padding-top: 2px; }
+.admin-logline { display: grid; grid-template-columns: 66px 1fr; gap: 8px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; }
+.admin-logday + .admin-logline { border-top: 0; }
+.admin-logtime { color: var(--ink-faint); font-size: 11.5px; font-weight: 700; padding-top: 1px; white-space: nowrap; }
+.admin-logline.admin span:last-child { color: var(--ink-soft); }
+.admin-logline.guard span:last-child { color: var(--warn); }
