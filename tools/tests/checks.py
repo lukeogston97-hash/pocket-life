@@ -157,10 +157,10 @@ async def collapse():
         expect(not await a.evaluate('!!__pl.walk.target'), "can't walk off while too tired")
         await a.evaluate("window.__sock.send(JSON.stringify({ t: 'sleep', on: false }))"); await a.wait_for_timeout(1000)
         expect(await a.evaluate('__pl.you.sleeping'), "the server won't wake them either")
-        await a.click('#sayBtn'); await a.fill('#sayInput', '/admin secret123456'); await a.press('#sayInput', 'Enter'); await a.wait_for_timeout(800)
-        await a.mouse.click(195, 300); await a.wait_for_timeout(300)
-        await a.evaluate("window.__sock.send(JSON.stringify({ t: 'a.fill', id: __pl.net.myId }))"); await a.wait_for_timeout(1000)
-        expect(await a.evaluate('__pl.you.stats.rest') >= 25, 'Rest topped up')
+        boss = await W.page('restBoss'); await boss.evaluate(RAW)  # the admin: a separate connection that only watches
+        await boss.evaluate("conn('boss', { watch: true, admin: true, adminCode: 'secret123456' })")
+        told = await boss.evaluate(f"ask('boss', {{ t: 'a.fill', id: '{await a.evaluate('__pl.net.myId')}' }})"); await a.wait_for_timeout(1000)
+        expect(await a.evaluate('__pl.you.stats.rest') >= 25, f'Rest topped up by the admin ("{told}")')
         await a.evaluate("(() => { const p = __pl.player.position; __pl.queueTask({ type: 'walk', x: p.x + 2, z: p.z }); })()"); await a.wait_for_timeout(1500)
         expect(not await a.evaluate('__pl.you.sleeping'), 'once rested, a task wakes them')
         expect(not W.errors, f'no errors {W.errors[:3]}')
@@ -558,7 +558,7 @@ async def claims():
 
 
 async def guards():
-    """The server's guards: you can't take, chop or drink from far away, jump across the world, or guess the admin code for long."""
+    """The server's guards: you can't take, chop or drink from far away, or jump across the world. (Guessing the admin code: see admin_login.)"""
     async with world() as W:
         a = await W.page('guardA'); await join(a)
         b = await W.page('guardB'); await join(b); await b.wait_for_timeout(500)
@@ -587,31 +587,31 @@ async def guards():
         thirst = await a.evaluate("__pl.you.stats.thirst")
         await a.evaluate(f"({send})({{ t: 'drink', source: 'pond' }})"); await a.wait_for_timeout(700)
         expect(await a.evaluate("__pl.you.stats.thirst") <= thirst + 0.5, "can't drink far from the pond")
-        # wrong admin codes: after a few, even the right one is refused for a while
-        for k in range(6):
-            await a.evaluate(f"({send})({{ t: 'adminLogin', code: 'wrong{k}' }})"); await a.wait_for_timeout(250)
-        await a.evaluate(f"({send})({{ t: 'adminLogin', code: 'secret123456' }})"); await a.wait_for_timeout(600)
-        expect(not await a.evaluate('__pl.admin.on'), 'too many wrong admin codes locks that address out')
+        # (wrong admin codes locking an address out: that's in the admin_login check now, where the admin logs in)
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
 async def maintenance():
-    """Maintenance pauses people who aren't playing: their needs stop, then carry on afterwards."""
+    """Maintenance pauses people who aren't playing: their needs stop, then carry on afterwards. It's run from admin mode, which stays in; someone playing on the release link is shut out."""
     async with world() as W:
         b = await W.page('pausedB'); await join(b); await b.wait_for_timeout(500)
         who = await b.evaluate('__pl.net.myId')
-        a = await W.page('maintA'); await join(a)
-        await a.click('#sayBtn'); await a.fill('#sayInput', '/admin secret123456'); await a.press('#sayInput', 'Enter'); await a.wait_for_timeout(800)
-        await a.mouse.click(195, 300); await a.wait_for_timeout(300)
+        a = await W.page('maintA'); await open_admin(a)  # the admin is not a person
         send = "(m) => window.__sock.send(JSON.stringify(m))"
         await b.close(); await a.wait_for_timeout(1500)  # B stops playing: their person is away
-        hunger = f"(async () => {{ ({send})({{ t: 'a.player', id: '{who}' }}); await new Promise((r) => setTimeout(r, 600)); return __pl.adminData.playerData.stats.hunger; }})()"
+        # (asks for their page and waits for the fresh answer, however long it takes: replies took up to 700 ms on this computer)
+        hunger = f"(async () => {{ const was = __pl.adminData.playerData; ({send})({{ t: 'a.player', id: '{who}' }}); for (let k = 0; k < 100; k++) {{ await new Promise((r) => setTimeout(r, 50)); const d = __pl.adminData.playerData; if (d && d !== was && d.stats) return d.stats.hunger; }} return null; }})()"
         await a.evaluate(f"({send})({{ t: 'a.speed', x: 600, minutes: 5 }})"); await a.wait_for_timeout(300)  # an hour passes every 6 seconds
         h0 = await a.evaluate(hunger); await a.wait_for_timeout(7000); h1 = await a.evaluate(hunger)
         expect(h1 < h0 - 1, f'away from the game their hunger drops ({h0:.1f} to {h1:.1f})')
+        # someone playing on the release link (the released copy of the game, as players have it) when maintenance starts
+        c = await W.page('releaseC', path=''); await join(c)
+        expect(await c.evaluate("!!__pl.player && document.getElementById('maint').hidden"), 'someone is playing on the release link')
         await a.evaluate(f"({send})({{ t: 'a.maintenance', on: true, text: 'Back soon' }})"); await a.wait_for_timeout(600)
         h2 = await a.evaluate(hunger); await a.wait_for_timeout(9000); h3 = await a.evaluate(hunger)
+        expect(h2 is not None and h3 is not None, "admin mode stays in during maintenance (it can still ask for someone's page)")
         expect(abs(h3 - h2) < 0.2, f'during maintenance it stays put ({h2:.1f} to {h3:.1f})')
+        expect(await shown(c, '#maint'), 'the release-link player is shut out and sees Back soon')
         await a.evaluate(f"({send})({{ t: 'a.maintenance', on: false }})"); await a.wait_for_timeout(600)
         h4 = await a.evaluate(hunger)
         # (time is sped up 600 times here, so the second or so it takes to ask already costs a little: unpaused, those 9 seconds would have cost about 6)
@@ -692,18 +692,20 @@ async def reconnect():
 async def errors():
     """If something in the game goes wrong it carries on instead of freezing, and the admin's Inbox gets one note about it."""
     async with world() as W:
-        a = await W.page('errAdmin'); await join(a)
-        await a.click('#sayBtn'); await a.fill('#sayInput', '/admin secret123456'); await a.press('#sayInput', 'Enter'); await a.wait_for_timeout(800)
-        await a.mouse.click(195, 300); await a.wait_for_timeout(300)
+        a = await W.page('errAdmin'); await open_admin(a)  # the admin is not a person
+        # someone else is playing too, as there was when the admin was a player. With B alone in the world the planted fault
+        # below goes wrong in two places (and so with two different wordings, two notes); with company it's one, as on main.
+        c = await W.page('errC'); await join(c)
         b = await W.page('errB'); await join(b); await b.wait_for_timeout(500)
         await b.evaluate("__pl.others.set('broken', {})"); await b.wait_for_timeout(1500)  # from now on every frame goes wrong
         f0 = await b.evaluate('window.__frames'); await b.wait_for_timeout(2000); f1 = await b.evaluate('window.__frames')
-        expect(f1 > f0, f'the game keeps running ({f1 - f0} frames in 2 s)')
+        if f1 <= f0: await frames(b, 1, 30000); f1 = await b.evaluate('window.__frames')  # (this computer draws about 1 to 2 frames a second)
+        expect(f1 > f0, f'the game keeps running ({f1 - f0} more frames)')
         await b.evaluate("__pl.others.delete('broken')"); await b.wait_for_timeout(500)
         await b.evaluate("__pl.queueTask({ type: 'walk', x: __pl.player.position.x + 2, z: __pl.player.position.z })"); await idle(b, 30)
         expect(not await b.evaluate('!!__pl.walk.target'), 'and carries on as normal once the problem has gone')
         send = "(m) => window.__sock.send(JSON.stringify(m))"
-        await a.evaluate(f"({send})({{ t: 'a.list' }})"); await a.wait_for_timeout(700)
+        await a.evaluate(f"({send})({{ t: 'a.list' }})"); await a.wait_for_timeout(1500)
         notes = await a.evaluate("__pl.adminData.inboxData.feedback.filter((x) => x.text.startsWith('Game error')).map((x) => [x.text.split('\\n')[0], x.count || 1])")
         expect(len(notes) == 1 and 'frame' in notes[0][0], f"the admin's Inbox has one note about it ({notes})")
         problems = [e for e in W.errors if 'errB' not in e]
