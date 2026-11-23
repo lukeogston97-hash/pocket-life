@@ -135,6 +135,27 @@ water.position.set(POND.x, WATER_Y, POND.z);
 water.receiveShadow = true;
 water.userData.label = 'Pond';
 scene.add(water);
+// a faint pale ring round the shore, lying on the ground along the pond's outline (looks only; not tappable)
+const pondRing = (() => {
+  const N = 120, pos = [], idx = [];
+  for (let i = 0; i <= N; i++) {
+    const a = (i / N) * Math.PI * 2;
+    const r = POND.r * (1 + 0.13 * Math.sin(a * 3 + 1.1) + 0.06 * Math.sin(a * 5 - 0.7)); // the same outline as pondShape
+    for (const k of [0.97, 1.1]) {
+      const x = POND.x + Math.cos(a) * r * k, z = POND.z + (Math.sin(a) * r * k) / 1.22;
+      pos.push(x, Math.max(heightAt(x, z), WATER_Y) + 0.035, z);
+    }
+    if (i < N) { const b = i * 2; idx.push(b, b + 2, b + 1, b + 1, b + 2, b + 3); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: '#d9efe9', transparent: true, opacity: 0.2, depthWrite: false, side: THREE.DoubleSide }));
+  m.renderOrder = 1;
+  return m;
+})();
+scene.add(pondRing);
 const waterBase = water.geometry.attributes.position.array.slice();
 function animateWater(t) {
   const a = water.geometry.attributes.position.array;

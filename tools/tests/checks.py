@@ -725,6 +725,40 @@ async def crowd():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
+async def bagdrag():
+    """Drag a tile out of the bag: onto the ground drops one, onto a built campfire adds fuel; the bag comes back after."""
+    async with world({}, FISHKIT=1) as W:
+        a = await W.page('dragA'); await join(a)
+        await a.click('#bagBtn'); await a.wait_for_timeout(400)
+        await a.click('#bagList .bag-tile[data-kind="campfire"]'); await a.wait_for_timeout(200)
+        await a.click('#bagInfo button.go'); await a.wait_for_timeout(400)
+        spot = await a.evaluate("""(() => { const p = __pl.player.position;
+          for (let r = 2; r < 8; r += 0.5) for (let k = 0; k < 16; k++) { const x = p.x + Math.cos(k / 16 * 6.28) * r, z = p.z + Math.sin(k / 16 * 6.28) * r;
+            if (!__pl.cantPlaceAt(x, z, 'campfire')) { __pl.movePlacing(x, z); return [x, z]; } } return null; })()""")
+        expect(spot is not None, f'found a spot for the fire ({spot})')
+        await a.evaluate('__pl.finishPlacing()'); await idle(a, 40); await a.wait_for_timeout(1500)
+        fid = await a.evaluate('[...__pl.placed.keys()][0]')
+        scr = """(([x, y, z]) => { const v = new __pl.THREE.Vector3(x, y, z).project(__pl.camera), r = document.getElementById('world').getBoundingClientRect();
+          return [r.left + (v.x + 1) / 2 * r.width, r.top + (1 - v.y) / 2 * r.height]; })"""
+        async def drag(kind, pt):
+            if not await a.evaluate("document.getElementById('bag').classList.contains('open')"): await a.click('#bagBtn')
+            await a.wait_for_timeout(500)
+            box = await (await a.query_selector(f'#bagList .bag-tile[data-kind="{kind}"]')).bounding_box()
+            await a.mouse.move(box['x'] + box['width'] / 2, box['y'] + box['height'] / 2); await a.mouse.down()
+            await a.mouse.move(pt[0], pt[1], steps=8); await a.mouse.up(); await a.wait_for_timeout(400)
+        sticks = await a.evaluate('__pl.you.carry.stick')
+        fire = await a.evaluate(f"({scr})([{spot[0]}, 0.3, {spot[1]}])")
+        await drag('stick', fire); await idle(a, 30); await a.wait_for_timeout(800)
+        left = await a.evaluate('__pl.you.carry.stick'); fuel = await a.evaluate(f'__pl.fuelLeft(__pl.placed.get({fid}))')
+        expect(left == sticks - 1 and fuel > 0, f'a stick dragged onto the fire went in as fuel ({sticks} -> {left}, fuel {fuel})')
+        expect(await a.evaluate("document.getElementById('bag').classList.contains('open')"), 'the bag is open again after the drag')
+        # a drop onto bare ground: the top corner of the world is sky or far ground, so aim just ahead of your feet
+        feet = await a.evaluate(f"({scr})([__pl.player.position.x + 1.5, 0, __pl.player.position.z + 1.5])")
+        await drag('stick', feet); await idle(a, 30); await a.wait_for_timeout(800)
+        left2 = await a.evaluate('__pl.you.carry.stick')
+        expect(left2 == left - 1, f'a stick dragged onto the ground was dropped ({left} -> {left2})')
+        expect(await a.evaluate("document.getElementById('bag').classList.contains('open')"), 'the bag is open again after a drop')
+
 async def fishing():
     """Fish at the pond with a spear: catches go in the bag, the spear wears, the pond runs dry for everyone, raw fish can't be eaten,
     cooking takes a lit campfire and makes cooked fish that fills you up."""
@@ -774,7 +808,7 @@ async def fishing():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing}
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}
