@@ -21,7 +21,7 @@ Luke's mobile "life in your pocket" game (SEED meets One Hour One Life): a persi
 - tools/tests: checks that run the real server locally and play the game in Chrome (see its README). tools/release.sh releases.
 
 ## How to work
-- Small updates, a couple of things at a time. Bump version/build in test/game-data.json and add a devlog entry (shown in What's new).
+- Small updates, a couple of things at a time. Versions are Major.Minor.Patch (see docs/design/working.md): a test build only bumps "build"; patch goes up once per release; minor only when Luke says; 1.0.0 is the full game. Add short notes to the current version's devlog entry (shown in What's new); fold a finished minor version into one grouped entry.
 - Checks, kept quick (Luke, 22 Nov 2026: they were taking too long): `python3 tools/tests/lint.py` always. Test builds: only the check for the area you touched (plus `layout` if world layout code changed). Releases (Luke, 22 Nov 2026: too slow, publish straight away): no extra checks if each test build was already checked; just release. Everything (`run.py`, which skips `screens`) only after big changes. `screens` (6 minutes of screenshots) only when reviewing the look. Add a check when you add a feature. Only one check run at a time.
 - Test first: push to main, Luke tries https://pocketlife.pages.dev/test/ (never give that link to players). After each change tell Luke in a few short lines what changed and what to try.
 - Release only when Luke says ("release", "publish"): `sh tools/release.sh`, commit, push. Cloudflare Pages (project pocketlife) and the server both deploy from main within a minute or two.
