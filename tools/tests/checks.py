@@ -585,6 +585,75 @@ async def claims():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
+async def societies():
+    """Societies (0.1.4): start one from the Menu (your claim becomes its claim), invite someone by tapping them, they join
+    from the invite card, everyone's name tag shows it, members can use the claim, the admin's World tab lists and renames
+    it, and leaving takes two taps."""
+    async with world(CAMPKIT=1) as W:
+        a = await W.page('leaderA'); await join(a)
+        send = "(m) => window.__sock.send(JSON.stringify(m))"
+        # A makes a claim, as in the claims check
+        await a.evaluate(f"({send})({{ t: 'craft', id: 'campfire' }})"); await a.wait_for_timeout(800)
+        await a.evaluate("__pl.queueTask({ type: 'walk', x: 28, z: 6 })"); await idle(a, 50); await a.wait_for_timeout(1500)
+        spot = await a.evaluate("(() => { const p = __pl.player.position; for (let k = 0; k < 16; k++) { const ang = k / 16 * Math.PI * 2, x = p.x + Math.cos(ang) * 1.8, z = p.z + Math.sin(ang) * 1.8; if (!__pl.cantPlaceAt(x, z, 'campfire')) return [x, z]; } return null; })()")
+        expect(spot is not None, f'a spot for the fire ({spot})')
+        await a.evaluate(f"({send})({{ t: 'place', kind: 'campfire', x: {spot[0]:.2f}, z: {spot[1]:.2f}, rot: 0 }})"); await a.wait_for_timeout(800)
+        fid = await a.evaluate("[...__pl.placed.keys()][0]")
+        for m in [f"{{ t: 'build', id: {fid} }}", f"{{ t: 'fire', id: {fid}, do: 'add', n: 5, fuel: 'stick' }}", f"{{ t: 'fire', id: {fid}, do: 'light' }}"]:
+            await a.evaluate(f"({send})({m})"); await a.wait_for_timeout(700)
+        expect(await a.evaluate(f"(__pl.placed.get({fid}).claim || {{}}).who === __pl.net.myId"), "A's lit fire is A's claim")
+        # Menu > Society: start Rivers
+        await a.click('#menuBtn'); await a.wait_for_timeout(400)
+        await a.click('#pauseSocietyBtn'); await a.wait_for_timeout(400)
+        expect(await shown(a, '#socStartForm') and 'yours becomes' in (await text(a, '#socText')), f"the Society panel offers to start one, and says A's claim becomes its claim ({await text(a, '#socText')})")
+        await a.fill('#socName', 'Rivers'); await a.click('#socStartForm button[type=submit]'); await a.wait_for_timeout(1500)
+        expect(await a.evaluate("(__pl.you.soc || {}).name") == 'Rivers' and await text(a, '#socTitle') == 'Rivers', 'A started Rivers, and the panel now shows it')
+        expect(await a.evaluate(f"__pl.placed.get({fid}).claim.who") == 's:1' and await a.evaluate(f"__pl.claimMine(__pl.placed.get({fid}))"), "A's claim is now Rivers' claim, still A's to use")
+        await shot(a, 'society-panel')
+        await a.click('#socClose'); await a.wait_for_timeout(300)
+        # B comes over; A taps B: Invite to society
+        b = await W.page('memberB'); await join(b); await b.wait_for_timeout(800)
+        ax, az = await a.evaluate("[__pl.player.position.x, __pl.player.position.z]")
+        await b.evaluate(f"__pl.queueTask({{ type: 'walk', x: {ax + 1.6:.2f}, z: {az:.2f} }})"); await idle(b, 60); await b.wait_for_timeout(1500)
+        expect(await b.evaluate(f"!!__pl.notMineAt({spot[0]:.2f}, {spot[1]:.2f})"), "B isn't in Rivers yet: its claim is someone else's to B")
+        pick = "(() => { const o = [...__pl.others.values()][0]; return __pl.menuActions({ kind: 'person', person: o, name: o.title }); })()"
+        acts = await a.evaluate(f"{pick}.map((x) => [x.label, !!x.disabled, x.note || ''])")
+        inv = next((x for x in acts if x[0] == 'Invite to society'), None)
+        expect(inv is not None and not inv[1], f"A's tap menu on B has Invite to society ({acts})")
+        await a.evaluate(f"{pick}.find((x) => x.label === 'Invite to society').run()")
+        await b.wait_for_function("!document.getElementById('socInvite').hidden", timeout=20000)
+        name_a = await a.evaluate('__pl.you.look.name')
+        expect(await text(b, '#socInviteText') == f'{name_a} invites you to join Rivers', f"B's invite card says who and which ({await text(b, '#socInviteText')})")
+        await shot(b, 'society-invite')
+        await b.click('#socYes'); await b.wait_for_timeout(2000)
+        expect(await b.evaluate("(__pl.you.soc || {}).name") == 'Rivers' and not await shown(b, '#socInvite'), 'B tapped Join: B is in Rivers and the card is gone')
+        expect(not await b.evaluate(f"!!__pl.notMineAt({spot[0]:.2f}, {spot[1]:.2f})"), "now B can use things in Rivers' claim")
+        tag = await a.evaluate("[...__pl.others.values()][0].name.el.textContent")
+        expect('Rivers' in tag, f"A sees Rivers under B's name ({tag})")
+        expect((await b.evaluate("__pl.claimHere(0, 0).text")).startswith('Just a fire: only Rivers'), "B's own fires are just fires: only the leader claims")
+        # the admin's World tab lists it; Members, then Rename
+        c = await W.page('adminC'); await open_admin(c)
+        await c.click('#adminDashBtn'); await c.click('[data-admin-tab="world"]'); await c.wait_for_timeout(1500)
+        r = await text(c, '#adminSocs')
+        expect('Rivers' in r and '2 of 3' in r and 'claim burning' in r and await text(c, '#adminSocsState') == '1 society', f'the admin sees Rivers, 2 of 3, with its claim ("{r}")')
+        await c.click('#adminSocs button:has-text("Members")'); await c.wait_for_timeout(500)
+        await c.fill('#adminSocs input.admin-input', 'Riverside'); await c.click('#adminSocs button:has-text("Rename")'); await c.wait_for_timeout(1500)
+        await shot(c, 'society-admin')
+        expect(await a.evaluate("(__pl.you.soc || {}).name") == 'Riverside' and 'Riverside' in await a.evaluate("[...__pl.others.values()][0].name.el.textContent"), "the admin renamed it: A's game and B's name tag say Riverside")
+        await c.close()
+        # B leaves from the panel: two taps
+        await b.click('#menuBtn'); await b.wait_for_timeout(400); await b.click('#pauseSocietyBtn'); await b.wait_for_timeout(400)
+        names = await b.evaluate("[...document.querySelectorAll('#socMembers .soc-who')].map((e) => e.textContent)")
+        expect(len(names) == 2 and names[0].startswith(name_a) and 'Leader' in names[0], f'the panel lists both, the leader first ({names})')
+        await b.click('#socLeave'); await b.wait_for_timeout(700)
+        expect(await b.evaluate("(__pl.you.soc || {}).name") == 'Riverside', 'one tap on Leave does nothing yet')
+        await b.click('#socLeave'); await b.wait_for_timeout(2000)
+        expect(await b.evaluate("__pl.you.soc") is None and await b.evaluate(f"!!__pl.notMineAt({spot[0]:.2f}, {spot[1]:.2f})"), "the second tap: B left, and Riverside's claim is someone else's again")
+        tag = await a.evaluate("[...__pl.others.values()][0].name.el.textContent")
+        expect('Riverside' not in tag, f"B's name tag lost the line ({tag})")
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
 async def guards():
     """The server's guards: you can't take, chop or drink from far away, or jump across the world. (Guessing the admin code: see admin_login.)"""
     async with world() as W:
@@ -1539,18 +1608,18 @@ async def admin_phone():
 
 
 async def server_tests():
-    """The server's own code, tested with no browser (quick): the admin's fire, claim, Log, rename and message tools, live item numbers, that an old admin flag gives a player nothing, and that things which aren't in the world can't be chopped, mined or picked."""
+    """The server's own code, tested with no browser (quick): the admin's fire, claim, Log, rename and message tools, live item numbers, that an old admin flag gives a player nothing, that things which aren't in the world can't be chopped, mined or picked, and societies."""
     import subprocess
     from lib import bundle
     bundle()
-    for f in ['admin_extras.mjs', 'live_items.mjs', 'stale_admin.mjs', 'cheats.mjs']:
+    for f in ['admin_extras.mjs', 'live_items.mjs', 'stale_admin.mjs', 'cheats.mjs', 'societies.mjs']:
         r = subprocess.run(['node', f], cwd=HERE, capture_output=True, text=True, timeout=180)
         last = (r.stdout.strip().splitlines() or ['(nothing printed)'])[-1]
         if r.returncode: print(r.stdout[-4000:], r.stderr[-2000:])
         expect(r.returncode == 0, f'{f}: {last[:160]}')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'server_tests': server_tests}
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'server_tests': server_tests}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

@@ -79,6 +79,7 @@ function goOnline() {
     else if (m.t === 'live') applyLive(m.live);
     else if (m.t === 'liveItems') applyLiveItems(m.liveItems);
     else if (m.t === 'claimNote') showTag(m.text, headTop(), 3.5);
+    else if (m.t.startsWith('soc')) societyMessage(m); // societies (society.js)
     else if (m.t === 'pos') snapTo(m.x, m.z);
     else if (m.t === 'moved') moveLayoutThing(m.what, m.idx, m.x, m.z);
     else if (m.t === 'removed') removeLayoutThing(m.what, m.idx);
@@ -216,6 +217,7 @@ function applyMe(m, spawn = false) {
   if (!!m.sleeping !== !!you.sleeping) setSleeping(m.sleeping, true);
   you.collapsed = !!m.collapsed;
   you.lastKind = carry[you.lastKind] ? you.lastKind : (ITEMS[m.lastKind] && carry[m.lastKind] ? m.lastKind : Object.keys(carry)[0] || null);
+  setSociety(m.soc); // your society, if you're in one (society.js)
   tickStats();
   drawNeeds();
   drawCarry();

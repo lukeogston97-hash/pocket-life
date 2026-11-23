@@ -11,6 +11,7 @@ const inside = (key) => (G[key] = G[key] || {});
 const drop = (id) => ({ get: () => -(need(id).perHour || 0), set: (v) => { need(id).perHour = -v; }, needs: true });
 const RULES = {
   maxPlaying: { get: () => G.maxPlaying, set: (v) => { G.maxPlaying = v; } },
+  societyMax: { get: () => inside('societies').maxMembers || 3, set: (v) => { inside('societies').maxMembers = v; } }, // (societies.js socMax)
   respawnMinutes: { get: () => G.respawnMinutes, set: (v) => { G.respawnMinutes = v; } },
   berryRegrowHours: { get: () => BERRY_SRC.regrowHours || 0, set: (v, world) => { BERRY_SRC.regrowHours = v; if (world.world) world.world.regrowMs = v * HOUR; } },
   treeRegrowDays: { get: () => inside('chopping').regrowDays || 3, set: (v) => { inside('chopping').regrowDays = v; } },

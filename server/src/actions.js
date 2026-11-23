@@ -4,6 +4,7 @@
 // person (p), the world (w), reply() to answer just you, and save() to save your person straight away; `this` is the
 // world (index.js), so this.send() tells everyone. Remember a spam limit in LIMITS (shared.js) for anything new.
 import { PLACEABLES, fireRule, seatAt } from './placed.js';
+import { SOC, socMax, INVITE_MS } from './societies.js';
 import { fuelRoom } from './rules.js';
 import { FILTER, G, starText, badName, freshStats, addCarry, takeCarry, wearList, applyGives, eatOne, craft, spend, clean, blank, num, kindOk, START, REST, BERRY_SRC, cleanLook, REPORTS_KEEP } from './shared.js';
 const SIT_OPEN = 365 * 24 * 3600000; // sitting has no set time: `until` is far off, and ends when they stand up, do something else, or the fire goes out
@@ -403,5 +404,67 @@ export const ACTIONS = {
     await this.save();
     save();
     reply(this.mine(p));
+  } },
+
+  /* ---------- societies (0.1.4, societies.js): start one, invite someone, answer an invite, leave, take someone out ---------- */
+  // start a society with a name: you lead it, and your claim (if you have one) becomes the society's
+  socStart: { when: 'alive', async run({ m, p, reply }) {
+    if (this.socOf(p.who)) { reply({ t: 'socNo', why: "You're already in a society" }); return; }
+    const name = clean(m.name, SOC.nameMax).trim(), no = this.socNameNo(name);
+    if (no) { reply({ t: 'socNo', why: no }); return; }
+    const s = this.socStart(p, name);
+    await this.saveSocs();
+    reply(this.mine(p));
+    this.socTag(p.who);
+    reply({ t: 'socNote', text: `You started ${s.name}` });
+  } },
+  // the leader invites someone nearby who is playing; the invite waits on their connection for SOC.inviteMinutes
+  socInvite: { when: 'alive', async run({ m, p, reply }) {
+    const s = this.socOf(p.who), no = (why) => reply({ t: 'socNo', why });
+    if (!s) return no("You're not in a society");
+    if (s.leader !== p.who) return no('Only the leader can invite people');
+    if (s.members.length >= socMax()) return no(`${s.name} is full (${socMax()} people)`);
+    const them = this.persons.get(m.id), sock = this.socketOf(m.id);
+    if (!this.alive(them) || them.who === p.who) return no("They've gone");
+    if (!sock || !sock.p.alive) return no(`${them.name} is away, so they can't answer`);
+    if (Math.hypot(them.x - p.x, them.z - p.z) > SOC.inviteReach) return no(`Get closer to ${them.name} first`);
+    const theirs = this.socOf(them.who);
+    if (theirs) return no(theirs === s ? `${them.name} is already in ${s.name}` : `${them.name} is in ${theirs.name}`);
+    sock.p.invite = { soc: s.id, by: p.who, at: Date.now() };
+    this.attach(sock.ws, sock.p);
+    this.tell(them.who, { t: 'socInvite', soc: s.name, by: p.name, ms: INVITE_MS });
+    reply({ t: 'socNote', text: `Invite sent to ${them.name}` });
+  } },
+  // the answer to an invite (yes: join). Someone whose own fire holds a claim has to put it out first; the invite stays.
+  socAnswer: { when: 'alive', async run({ ws, me, m, p, reply }) {
+    const inv = me.invite, s = inv && this.socById(inv.soc), late = !inv || Date.now() - inv.at > INVITE_MS;
+    const drop = () => { me.invite = null; this.attach(ws, me); };
+    if (!m.yes) { if (inv) drop(); if (s && !late) this.tell(inv.by, { t: 'socNote', text: `${p.name} said no thanks` }); return; }
+    if (!s || late) { if (inv) drop(); reply({ t: 'socNo', why: 'That invite has run out' }); return; }
+    if (this.socOf(p.who)) { drop(); reply({ t: 'socNo', why: "You're already in a society" }); return; }
+    if (s.members.length >= socMax()) { drop(); reply({ t: 'socNo', why: `${s.name} is full` }); return; }
+    if (this.claimOf(p.who)) { reply({ t: 'socNo', why: 'Put your fire out first: it holds your claim' }); return; }
+    drop();
+    this.socJoin(s, p);
+    await this.saveSocs();
+    this.socTag(p.who);
+    this.socTellMembers(s);
+    reply({ t: 'socNote', text: `You joined ${s.name}` });
+  } },
+  // leave your society (the last one out ends it and keeps its claim)
+  socLeave: { when: 'alive', async run({ p, reply }) {
+    const s = this.socOf(p.who);
+    if (!s) { reply(this.mine(p)); return; }
+    const ends = s.members.length === 1;
+    await this.socOut(s, p.who, 'left');
+    reply({ t: 'socNote', text: ends ? `${s.name} has ended` : `You left ${s.name}` });
+  } },
+  // the leader takes a member out
+  socRemove: { when: 'alive', async run({ m, p, reply }) {
+    const s = this.socOf(p.who);
+    if (!s || s.leader !== p.who) { reply({ t: 'socNo', why: 'Only the leader can do that' }); return; }
+    const mem = s.members.find((x) => x.who === m.id);
+    if (!mem || mem.who === p.who) { reply(this.mine(p)); return; }
+    await this.socOut(s, mem.who, 'removed'); // (every member left, the leader too, is told, and gets the new list)
   } },
 };

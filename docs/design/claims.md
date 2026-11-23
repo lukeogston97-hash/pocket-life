@@ -9,4 +9,5 @@
 - How players see it: a faint ring on the ground at the edge (green for yours, white for others; shown within ringShowsWithin metres), a small tag when you walk in ("Your claim" or "<name>'s claim"), the fire's tap menu title says whose claim it is and how long the fuel lasts, and while placing a campfire a ring shows the claim it would make, with a line saying if it can't claim there and why.
 - While you're away: your person strolls within their claim instead of by the pond, puts sticks and logs from their bag on the fire when there's room (logs first; they wait for half an hour of room so they don't walk over for every stick), and still walks to the pond to drink, then back. Welcome back says they kept the fire going.
 - Fires lit before 0.3.0 are just fires until they're lit again.
-- Not built yet: societies sharing a claim, storage inside a claim, a claim marker other than the fire, more water for a bigger world (see later.md).
+- Societies (0.1.4, societies.md): a society has one claim, its leader's lit campfire (th.claim 's:<id>'); members use it as their own.
+- Not built yet: storage inside a claim, a claim marker other than the fire, more water for a bigger world (see later.md).

@@ -6,6 +6,7 @@
 // - at most G.maxPlaying people play at once; anyone else waits in line on the main menu (line.js)
 // - things people place and build, like campfires (placed.js)
 // - what players do, one small handler each (actions.js); chat, reports, feedback; the admin player's tools (admin.js)
+// - societies: groups of players sharing one claim (societies.js)
 // - Restore: the admin puts the whole world back to an earlier time with Cloudflare's 30 days of history (restore.js)
 // What every part shares (the game's rules from game.json, limits, helpers) is in shared.js.
 import { DurableObject } from 'cloudflare:workers';
@@ -19,6 +20,7 @@ import { placedMethods } from './placed.js';
 import { liveMethods, maxPlaying } from './live.js';
 import { liveItemsMethods } from './live-items.js';
 import { claimsMethods } from './claims.js';
+import { societiesMethods, freshSocieties } from './societies.js';
 import { restoreMethods } from './restore.js';
 import { guardMethods } from './guard.js';
 import { activityMethods, BACK_AFTER, longText } from './activity.js';
@@ -39,6 +41,7 @@ export class World extends DurableObject {
     this.live = {}; // live settings the admin changed (live.js)
     this.liveItems = {}; // item and recipe numbers the admin changed (live-items.js)
     this.activity = []; // the admin's activity log (activity.js)
+    this.societies = freshSocieties(); // groups of players sharing a claim (societies.js)
     this.adminFails = new Map(); // wrong admin codes, by address (guard.js); kept in memory only
     this.feedbackLog = []; // when feedback came in and from where, to stop floods (guard.js)
     this.reportLog = []; // the same for reports about players
@@ -53,6 +56,7 @@ export class World extends DurableObject {
       this.liveItems = (await ctx.storage.get('liveItems')) || {};
       this.applyLiveItems();
       this.activity = (await ctx.storage.get('activity')) || [];
+      this.societies = (await ctx.storage.get('societies')) || freshSocieties();
       Object.assign(this.usage, (await ctx.storage.get('usage')) || {});
       for (const [k, p] of await ctx.storage.list({ prefix: 'p:' })) this.persons.set(k.slice(2), p);
       if (!(await ctx.storage.getAlarm())) await ctx.storage.setAlarm(Date.now() + TICK_MS);
@@ -329,6 +333,7 @@ export class World extends DurableObject {
       for (const p of [...this.persons.values()]) {
         try { // (one person's record going wrong never stops everyone else's tick)
           if (!this.alive(p)) {
+            await this.socGone(p, now); // no person in the world for too long: out of their society (societies.js)
             if (p.diedAt && now - p.diedAt > 30 * 24 * HOUR) { await this.rememberPast(p); this.persons.delete(p.who); await this.ctx.storage.delete(`p:${p.who}`); }
             continue;
           }
@@ -414,7 +419,7 @@ export class World extends DurableObject {
 
 }
 // the rest of the world's methods, kept in their own files by topic
-Object.assign(World.prototype, lineMethods, personsMethods, awayMethods, natureMethods, adminMethods, placedMethods, liveMethods, liveItemsMethods, claimsMethods, guardMethods, restoreMethods, activityMethods);
+Object.assign(World.prototype, lineMethods, personsMethods, awayMethods, natureMethods, adminMethods, placedMethods, liveMethods, liveItemsMethods, claimsMethods, societiesMethods, guardMethods, restoreMethods, activityMethods);
 
 export default {
   async fetch(request, env) {

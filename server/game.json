@@ -398,6 +398,15 @@
       "step": 1
     },
     {
+      "id": "societyMax",
+      "name": "People in a society",
+      "group": "Players",
+      "unit": "people",
+      "min": 1,
+      "max": 100,
+      "step": 1
+    },
+    {
       "id": "respawnMinutes",
       "name": "Sticks and stones top up every",
       "group": "Respawn times",
@@ -475,6 +484,12 @@
     "spawnRadius": 16,
     "placeable": "campfire",
     "ringShowsWithin": 25
+  },
+  "societies": {
+    "maxMembers": 3,
+    "nameMax": 20,
+    "inviteMinutes": 5,
+    "inviteReach": 8
   },
   "start": {
     "x": 0.6,

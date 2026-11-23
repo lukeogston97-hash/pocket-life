@@ -7,6 +7,7 @@
 import { FILTER, G, starText, MINUTE, HOUR, clean, blank, num, kindOk, addCarry, takeCarry, ageOf, pickRandom } from './shared.js';
 import { fireRule } from './placed.js';
 import { CLAIM_KIND } from './claims.js';
+import { SOC, socKey, freshSocieties } from './societies.js';
 
 const DONE_KEEP_DAYS = 30; // feedback and reports marked Done are deleted after this
 const PAST_KEEP = 20; // earlier people each player had
@@ -20,7 +21,8 @@ const MOVABLE = { tree: 5000, rock: 2000, bush: 200 }; // things laid out with t
 const TOOLS = { 'a.maintenance': 'Maintenance', 'a.announce': 'Message to everyone', 'a.speed': 'Speed up time', 'a.kick': 'Kick', 'a.ban': 'Ban', 'a.unban': 'Unban',
   'a.mute': 'Mute', 'a.fill': 'Fill needs', 'a.give': 'Give', 'a.take': 'Take', 'a.wake': 'Wake', 'a.sleep': 'Send to sleep', 'a.movePerson': 'Move person',
   'a.setStats': 'Edit person', 'a.removePerson': 'Remove person', 'a.regrowAll': 'Regrow everything', 'a.clear': 'Clear loose items', 'a.move': 'Move', 'a.regrow': 'Regrow',
-  'a.remove': 'Remove', 'a.live': 'Setting', 'a.liveItem': 'Item number', 'a.fire': 'Fire', 'a.claim': 'Claim', 'a.rename': 'Rename', 'a.tell': 'Message' };
+  'a.remove': 'Remove', 'a.live': 'Setting', 'a.liveItem': 'Item number', 'a.fire': 'Fire', 'a.claim': 'Claim', 'a.rename': 'Rename', 'a.tell': 'Message',
+  'a.socRename': 'Rename society', 'a.socRemove': 'Take out of society', 'a.socEnd': 'End society' };
 // which thing a tool was used on, when its answer doesn't say (server: the World)
 function aboutOf(m, server) {
   const short = (v) => clean(String(v == null ? '' : v), 40);
@@ -28,6 +30,7 @@ function aboutOf(m, server) {
   if (m.t === 'a.live') return short(m.id);
   if (m.t === 'a.announce') return `"${clean(m.text, 60).trim()}"`;
   if (m.t === 'a.unban') return short(m.id);
+  if (m.t.startsWith('a.soc')) { const soc = server.socById(m.id); return soc ? short(soc.name) : ''; } // a society: by its name
   if (['a.fire', 'a.claim', 'a.move', 'a.regrow', 'a.remove'].includes(m.t)) {
     const th = m.id != null ? server.placedById(m.id) : null; // a campfire: by where it is
     if (th) return `${th.kind} at ${Math.round(th.x)}, ${Math.round(th.z)}`;
@@ -64,6 +67,8 @@ export const adminMethods = {
     const out = { t: 'adminPlayer', id: who, muted: this.admin.muted.includes(who), banned: this.admin.banned.includes(who), reports, past, v: s ? s.p.v : '', link: s ? s.p.link : '' };
     if (this.alive(p)) Object.assign(out, this.playerRow(p), { born: p.born || 0, stats: p.stats, carry: p.carry || {}, x: num(p.x), z: num(p.z) });
     else Object.assign(out, { name: past[0] ? past[0].name : `Phone ${who}`, state: 'gone' });
+    const soc = this.socOf(who);
+    if (soc) out.soc = { id: soc.id, name: soc.name, lead: soc.leader === who, n: soc.members.length }; // their society (societies.js)
     return out;
   },
   // feedback and reports, newest first; ones marked Done over 30 days ago are deleted
@@ -311,7 +316,8 @@ export const adminMethods = {
         if (m.all) {
           this.persons.clear(); this.dirty.clear(); this.savedAt.clear();
           this.admin.banned = []; this.admin.muted = []; await this.saveAdmin(); // (maintenance and its message stay)
-          const gone = ['feedback', 'reports'];
+          this.societies = freshSocieties(); // (societies.js)
+          const gone = ['feedback', 'reports', 'societies'];
           for (const prefix of ['p:', 'past:']) gone.push(...(await this.ctx.storage.list({ prefix })).keys());
           this.use('writes', gone.length);
           for (let i = 0; i < gone.length; i += 100) await this.ctx.storage.delete(gone.slice(i, i + 100));
@@ -473,7 +479,7 @@ export const adminMethods = {
         } else return;
         th.at = Date.now();
         this.burn(th); // out: a claim on it ends with it
-        if (was && !th.claim) { text += `. ${whose}'s claim ended with it`; this.tell(was, { t: 'claimNote', text: 'Your fire is out, so your claim has ended' }); }
+        if (was && !th.claim) { text += `. ${whose}'s claim ended with it`; this.tellClaim(was, 'The fire is out, so the claim has ended'); }
         await this.save();
         this.sendPlaced(th);
         reply(this.firesView());
@@ -494,20 +500,57 @@ export const adminMethods = {
           const to = this.persons.get(clean(m.to, 40));
           if (!to || !this.alive(to)) return done("They've left");
           if (th.kind !== CLAIM_KIND) return done("That can't hold a claim");
-          if (th.claim === to.who) return done(`It's already ${to.name}'s claim`);
+          const soc = this.socOf(to.who), key = soc ? socKey(soc) : to.who, toName = soc ? soc.name : to.name; // someone in a society: it goes to their society
+          if (th.claim === key) return done(`It's already ${toName}'s claim`);
           if (!th.built || !th.lit) return done('Light it first: a claim lasts only while its fire burns');
           const no = this.claimFit(th, to); // the same rules as lighting a first fire: one claim each, clear of the pond and of other claims
-          if (no) return done(no.why === 'has' ? `${to.name} already has a claim` : no.why === 'pond' ? "It's too close to the pond to be a claim" : `It's too close to ${no.name}'s claim`);
-          th.claim = to.who;
+          if (no) return done(no.why === 'has' ? `${toName} already has a claim` : no.why === 'pond' ? "It's too close to the pond to be a claim" : `It's too close to ${no.name}'s claim`);
+          th.claim = key;
           th.by = to.who; // theirs to pack up later, as when they light it themselves
-          text = `Now ${to.name}'s claim${whose ? ` (it was ${whose}'s)` : ''}`;
-          this.tell(to.who, { t: 'claimNote', text: 'The land round this fire is now your claim, while it burns' });
+          text = `Now ${toName}'s claim${whose ? ` (it was ${whose}'s)` : ''}`;
+          this.tellClaim(key, soc ? `The land round this fire is now ${soc.name}'s claim, while it burns` : 'The land round this fire is now your claim, while it burns');
         } else return;
-        if (was && was !== th.claim) this.tell(was, { t: 'claimNote', text: 'Your claim has ended' });
+        if (was && was !== th.claim) this.tellClaim(was, 'The claim has ended');
         await this.save();
         this.sendPlaced(th);
         reply(this.firesView());
         return done(text);
+      }
+
+      /* ---------- Societies (World tab, societies.js): see them, rename one, take someone out, end one ---------- */
+      case 'a.socs': return reply({ t: 'adminSocs', list: this.socsView() });
+      case 'a.socRename': {
+        const soc = this.socById(m.id);
+        if (!soc) return done("That society has ended");
+        const name = clean(m.name, SOC.nameMax).trim(), was = soc.name;
+        if (name === was) return done("That's already its name");
+        const no = this.socNameNo(name, soc.id, true); // (any name, as with people: this is how a bad one is fixed)
+        if (no) return done(no);
+        soc.name = name;
+        await this.saveSocs();
+        for (const mem of soc.members) this.socTag(mem.who); // the line under their name tags
+        this.socTellMembers(soc);
+        this.socNote(soc, `Your society is now called ${name}`);
+        const th = this.socClaim(soc);
+        if (th) this.sendPlaced(th); // the claim's name
+        reply({ t: 'adminSocs', list: this.socsView() });
+        return done(`${was} is now ${name}`);
+      }
+      case 'a.socRemove': {
+        const soc = this.socById(m.id), mem = soc && soc.members.find((x) => x.who === m.who);
+        if (!soc) return done("That society has ended");
+        if (!mem) return done("They're not in it any more");
+        const name = this.memberName(mem), ends = soc.members.length === 1;
+        await this.socOut(soc, mem.who, 'removed');
+        reply({ t: 'adminSocs', list: this.socsView() });
+        return done(`${name} is out of ${soc.name}${ends ? `, so it has ended` : ''}`);
+      }
+      case 'a.socEnd': {
+        const soc = this.socById(m.id);
+        if (!soc) return done("That society has ended");
+        await this.socEndAll(soc);
+        reply({ t: 'adminSocs', list: this.socsView() });
+        return done(`${soc.name} ended`);
       }
 
       /* ---------- Restore: the whole world back to an earlier time, or undo the last restore (restore.js) ---------- */

@@ -89,6 +89,10 @@ def problems(d):
     if c is not None:
         known(c.get('placeable'), 'claims.placeable', placeables, 'placeable')
         if not (isinstance(c.get('radius'), (int, float)) and c['radius'] > 0): out.append('claims.radius should be a number above 0')
+    so = d.get('societies')
+    if so is not None:
+        for k in ('maxMembers', 'nameMax', 'inviteMinutes', 'inviteReach'):
+            if not (isinstance(so.get(k), (int, float)) and so[k] > 0): out.append(f'societies.{k} should be a number above 0')
     age = (d.get('looks') or {}).get('age') or {}
     if not (whole(age.get('min')) and whole(age.get('max')) and age['min'] <= age.get('start', age['min']) <= age['max']): out.append('looks.age: needs min, start and max, in that order')
     opened = [r for r in d.get('regions', []) if r.get('open')]
@@ -145,6 +149,7 @@ def server_files(d):
         # numbers the admin can change live (Admin > Settings); wired up in server/src/live.js
         'liveSettings': d.get('liveSettings', []),
         'claims': d.get('claims', {}),
+        'societies': d.get('societies', {}),
         'start': {'x': 0.6, 'z': 1.9},
         'pond': {'x': -5.6, 'z': -0.9, 'r': 5.0},  # the main pond's middle and rough radius (POND in game/land.js)
     }
