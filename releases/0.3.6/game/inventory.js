@@ -18,8 +18,8 @@ function makeItemIcons() {
     const cam = new THREE.PerspectiveCamera(30, 1, 0.01, 20);
     const box = new THREE.Box3(), size = V(), mid = V();
     for (const kind of Object.keys(ITEMS)) {
-      const { model } = buildItem(kind);
-      model.rotation.y = 0.5;
+      const { model, iconY } = buildItem(kind);
+      model.rotation.y = iconY ?? 0.5; // a shape can turn its picture (a log shows its cut end)
       sc.add(model);
       box.setFromObject(model);
       box.getSize(size); box.getCenter(mid);
@@ -98,12 +98,92 @@ function bagTile(s) {
   if (s.n > 1) { const c = document.createElement('span'); c.className = 'count'; c.textContent = s.n; b.appendChild(c); }
   if (it.uses) { const w = document.createElement('span'); w.className = 'wear'; w.style.setProperty('--w', (s.left / it.uses).toFixed(2)); b.appendChild(w); }
   b.addEventListener('click', () => { // tap to show its info, tap again to hide it
+    if (Date.now() - bagDragged < 400) return;
     bagPick = bagPick === s.key ? null : s.key;
     drawBag();
     const again = $('bagList').querySelector(`[data-key="${s.key}"]`);
     if (again) again.focus({ preventScroll: true });
   });
+  bagDragOn(b, s);
   return b;
+}
+// dragging a tile out of the bag onto the world: your person eats it, a campfire takes fuel or cooks it, anywhere else drops
+// one. The bag fades while you drag and comes back after. Mouse: drag after a few pixels. Touch: hold a moment first (so the
+// grid can still scroll).
+let bagDragged = 0; // when the last drag ended (the click after it is ignored)
+function bagDragOn(b, s) {
+  b.addEventListener('dragstart', (e) => e.preventDefault()); // the browser's own picture-drag would cancel ours
+  b.addEventListener('pointerdown', (e) => {
+    if (e.button > 0) return;
+    const x0 = e.clientX, y0 = e.clientY, touch = e.pointerType !== 'mouse';
+    let ghost = null, timer = null, over = false;
+    const start = () => {
+      clearTimeout(timer);
+      ghost = document.createElement('div');
+      ghost.className = 'drag-ghost';
+      ghost.appendChild(itemPic(s.kind));
+      document.body.appendChild(ghost);
+      $('bag').classList.add('dragging');
+      bagDragging = true;
+      move(e);
+    };
+    const move = (m) => { if (ghost) ghost.style.transform = `translate(${m.clientX - 28}px, ${m.clientY - 28}px)`; };
+    const onMove = (m) => {
+      if (!ghost) {
+        const far = Math.hypot(m.clientX - x0, m.clientY - y0) > (touch ? 10 : 8);
+        if (far && !touch) start(); else if (far) end(null);
+        return;
+      }
+      move(m);
+    };
+    const end = (m) => {
+      clearTimeout(timer);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', cancel);
+      if (!ghost) return;
+      ghost.remove();
+      $('bag').classList.remove('dragging');
+      bagDragging = false;
+      bagDragged = Date.now();
+      if (m && !over) bagDropAt(s, m);
+      if (!bagOpen()) openBag();
+    };
+    const up = (m) => { end(m); }, cancel = () => { over = true; end(null); };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', cancel);
+    if (touch) timer = setTimeout(start, 260);
+  });
+}
+let bagDragging = false;
+document.addEventListener('touchmove', (e) => { if (bagDragging && e.cancelable) e.preventDefault(); }, { passive: false });
+function bagDropAt(s, e) {
+  const kind = s.kind, it = ITEMS[kind];
+  if (ui.mode !== 'world' || !player || you.dead || !you.carry[kind]) return;
+  const r = canvas.getBoundingClientRect();
+  if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return; // let go off the world: nothing
+  const t = pickTarget(...toCanvas(e));
+ 
+  if (t.kind === 'you') {
+    if (it.eat) eatOne(kind); else showTag(`Can't eat ${it.name.toLowerCase()}`);
+    return;
+  }
+  if (t.kind === 'placed' && t.th.built) {
+    const th = t.th, P = PLACEABLES[th.kind];
+    if (P.fire && P.fire.fuels[kind]) {
+      if (roomFor(th, kind) < 1) showTag('Fire is full'); else queueTask({ type: 'tend', id: th.id, do: 'add', n: 1, fuel: kind });
+      return;
+    }
+    const r2 = RECIPES.find((q) => q.near === th.kind && q.needs[kind] && recipeKnown(q));
+    if (r2) {
+      if (P.fire && !isLit(th)) { showTag('Light the fire first'); return; }
+      const why = cantMake(r2);
+      if (why && why !== 'Not here') showTag(why); else queueTask({ type: 'make', id: th.id, recipe: r2.id });
+      return;
+    }
+  }
+  dropItems(kind, 1, it.uses ? s.i : undefined);
 }
 // the bar under the grid: what it is, and what you can do with it (the main thing in green)
 function drawBagInfo(s) {
@@ -176,17 +256,23 @@ function cantMake(r) {
   return '';
 }
 const canMake = (r) => !cantMake(r);
+// a recipe with "seconds" (cooking) takes that long, and uses its things up when it finishes (if it still can be made)
 function make(r) {
   if (!canMake(r)) return;
-  spendEnergy('craft');
-  for (const [k, n] of Object.entries(r.needs)) takeFromCarry(k, n);
-  for (const [k, n] of Object.entries(r.makes)) addToCarry(k, n);
-  sendAct({ t: 'craft', id: r.id });
+  const finish = () => {
+    if (!canMake(r)) return;
+    spendEnergy('craft');
+    for (const [k, n] of Object.entries(r.needs)) takeFromCarry(k, n);
+    for (const [k, n] of Object.entries(r.makes)) addToCarry(k, n);
+    sendAct({ t: 'craft', id: r.id });
+    if (bagOpen()) drawBag();
+    drawHeld();
+    drawCarry();
+    showGain(`Made ${recipeName(r)}`);
+  };
+  if (r.seconds) { startAction({ pose: 'kneel', seconds: r.seconds, end: finish }); return; }
   startAction({ pose: 'kneel', seconds: 1.6 });
-  if (bagOpen()) drawBag();
-  drawHeld();
-  drawCarry();
-  showGain(`Made ${recipeName(r)}`);
+  finish();
 }
 function recipeCard(r) {
   const makes = Object.keys(r.makes)[0], it = ITEMS[makes];

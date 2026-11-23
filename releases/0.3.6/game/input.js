@@ -301,7 +301,10 @@ function thingActions(t) {
       return [{ label: src.action || `Pick ${ITEMS[Object.keys(src.harvest)[0]].plural.toLowerCase()}`, note: ready ? (b ? `${berriesOn(b)} left` : '') : `Next in ${readyIn(b)}`,
         disabled: !ready, run: () => queueTask(task) }, walkHere, ...(b ? adminMore(adminThingActions('bush', task.bush, berriesOn(b) < bushHolds(src))) : [])];
     }
-    return [{ label: src.action || `Use ${src.name.toLowerCase()}`, run: () => queueTask(task) }, walkHere];
+    const F = src.fish, has = F && you.carry[F.tool];
+    return [{ label: src.action || `Use ${src.name.toLowerCase()}`, run: () => queueTask(task) },
+      ...(F ? [{ label: F.action, note: has ? '' : `Needs a ${ITEMS[F.tool].name.toLowerCase()}`, disabled: !has, run: () => queueTask({ type: 'fish' }) }] : []),
+      walkHere];
   }
   return [];
 }
