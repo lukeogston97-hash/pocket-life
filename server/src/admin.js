@@ -16,7 +16,7 @@ const MOVABLE = { tree: 5000, rock: 2000, bush: 200 }; // things laid out with t
 
 export const adminMethods = {
   adminState(me) {
-    return { t: 'admin', on: true, tag: !!me.tag, maintenance: this.admin.maintenance, message: this.admin.message, speed: this.speed, usage: this.usageNow(), live: this.liveView() };
+    return { t: 'admin', on: true, maintenance: this.admin.maintenance, message: this.admin.message, speed: this.speed, usage: this.usageNow(), live: this.liveView() };
   },
   // a person who died or left, kept short for their player's page (Past people)
   async rememberPast(p) {
@@ -73,10 +73,6 @@ export const adminMethods = {
     const everyoneSees = async () => { await this.save(); this.send({ t: 'world', world: this.view() }, null); }; // big changes: the whole world again
     switch (m.t) {
       case 'a.state': return reply(this.adminState(me)); // the Admin panel was opened: fresh numbers
-      case 'a.tag':
-        me.tag = !!m.on; this.attach(ws, me);
-        this.send({ t: 'badge', id: me.id, on: me.tag }, me.id);
-        return done(me.tag ? 'Admin tag on' : 'Admin tag off');
       case 'a.maintenance': { // on: release-link players see Back soon, and everyone not playing is paused (persons.js paused, thaw)
         const on = !!m.on, was = !!this.admin.maintenance, now = Date.now();
         if (on && !was) { // everyone and every fire brought up to now, then the pause starts
@@ -148,7 +144,6 @@ export const adminMethods = {
       case 'a.player': return reply(await this.playerPage(clean(m.id, 40)));
       case 'a.kick': case 'a.ban': {
         if (!them && !sock && m.t === 'a.kick') return done("They've left");
-        if (sock && sock.p.admin) return done("That's you");
         if (m.t === 'a.ban' && !this.admin.banned.includes(m.id)) { this.admin.banned.push(clean(m.id, 40)); await this.saveAdmin(); }
         if (sock) this.boot(sock.ws, { t: m.t === 'a.ban' ? 'banned' : 'kicked' });
         return done(`${them ? them.name : 'They'} ${m.t === 'a.ban' ? 'banned' : 'kicked'}`);

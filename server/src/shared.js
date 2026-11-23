@@ -40,7 +40,7 @@ export function tooOld(v, b, min, e = 0, minEra = 0) {
 export const FEEDBACK_KEEP = 300, REPORTS_KEEP = 300;
 // Spam limits: each kind of message refills at so many a second, up to a small burst. The admin is never limited.
 export const LIMITS = { place: [1, 3], build: [1, 3], unplace: [1, 3], apart: [1, 3], fire: [2, 6], sit: [1, 4], chop: [1, 3], quarry: [1, 3], cut: [1, 3], seed: [1 / 10, 2], layout: [1 / 10, 2], sleep: [1, 4], craft: [1, 3], fish: [1 / 2, 3], act: [3, 6], say: [1, 3], take: [5, 10], pick: [5, 10], drop: [2, 6], move: [12, 20], eat: [3, 6], drink: [1, 3], create: [1 / 5, 3],
-  feedback: [1 / 30, 3], report: [1 / 30, 3], adminLogin: [1 / 5, 3], hello: [1 / 2, 4], sync: [1 / 5, 2] };
+  feedback: [1 / 30, 3], report: [1 / 30, 3], hello: [1 / 2, 4], sync: [1 / 5, 2] };
 export const buckets = new WeakMap(); // per connection, kept in memory only
 export const lastHeard = new WeakMap(); // per connection: when it last sent anything (the game pings every 25 seconds)
 export const QUIET_MS = 90000; // nothing heard for this long: the phone is asleep or gone, so the person goes away
@@ -57,7 +57,7 @@ export const FREE = { writes: 100000, requests: 100000 };
 export const TURN_MS = 60000; // how long someone at the front of the line has to take their spot
 export function allowed(ws, me, t) {
   const lim = LIMITS[t];
-  if (!lim || me.admin) return true;
+  if (!lim || (me.admin && me.watch && !me.who)) return true; // (the admin: a connection that only watches, index.js isAdmin)
   const [rate, burst] = lim, now = Date.now() / 1000;
   let b = buckets.get(ws);
   if (!b) buckets.set(ws, (b = {}));

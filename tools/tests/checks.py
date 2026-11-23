@@ -852,7 +852,61 @@ async def fishing():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow}
+RAW = """(() => {
+  // a bare connection to the server (no game), for checks about who the server lets do what
+  window.__raw = window.__raw || {};
+  window.conn = (name, hello) => new Promise((done, fail) => {
+    const D = window.GAME_DATA, ws = new WebSocket(D.server + '?world=live'), got = [];
+    window.__raw[name] = { ws, got };
+    ws.onmessage = (e) => { try { got.push(JSON.parse(e.data)); } catch (err) { /* not for us */ } };
+    ws.onerror = () => fail(new Error('no connection'));
+    ws.onopen = () => { ws.send(JSON.stringify({ t: 'hello', proto: 2, v: D.version, b: D.build || 0, e: D.era || 0, link: 'test', pid: 'raw-' + name, ...hello })); setTimeout(done, 700); };
+  });
+  window.say = (name, m) => window.__raw[name].ws.send(JSON.stringify(m));
+  window.heard = (name, t) => window.__raw[name].got.filter((m) => m.t === t);
+})()"""
+
+
+async def admin_login():
+    """Who is the admin: only a connection that watches with the right code. Someone playing a person never is, a wrong code is refused, and too many wrong codes lock that address out."""
+    async with world() as W:
+        pg = await W.page('rawhost')
+        await pg.evaluate(RAW)
+        ev = pg.evaluate
+        # someone just watching from the main menu can't use the admin's tools
+        await ev("conn('watcher', { watch: true })")
+        await ev("say('watcher', { t: 'a.state' })"); await pg.wait_for_timeout(400)
+        expect(len(await ev("heard('watcher', 'welcome')")) == 1 and not await ev("heard('watcher', 'admin').length"), "a plain watcher isn't the admin")
+        # admin mode: watching, with the code
+        await ev("conn('boss', { watch: true, admin: true, adminCode: 'secret123456' })")
+        on = await ev("heard('boss', 'admin')")
+        expect(len(on) == 1 and on[0].get('on') is True, f'watching with the right code is the admin ({on})')
+        hi = (await ev("heard('boss', 'welcome')"))[0]
+        expect(hi.get('watch') is True and str(hi.get('id', '')).startswith('w:') and not hi.get('me'), f"the admin has no person: a watcher ({hi.get('id')})")
+        await ev("say('boss', { t: 'a.announce', text: 'hello from admin' })"); await pg.wait_for_timeout(500)
+        expect([m.get('text') for m in await ev("heard('watcher', 'announce')")] == ['hello from admin'], "the admin's tools work from admin mode")
+        # someone playing a person is never the admin, even with the right code
+        await ev("conn('player', { adminCode: 'secret123456', admin: true })")
+        await ev("say('player', { t: 'create', name: 'Pat', age: 30, look: {} })"); await pg.wait_for_timeout(600)
+        expect(len(await ev("heard('player', 'me')")) >= 1, 'they have a person')
+        await ev("say('player', { t: 'a.state' })"); await ev("say('player', { t: 'a.announce', text: 'from a player' })"); await pg.wait_for_timeout(500)
+        expect(not await ev("heard('player', 'admin').length") and not await ev("heard('player', 'adminDone').length"), 'a player with the right code is not the admin')
+        expect(len(await ev("heard('watcher', 'announce')")) == 1, "a player can't use the admin's tools")
+        # the old way in (typed in the Say box) is gone
+        await ev("say('player', { t: 'adminLogin', code: 'secret123456' })"); await pg.wait_for_timeout(400)
+        expect(not await ev("heard('player', 'admin').length"), 'the old /admin login does nothing')
+        # a wrong code is refused
+        await ev("conn('guess', { watch: true, admin: true, adminCode: 'wrong-one' })")
+        expect(len(await ev("heard('guess', 'adminNo')")) == 1 and not await ev("heard('guess', 'admin').length"), 'a wrong code is refused')
+        # and after a few wrong ones, that address has to wait: even the right code is refused
+        for k in range(5):
+            await ev(f"conn('guess{k}', {{ watch: true, admin: true, adminCode: 'wrong{k}' }})")
+        await ev("conn('late', { watch: true, admin: true, adminCode: 'secret123456' })")
+        expect(not await ev("heard('late', 'admin').length") and len(await ev("heard('late', 'adminNo')")) == 1, 'too many wrong codes locks that address out')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

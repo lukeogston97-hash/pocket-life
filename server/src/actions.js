@@ -14,16 +14,6 @@ export const ACTIONS = {
     await this.addFeedback(m, me.from);
     if (!m.auto) reply({ t: 'thanks' }); // (auto: a note the game sent by itself about an error)
   } },
-  // typing /admin and the code in the Say box
-  adminLogin: { when: 'any', async run({ ws, me, m, p, w, reply, save }) {
-    me.tries = (me.tries || 0) + 1;
-    if (me.tries > 5 || this.adminLocked(me) || !this.codeOk(m.code)) { this.adminFail(me); this.attach(ws, me); reply({ t: 'adminNo' }); return; }
-    me.admin = true;
-    this.attach(ws, me);
-    reply(this.adminState(me));
-    if (me.alive) this.send({ t: 'badge', id: me.id, on: !!me.tag }, me.id);
-    return;
-  } },
   // reporting another player (kept with what they said lately)
   report: { when: 'any', async run({ ws, me, m, p, w, reply, save }) {
     const them = this.persons.get(m.id), sock = this.socketOf(m.id);

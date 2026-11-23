@@ -33,7 +33,7 @@ export const guardMethods = {
   // may this person move to nx, nz now? Not off the map, not while asleep, and no faster than a person walks
   // (with room for a patchy connection). The admin can teleport.
   moveOk(ws, me, p, nx, nz) {
-    if (me.admin) return true;
+    if (this.isAdmin(me)) return true;
     const edge = (G.worldSize || 100) / 2 - 1;
     if (!(Math.abs(nx) <= edge && Math.abs(nz) <= edge)) return false;
     const d = Math.hypot(nx - p.x, nz - p.z), now = Date.now();
@@ -66,11 +66,11 @@ export const guardMethods = {
     const mine = `${me.v}.${me.b || 0}`, V = WORLDS.minVersion || {};
     if (mine !== V.test && mine !== V.release) return false;
     if (!L.v || tooOld(L.v, L.b, mine, L.e, me.e)) return true;
-    return !!me.admin && !L.admin;
+    return this.isAdmin(me) && !L.admin;
   },
   takeLayout(me, m) {
     const w = this.world;
-    w.layout = { ...this.cleanLayout(m), v: me.v || '', b: me.b || 0, e: me.e || 0, admin: !!me.admin };
+    w.layout = { ...this.cleanLayout(m), v: me.v || '', b: me.b || 0, e: me.e || 0, admin: this.isAdmin(me) };
     for (const [key, at] of Object.entries(w.moved || {})) { // bushes the admin moved stay where they were moved to
       const [what, i] = key.split(':');
       if (what === 'bush' && w.layout.bushes[i]) w.layout.bushes[i] = at;

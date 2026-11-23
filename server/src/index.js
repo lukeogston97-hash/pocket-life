@@ -186,9 +186,12 @@ export class World extends DurableObject {
     const trace = String((err && err.stack) || '').split('\n').slice(1, 4).map((l) => l.trim()).join(' | ').slice(0, 300);
     try { await this.addFeedback({ auto: true, text: `Server error (${what})${trace ? `\n${trace}` : ''}`, name: 'The server', v: (WORLDS.minVersion || {}).test || '' }, 'server'); } catch (e) { /* storage trouble: it's in the log */ }
   }
+  // The admin (Luke) is never a person in the world: it's a connection that only watches (admin mode in the game, opened
+  // from the main menu with the admin code). A connection playing someone is never the admin, whatever it says.
+  isAdmin(me) { return !!(me && me.admin && me.watch && !me.who); }
   tellAdmins(msg) {
     const text = JSON.stringify(msg);
-    for (const { ws, p } of this.sockets()) if (p.admin) { try { ws.send(text); } catch (err) { /* gone */ } }
+    for (const { ws, p } of this.sockets()) if (this.isAdmin(p)) { try { ws.send(text); } catch (err) { /* gone */ } }
   }
 
   async webSocketMessage(ws, raw) {
@@ -205,7 +208,8 @@ export class World extends DurableObject {
     if (m.t === 'hello') { if (me.id && !allowed(ws, me, 'hello')) { reply({ t: 'slow' }); return; } await this.hello(ws, me, m, reply); return; }
     if (m.t === 'bye') { try { ws.close(1000, 'bye'); } catch (err) { /* gone */ } this.webSocketClose(ws); return; }
     if (!me.id) return;
-    if (me.watch && m.t !== 'feedback') return; // on the main menu: only watching the world
+    const isAdmin = this.isAdmin(me);
+    if (me.watch && m.t !== 'feedback' && !(isAdmin && (m.t.startsWith('a.') || m.t === 'layout'))) return; // on the main menu: only watching the world (the admin: their tools, and the layout)
     if (!allowed(ws, me, m.t)) {
       if (m.t === 'take') reply({ t: 'took', id: m.id, ok: false });
       else if (m.t === 'pick') reply({ t: 'picked', bush: m.bush, ok: false });
@@ -215,7 +219,7 @@ export class World extends DurableObject {
     const w = this.world;
     const p = this.persons.get(me.who);
     const save = () => { this.touch(p); this.flush(p.who); }; // what they did is saved straight away
-    if (m.t.startsWith('a.')) { if (me.admin) await this.adminDo(ws, me, m); return; } // the admin player's tools (admin.js)
+    if (m.t.startsWith('a.')) { if (isAdmin) await this.adminDo(ws, me, m); return; } // the admin's tools (admin.js)
     const action = ACTIONS[m.t]; // everything else (actions.js)
     if (!action) return;
     if (action.when !== 'any') {
@@ -235,7 +239,8 @@ export class World extends DurableObject {
     if (m.proto !== PROTOCOL) { this.boot(ws, { t: 'maintenance', text: 'A big update is on its way. Back soon.' }); return; } // an older game
     const link = m.link === 'test' ? 'test' : 'release';
     const min = (WORLDS.minVersion || {})[link];
-    const isAdmin = !!m.adminCode && !this.adminLocked(me) && this.codeOk(m.adminCode);
+    const asksAdmin = !!m.watch && !!m.admin && !!m.adminCode; // admin mode: watching only, never while playing a person
+    const isAdmin = asksAdmin && !this.adminLocked(me) && this.codeOk(m.adminCode);
     if (m.adminCode && !isAdmin) this.adminFail(me); // too many wrong codes from one address and it has to wait (guard.js)
     const who = await this.whoFor(m);
     if (!isAdmin && this.admin.banned.includes(who)) { this.boot(ws, { t: 'banned' }); return; }
@@ -247,18 +252,19 @@ export class World extends DurableObject {
     const full = !m.watch && !isAdmin && !this.mayPlay(ws, me, who);
     if (m.watch || full) { // the main menu: watch the world go by without a person
       const queued = full ? me.queued || Date.now() : 0;
-      Object.assign(me, { id: me.watch && me.id ? me.id : `w:${crypto.randomUUID().slice(0, 8)}`, who: null, watch: true, queued, turnAt: 0, admin: isAdmin, tag: m.adminTag !== false, v: clean(m.v, 20), b: Math.floor(Number(m.b)) || 0, e: Math.floor(Number(m.e)) || 0, link, alive: false });
+      Object.assign(me, { id: me.watch && me.id ? me.id : `w:${crypto.randomUUID().slice(0, 8)}`, who: null, watch: true, queued, turnAt: 0, admin: isAdmin, v: clean(m.v, 20), b: Math.floor(Number(m.b)) || 0, e: Math.floor(Number(m.e)) || 0, link, alive: false });
       this.attach(ws, me);
       const p = this.persons.get(who);
       reply({ t: 'welcome', watch: true, id: me.id, people: this.people(null), world: this.view(), count: this.playing(), speed: this.speed, live: this.live,
-        yours: this.alive(p) ? { name: p.name, age: ageOf(p) } : null, line: full ? this.placeOf(ws) : 0 });
+        yours: this.alive(p) ? { name: p.name, age: ageOf(p) } : null, line: full ? this.placeOf(ws) : 0, needLayout: isAdmin && this.needLayout(me) });
+      if (isAdmin) reply(this.adminState(me)); // admin mode is on: the panels get their numbers
       if (full) this.callLine();
       return;
     }
     me.queued = 0; me.turnAt = 0;
     // the same phone in another tab or link: that one closes
     for (const s of this.sockets()) if (s.p.who === who && s.ws !== ws) { s.p.alive = false; this.attach(s.ws, s.p); this.boot(s.ws, { t: 'elsewhere' }); }
-    Object.assign(me, { id: who, who, watch: false, admin: isAdmin, tag: m.adminTag !== false, said: me.said || [], v: clean(m.v, 20), b: Math.floor(Number(m.b)) || 0, e: Math.floor(Number(m.e)) || 0, link, alive: false });
+    Object.assign(me, { id: who, who, watch: false, admin: false, said: me.said || [], v: clean(m.v, 20), b: Math.floor(Number(m.b)) || 0, e: Math.floor(Number(m.e)) || 0, link, alive: false });
     const p = this.persons.get(who);
     let away = null, dead = null;
     if (p && this.alive(p)) {
@@ -282,7 +288,6 @@ export class World extends DurableObject {
     if (p && this.alive(p)) me.alive = true;
     this.attach(ws, me);
     if (p) await this.flush(who);
-    if (isAdmin) reply(this.adminState(me));
     const w = this.world;
     reply({ t: 'welcome', id: who, people: this.people(who), world: this.view(), needSeed: !w, needLayout: this.needLayout(me),
       count: this.playing(), me: me.alive ? this.mine(p) : null, away, dead, speed: this.speed, live: this.live });
