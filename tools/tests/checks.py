@@ -1161,6 +1161,27 @@ async def admin_taps():
         before = await b.evaluate("__pl.world.items.length")
         await a.click('#actList >> text=Remove'); await a.wait_for_timeout(1500)
         expect(await b.evaluate("__pl.world.items.length") == before - 1, "the item is gone in the player's game too")
+        # a tree and a rock laid out with the world: their own menus, and Remove (which asks first). The view is put over one,
+        # then the screen is searched for a spot where a tap really lands on it (another tree can stand in the way).
+        for what, left, title in [('tree', "__pl.trees.filter((t) => t.state === 'tree').length", ('Tree', 'Pine tree')), ('rock', "__pl.rocks.filter((r) => r.state !== 'gone').length", ('Rock', 'Boulder'))]:
+            await a.evaluate(f"""(() => {{ const c = __pl.controls, list = __pl.{what}s.filter((t) => t.state === '{'tree' if what == 'tree' else 'whole'}');
+                const t = list.sort((p, q) => Math.hypot(p.x - c.target.x, p.z - c.target.z) - Math.hypot(q.x - c.target.x, q.z - c.target.z))[0];
+                const dx = t.x - c.target.x, dz = t.z - c.target.z; c.target.x += dx; c.target.z += dz; __pl.camera.position.x += dx; __pl.camera.position.z += dz; }})()""")
+            await frames(a, 3)
+            spot = await a.evaluate(f"""(() => {{ const c = document.getElementById('world').getBoundingClientRect(), mx = c.left + c.width / 2, my = c.top + c.height / 2;
+                for (let r = 0; r < 260; r += 12) for (let k = 0; k < (r ? 12 : 1); k++) {{ const x = mx + Math.cos(k / 12 * 6.283) * r, y = my + Math.sin(k / 12 * 6.283) * r;
+                  if (x < 400 || x > c.right - 20 || y < 80 || y > c.bottom - 20) continue; const t = __pl.adminAt(x, y); if (t.kind === '{what}') return [x, y, t.name, t.acts]; }}
+                return null; }})()""")
+            expect(spot is not None and spot[2] in title, f'a {what} near the middle of the view can be tapped ({spot})')
+            n0 = await b.evaluate(left)
+            await a.mouse.click(spot[0], spot[1]); await a.wait_for_timeout(600)
+            m = await menu()
+            expect(m['shown'] and m['title'] in title and 'Move' in m['acts'] and 'Remove' in m['acts'], f"tapping a {what} offers Move and Remove ({m})")
+            await a.click('#actList >> text=Remove'); await a.wait_for_timeout(400)
+            m = await menu()
+            expect(m['shown'] and 'Yes, remove' in m['acts'] and 'Move' not in m['acts'] and await b.evaluate(left) == n0, f"Remove asks first, and nothing is gone yet ({m['acts']})")
+            await a.click('#actList >> text=Yes, remove'); await a.wait_for_timeout(1500)
+            expect(await b.evaluate(left) == n0 - 1, f"then the {what} is gone in the player's game too ({n0} to {await b.evaluate(left)})")
         st = await a.evaluate("({ mode: __pl.ui.mode, person: !!__pl.player })")
         expect(st['mode'] == 'admin' and not st['person'], f'the admin is still in admin mode with no person ({st})')
         expect(not W.errors, f'no errors {W.errors[:3]}')
