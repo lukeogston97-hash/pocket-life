@@ -158,32 +158,44 @@ function bagDragOn(b, s) {
 }
 let bagDragging = false;
 document.addEventListener('touchmove', (e) => { if (bagDragging && e.cancelable) e.preventDefault(); }, { passive: false });
-function bagDropAt(s, e) {
+// where a drag let go decides what happens. s: the tile ({kind, i}); loose: a lone item lying on the ground (picked up first)
+function bagDropAt(s, e, loose) {
   const kind = s.kind, it = ITEMS[kind];
-  if (ui.mode !== 'world' || !player || you.dead || !you.carry[kind]) return;
+  if (ui.mode !== 'world' || !player || you.dead || (!loose && !you.carry[kind])) return;
   const r = canvas.getBoundingClientRect();
   if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return; // let go off the world: nothing
   const t = pickTarget(...toCanvas(e));
- 
-  if (t.kind === 'you') {
-    if (it.eat) eatOne(kind); else showTag(`Can't eat ${it.name.toLowerCase()}`);
+  const pick = () => { if (loose) queueTask({ type: 'pickup', id: loose.id }); };
+  if (t && t.kind === 'you') {
+    if (loose) pick(); // (picks it up; eat it from the bag)
+    else if (it.eat) eatOne(kind); else showTag(`Can't eat ${it.name.toLowerCase()}`);
     return;
   }
-  if (t.kind === 'placed' && t.th.built) {
+  if (t && t.kind === 'placed' && t.th.built) {
     const th = t.th, P = PLACEABLES[th.kind];
     if (P.fire && P.fire.fuels[kind]) {
-      if (roomFor(th, kind) < 1) showTag('Fire is full'); else queueTask({ type: 'tend', id: th.id, do: 'add', n: 1, fuel: kind });
+      if (roomFor(th, kind) < 1) showTag('Fire is full'); else { pick(); queueTask({ type: 'tend', id: th.id, do: 'add', n: 1, fuel: kind }); }
       return;
     }
     const r2 = RECIPES.find((q) => q.near === th.kind && q.needs[kind] && recipeKnown(q));
     if (r2) {
       if (P.fire && !isLit(th)) { showTag('Light the fire first'); return; }
-      const why = cantMake(r2);
-      if (why && why !== 'Not here') showTag(why); else queueTask({ type: 'make', id: th.id, recipe: r2.id });
+      const why = loose ? '' : cantMake(r2);
+      if (why && why !== 'Not here') showTag(why); else { pick(); queueTask({ type: 'make', id: th.id, recipe: r2.id }); }
       return;
     }
   }
-  dropItems(kind, 1, it.uses ? s.i : undefined);
+  ray.setFromCamera(ndc, camera);
+  const gh = ray.intersectObject(terrain, false)[0]; // the ground under your finger (past grass, trees and the like)
+  const at = t && t.kind === 'item' ? { x: t.item.x + 0.3, z: t.item.z + 0.3 } : t && t.kind === 'ground' ? { x: t.point.x, z: t.point.z }
+    : gh && !['shore', 'use'].includes(t && t.kind) ? { x: gh.point.x, z: gh.point.z } : null;
+  if (loose) {
+    if (!at) return; // dropped on something else: stays where it was
+    pick();
+    queueTask({ type: 'drop', kind, n: 1, x: at.x, z: at.z });
+    return;
+  }
+  dropItems(kind, 1, it.uses ? s.i : undefined, at);
 }
 // the bar under the grid: what it is, and what you can do with it (the main thing in green)
 function drawBagInfo(s) {

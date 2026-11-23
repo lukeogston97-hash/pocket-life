@@ -1,5 +1,5 @@
 {
-  "version": "0.1.0",
+  "version": "0.1.1",
   "build": 1,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
@@ -909,6 +909,13 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.1.1",
+      "date": "2026-11-23",
+      "notes": [
+        "Dragging from the Inventory now drops things where you let go (your person walks over). Drag a loose item on the ground to move it, or onto a campfire to burn it."
+      ]
+    },
     {
       "version": "0.1.0",
       "date": "2026-11-23",

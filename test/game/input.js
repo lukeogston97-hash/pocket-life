@@ -22,24 +22,58 @@ canvas.addEventListener('pointerdown', (e) => {
   if (swallowTap) { swallowTap = false; down = null; return; } // that press only closed the menu
   if (e.button !== 0) { down = null; return; } // right and middle buttons don't walk
   down = { x: e.clientX, y: e.clientY, t: e.timeStamp };
+  // pressing a loose item can turn into dragging it (mouse: move; touch: hold a moment, then move) onto the ground, a fire or you
+  wdrag = null;
+  if (ui.mode === 'world' && player && !you.dead && !paused && !placing.on) {
+    const hit = pickTarget(...toCanvas(e));
+    if (hit && hit.kind === 'item') {
+      wdrag = { item: hit.item, x: e.clientX, y: e.clientY, ready: e.pointerType === 'mouse', ghost: null };
+      if (!wdrag.ready) { const w = wdrag; w.timer = setTimeout(() => { w.ready = true; }, 300); }
+    }
+  }
   if (e.pointerType !== 'mouse') {
     const at = { clientX: e.clientX, clientY: e.clientY };
     pressTimer = setTimeout(() => {
       pressTimer = null;
       if (!down || multi) return;
       const [px, py] = toCanvas(at);
-      if (openMenuAt(px, py)) down = null;
+      if (openMenuAt(px, py)) { down = null; endWorldDrag(); }
     }, 480);
   }
 });
+let wdrag = null;
+function endWorldDrag() {
+  if (!wdrag) return;
+  clearTimeout(wdrag.timer);
+  if (wdrag.ghost) { wdrag.ghost.remove(); bagDragging = false; }
+  wdrag = null;
+}
 canvas.addEventListener('pointermove', (e) => {
   if (e.pointerType === 'mouse') { hoverAt = e.buttons ? null : { clientX: e.clientX, clientY: e.clientY }; hoverWait = 0; }
+  if (wdrag && wdrag.ready && !wdrag.ghost && Math.hypot(e.clientX - wdrag.x, e.clientY - wdrag.y) > 8 && getItem(wdrag.item.id)) {
+    const g = document.createElement('div');
+    g.className = 'drag-ghost';
+    g.appendChild(itemPic(wdrag.item.kind));
+    document.body.appendChild(g);
+    wdrag.ghost = g;
+    bagDragging = true;
+    down = null; // not a tap any more
+    cancelPress();
+  }
+  if (wdrag && wdrag.ghost) wdrag.ghost.style.transform = `translate(${e.clientX - 28}px, ${e.clientY - 28}px)`;
   if (pressTimer && down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 10) cancelPress();
 });
-canvas.addEventListener('pointercancel', cancelPress);
+canvas.addEventListener('pointercancel', () => { cancelPress(); endWorldDrag(); });
 canvas.addEventListener('pointerleave', () => { hoverAt = null; });
 canvas.addEventListener('pointerup', (e) => {
   cancelPress();
+  if (wdrag && wdrag.ghost) {
+    const w = wdrag;
+    endWorldDrag();
+    if (getItem(w.item.id)) bagDropAt({ kind: w.item.kind }, e, w.item);
+    return;
+  }
+  endWorldDrag();
   if (!e.isPrimary || multi || !down) return;
   if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > 12 || e.timeStamp - down.t > 550) return;
   down = null;

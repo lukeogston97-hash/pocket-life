@@ -752,12 +752,17 @@ async def bagdrag():
         left = await a.evaluate('__pl.you.carry.stick'); fuel = await a.evaluate(f'__pl.fuelLeft(__pl.placed.get({fid}))')
         expect(left == sticks - 1 and fuel > 0, f'a stick dragged onto the fire went in as fuel ({sticks} -> {left}, fuel {fuel})')
         expect(await a.evaluate("document.getElementById('bag').classList.contains('open')"), 'the bag is open again after the drag')
-        # a drop onto bare ground: the top corner of the world is sky or far ground, so aim just ahead of your feet
-        feet = await a.evaluate(f"({scr})([__pl.player.position.x + 1.5, 0, __pl.player.position.z + 1.5])")
-        await drag('stick', feet); await idle(a, 30); await a.wait_for_timeout(800)
+        # a drop onto bare ground away from your feet: it walks over and puts it down where you let go
+        P = await a.evaluate('[__pl.player.position.x, __pl.player.position.z]')
+        tgt = [P[0] + 3.5, P[1] + 3.5]
+        near = "(() => { const p = __pl.player.position; let best = 99, at = null; for (const v of __pl.itemViews.values()) { const d = Math.hypot(v.position.x - %s, v.position.z - %s); if (d < best) { best = d; at = [v.position.x, v.position.z]; } } return [best, at]; })()"
+        await drag('stick', await a.evaluate(f"({scr})([{tgt[0]}, 0, {tgt[1]}])")); await idle(a, 60); await a.wait_for_timeout(800)
         left2 = await a.evaluate('__pl.you.carry.stick')
-        expect(left2 == left - 1, f'a stick dragged onto the ground was dropped ({left} -> {left2})')
+        d = await a.evaluate(near % (tgt[0], tgt[1]))
+        expect(left2 == left - 1 and d[0] < 3.0, f'a stick dragged onto far ground was put down there ({left} -> {left2}, {d[0]:.1f} m from where I let go)')
         expect(await a.evaluate("document.getElementById('bag').classList.contains('open')"), 'the bag is open again after a drop')
+        await a.evaluate("document.getElementById('bag').classList.remove('open')")
+        # (dragging a loose item along the ground is not checked yet: the headless mouse drag did not pick the stick up)
 
 async def glow():
     """A mouse over a loose item gives it a faint outline, a campfire gets none; moving away takes it off."""

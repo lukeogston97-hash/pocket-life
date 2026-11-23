@@ -22,22 +22,58 @@ canvas.addEventListener('pointerdown', (e) => {
   if (swallowTap) { swallowTap = false; down = null; return; } // that press only closed the menu
   if (e.button !== 0) { down = null; return; } // right and middle buttons don't walk
   down = { x: e.clientX, y: e.clientY, t: e.timeStamp };
+  // pressing a loose item can turn into dragging it (mouse: move; touch: hold a moment, then move) onto the ground, a fire or you
+  wdrag = null;
+  if (ui.mode === 'world' && player && !you.dead && !paused && !placing.on) {
+    const hit = pickTarget(...toCanvas(e));
+    if (hit && hit.kind === 'item') {
+      wdrag = { item: hit.item, x: e.clientX, y: e.clientY, ready: e.pointerType === 'mouse', ghost: null };
+      if (!wdrag.ready) { const w = wdrag; w.timer = setTimeout(() => { w.ready = true; }, 300); }
+    }
+  }
   if (e.pointerType !== 'mouse') {
     const at = { clientX: e.clientX, clientY: e.clientY };
     pressTimer = setTimeout(() => {
       pressTimer = null;
       if (!down || multi) return;
       const [px, py] = toCanvas(at);
-      if (openMenuAt(px, py)) down = null;
+      if (openMenuAt(px, py)) { down = null; endWorldDrag(); }
     }, 480);
   }
 });
+let wdrag = null;
+function endWorldDrag() {
+  if (!wdrag) return;
+  clearTimeout(wdrag.timer);
+  if (wdrag.ghost) { wdrag.ghost.remove(); bagDragging = false; }
+  wdrag = null;
+}
 canvas.addEventListener('pointermove', (e) => {
+  if (e.pointerType === 'mouse') { hoverAt = e.buttons ? null : { clientX: e.clientX, clientY: e.clientY }; hoverWait = 0; }
+  if (wdrag && wdrag.ready && !wdrag.ghost && Math.hypot(e.clientX - wdrag.x, e.clientY - wdrag.y) > 8 && getItem(wdrag.item.id)) {
+    const g = document.createElement('div');
+    g.className = 'drag-ghost';
+    g.appendChild(itemPic(wdrag.item.kind));
+    document.body.appendChild(g);
+    wdrag.ghost = g;
+    bagDragging = true;
+    down = null; // not a tap any more
+    cancelPress();
+  }
+  if (wdrag && wdrag.ghost) wdrag.ghost.style.transform = `translate(${e.clientX - 28}px, ${e.clientY - 28}px)`;
   if (pressTimer && down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 10) cancelPress();
 });
-canvas.addEventListener('pointercancel', cancelPress);
+canvas.addEventListener('pointercancel', () => { cancelPress(); endWorldDrag(); });
+canvas.addEventListener('pointerleave', () => { hoverAt = null; });
 canvas.addEventListener('pointerup', (e) => {
   cancelPress();
+  if (wdrag && wdrag.ghost) {
+    const w = wdrag;
+    endWorldDrag();
+    if (getItem(w.item.id)) bagDropAt({ kind: w.item.kind }, e, w.item);
+    return;
+  }
+  endWorldDrag();
   if (!e.isPrimary || multi || !down) return;
   if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > 12 || e.timeStamp - down.t > 550) return;
   down = null;
@@ -318,6 +354,7 @@ function openMenuAt(px, py, known) {
   $('actTitle').textContent = t.name;
   showActs(acts);
   menu.hidden = false;
+  menuGlow = glowViewOf(t); // the thing the menu is for stays outlined while it's open
   const w = menu.offsetWidth, h = menu.offsetHeight;
   measureHud();
   menu.style.left = `${Math.round(Math.min(Math.max(8, px + 8), app.clientWidth - w - 8))}px`;
@@ -361,7 +398,7 @@ function showActs(acts, back) {
   }
   $('actList').replaceChildren(...rows);
 }
-function closeMenu() { $('actMenu').hidden = true; }
+function closeMenu() { $('actMenu').hidden = true; menuGlow = null; }
 // pressing anywhere else closes the menu (and that press doesn't also walk)
 document.addEventListener('pointerdown', (e) => {
   if ($('actMenu').hidden || $('actMenu').contains(e.target)) return;
@@ -575,4 +612,70 @@ function updatePlayer(dt) {
   const age = elapsed - (tapMark.userData.born ?? -9);
   tapMark.material.opacity = age < 0.8 ? 0.85 * (1 - age / 0.8) : 0;
   tapMark.scale.setScalar(1 + age * 1.2);
+}
+
+/* ---------- a faint glow round what you're about to click ---------- */
+// Loose items (sticks, stones, tools...) get a soft light outline when the mouse is over them, and a loose item
+// the tap menu is open for stays outlined. Only loose items (Luke, 23 Nov 2026): not campfires, trees, rocks or bushes. The outline is a slightly bigger copy of the
+// thing's shapes, drawn from the inside only, so just a thin rim shows round the edge.
+const GLOW_MAT = new THREE.MeshBasicMaterial({ color: 0xfff1cf, transparent: true, opacity: 0.5, side: THREE.BackSide, depthWrite: false, fog: false });
+const GLOW_PAD = 0.045; // metres the rim sticks out
+let hoverAt = null, hoverWait = 0, hoverGlow = null, menuGlow = null, glowOn = null, glowShell = null;
+const glowKinds = new Map(); // item kind -> its outline model, built once
+function glowMatrix(geo) { // grow a shape a little round its own middle
+  if (!geo.boundingSphere) geo.computeBoundingSphere();
+  const { center: c, radius: r } = geo.boundingSphere, k = 1 + Math.min(0.6, GLOW_PAD / Math.max(r, 0.01));
+  return new THREE.Matrix4().makeTranslation(c.x, c.y, c.z).multiply(new THREE.Matrix4().makeScale(k, k, k))
+    .multiply(new THREE.Matrix4().makeTranslation(-c.x, -c.y, -c.z));
+}
+const glowable = (o) => o.isMesh && !o.isInstancedMesh && o.material !== HIT_MAT && !(o.material && o.material.transparent);
+function itemGlow(kind) {
+  let m = glowKinds.get(kind);
+  if (!m) {
+    m = buildItem(kind).model;
+    disposeMaterials(m);
+    m.position.set(0, 0, 0); m.rotation.set(0, 0, 0);
+    const meshes = [];
+    m.traverse((o) => { if (o.isMesh) meshes.push(o); });
+    for (const o of meshes) {
+      if (!glowable(o)) { o.visible = false; continue; }
+      o.material = GLOW_MAT; o.castShadow = o.receiveShadow = false;
+      o.updateMatrix(); o.matrix.multiply(glowMatrix(o.geometry)); o.matrixAutoUpdate = false;
+    }
+    glowKinds.set(kind, m);
+  }
+  return m;
+}
+function glowViewOf(t) {
+  if (!t) return null;
+  if (t.kind === 'item') { const v = itemViews.get(t.item.id); return v ? { view: v, kind: t.item.kind } : null; }
+  return null;
+}
+function clearGlow() {
+  if (!glowShell) return;
+  glowShell.parent && glowShell.parent.remove(glowShell);
+  glowOn = glowShell = null;
+}
+function showGlow(g) {
+  if (g && glowOn === g.view && glowShell && glowShell.userData.view === g.view) return;
+  clearGlow();
+  if (!g) return;
+  glowOn = g.view;
+  glowShell = itemGlow(g.kind); // its outline model sits on it
+  glowShell.userData.view = g.view;
+  g.view.add(glowShell);
+}
+// called every frame: works out what's under the mouse now and then (the camera may have moved under it)
+function updateGlow(dt) {
+  const live = ui.mode === 'world' && player && !you.dead && !paused && !placing.on && !adminMoving;
+  if (!live) { hoverGlow = menuGlow = null; clearGlow(); return; }
+  if (!hoverAt || lastPointer !== 'mouse') hoverGlow = null;
+  else if ((hoverWait -= dt) <= 0) {
+    hoverWait = 0.12;
+    const t = pickTarget(...toCanvas(hoverAt));
+    hoverGlow = glowViewOf(t);
+  }
+  const g = (!$('actMenu').hidden && menuGlow) || hoverGlow;
+  if (g && !g.view.parent) { if (g === menuGlow) menuGlow = null; else hoverGlow = null; clearGlow(); return; } // it was picked up
+  showGlow(g);
 }

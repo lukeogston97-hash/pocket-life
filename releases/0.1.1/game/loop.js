@@ -28,6 +28,7 @@ function frameStep() {
     if (!paused) keyCamera(dt);
     updateOthers(dt);
     fadeTapRing(dt);
+    updateGlow(raw);
     updateClaims(Date.now());
     sendMove();
     followPlayer(dt);

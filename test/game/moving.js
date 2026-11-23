@@ -579,30 +579,36 @@ Object.assign(TASK_KINDS, {
   },
 });
 // where dropped things land: one in front of you, more in a small pile around it
-function dropSpot(i) {
+function dropSpot(i, at) { // at: {x, z} where you let go (else just in front of you)
   const fx = Math.sin(player.rotation.y), fz = Math.cos(player.rotation.y);
   const a = i * 2.39996, r = i === 0 ? 0 : 0.16 + Math.sqrt(i) * 0.15;
-  let x = player.position.x + fx * 0.6 + Math.cos(a) * r, z = player.position.z + fz * 0.6 + Math.sin(a) * r;
+  const bx = at ? at.x : player.position.x + fx * 0.6, bz = at ? at.z : player.position.z + fz * 0.6;
+  let x = bx + Math.cos(a) * r, z = bz + Math.sin(a) * r;
   if (pondShape(x, z) < 0.95) { x = player.position.x - fx * 0.5 + Math.cos(a) * r; z = player.position.z - fz * 0.5 + Math.sin(a) * r; }
   return { x, z };
 }
 function doDrop(t) {
   if (!you.carry[t.kind]) { nextTask(); return; }
-  startAction({ pose: 'bend', mid: () => {
-    const taken = takeFromCarry(t.kind, t.n);
-    const out = [];
-    for (let i = 0; i < taken; i++) { const s = dropSpot(i); out.push({ kind: t.kind, x: s.x, z: s.z, rot: rand() * Math.PI, ...(i === 0 && t.which != null ? { which: t.which } : {}) }); }
-    placeItems(out);
-    drawHeld();
-    drawCarry();
-  } });
+  const at = Number.isFinite(t.x) && Number.isFinite(t.z) ? { x: t.x, z: t.z } : null;
+  const go = () => {
+    if (at) face(at.x, at.z);
+    startAction({ pose: 'bend', mid: () => {
+      const taken = takeFromCarry(t.kind, t.n);
+      const out = [];
+      for (let i = 0; i < taken; i++) { const s = dropSpot(i, at); out.push({ kind: t.kind, x: s.x, z: s.z, rot: rand() * Math.PI, ...(i === 0 && t.which != null ? { which: t.which } : {}) }); }
+      placeItems(out);
+      drawHeld();
+      drawCarry();
+    } });
+  };
+  if (at) approach(at.x, at.z, 1.6, 2.4, go); else go(); // put it down where you let go: walk over first if it's far
 }
 // dropping from your inventory happens straight away, then your person carries on with the queue
-function dropItems(kind, n, which) { // which: for a tool, which one (0 is the one in use)
+function dropItems(kind, n, which, at) { // which: for a tool, which one (0 is the one in use); at: {x, z} to put it there
   if (ui.mode !== 'world' || !player || you.dead || !you.carry[kind]) return;
   closeBag();
   closeCraft();
-  const t = { type: 'drop', kind, n, ...(Number.isInteger(which) ? { which } : {}) };
+  const t = { type: 'drop', kind, n, ...(Number.isInteger(which) ? { which } : {}), ...(at ? { x: at.x, z: at.z } : {}) };
   if (action) { tasks.list.unshift(t); return; }
   if (tasks.current) tasks.list.unshift(tasks.current);
   walk.target = null;
