@@ -46,6 +46,10 @@ export const TICK_MS = 20000; // how often the world moves on (needs, people awa
 // What people do (eat, pick up, craft) is saved straight away; walking about and needs ticking over are saved
 // at most every SAVE_EVERY. If the world is shut down in between, people away are simply played forward again.
 export const SAVE_EVERY = 5 * MINUTE;
+// People away are played forward by the server from their last save, so their strolling and needs ticking over only need
+// saving now and then; anything lasting (picked berries, fed their fire, fell asleep, died) is still saved within SAVE_EVERY.
+// (Found in the 23 Nov 2026 growth check: saving every away person every 5 minutes used up the free plan at about 170 people a day.)
+export const AWAY_SAVE_EVERY = 60 * MINUTE;
 export const FREE = { writes: 100000, requests: 100000 };
 export const TURN_MS = 60000; // how long someone at the front of the line has to take their spot
 export function allowed(ws, me, t) {

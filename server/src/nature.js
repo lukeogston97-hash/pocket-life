@@ -21,9 +21,11 @@ export const natureMethods = {
     if ((w.removed || {})[`bush:${i}`]) return 0; // the admin took this bush out
     return berriesGrown(b[0], b[1], w.holds, w.regrowMs, t); // rules.js, the same as in the game
   },
-  takeBerry(i, t = Date.now()) {
-    const w = this.world, b = w.bushes[i] || [null, null];
-    const [count, from] = berryPicked(b[0], b[1], w.holds, w.regrowMs, t);
+  // n berries picked off a bush at once (one save and one message, however many)
+  takeBerries(i, n = 1, t = Date.now()) {
+    const w = this.world;
+    let [count, from] = w.bushes[i] || [null, null];
+    for (let k = 0; k < n; k++) [count, from] = berryPicked(count, from, w.holds, w.regrowMs, t);
     w.bushes[i] = [count, from];
     this.save();
     this.send({ t: 'bush', bush: i, count, growFrom: from }, null);

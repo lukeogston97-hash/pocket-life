@@ -11,7 +11,8 @@ const SIT_OPEN = 365 * 24 * 3600000; // sitting has no set time: `until` is far 
 export const ACTIONS = {
   // feedback from the Send feedback screen
   feedback: { when: 'any', async run({ ws, me, m, p, w, reply, save }) {
-    await this.addFeedback(m, me.from); reply({ t: 'thanks' });
+    await this.addFeedback(m, me.from);
+    if (!m.auto) reply({ t: 'thanks' }); // (auto: a note the game sent by itself about an error)
   } },
   // typing /admin and the code in the Say box
   adminLogin: { when: 'any', async run({ ws, me, m, p, w, reply, save }) {
@@ -60,6 +61,7 @@ export const ACTIONS = {
     const text = starText(clean(m.text, 80).trim(), FILTER);
     if (!text || !this.alive(p)) return;
     me.said = [...(me.said || []), [Date.now(), text]].slice(-8); // kept for reports
+    while (me.said.length > 1 && new TextEncoder().encode(JSON.stringify(me)).length > 1800) me.said.shift(); // (what's kept with a connection has to stay under 2 KB)
     ws.serializeAttachment(me);
     if (this.admin.muted.includes(me.who)) reply({ t: 'say', id: me.id, text }); // muted by the admin: only they see it
     else this.send({ t: 'say', id: me.id, text }, null);
@@ -246,7 +248,7 @@ export const ACTIONS = {
     const many = BERRY_SRC.tool && BERRY_SRC.toolHarvest && p.carry[BERRY_SRC.tool] ? Number(BERRY_SRC.toolHarvest[G.berryKind]) || 1 : 1;
     const n = this.berriesOn(i) >= many ? many : 1;
     if (this.berriesOn(i) < 1 || !addCarry(p, G.berryKind, n, G)) { reply({ t: 'picked', bush: i, ok: false }); return; }
-    for (let k = 0; k < n; k++) this.takeBerry(i);
+    this.takeBerries(i, n);
     spend(p, 'harvest', G);
     if (n > 1) { this.wearTool(p, BERRY_SRC.tool, reply); reply(this.mine(p)); }
     save();

@@ -636,7 +636,44 @@ async def reconnect():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'claims': claims, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect}
+async def errors():
+    """If something in the game goes wrong it carries on instead of freezing, and the admin's Inbox gets one note about it."""
+    async with world() as W:
+        a = await W.page('errAdmin'); await join(a)
+        await a.click('#sayBtn'); await a.fill('#sayInput', '/admin secret123456'); await a.press('#sayInput', 'Enter'); await a.wait_for_timeout(800)
+        await a.mouse.click(195, 300); await a.wait_for_timeout(300)
+        b = await W.page('errB'); await join(b); await b.wait_for_timeout(500)
+        await b.evaluate("__pl.others.set('broken', {})"); await b.wait_for_timeout(1500)  # from now on every frame goes wrong
+        f0 = await b.evaluate('window.__frames'); await b.wait_for_timeout(2000); f1 = await b.evaluate('window.__frames')
+        expect(f1 > f0, f'the game keeps running ({f1 - f0} frames in 2 s)')
+        await b.evaluate("__pl.others.delete('broken')"); await b.wait_for_timeout(500)
+        await b.evaluate("__pl.queueTask({ type: 'walk', x: __pl.player.position.x + 2, z: __pl.player.position.z })"); await idle(b, 30)
+        expect(not await b.evaluate('!!__pl.walk.target'), 'and carries on as normal once the problem has gone')
+        send = "(m) => window.__sock.send(JSON.stringify(m))"
+        await a.evaluate(f"({send})({{ t: 'a.list' }})"); await a.wait_for_timeout(700)
+        notes = await a.evaluate("__pl.adminData.inboxData.feedback.filter((x) => x.text.startsWith('Game error')).map((x) => [x.text.split('\\n')[0], x.count || 1])")
+        expect(len(notes) == 1 and 'frame' in notes[0][0], f"the admin's Inbox has one note about it ({notes})")
+        problems = [e for e in W.errors if 'errB' not in e]
+        expect(not problems, f'no other errors {problems[:3]}')
+
+
+async def crowd():
+    """A busy world: with 40 people about, only the nearest few get a body, and the game keeps running."""
+    import subprocess
+    data = json.load(open(os.path.join(HERE, '..', '..', 'test', 'game-data.json')))
+    async with world() as W:
+        a = await W.page('crowdA'); await join(a); await a.wait_for_timeout(500)
+        subprocess.run(['node', os.path.join(HERE, 'bots.mjs'), '40', data['version'], str(data['build'])], check=True, stdout=subprocess.DEVNULL)
+        await a.wait_for_timeout(3000)
+        n = await a.evaluate("(() => { const all = [...__pl.others.values()]; return [all.length, all.filter((o) => o.body).length, all.filter((o) => o.shown).length, __pl.peopleDrawn()]; })()")
+        expect(n[0] == 40, f'everyone is known about ({n[0]} people)')
+        expect(0 < n[1] <= n[3] and n[1] == n[2], f'only the nearest {n[3]} have a body ({n[1]} do)')
+        f0 = await a.evaluate('window.__frames'); await a.wait_for_timeout(2000)
+        expect(await a.evaluate('window.__frames') > f0, 'the game keeps running')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'claims': claims, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

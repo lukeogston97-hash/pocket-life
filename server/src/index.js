@@ -8,7 +8,7 @@
 // - what players do, one small handler each (actions.js); chat, reports, feedback; the admin player's tools (admin.js)
 // What every part shares (the game's rules from game.json, limits, helpers) is in shared.js.
 import { DurableObject } from 'cloudflare:workers';
-import { WORLDS, G, HOUR, MINUTE, PROTOCOL, CORS, clean, num, AWAY, tooOld, FEEDBACK_KEEP, lastHeard, QUIET_MS, TICK_MS, SAVE_EVERY, FREE, allowed, tagOf, ageOf } from './shared.js';
+import { WORLDS, G, HOUR, MINUTE, PROTOCOL, CORS, clean, num, AWAY, tooOld, FEEDBACK_KEEP, lastHeard, QUIET_MS, TICK_MS, SAVE_EVERY, AWAY_SAVE_EVERY, FREE, allowed, tagOf, ageOf } from './shared.js';
 import { lineMethods } from './line.js';
 import { personsMethods } from './persons.js';
 import { awayMethods } from './away.js';
@@ -26,6 +26,8 @@ export class World extends DurableObject {
     this.world = null;
     this.persons = new Map(); // who -> person
     this.dirty = new Set();
+    this.later = new Set(); // people away whose walk or needs moved on but nothing lasting changed: saved now and then (touchLater)
+    this.errorsNoted = new Map(); // server errors already put in the admin's Inbox this hour (noteError)
     this.savedAt = new Map(); // who -> when they were last saved
     this.usage = { day: '', messages: 0, connections: 0, writes: 0, alarms: 0 }; // today's use of the free plan (UTC days)
     this.speed = null; // the admin's "speed up time": { x, until }
@@ -51,6 +53,9 @@ export class World extends DurableObject {
   save() { return this.put('world', this.world); }
   saveAdmin() { return this.put('admin', this.admin); }
   touch(p) { this.dirty.add(p.who); }
+  // someone away who only walked on or whose needs ticked over: the server can play that forward again from their last
+  // save, so they're saved at most every AWAY_SAVE_EVERY instead of every SAVE_EVERY
+  touchLater(p) { if (!this.dirty.has(p.who)) this.later.add(p.who); }
   // Save people who changed: just `only` (straight after they did something), everyone changed (all), or
   // by default only those not saved for SAVE_EVERY (the world's tick: walking about, needs ticking over).
   async flush(only, all = false) {
@@ -58,6 +63,16 @@ export class World extends DurableObject {
     for (const who of [...this.dirty]) {
       if (!all && (only ? who !== only : now - (this.savedAt.get(who) || 0) < SAVE_EVERY)) continue;
       this.dirty.delete(who);
+      this.later.delete(who);
+      const p = this.persons.get(who);
+      if (!p) continue;
+      batch[`p:${who}`] = p;
+      this.savedAt.set(who, now);
+    }
+    if (!only) for (const who of [...this.later]) { // people away with nothing lasting to save: now and then
+      if (!this.savedAt.has(who)) this.savedAt.set(who, now - Math.random() * AWAY_SAVE_EVERY); // (after a restart: spread out, not all at once)
+      if (!all && now - this.savedAt.get(who) < AWAY_SAVE_EVERY) continue;
+      this.later.delete(who);
       const p = this.persons.get(who);
       if (!p) continue;
       batch[`p:${who}`] = p;
@@ -126,9 +141,23 @@ export class World extends DurableObject {
     const text = clean(note && note.text, 1000).trim();
     if (!text || !this.feedbackOk(from)) return; // (too many from one address: quietly dropped)
     const list = (await this.ctx.storage.get('feedback')) || [];
-    list.push({ at: new Date().toISOString(), name: clean(note.name, 20), v: clean(note.v, 30), device: clean(note.device, 200), x: num(note.x), z: num(note.z), text });
+    // a note the game or the server sent by itself (an error): the same one again is counted, not added again
+    const same = note.auto && list.find((x) => x.auto && !x.done && x.text === text);
+    if (same) { same.count = (same.count || 1) + 1; same.lastAt = new Date().toISOString(); await this.put('feedback', list); return; }
+    list.push({ at: new Date().toISOString(), name: clean(note.name, 20), v: clean(note.v, 30), device: clean(note.device, 200), x: num(note.x), z: num(note.z), text, ...(note.auto ? { auto: true } : {}) });
     await this.put('feedback', list.slice(-FEEDBACK_KEEP));
     this.tellAdmins({ t: 'adminNew', list: 'feedback' }); // the admin's Inbox count goes up straight away
+  }
+  // Something went wrong on the server: it's logged, and a note goes to the admin's Inbox (as feedback starting "Server error"),
+  // each problem once an hour at most, so Luke hears about it without anyone having to report it.
+  async noteError(where, err) {
+    const what = `${where}: ${err && err.message ? err.message : String(err)}`.slice(0, 200), now = Date.now();
+    console.error(`${what}\n`, err && err.stack ? err.stack : '');
+    for (const [k, t] of this.errorsNoted) if (now - t > HOUR) this.errorsNoted.delete(k); // (an hour on, the same problem gets noted again)
+    if (now - (this.errorsNoted.get(what) || 0) < HOUR || this.errorsNoted.size > 50) return;
+    this.errorsNoted.set(what, now);
+    const trace = String((err && err.stack) || '').split('\n').slice(1, 4).map((l) => l.trim()).join(' | ').slice(0, 300);
+    try { await this.addFeedback({ auto: true, text: `Server error (${what})${trace ? `\n${trace}` : ''}`, name: 'The server', v: (WORLDS.minVersion || {}).test || '' }, 'server'); } catch (e) { /* storage trouble: it's in the log */ }
   }
   tellAdmins(msg) {
     const text = JSON.stringify(msg);
@@ -167,8 +196,8 @@ export class World extends DurableObject {
     }
     try {
       await action.run.call(this, { ws, me, m, p, w, reply, save });
-    } catch (err) { // one action going wrong never takes the world down: it's logged, and their game gets their person as the server has them
-      console.error(`action ${m.t} failed:`, err && err.stack ? err.stack : err);
+    } catch (err) { // one action going wrong never takes the world down: it's noted, and their game gets their person as the server has them
+      await this.noteError(`the action "${clean(m.t, 20)}"`, err);
       try { if (this.alive(p)) reply(this.mine(p)); } catch (e) { /* gone */ }
     }
   }
@@ -243,26 +272,28 @@ export class World extends DurableObject {
         if (now - lastHeard.get(ws) > QUIET_MS) { try { ws.close(1000, 'quiet'); } catch (err) { /* gone */ } this.webSocketClose(ws); }
       }
       for (const p of [...this.persons.values()]) {
-        if (!this.alive(p)) {
-          if (p.diedAt && now - p.diedAt > 30 * 24 * HOUR) { await this.rememberPast(p); this.persons.delete(p.who); await this.ctx.storage.delete(`p:${p.who}`); }
-          continue;
-        }
-        if (this.paused(p)) continue; // maintenance: nothing happens to people who aren't playing
-        if (this.isOnline(p.who)) {
-          this.catchUp(p, now);
-          if (this.alive(p)) this.tell(p.who, this.mine(p));
-          this.touch(p);
-        } else {
-          if (!p.leftAt) { p.leftAt = now; p.simAt = now; p.home = [p.x, p.z]; p.log = { ate: 0, drank: 0, picked: 0 }; this.touch(p); }
-          if (p.asleep) { // asleep: needs are caught up when they come back (nothing to save until they wake or go)
-            if (now - p.sleepAt > AWAY.goneAfterDays * 24 * HOUR) { // asleep too long (3 days away in all): gone, their things left where they slept
-              p.state = 'gone'; p.diedAt = now;
-              this.spill(p);
-              this.send({ t: 'leave', id: p.who }, null);
-              this.touch(p);
-            }
-          } else { this.advanceAway(p, now); this.touch(p); }
-        }
+        try { // (one person's record going wrong never stops everyone else's tick)
+          if (!this.alive(p)) {
+            if (p.diedAt && now - p.diedAt > 30 * 24 * HOUR) { await this.rememberPast(p); this.persons.delete(p.who); await this.ctx.storage.delete(`p:${p.who}`); }
+            continue;
+          }
+          if (this.paused(p)) continue; // maintenance: nothing happens to people who aren't playing
+          if (this.isOnline(p.who)) {
+            this.catchUp(p, now);
+            if (this.alive(p)) this.tell(p.who, this.mine(p));
+            this.touch(p);
+          } else {
+            if (!p.leftAt) { p.leftAt = now; p.simAt = now; p.home = [p.x, p.z]; p.log = { ate: 0, drank: 0, picked: 0 }; this.touch(p); }
+            if (p.asleep) { // asleep: needs are caught up when they come back (nothing to save until they wake or go)
+              if (now - p.sleepAt > AWAY.goneAfterDays * 24 * HOUR) { // asleep too long (3 days away in all): gone, their things left where they slept
+                p.state = 'gone'; p.diedAt = now;
+                this.spill(p);
+                this.send({ t: 'leave', id: p.who }, null);
+                this.touch(p);
+              }
+            } else { this.advanceAway(p, now); this.touchLater(p); } // (anything lasting they did was marked to save sooner: away.js)
+          }
+        } catch (err) { await this.noteError('the tick', err); }
       }
       await this.flush(); // only people not saved for a while
       if (this.usage.alarms % 15 === 0) await this.put('usage', this.usage); // about every 5 minutes

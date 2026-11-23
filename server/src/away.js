@@ -46,16 +46,17 @@ export const awayMethods = {
     if (plan.then === 'drink') {
       const src = G.sources[plan.source];
       for (let n = 0; n < 8 && src && p.stats.thirst != null && p.stats.thirst < 95; n++) { applyGives(p, src.gives); spend(p, 'drink', G); p.log.drank++; }
-    } else if (plan.then === 'feed') this.feedFire(p);
+    } else if (plan.then === 'feed') this.feedFire(p); // (saves them itself if anything went on the fire)
     else if (plan.then === 'pick') {
-      for (let n = 0; n < 4 && this.berriesOn(plan.bush, t) > 0; n++) {
+      let got = 0;
+      for (; got < 4 && this.berriesOn(plan.bush, t) > got; got++) {
         if (!addCarry(p, G.berryKind, 1, G)) break;
-        this.takeBerry(plan.bush, t);
         spend(p, 'harvest', G);
         p.log.picked++;
       }
+      if (got) { this.takeBerries(plan.bush, got, t); this.touch(p); } // the bush changed with their bag: saved soon, together
     }
-    this.touch(p);
+    // (a plain walk or a drink: nothing lasting, so no save is asked for here; the tick asks for one now and then)
   },
   // their claim's fire, and whether there's room in it for something they carry (biggest fuel first): [fire, kind] or null.
   // least: the room there has to be before it's worth walking over (so they don't go back and forth for every stick)
