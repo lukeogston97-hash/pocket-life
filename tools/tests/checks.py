@@ -1159,7 +1159,43 @@ async def admin_taps():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps}
+async def live_items_game():
+    """The admin's item and recipe numbers reach a player's own game: the weight they carry, what a recipe needs and whether they can make it, and someone joining later gets the same."""
+    card = """(() => { const c = [...document.querySelectorAll('#craftList .craft-card')].find((x) => x.textContent.includes('Stone knife')); if (!c) return null;
+      return { chips: [...c.querySelectorAll('.need-chip')].map((x) => x.textContent), canMake: !c.querySelector('button.small-btn').disabled }; })()"""
+    async with world(TESTKIT=1) as W:
+        p = await W.page('liveP'); await join(p)
+        boss = await W.page('liveBoss'); await boss.evaluate(RAW)
+        await boss.evaluate("conn('boss', { watch: true, admin: true, adminCode: 'secret123456' })")
+        ask = lambda m: boss.evaluate(f"ask('boss', {m})")
+        weight = lambda pg: pg.evaluate("Number(document.getElementById('carryWeight').textContent)")
+        w0 = await weight(p)
+        expect(w0 == 8, f'to start: 2 sticks, 3 stones, twine and a stone axe weigh 8 ({w0})')
+        # a stick now weighs 3: the player's carried weight changes without them doing anything
+        told = await ask("{ t: 'a.liveItem', at: ['items', 'stick', 'weight'], value: 3 }")
+        await p.wait_for_function("Number(document.getElementById('carryWeight').textContent) === 12", timeout=20000)
+        expect(told == 'Changed to 3' and await weight(p) == 12, f"a stick made to weigh 3: the player's game shows 12 carried ({await weight(p)})")
+        # the knife recipe, as the player sees it in Craft
+        await p.click('#craftBtn'); await p.wait_for_function(f"!!({card})", timeout=20000)
+        c0 = await p.evaluate(card)
+        expect(c0['canMake'] and c0['chips'] == ['Sticks 1/1', 'Stones 1/1', 'Twine 1/1'], f"the player can make a stone knife from what they carry ({c0['chips']})")
+        await ask("{ t: 'a.liveItem', at: ['recipes', 'knife', 'needs', 'stick'], value: 3 }")
+        await p.wait_for_function(f"(() => {{ const c = {card}; return c && !c.canMake; }})()", timeout=20000)
+        c1 = await p.evaluate(card)
+        expect(not c1['canMake'] and c1['chips'] == ['Sticks 2/3', 'Stones 1/1', 'Twine 1/1'], f"a knife made to need 3 sticks: the open Craft list shows it and they can't make one with 2 ({c1['chips']})")
+        # back to the game file's numbers
+        expect(await ask("{ t: 'a.liveItem', at: ['recipes', 'knife', 'needs', 'stick'], value: null }") == 'Back to what the game file says', 'Reset answers plainly')
+        await ask("{ t: 'a.liveItem', at: ['items', 'stick', 'weight'], value: null }")
+        await p.wait_for_function(f"(() => {{ const c = {card}; return c && c.canMake; }})() && Number(document.getElementById('carryWeight').textContent) === 8", timeout=20000)
+        expect(await weight(p) == 8 and (await p.evaluate(card))['canMake'], 'Reset puts both back for the player: 8 carried, and the knife can be made again')
+        # someone who joins later gets the admin's numbers on the way in
+        await ask("{ t: 'a.liveItem', at: ['items', 'stick', 'weight'], value: 2 }")
+        q = await W.page('liveQ'); await join(q)
+        expect(await weight(q) == 10, f'someone joining afterwards carries 10 (their 2 sticks weigh 2 each) ({await weight(q)})')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

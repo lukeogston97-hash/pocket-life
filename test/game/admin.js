@@ -80,6 +80,33 @@ function applyLive(live) {
   for (const [id, set] of Object.entries(LIVE_SET)) { const v = live && live[id] != null ? live[id] : LIVE_BASE[id]; if (v != null) set(v); }
 }
 
+/* ---------- live item and recipe numbers: the admin changes them, every game uses them (server/src/live-items.js) ----------
+   An item's weight, a tool's uses, what a food fills, and how many of each thing a recipe needs and makes. The admin's
+   number wins over game-data.json until it's reset, so the game keeps the file's numbers (LIVE_ITEMS_BASE) to go back to.
+   Only numbers that are already there change: a change for something this build doesn't have is ignored. */
+const LIVE_ITEMS_BASE = {
+  items: Object.fromEntries(Object.entries(ITEMS).map(([k, it]) => [k, { weight: it.weight, uses: it.uses || 0, eat: { ...(it.eat || {}) } }])),
+  recipes: Object.fromEntries(RECIPES.map((r) => [r.id, { needs: { ...r.needs }, makes: { ...r.makes } }])),
+};
+let liveItems = {}; // the admin's changes, as the server sent them
+function applyLiveItems(live) {
+  liveItems = live && typeof live === 'object' ? live : {};
+  const num = (v, base) => (Number.isFinite(v) ? v : base);
+  for (const [k, base] of Object.entries(LIVE_ITEMS_BASE.items)) {
+    const it = ITEMS[k], mine = (liveItems.items || {})[k] || {};
+    it.weight = num(mine.weight, base.weight);
+    if (base.uses > 0) it.uses = num(mine.uses, base.uses);
+    for (const need of Object.keys(base.eat)) it.eat[need] = num((mine.eat || {})[need], base.eat[need]);
+  }
+  for (const r of RECIPES) {
+    const base = LIVE_ITEMS_BASE.recipes[r.id], mine = (liveItems.recipes || {})[r.id] || {};
+    for (const f of ['needs', 'makes']) for (const kind of Object.keys(base[f])) r[f][kind] = num((mine[f] || {})[kind], base[f][kind]);
+  }
+  // what's on screen that shows these numbers: the weight you carry, the inventory, the craft list
+  bagDrawn = ''; craftDrawn = '';
+  if (player) { drawCarry(); if (bagOpen()) drawBag(); if (craftOpen()) drawCraft(); }
+}
+
 /* ---------- what the admin can do with the thing they tapped (admin-mode.js adminTap opens these as its menu) ---------- */
 const sure = (label, run, note = '') => ({ label, note, sub: [{ label: `Yes, ${label.toLowerCase()}`, run }] }); // asks once more first
 function adminPersonActions(o) {

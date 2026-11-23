@@ -77,6 +77,7 @@ function goOnline() {
     else if (m.t === 'graves') drawGraves(m.graves);
     else if (m.t === 'speed') setSpeed(m.speed);
     else if (m.t === 'live') applyLive(m.live);
+    else if (m.t === 'liveItems') applyLiveItems(m.liveItems);
     else if (m.t === 'claimNote') showTag(m.text, headTop(), 3.5);
     else if (m.t === 'pos') snapTo(m.x, m.z);
     else if (m.t === 'moved') moveLayoutThing(m.what, m.idx, m.x, m.z);
@@ -145,6 +146,7 @@ function welcome(m) {
   setNet('online', m.count);
   setSpeed(m.speed);
   applyLive(m.live);
+  applyLiveItems(m.liveItems);
   for (const id of [...others.keys()]) removeOther(id);
   for (const p of m.people || []) addOther(p);
   if (m.watch) { // watching from the main menu (or waiting in line because the world is full)
