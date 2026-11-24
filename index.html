@@ -331,12 +331,12 @@
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="socTitle">
       <div class="bag-head"><h2 id="socTitle">Society</h2><button id="socClose" class="text-btn" type="button">Close</button></div>
       <p id="socText"></p>
-      <form id="socStartForm" novalidate>
+      <form id="socNameForm" class="soc-name" novalidate hidden>
         <label for="socName" class="sr-only">Society name</label>
-        <input id="socName" class="feedback-text" type="text" maxlength="20" autocomplete="off" placeholder="Society name" enterkeyhint="go">
-        <p id="socErr" class="err soc-err" hidden></p>
-        <div class="modal-actions"><button type="submit" class="action-btn">Start a society</button></div>
+        <input id="socName" class="feedback-text" type="text" maxlength="20" autocomplete="off" placeholder="Society name" enterkeyhint="done">
+        <button type="submit" class="small-btn">Rename</button>
       </form>
+      <p id="socErr" class="err soc-err" hidden></p>
       <div id="socMembers" class="soc-members"></div>
       <div id="socFoot" class="modal-actions" hidden><button id="socLeave" type="button" class="text-btn">Leave</button></div>
     </div>

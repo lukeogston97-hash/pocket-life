@@ -1,8 +1,9 @@
-/* ---------- societies (0.1.4): groups of players sharing one claim. The server decides everything (server/src/societies.js) ----------
-   Your society comes with your person ('me'): you.soc = { id, name, lead, max, members: [{ id, name, lead, state }] }.
-   Menu > Society starts one or shows who's in it. The leader taps a person nearby to invite them (inviteAction, used by
-   the person's tap menu in input.js); the invite card asks them to Join. Everyone's name tag shows their society
-   (others.js drawTag). Its one claim is the leader's lit campfire, th.claim.who 's:<id>' (claimMine in placeables.js). */
+/* ---------- societies (0.1.4, reworked 0.1.5): your claim is your society. The server decides everything (server/src/societies.js) ----------
+   Lighting your first campfire starts yours ("<name>'s camp"); the fire going out ends it. It comes with your person
+   ('me'): you.soc = { id, name, lead, max, members: [{ id, name, lead, state }] }. Menu > Society shows who's in it, and
+   the leader can rename it. The leader taps a person nearby to invite them (inviteAction, used by the person's tap menu
+   in input.js); the invite card asks them to Join. Name tags show it once it has 2 or more people (others.js drawTag).
+   Its claim is th.claim.who 's:<id>' (claimMine in placeables.js). */
 const SOCIETY = { maxMembers: 3, nameMax: 20, inviteMinutes: 5, inviteReach: 8, ...(DATA.societies || {}) };
 you.soc = null;
 const socSend = (m) => { if (!online()) { showTag("You're offline right now", headTop(), 2.5); return false; } net.sock.send(JSON.stringify(m)); return true; };
@@ -13,7 +14,7 @@ function societyMessage(m) {
   else if (m.t === 'socNote') showTag(m.text, headTop(), 3.5);
   else if (m.t === 'socNo') { // a no: said where you're looking (the invite card, the Society panel), else over your person
     if (!$('socInvite').hidden && invite && invite.asked) { $('socInviteNote').textContent = m.why; $('socInviteNote').hidden = false; invite.asked = false; }
-    else if (!$('society').hidden && !$('socStartForm').hidden) { $('socErr').textContent = m.why; $('socErr').hidden = false; }
+    else if (!$('society').hidden && !$('socNameForm').hidden) { $('socErr').textContent = m.why; $('socErr').hidden = false; }
     else showTag(m.why, headTop(), 3.5);
   }
 }
@@ -23,7 +24,7 @@ function setSociety(soc) {
   you.soc = soc && soc.name ? soc : null;
   if (JSON.stringify(you.soc) === was) return;
   if (!$('society').hidden) drawSociety();
-  if (you.soc && invite) hideInvite(); // you joined
+  if (you.soc && invite && you.soc.name === invite.soc) hideInvite(); // you joined
   claimCheckAt = 0; // claim rings: yours or theirs (placeables.js)
 }
 
@@ -32,7 +33,6 @@ function openSociety() {
   if (ui.mode !== 'world' || !player || you.dead) return;
   closeMenu();
   paused = true;
-  $('socName').value = '';
   drawSociety();
   $('society').hidden = false;
 }
@@ -40,17 +40,17 @@ function closeSociety() { $('society').hidden = true; paused = false; $('socName
 $('socClose').addEventListener('click', closeSociety);
 $('society').addEventListener('click', (e) => { if (e.target === $('society')) closeSociety(); });
 $('pauseSocietyBtn').addEventListener('click', () => { closePause(); openSociety(); });
-// your own claim's fire (lit), if you have one
+// your own claim's fire from before 0.1.5 (lit), if you have one
 const myOwnClaim = () => [...placed.values()].find((th) => claimOn(th) && th.claim.who === net.myId) || null;
 const STATE_SHORT = { away: 'away', asleep: 'away, asleep', sleeping: 'sleeping', gone: 'no person right now' };
 function drawSociety() {
   const s = you.soc, list = $('socMembers');
   $('socErr').hidden = true;
   resetLeave(); // (a Leave tapped once goes back to Leave)
-  if (!s) {
+  if (!s) { // lighting your first campfire starts your society (0.1.5)
     $('socTitle').textContent = 'Society';
-    $('socText').textContent = `Start one, then tap people nearby to invite them (up to ${SOCIETY.maxMembers} in all). Members share one claim: ${myOwnClaim() ? 'yours becomes the society\'s' : 'the leader\'s lit campfire'}.`;
-    $('socStartForm').hidden = false;
+    $('socText').textContent = `Light a campfire away from the pond to start your own. It claims the land round the fire while it burns, and you can invite up to ${SOCIETY.maxMembers - 1} more people. Or join someone's when they invite you.`;
+    $('socNameForm').hidden = true;
     list.replaceChildren();
     $('socFoot').hidden = true;
     return;
@@ -60,7 +60,8 @@ function drawSociety() {
   $('socText').textContent = s.lead
     ? (n < s.max ? `You lead it. Tap a person nearby to invite them (${n} of ${s.max}).` : `You lead it. It's full (${n} of ${s.max}).`)
     : `${leader ? leader.name : 'Someone'} leads it (${n} of ${s.max}). You share its claim.`;
-  $('socStartForm').hidden = true;
+  $('socNameForm').hidden = !s.lead; // the leader can rename it
+  if (s.lead && document.activeElement !== $('socName')) $('socName').value = s.name;
   list.replaceChildren(...s.members.map((x) => {
     const row = el('div', 'soc-member'), who = el('div', 'soc-who', x.id === net.myId ? `${x.name} (you)` : x.name);
     const sub = [x.lead ? 'Leader' : '', STATE_SHORT[x.state] || ''].filter(Boolean).join(' · ');
@@ -74,25 +75,27 @@ function drawSociety() {
     }
     return row;
   }));
+  // Leave (two taps). Alone, leaving ends it and its fire goes out (Luke: the claim and the society end together)
   const foot = $('socFoot'), leave = $('socLeave'), next = s.lead && n > 1 ? s.members.find((x) => !x.lead) : null;
   foot.hidden = false;
-  foot.replaceChildren(el('small', '', s.lead && n === 1 ? 'Leaving ends it' : next ? `${next.name} leads if you leave` : ''), leave);
+  leave.textContent = n === 1 ? 'End it' : 'Leave';
+  foot.replaceChildren(el('small', '', n === 1 ? 'Its fire goes out' : next ? `${next.name} leads if you leave` : ''), leave);
 }
-// Leave: two taps (it can't be undone; you'd need a new invite)
-const resetLeave = twoTaps($('socLeave'), () => { if (socSend({ t: 'socLeave' })) closeSociety(); }, 'Tap again to leave', 400);
-$('socStartForm').addEventListener('submit', (e) => {
+const resetLeave = twoTaps($('socLeave'), () => { if (socSend({ t: 'socLeave' })) closeSociety(); }, 'Tap again', 400);
+$('socNameForm').addEventListener('submit', (e) => {
   e.preventDefault();
   const name = $('socName').value.trim().slice(0, SOCIETY.nameMax);
   if (name.length < 2) { $('socErr').textContent = 'At least 2 letters'; $('socErr').hidden = false; return; }
   $('socErr').hidden = true;
-  socSend({ t: 'socStart', name });
+  $('socName').blur();
+  if (you.soc && name !== you.soc.name) socSend({ t: 'socRename', name });
 });
 
 /* ---------- inviting: the leader taps a person (input.js thingActions) ---------- */
 function inviteAction(o) {
   const s = you.soc;
   if (!s || !s.lead) return null;
-  if (o.soc && o.soc === s.name) return { label: `In ${s.name}`, disabled: true };
+  if (o.soc && o.soc === s.name) return { label: `In ${s.name}`, disabled: true }; // (o.soc shows only with 2 or more: someone alone in their own can be invited)
   const far = player && Math.hypot(o.mesh.position.x - player.position.x, o.mesh.position.z - player.position.z) > SOCIETY.inviteReach;
   const away = o.state === 'away' || o.state === 'asleep'; // (their player isn't here to answer)
   const why = o.soc ? `In ${o.soc}` : s.members.length >= s.max ? `${s.name} is full` : away ? "Away, so they can't answer" : far ? 'Get closer first' : '';
@@ -109,12 +112,13 @@ function showInvite(m) {
   clearInterval(inviteTimer);
   inviteTimer = setInterval(() => { if (!invite || Date.now() > invite.until) hideInvite(); else drawInvite(); }, 2000);
 }
-// your own fire holds your claim: it has to go out first (lighting a fire starts a claim, putting it out ends it)
+// alone in your own society, your fire holds your claim: it has to go out first (that ends it). In one with others: leave it first
 function drawInvite() {
   if (!invite || invite.asked) return;
-  const note = $('socInviteNote'), own = myOwnClaim();
-  note.textContent = own ? 'Put your fire out first: it holds your claim' : '';
-  note.hidden = !own;
+  const note = $('socInviteNote'), s = you.soc;
+  const why = s ? (s.members.length > 1 ? `Leave ${s.name} first` : 'Put your fire out first: it holds your claim') : myOwnClaim() ? 'Put your fire out first: it holds your claim' : '';
+  note.textContent = why;
+  note.hidden = !why;
 }
 function hideInvite() { invite = null; clearInterval(inviteTimer); inviteTimer = null; $('socInvite').hidden = true; $('socInviteNote').hidden = true; }
 $('socYes').addEventListener('click', () => { if (invite && socSend({ t: 'socAnswer', yes: true })) invite.asked = true; });

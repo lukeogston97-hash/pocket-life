@@ -269,8 +269,8 @@ function targetSpot(t) {
 function menuActions(t) {
   const acts = thingActions(t), at = t && targetSpot(t), c = at && notMineAt(at[0], at[1]);
   if (!c) return acts;
-  const soc = String(c.claim.who).startsWith('s:'); // a society's claim (0.1.4)
-  return [{ label: `${c.claim.name}'s claim`, note: soc ? 'Only its members can use things here' : 'Only they can use things here', disabled: true }, ...acts.filter((a) => a.foot || a.admin || a.label === 'Walk here')];
+  const soc = String(c.claim.who).startsWith('s:'); // a society's claim (0.1.5: every claim is one), called by its name
+  return [{ label: soc ? c.claim.name : `${c.claim.name}'s claim`, note: soc ? 'Only its members can use things here' : 'Only they can use things here', disabled: true }, ...acts.filter((a) => a.foot || a.admin || a.label === 'Walk here')];
 }
 // the small menu for a thing: Pick up Stick, Pick berries, Drink, Chop tree...
 function thingActions(t) {

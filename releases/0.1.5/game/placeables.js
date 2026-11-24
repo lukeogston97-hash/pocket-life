@@ -237,7 +237,7 @@ function cantPlaceAt(x, z, kind) {
   if (!roomAt(x, z, r + 0.25, 0.4)) return 'Not enough room here';
   if ([...placed.values()].some((th) => Math.hypot(th.x - x, th.z - z) < r + PLACEABLES[th.kind].solid + 1)) return 'Too close to another one';
   const c = notMineAt(x, z);
-  if (c) return `That's ${c.claim.name}'s claim`;
+  if (c) return `That belongs to ${c.claim.name}`;
   return null;
 }
 function startPlacing(item) {
@@ -505,7 +505,11 @@ function placedActions(th) {
     }) });
   }
   if (P.seats && (!F || lit)) out.push({ label: `Sit by ${name}`, run: () => queueTask({ type: 'sit', id: th.id }) });
-  if (lit) out.push({ label: 'Put out fire', run: () => queueTask({ type: 'tend', id: th.id, do: 'out' }) });
+  if (lit) { // a society's fire (0.1.5): putting it out ends the society, so only its leader can (the server checks too)
+    const lead = you.soc && th.claim && th.claim.who === `s:${you.soc.id}` ? you.soc.members.find((x) => x.lead) : null, notLeader = lead && lead.id !== net.myId;
+    out.push({ label: 'Put out fire', note: notLeader ? `Only ${lead.name} can` : th.claim && claimMine(th) ? `Ends ${you.soc ? you.soc.name : 'your claim'}` : '', disabled: !!notLeader,
+      run: () => queueTask({ type: 'tend', id: th.id, do: 'out' }) });
+  }
   else { // once it's out: pack it into your inventory, or take it apart for what it's made of (only who built it; the server checks)
     const heavy = carried() + ITEMS[P.item].weight > SETTINGS.carryCapacity;
     out.push({ label: 'Pack up', disabled: heavy, note: heavy ? 'Too heavy' : F && fuelLeft(th) > 0 ? 'Fuel left is lost' : 'Into your inventory', run: () => queueTask({ type: 'unplace', id: th.id }) });
@@ -552,23 +556,29 @@ Object.assign(TASK_KINDS, {
   },
 });
 
-/* ---------- claims (0.3.0): your first lit campfire claims the land round it while it burns ----------
+/* ---------- claims (0.3.0): your first lit campfire claims the land round it while it burns. Since 0.1.5 your claim is
+   your society: lighting your first fire starts both and the fire going out ends both (society.js) ----------
    The server decides (server/src/claims.js) and says whose claim a fire is (th.claim: { who, name }); a claim only
    counts while its fire is lit. Inside someone else's claim you can only walk through: the tap menus say so
    (menuActions in input.js), placing there is refused, and autopilot leaves their things alone. */
 const CLAIMS = { radius: 10, spawnRadius: 16, placeable: 'campfire', ringShowsWithin: 25, ...(DATA.claims || {}) };
 const claimOn = (th) => !!th.claim && isLit(th);
-const claimName = (th) => (th.claim.who === net.myId ? 'Your claim' : `${th.claim.name}'s claim`);
+// yours to use: your society's claim ('s:<id>', society.js), or one from before 0.1.5 (your own id)
+const claimMine = (th) => !!th.claim && (th.claim.who === net.myId || (!!you.soc && th.claim.who === `s:${you.soc.id}`));
+// what a claim is called: yours, or by its society's name ("Luke's camp", "Rivers")
+const claimName = (th) => (claimMine(th) ? 'Your claim' : th.claim.name);
 const claimAt = (x, z) => { for (const th of placed.values()) if (claimOn(th) && Math.hypot(th.x - x, th.z - z) <= CLAIMS.radius) return th; return null; };
 // someone else's claim at x, z (the admin can do anything anywhere)
-const notMineAt = (x, z) => { const c = claimAt(x, z); return c && c.claim.who !== net.myId ? c : null; };
+const notMineAt = (x, z) => { const c = claimAt(x, z); return c && !claimMine(c) ? c : null; };
 // placing a campfire: would lighting it there claim the land? { ok, text } (the server has the final say)
 function claimHere(x, z) {
+  const soc = you.soc; // one claim each: your society's (0.1.5)
+  if (soc) return { ok: false, text: soc.lead ? 'Just a fire: you already have a claim' : `Just a fire: you're in ${soc.name}` };
   const all = [...placed.values()].filter(claimOn);
-  const no = claimProblem(x, z, { radius: CLAIMS.radius, spawnRadius: CLAIMS.spawnRadius, pond: POND, hasClaim: all.some((th) => th.claim.who === net.myId),
+  const no = claimProblem(x, z, { radius: CLAIMS.radius, spawnRadius: CLAIMS.spawnRadius, pond: POND, hasClaim: all.some(claimMine),
     claims: all.map((th) => ({ x: th.x, z: th.z, name: th.claim.name })) }); // rules.js, the same on the server
-  if (!no) return { ok: true, text: 'Light it to claim the land round it' };
-  return { ok: false, text: no.why === 'has' ? 'Just a fire: you already have a claim' : no.why === 'pond' ? 'Just a fire: too close to the pond to claim' : `Just a fire: too close to ${no.name}'s claim` };
+  if (!no) return { ok: true, text: 'Light it to claim the land and start your society' };
+  return { ok: false, text: no.why === 'has' ? 'Just a fire: you already have a claim' : no.why === 'pond' ? 'Just a fire: too close to the pond to claim' : `Just a fire: too close to ${no.name}` };
 }
 // a soft ring on the ground at a claim's edge, following the hills
 const ringMats = { mine: new THREE.MeshBasicMaterial({ color: '#9fd88a', transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide }),
@@ -593,7 +603,7 @@ function claimRingMesh(x, z, material) {
   return mesh;
 }
 function drawClaimRing(th) {
-  const want = claimOn(th) ? (th.claim.who === net.myId ? 'mine' : 'theirs') : null;
+  const want = claimOn(th) ? (claimMine(th) ? 'mine' : 'theirs') : null;
   if (th.ring && th.ring.userData.kind === want && th.ring.userData.x === th.x && th.ring.userData.z === th.z) return;
   if (th.ring) { scene.remove(th.ring); th.ring.geometry.dispose(); th.ring = null; }
   if (!want) return;

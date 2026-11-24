@@ -269,7 +269,8 @@ function targetSpot(t) {
 function menuActions(t) {
   const acts = thingActions(t), at = t && targetSpot(t), c = at && notMineAt(at[0], at[1]);
   if (!c) return acts;
-  return [{ label: `${c.claim.name}'s claim`, note: 'Only they can use things here', disabled: true }, ...acts.filter((a) => a.foot || a.admin || a.label === 'Walk here')];
+  const soc = String(c.claim.who).startsWith('s:'); // a society's claim (0.1.5: every claim is one), called by its name
+  return [{ label: soc ? c.claim.name : `${c.claim.name}'s claim`, note: soc ? 'Only its members can use things here' : 'Only they can use things here', disabled: true }, ...acts.filter((a) => a.foot || a.admin || a.label === 'Walk here')];
 }
 // the small menu for a thing: Pick up Stick, Pick berries, Drink, Chop tree...
 function thingActions(t) {
@@ -281,6 +282,7 @@ function thingActions(t) {
         if (!isMuted && o.bubble) { removeLabel(o.bubble); o.bubble = null; }
         showTag(isMuted ? `${o.title} unmuted` : `${o.title} muted`, headTop(), 2);
       } },
+      ...[inviteAction(o)].filter(Boolean), // the leader of a society can invite them (society.js)
       { label: 'Report', run: () => openReport(o) },
       { label: 'Walk here', foot: true, run: () => walkFirst(V(o.mesh.position.x, 0, o.mesh.position.z)) }];
   }
@@ -436,6 +438,7 @@ document.addEventListener('keydown', (e) => {
   if (maint.on) return;
   if (placing.on) stopPlacing();
   else if (!$('news').hidden) closeNews();
+  else if (!$('society').hidden) closeSociety();
   else if (!$('settings').hidden) closeSettings();
   else if (!$('back').hidden) $('back').hidden = true;
   else if (!$('adminPick').hidden) closePicker();
