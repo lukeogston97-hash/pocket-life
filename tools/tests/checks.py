@@ -568,11 +568,11 @@ async def claims():
         expect(await a.evaluate(f"!!__pl.placed.get({fid}).claim && __pl.isLit(__pl.placed.get({fid}))"), 'lighting it made a claim')
         b = await W.page('visitorB'); await join(b); await b.wait_for_timeout(800)
         name = await a.evaluate('__pl.you.look.name')
-        expect(await b.evaluate(f"(__pl.placed.get({fid}).claim || {{}}).name") == name, "the other phone sees whose claim it is")
+        expect(await b.evaluate(f"(__pl.placed.get({fid}).claim || {{}}).name") == f"{name}'s camp", "the other phone sees whose claim it is (their society, 0.1.5)")
         why = await b.evaluate(f"(() => {{ const th = __pl.placed.get({fid}); for (let dx = -7; dx <= 7; dx++) for (let dz = -7; dz <= 7; dz++) {{ const w = __pl.cantPlaceAt(th.x + dx, th.z + dz, 'campfire'); if (w !== 'Not enough room here' && w !== 'Too close to another one') return w; }} return 'no clear spot'; }})()")
-        expect(why == f"That's {name}'s claim", f"can't place inside someone else's claim ({why})")
+        expect(why == f"That belongs to {name}'s camp", f"can't place inside someone else's claim ({why})")
         acts = await b.evaluate(f"__pl.menuActions({{ kind: 'placed', th: __pl.placed.get({fid}), name: '' }}).map((x) => x.label)")
-        expect(acts[0] == f"{name}'s claim" and 'Put out fire' not in acts, f'their fire menu only says whose claim it is ({acts})')
+        expect(acts[0] == f"{name}'s camp" and 'Put out fire' not in acts, f'their fire menu only says whose claim it is ({acts})')
         # the server says no too: B walks over and tries to put it out
         await b.evaluate(f"__pl.queueTask({{ type: 'walk', x: __pl.placed.get({fid}).x + 1.6, z: __pl.placed.get({fid}).z }})"); await idle(b, 40); await b.wait_for_timeout(1500)
         await b.evaluate(f"({send})({{ t: 'fire', id: {fid}, do: 'out' }})"); await b.wait_for_timeout(800)
@@ -586,29 +586,32 @@ async def claims():
 
 
 async def societies():
-    """Societies (0.1.4): start one from the Menu (your claim becomes its claim), invite someone by tapping them, they join
-    from the invite card, everyone's name tag shows it, members can use the claim, the admin's World tab lists and renames
-    it, and leaving takes two taps."""
+    """Societies (0.1.4, reworked 0.1.5): lighting your first fire starts your society ("<name>'s camp"), Menu > Society
+    renames it, invite someone by tapping them, they join from the invite card, name tags show it with 2 or more, members
+    share the claim but only the leader puts the fire out, the admin's World tab lists and renames it, leaving takes two
+    taps, and the last one out ends it with its fire."""
     async with world(CAMPKIT=1) as W:
         a = await W.page('leaderA'); await join(a)
         send = "(m) => window.__sock.send(JSON.stringify(m))"
-        # A makes a claim, as in the claims check
+        name_a = await a.evaluate('__pl.you.look.name')
+        # A lights a fire away from the pond: a claim and a society
         await a.evaluate(f"({send})({{ t: 'craft', id: 'campfire' }})"); await a.wait_for_timeout(800)
         await a.evaluate("__pl.queueTask({ type: 'walk', x: 28, z: 6 })"); await idle(a, 50); await a.wait_for_timeout(1500)
         spot = await a.evaluate("(() => { const p = __pl.player.position; for (let k = 0; k < 16; k++) { const ang = k / 16 * Math.PI * 2, x = p.x + Math.cos(ang) * 1.8, z = p.z + Math.sin(ang) * 1.8; if (!__pl.cantPlaceAt(x, z, 'campfire')) return [x, z]; } return null; })()")
         expect(spot is not None, f'a spot for the fire ({spot})')
+        expect(await a.evaluate(f"__pl.claimHere({spot[0]:.2f}, {spot[1]:.2f}).text") == 'Light it to claim the land and start your society', 'placing it says lighting it starts your society')
         await a.evaluate(f"({send})({{ t: 'place', kind: 'campfire', x: {spot[0]:.2f}, z: {spot[1]:.2f}, rot: 0 }})"); await a.wait_for_timeout(800)
         fid = await a.evaluate("[...__pl.placed.keys()][0]")
         for m in [f"{{ t: 'build', id: {fid} }}", f"{{ t: 'fire', id: {fid}, do: 'add', n: 5, fuel: 'stick' }}", f"{{ t: 'fire', id: {fid}, do: 'light' }}"]:
             await a.evaluate(f"({send})({m})"); await a.wait_for_timeout(700)
-        expect(await a.evaluate(f"(__pl.placed.get({fid}).claim || {{}}).who === __pl.net.myId"), "A's lit fire is A's claim")
-        # Menu > Society: start Rivers
+        expect(await a.evaluate("(__pl.you.soc || {}).name") == f"{name_a}'s camp" and await a.evaluate(f"__pl.placed.get({fid}).claim.who") == 's:1', f"lighting it started A's society, {name_a}'s camp, holding the claim")
+        # Menu > Society: rename it
         await a.click('#menuBtn'); await a.wait_for_timeout(400)
         await a.click('#pauseSocietyBtn'); await a.wait_for_timeout(400)
-        expect(await shown(a, '#socStartForm') and 'yours becomes' in (await text(a, '#socText')), f"the Society panel offers to start one, and says A's claim becomes its claim ({await text(a, '#socText')})")
-        await a.fill('#socName', 'Rivers'); await a.click('#socStartForm button[type=submit]'); await a.wait_for_timeout(1500)
-        expect(await a.evaluate("(__pl.you.soc || {}).name") == 'Rivers' and await text(a, '#socTitle') == 'Rivers', 'A started Rivers, and the panel now shows it')
-        expect(await a.evaluate(f"__pl.placed.get({fid}).claim.who") == 's:1' and await a.evaluate(f"__pl.claimMine(__pl.placed.get({fid}))"), "A's claim is now Rivers' claim, still A's to use")
+        expect(await text(a, '#socTitle') == f"{name_a}'s camp" and await shown(a, '#socNameForm') and 'You lead it' in await text(a, '#socText'), 'the Society panel shows it, with a Rename box for the leader')
+        await a.fill('#socName', 'Rivers'); await a.click('#socNameForm button[type=submit]'); await a.wait_for_timeout(1500)
+        expect(await a.evaluate("(__pl.you.soc || {}).name") == 'Rivers' and await text(a, '#socTitle') == 'Rivers', 'A renamed it Rivers')
+        expect(await text(a, '#socLeave') == 'End it' and 'fire goes out' in await text(a, '#socFoot'), 'alone, Leave says End it: its fire goes out')
         await shot(a, 'society-panel')
         await a.click('#socClose'); await a.wait_for_timeout(300)
         # B comes over; A taps B: Invite to society
@@ -622,15 +625,16 @@ async def societies():
         expect(inv is not None and not inv[1], f"A's tap menu on B has Invite to society ({acts})")
         await a.evaluate(f"{pick}.find((x) => x.label === 'Invite to society').run()")
         await b.wait_for_function("!document.getElementById('socInvite').hidden", timeout=20000)
-        name_a = await a.evaluate('__pl.you.look.name')
         expect(await text(b, '#socInviteText') == f'{name_a} invites you to join Rivers', f"B's invite card says who and which ({await text(b, '#socInviteText')})")
         await shot(b, 'society-invite')
         await b.click('#socYes'); await b.wait_for_timeout(2000)
         expect(await b.evaluate("(__pl.you.soc || {}).name") == 'Rivers' and not await shown(b, '#socInvite'), 'B tapped Join: B is in Rivers and the card is gone')
         expect(not await b.evaluate(f"!!__pl.notMineAt({spot[0]:.2f}, {spot[1]:.2f})"), "now B can use things in Rivers' claim")
         tag = await a.evaluate("[...__pl.others.values()][0].name.el.textContent")
-        expect('Rivers' in tag, f"A sees Rivers under B's name ({tag})")
-        expect((await b.evaluate("__pl.claimHere(0, 0).text")).startswith('Just a fire: only Rivers'), "B's own fires are just fires: only the leader claims")
+        expect('Rivers' in tag, f"with 2 in it, A sees Rivers under B's name ({tag})")
+        expect(await b.evaluate("__pl.claimHere(0, 0).text") == "Just a fire: you're in Rivers", "B's own fires are just fires")
+        out = await b.evaluate(f"__pl.placedActions(__pl.placed.get({fid})).filter((x) => x.label === 'Put out fire').map((x) => [!!x.disabled, x.note || ''])")
+        expect(out == [[True, f'Only {name_a} can']], f"only the leader can put Rivers' fire out ({out})")
         # the admin's World tab lists it; Members, then Rename
         c = await W.page('adminC'); await open_admin(c)
         await c.click('#adminDashBtn'); await c.click('[data-admin-tab="world"]'); await c.wait_for_timeout(1500)
@@ -644,13 +648,17 @@ async def societies():
         # B leaves from the panel: two taps
         await b.click('#menuBtn'); await b.wait_for_timeout(400); await b.click('#pauseSocietyBtn'); await b.wait_for_timeout(400)
         names = await b.evaluate("[...document.querySelectorAll('#socMembers .soc-who')].map((e) => e.textContent)")
-        expect(len(names) == 2 and names[0].startswith(name_a) and 'Leader' in names[0], f'the panel lists both, the leader first ({names})')
+        expect(len(names) == 2 and names[0].startswith(name_a) and 'Leader' in names[0] and not await shown(b, '#socNameForm'), f'the panel lists both, the leader first, and no Rename for B ({names})')
         await b.click('#socLeave'); await b.wait_for_timeout(700)
         expect(await b.evaluate("(__pl.you.soc || {}).name") == 'Riverside', 'one tap on Leave does nothing yet')
         await b.click('#socLeave'); await b.wait_for_timeout(2000)
         expect(await b.evaluate("__pl.you.soc") is None and await b.evaluate(f"!!__pl.notMineAt({spot[0]:.2f}, {spot[1]:.2f})"), "the second tap: B left, and Riverside's claim is someone else's again")
         tag = await a.evaluate("[...__pl.others.values()][0].name.el.textContent")
         expect('Riverside' not in tag, f"B's name tag lost the line ({tag})")
+        # A, alone again, ends it: the fire goes out
+        await a.click('#menuBtn'); await a.wait_for_timeout(400); await a.click('#pauseSocietyBtn'); await a.wait_for_timeout(400)
+        await a.click('#socLeave'); await a.wait_for_timeout(700); await a.click('#socLeave'); await a.wait_for_timeout(2000)
+        expect(await a.evaluate("__pl.you.soc") is None and not await a.evaluate(f"__pl.isLit(__pl.placed.get({fid}))") and not await a.evaluate(f"!!__pl.placed.get({fid}).claim"), 'A ended it: no society, and its fire is out')
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
@@ -1464,7 +1472,7 @@ async def admin_extras():
         name = await b.evaluate('__pl.you.look.name')
         fire = lambda: b.evaluate(f"(() => {{ const th = __pl.placed.get({fid}); return {{ lit: __pl.isLit(th), claim: th.claim ? th.claim.name : '', fuel: th.fuel }}; }})()")
         f = await fire()
-        expect(f['lit'] and f['claim'] == name, f"the player's fire burns and is their claim ({f})")
+        expect(f['lit'] and f['claim'] == f"{name}'s camp", f"the player's fire burns and is their claim, as their society ({f})")
 
         a = await W.page('fireAdmin', 1440, 900); await open_admin(a)
         # what the admin is told: every line shown under the bar is kept as it appears (a line is only up for a few seconds,
@@ -1476,13 +1484,13 @@ async def admin_extras():
         await a.click('#adminDashBtn'); await a.click('[data-admin-tab="world"]')
         await a.wait_for_function("document.querySelectorAll('#adminFires [data-fire]').length === 1", timeout=8000)
         r = await row()
-        expect(f"{name}'s claim" in r and 'burning' in r and await a.evaluate("document.getElementById('adminFiresState').textContent") == '1 fire · 1 claim', f'the World tab lists the fire as their claim, burning ("{r}")')
+        expect(f"{name}'s camp" in r and 'claim · burning' in r and await a.evaluate("document.getElementById('adminFiresState').textContent") == '1 fire · 1 claim', f'the World tab lists the fire as their claim, burning ("{r}")')
         await shot(a, 'admin-extras-1-world-pc')
         # its fuel, typed in hours
         await a.click('#adminFires >> text=More')
         await a.fill('#adminFires input[type=number]', '2'); await a.click('#adminFires >> text=Set fuel'); await a.wait_for_timeout(1500)
         f = await fire()
-        expect(abs(f['fuel'] - 2 * 3600000) < 120000 and f['lit'] and f['claim'] == name, f"Set fuel 2: the player's game has two hours on the fire, still burning, still theirs ({f['fuel'] / 60000:.0f} min)")
+        expect(abs(f['fuel'] - 2 * 3600000) < 120000 and f['lit'] and f['claim'] == f"{name}'s camp", f"Set fuel 2: the player's game has two hours on the fire, still burning, still theirs ({f['fuel'] / 60000:.0f} min)")
         said = await toast()
         expect(said == '2 h of fuel', f'the admin is told ("{said}")')
         # End claim: the land is free, the fire burns on
@@ -1494,14 +1502,16 @@ async def admin_extras():
         # give it back
         await a.select_option('#adminFires select', who); await a.click('#adminFires >> text=Give claim'); await a.wait_for_timeout(1500)
         f = await fire()
-        expect(f['claim'] == name and f['lit'], f"Give claim: it's the player's claim again ({f})")
+        expect(f['claim'] == f"{name}'s camp" and f['lit'], f"Give claim: it's the player's claim (and society) again ({f})")
         said = await toast()
-        expect(said == f"Now {name}'s claim", f'the admin is told ("{said}")')
+        expect(said == f"Now {name}'s claim, as {name}'s camp", f'the admin is told ("{said}")')
         # Put out: asks again because it ends their claim
         asked = await tap_twice('Put out'); await a.wait_for_timeout(1500)
         f = await fire()
         expect(name in asked and not f['lit'] and f['claim'] == '', f'Put out warns it ends their claim, then the fire is out and the claim gone ({f}; button said "{asked}")')
-        # the fire's own menu, tapped in the world: Light, then Put out
+        # the fire's own menu, tapped in the world: Light, then Put out. The player steps away first, or the tap can land on
+        # them standing by the fire (it did from 0.1.3 at least, found 24 Nov 2026)
+        await b.evaluate(f"(() => {{ const th = __pl.placed.get({fid}); __pl.queueTask({{ type: 'walk', x: th.x + 6, z: th.z + 6 }}); }})()"); await idle(b, 30)
         menu = lambda: a.evaluate("({ shown: !document.getElementById('actMenu').hidden, title: document.getElementById('actTitle').textContent, acts: [...document.querySelectorAll('#actList .act-btn')].map((x) => x.firstChild.textContent) })")
         fx, fy, fz = await a.evaluate(f"(() => {{ const th = __pl.placed.get({fid}); return [th.x, __pl.controls.target.y, th.z]; }})()")
         await a.click('#adminFires >> text=Fly to'); await frames(a, 3)
@@ -1550,9 +1560,9 @@ async def admin_extras():
         # the Log has it all, newest first, and its filter works
         await a.click('[data-admin-tab="log"]'); await a.wait_for_function("document.querySelectorAll('#adminLog .admin-logline').length > 5", timeout=8000)
         lines = await a.evaluate("[...document.querySelectorAll('#adminLog .admin-logline')].map((l) => l.lastChild.textContent)")
-        for want in ['Message: Sent to Robin', f'Rename: {name} is now Robin', f'Edit person: {name} changed', f"Claim (campfire at {round(spot[0])}, {round(spot[1])}): Now {name}'s claim", f'{name} claimed land', f'New person: {name}, ', 'Admin mode opened']:
+        for want in ['Message: Sent to Robin', f'Rename: {name} is now Robin', f'Edit person: {name} changed', f"Claim (campfire at {round(spot[0])}, {round(spot[1])}): Now {name}'s claim", f"{name} lit a fire and started {name}'s camp", f'New person: {name}, ', 'Admin mode opened']:
             expect(any(l.startswith(want) for l in lines), f'the Log has "{want}"')
-        expect(lines.index('Message: Sent to Robin') < lines.index(f'{name} claimed land'), 'newest first')
+        expect(lines.index('Message: Sent to Robin') < lines.index(f"{name} lit a fire and started {name}'s camp"), 'newest first')
         await shot(a, 'admin-extras-3-log-pc')
         await a.click('#adminLogShow >> text=People'); await a.wait_for_timeout(400)
         people = await a.evaluate("[...document.querySelectorAll('#adminLog .admin-logline')].map((l) => l.lastChild.textContent)")

@@ -59,6 +59,7 @@ export class World extends DurableObject {
       this.societies = (await ctx.storage.get('societies')) || freshSocieties();
       Object.assign(this.usage, (await ctx.storage.get('usage')) || {});
       for (const [k, p] of await ctx.storage.list({ prefix: 'p:' })) this.persons.set(k.slice(2), p);
+      if (this.world && this.socTidy()) { await this.put('world', this.world); await this.saveSocs(); } // (claims from before 0.1.5 become societies: societies.js)
       if (!(await ctx.storage.getAlarm())) await ctx.storage.setAlarm(Date.now() + TICK_MS);
     });
   }
@@ -356,6 +357,7 @@ export class World extends DurableObject {
           }
         } catch (err) { await this.noteError('the tick', err); }
       }
+      if (this.world) this.claims(); // every claim's fire brought up to now: one that burnt out ends its society (claims.js claimLost)
       await this.flush(); // only people not saved for a while
       if (this.usage.alarms % 15 === 0) await this.put('usage', this.usage); // about every 5 minutes
       this.callLine();

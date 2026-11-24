@@ -13,8 +13,8 @@ export const personsMethods = {
     const [x, z] = state === 'away' ? posAt(p, now) : [p.x, p.z];
     const out = { id: p.who, name: p.name, look: { ...p.look, age: ageOf(p, now) }, x: num(x), z: num(z), ry: num(p.ry), state };
     if (p.sit && p.sit.until > now) out.sit = [p.sit.fire, p.sit.seat]; // sitting by a fire
-    const soc = this.socOf(p.who);
-    if (soc) out.soc = soc.name; // their society, shown under their name tag (societies.js)
+    const soc = this.socTagName(p.who);
+    if (soc) out.soc = soc; // their society, shown under their name tag once it has 2 or more people (societies.js)
     if (state === 'away' && p.plan && p.plan.kind === 'walk' && p.plan.arrive > now) Object.assign(out, { tx: p.plan.to[0], tz: p.plan.to[1], speed: AWAY.strollSpeed, ms: Math.round(p.plan.arrive - now) });
     return out;
   },

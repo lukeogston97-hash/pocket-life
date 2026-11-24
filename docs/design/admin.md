@@ -35,7 +35,7 @@
 - The owner is told when their claim ends or when they're given one.
 
 ## Societies (admin mode, 0.1.4)
-- World tab, Societies: every society with its leader, how many of how many, and its claim (burning, time left). Fly to (its claim), Members (each with Take out, and a Rename box: any name, as with people), End (two taps: its claim goes to the leader). A player's page shows their society with Take out of society. Live setting: People in a society (Settings, Players). See societies.md.
+- World tab, Societies: every society with its leader, how many of how many, and its claim (burning, time left). Fly to (its claim), Members (each with Take out, and a Rename box: any name, as with people), End (two taps: its fire goes out). Since 0.1.5 a claim is a society: End claim ends it (the fire burns on), and Give claim starts a new one for that person. A player's page shows their society with Take out of society. Live setting: People in a society (Settings, Players). See societies.md.
 
 ## Log (admin mode)
 - Log tab (server/src/activity.js, storage key `activity`, the newest 200 lines): new people, deaths, someone back after 10 minutes or more away, someone gone after too long away, claims made, every admin tool that changes something (with its answer, also when it couldn't be done), admin mode opened, and wrong admin passwords (never the password itself). The same line again within 10 minutes is counted, not repeated. Filters: All, People, Admin, Refused.

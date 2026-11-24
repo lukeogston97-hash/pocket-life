@@ -4,8 +4,8 @@
 // main pond (G.claims.spawnRadius from the pond's middle). Inside someone else's claim others can only walk through:
 // no building, picking things up, chopping, mining, picking or cutting, and no using, feeding or putting out the fire.
 // The admin can do anything anywhere. A fire's claim is th.claim (the owner's who); burn() in placed.js ends it.
-// Societies (0.1.4, societies.js): a society's claim is th.claim 's:<id>'. Its members use it as their own, and only its
-// leader's fire can claim for it.
+// Societies (0.1.4, reworked 0.1.5, societies.js): your claim is your society. Lighting your first fire starts both
+// (th.claim 's:<id>'), its members use it as their own, and the fire going out ends both (claimLost).
 // These are methods of the World (index.js adds them to it), so `this` is the world.
 import { G } from './shared.js';
 import { claimProblem } from './rules.js';
@@ -47,24 +47,29 @@ export const claimsMethods = {
   // a few words for whoever a claim belongs to: the player, or every member of the society playing right now
   tellClaim(key, text) { const s = this.socOfClaim(key); if (s) this.socNote(s, text); else this.tell(key, { t: 'claimNote', text }); },
   // the answer when someone tries something inside another person's claim
-  claimNo(c) { return `This is ${this.ownerName(c)}'s claim`; },
+  claimNo(c) { return this.socOfClaim(c.claim) ? `This belongs to ${this.ownerName(c)}` : `This is ${this.ownerName(c)}'s claim`; },
+  // a claim's fire went out (burn in placed.js): the land is free, the cold fire is anyone's, and its society ends with it
+  claimLost(th) {
+    const key = th.claim;
+    th.claim = null; th.by = null;
+    this.save();
+    this.socFireOut(key); // (societies.js)
+  },
   // lighting a fire: it becomes the lighter's claim if they have none and it fits here. Says what happened.
   // why this fire can't be p's claim (null if it can): they have one, or it's too close to the pond or someone else's claim
   claimFit(th, p) {
     return claimProblem(th.x, th.z, { radius: C.radius, spawnRadius: C.spawnRadius, pond: G.pond || { x: 0, z: 0 }, hasClaim: !!this.claimOf(p.who),
       claims: this.claims().filter((o) => o.id !== th.id).map((o) => ({ x: o.x, z: o.z, name: this.ownerName(o) })) }); // rules.js, the same as in the game
   },
-  // In a society only the leader's fire claims, for the society (Luke, 24 Nov 2026: one society claim).
+  // Lighting your first fire starts your society, which holds the land round it (Luke, 24 Nov 2026: "lighting starts
+  // society"). Already in one (yours or someone else's): it's just a fire.
   tryClaim(th, p) {
     if (th.kind !== C.placeable || th.claim) return '';
     const s = this.socOf(p.who);
-    if (s && s.leader !== p.who) return `Lit. Only ${s.name}'s leader can claim land, so this is just a fire`;
+    if (s) return s.leader === p.who ? 'Lit. You already have a claim, so this is just a fire' : `Lit. You're in ${s.name}, so this is just a fire`;
     const no = this.claimFit(th, p);
-    if (no) return no.why === 'has' ? (s ? `Lit. ${s.name} already has a claim, so this is just a fire` : 'Lit. You already have a claim, so this is just a fire') : no.why === 'pond' ? "Lit. It's too close to the pond to claim land" : `Lit. Too close to ${no.name}'s claim to claim land`;
-    th.claim = s ? socKey(s) : p.who;
-    th.by = p.who; // it's theirs to pack up later
-    this.note('world', s ? `${p.name} claimed land for ${s.name}` : `${p.name} claimed land`);
-    if (s) this.socNote(s, `${p.name} claimed land for ${s.name}`, p.who);
-    return s ? `Lit. The land round it is now ${s.name}'s claim, while it burns` : `Lit. The land round it is now your claim, while it burns`;
+    if (no) return no.why === 'has' ? 'Lit. You already have a claim, so this is just a fire' : no.why === 'pond' ? "Lit. It's too close to the pond to claim land" : `Lit. Too close to ${no.name} to claim land`;
+    this.socNew(p, th); // (societies.js: named "<name>'s camp", theirs to lead)
+    return "Lit. It's your claim while it burns. Tap people nearby to invite them";
   },
 };

@@ -7,7 +7,7 @@
 import { FILTER, G, starText, MINUTE, HOUR, clean, blank, num, kindOk, addCarry, takeCarry, ageOf, pickRandom } from './shared.js';
 import { fireRule } from './placed.js';
 import { CLAIM_KIND } from './claims.js';
-import { SOC, socKey, freshSocieties } from './societies.js';
+import { SOC, freshSocieties } from './societies.js';
 
 const DONE_KEEP_DAYS = 30; // feedback and reports marked Done are deleted after this
 const PAST_KEEP = 20; // earlier people each player had
@@ -459,7 +459,7 @@ export const adminMethods = {
         if (!rule) return done("That fire is gone");
         if (!th.built) return done("It isn't built yet");
         this.burn(th);
-        const whose = th.claim ? this.ownerName(th) : '', was = th.claim;
+        const whose = th.claim ? this.ownerName(th) : '', was = th.claim, wasSoc = this.socOfClaim(was);
         let text;
         if (m.do === 'out') {
           if (!th.lit) return done("It's already out");
@@ -479,7 +479,7 @@ export const adminMethods = {
         } else return;
         th.at = Date.now();
         this.burn(th); // out: a claim on it ends with it
-        if (was && !th.claim) { text += `. ${whose}'s claim ended with it`; this.tellClaim(was, 'The fire is out, so the claim has ended'); }
+        if (was && !th.claim) { text += wasSoc ? `. ${whose} ended with it` : `. ${whose}'s claim ended with it`; if (!wasSoc) this.tellClaim(was, 'The fire is out, so the claim has ended'); } // (a society's members are told when it ends: societies.js)
         await this.save();
         this.sendPlaced(th);
         reply(this.firesView());
@@ -490,27 +490,30 @@ export const adminMethods = {
         const th = this.placedById(m.id);
         if (!th) return done("That fire is gone");
         this.burn(th);
-        const whose = th.claim ? this.ownerName(th) : '', was = th.claim;
+        const whose = th.claim ? this.ownerName(th) : '', was = th.claim, wasSoc = this.socOfClaim(was);
         let text;
-        if (m.do === 'end') {
+        if (m.do === 'end') { // the claim ends and the fire burns on; a society ends with its claim (societies.js)
           if (!th.claim) return done("It's nobody's claim");
+          const soc = this.socOfClaim(th.claim);
           th.claim = null; // the fire is still its builder's to pack up (th.by)
-          text = `${whose}'s claim ended. The fire burns on`;
-        } else if (m.do === 'give') {
+          if (soc) this.socEnd(soc, `${soc.name} has ended: the admin ended its claim`);
+          text = soc ? `${whose} ended. The fire burns on` : `${whose}'s claim ended. The fire burns on`;
+        } else if (m.do === 'give') { // the same as them lighting it: a new society, theirs (one claim each)
           const to = this.persons.get(clean(m.to, 40));
           if (!to || !this.alive(to)) return done("They've left");
           if (th.kind !== CLAIM_KIND) return done("That can't hold a claim");
-          const soc = this.socOf(to.who), key = soc ? socKey(soc) : to.who, toName = soc ? soc.name : to.name; // someone in a society: it goes to their society
-          if (th.claim === key) return done(`It's already ${toName}'s claim`);
+          const theirs = this.socOf(to.who);
+          if (theirs) return done(theirs.leader === to.who && theirs.members.length === 1 ? `${to.name} already has a claim` : `${to.name} is in ${theirs.name}, which has its own claim`);
           if (!th.built || !th.lit) return done('Light it first: a claim lasts only while its fire burns');
           const no = this.claimFit(th, to); // the same rules as lighting a first fire: one claim each, clear of the pond and of other claims
-          if (no) return done(no.why === 'has' ? `${toName} already has a claim` : no.why === 'pond' ? "It's too close to the pond to be a claim" : `It's too close to ${no.name}'s claim`);
-          th.claim = key;
-          th.by = to.who; // theirs to pack up later, as when they light it themselves
-          text = `Now ${toName}'s claim${whose ? ` (it was ${whose}'s)` : ''}`;
-          this.tellClaim(key, soc ? `The land round this fire is now ${soc.name}'s claim, while it burns` : 'The land round this fire is now your claim, while it burns');
+          if (no) return done(no.why === 'has' ? `${to.name} already has a claim` : no.why === 'pond' ? "It's too close to the pond to be a claim" : `It's too close to ${no.name}`);
+          if (wasSoc) { th.claim = null; this.socEnd(wasSoc, `${wasSoc.name} has ended: the admin gave its claim to someone else`); } // (its fire burns on, for them)
+          const made = this.socNew(to, th);
+          text = `Now ${to.name}'s claim, as ${made.name}${whose ? ` (it was ${whose})` : ''}`;
+          this.tell(to.who, { t: 'claimNote', text: 'The land round this fire is now your claim, while it burns' });
+          this.tell(to.who, this.mine(to));
         } else return;
-        if (was && was !== th.claim) this.tellClaim(was, 'The claim has ended');
+        if (was && was !== th.claim && !wasSoc) this.tellClaim(was, 'The claim has ended');
         await this.save();
         this.sendPlaced(th);
         reply(this.firesView());
@@ -531,7 +534,7 @@ export const adminMethods = {
         for (const mem of soc.members) this.socTag(mem.who); // the line under their name tags
         this.socTellMembers(soc);
         this.socNote(soc, `Your society is now called ${name}`);
-        const th = this.socClaim(soc);
+        const th = this.socFire(soc);
         if (th) this.sendPlaced(th); // the claim's name
         reply({ t: 'adminSocs', list: this.socsView() });
         return done(`${was} is now ${name}`);
@@ -548,9 +551,10 @@ export const adminMethods = {
       case 'a.socEnd': {
         const soc = this.socById(m.id);
         if (!soc) return done("That society has ended");
-        await this.socEndAll(soc);
+        this.socEnd(soc, `${soc.name} was ended by the admin, and its fire is out`); // (Luke: its fire goes out)
+        await this.saveSocs();
         reply({ t: 'adminSocs', list: this.socsView() });
-        return done(`${soc.name} ended`);
+        return done(`${soc.name} ended and its fire is out`);
       }
 
       /* ---------- Restore: the whole world back to an earlier time, or undo the last restore (restore.js) ---------- */

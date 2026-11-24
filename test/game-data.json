@@ -1,5 +1,5 @@
 {
-  "version": "0.1.4",
+  "version": "0.1.5",
   "build": 1,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
@@ -822,7 +822,7 @@
     "testNames": "Only for testing: with settings.autoName on, Make your person fills in a random name from this list. autoName is off in the real game, so players type their own name (the checks in tools/tests switch it on for themselves).",
     "bodyShapes": "The body builds on Make your person (slim, average and so on): how much wider or taller each part of the body is drawn. Add one by copying an entry; it shows up as a choice by itself.",
     "claims": "Claims (0.3.0): your first campfire becomes your claim when you light it: radius metres round it, yours only while the fire burns (once it's out the land is free and anyone can take the cold fire apart). One claim each. Claims can't overlap and can't reach into the free area round the main pond (spawnRadius metres from the pond's middle; the pond itself is about 6 m across from its middle). Inside someone else's claim others can only walk through. placeable: the kind that claims. ringShowsWithin: how near you have to be to see a claim's faint ring. Run tools/worlds.py test-build after changing it.",
-    "societies": "Player groups inside the world (built 0.1.4). A society has a name (2 to nameMax letters, no two the same), a leader and up to maxMembers people (also a live setting, Admin > Settings). It has one claim: the leader's lit campfire. Members can do everything inside it and any member can feed its fire; members' own fires are just fires. The leader invites someone playing within inviteReach metres; they have inviteMinutes to tap Join, and must put out their own claim's fire first. Anyone can leave; the leader can remove members. If the leader leaves or is gone, the member who joined first leads. A player with no person in the world for 3 days (the away timer) leaves. The last one out ends it and keeps its claim."
+    "societies": "Player groups inside the world (built 0.1.4, reworked 0.1.5). Your claim is your society: lighting your first campfire starts both (named \"<name>'s camp\" until the leader renames it, 2 to nameMax letters, no two the same) and the fire going out ends both. Up to maxMembers people (also a live setting, Admin > Settings). Members can do everything in the claim and keep its fire fed; only the leader can put it out; their own fires are just fires. The leader invites someone playing within inviteReach metres; they have inviteMinutes to tap Join, and must put out their own claim's fire (or leave their society) first. Anyone can leave; the leader can remove people. If the leader leaves or is gone, the member who joined first leads. The last one out ends it and its fire goes out. A player with no person in the world for 3 days (the away timer) leaves."
   },
   "chatFilter": {
     "anywhere": [
@@ -910,6 +910,16 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.1.5",
+      "date": "2026-11-24",
+      "improved": [
+        "Lighting your first campfire starts your society, and its fire going out ends it",
+        "The leader can rename the society in Menu > Society",
+        "Only the leader can put the society's fire out",
+        "A society's name shows under name tags once it has 2 or more people"
+      ]
+    },
     {
       "version": "0.1.4",
       "date": "2026-11-24",

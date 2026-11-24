@@ -506,6 +506,9 @@ select.admin-input { appearance: none; -webkit-appearance: none; }
 
 /* ---------- societies (0.1.4): the Society panel and the invite card ---------- */
 .soc-err { margin: -6px 0 10px; }
+.soc-name { display: flex; gap: 6px; align-items: center; margin: -4px 0 12px; }
+.soc-name[hidden] { display: none; }
+.soc-name .feedback-text { margin: 0; flex: 1; min-width: 0; }
 .soc-members { display: flex; flex-direction: column; margin: -4px 0 8px; }
 .soc-member { display: flex; align-items: center; gap: 8px; min-height: 44px; border-top: 1px solid var(--line); }
 .soc-member:first-child { border-top: 0; }

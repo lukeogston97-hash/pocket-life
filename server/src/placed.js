@@ -25,12 +25,12 @@ export const placedMethods = {
   },
   // bring a fire up to now: burnt fuel is gone, and with none left it's out
   burn(th, now = Date.now()) {
-    if (!th.lit) { if (th.claim) { th.claim = null; th.by = null; } return th; } // a claim's fire went out: the land is free and the fire is anyone's
+    if (!th.lit) { if (th.claim) this.claimLost(th); return th; } // a claim's fire went out: the land is free, the fire is anyone's, its society ends (claims.js)
     if (this.admin.maintenance) { th.at = now; return th; } // maintenance: fires hold their fuel (nobody can tend them)
     th.fuel = Math.max(0, (th.fuel || 0) - (now - (th.at || now)));
     th.at = now;
     if (th.fuel <= 0) { th.lit = false; th.fuel = 0; }
-    if (!th.lit && th.claim) { th.claim = null; th.by = null; } // a claim's fire went out: the land is free and the fire is anyone's
+    if (!th.lit && th.claim) this.claimLost(th); // a claim's fire went out: the land is free, the fire is anyone's, its society ends (claims.js)
     return th;
   },
   // when a placed thing's fire goes out (ms): Infinity if it isn't a fire or is gone; now (or earlier) if it's already out
