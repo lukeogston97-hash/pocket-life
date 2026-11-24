@@ -109,7 +109,7 @@ function applyLiveItems(live) {
     for (const f of ['needs', 'makes']) for (const kind of Object.keys(base[f])) r[f][kind] = num((mine[f] || {})[kind], base[f][kind]);
   }
   // what's on screen that shows these numbers: the weight you carry, the inventory, the craft list
-  bagDrawn = ''; craftDrawn = '';
+  bagDrawn = ''; craftDrawn = ''; foundDrawn = '';
   if (player) { drawCarry(); if (bagOpen()) drawBag(); if (craftOpen()) drawCraft(); }
 }
 
@@ -391,6 +391,26 @@ function drawPlayer() {
     give.appendChild(button('Give items', () => openPicker(`Give ${p.name}`, (kind, n) => adminSend({ t: 'a.give', id: p.id, kind, n }))));
     bag.appendChild(give);
     out.push(bag);
+  }
+  if (alive) { // their task list (0.1.7): what their person carries on with while they're away (server/src/tasks.js)
+    const list = p.tasks || [], sec = entry('Task list', list.length ? '' : 'Empty');
+    list.slice(0, 10).forEach((t, i) => sec.appendChild(el('div', 'admin-row', `${i + 1}. ${taskName(t, false) || t.type}`)));
+    if (list.length > 10) sec.appendChild(el('div', 'admin-row', `+${list.length - 10} more`));
+    if (list.length) {
+      const bar = el('div', 'admin-btns'), clear = button('Clear task list', () => {});
+      twoTaps(clear, () => toPlayer({ t: 'a.clearTasks', id: p.id }), 'Tap again', 500);
+      bar.appendChild(clear); sec.appendChild(bar);
+    }
+    out.push(sec);
+  }
+  if (alive) { // the recipes they've found on the craft mat (0.1.8): give them every one, or clear them to find again
+    const found = (p.found || []).filter((id) => RECIPES.some((r) => r.id === id));
+    const sec = entry('Recipes found', `${found.length} of ${RECIPES.length}${found.length ? `: ${found.map((id) => recipeName(RECIPES.find((r) => r.id === id)).toLowerCase()).join(', ')}` : ''}`);
+    const bar = el('div', 'admin-btns'), none = button('Clear found', () => {});
+    if (found.length < RECIPES.length) bar.appendChild(button('Find all', () => toPlayer({ t: 'a.found', id: p.id, all: true })));
+    if (found.length) { twoTaps(none, () => toPlayer({ t: 'a.found', id: p.id, all: false }), 'Tap again', 500); bar.appendChild(none); }
+    sec.appendChild(bar);
+    out.push(sec);
   }
   if (p.soc) { // their society (0.1.4): taking them out is the same as them leaving it
     const sec = entry(el('div', 'admin-name', 'Society'), `${p.soc.name}${p.soc.lead ? ' · leads it' : ''} · ${p.soc.n} in it`), bar = el('div', 'admin-btns');

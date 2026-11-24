@@ -160,7 +160,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .send-btn svg { width: 18px; height: 18px; }
 .chatting .hud-bottom, .chatting .queue, .chatting .hint { display: none; }
 
-/* sheets that slide up: inventory and craft */
+/* the sheet that slides up: the inventory, with the craft mat in it (0.1.8) */
 .bag { position: absolute; left: 0; right: 0; bottom: 0; z-index: 26; max-width: 520px; margin: 0 auto; max-height: 62%; overflow-y: auto;
   padding: 6px 14px calc(14px + env(safe-area-inset-bottom)); border-bottom: 0; border-radius: 18px 18px 0 0;
   transform: translateY(105%); visibility: hidden; transition: transform 0.26s ease, visibility 0s linear 0.26s; }
@@ -196,9 +196,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .bag-empty[hidden] { display: none; }
 .wear { display: block; height: 3px; width: 64px; margin-top: 4px; border-radius: 3px; background: rgba(255, 255, 255, 0.14); overflow: hidden; }
 .wear::after { content: ""; display: block; height: 100%; width: calc(var(--w, 1) * 100%); background: var(--accent); }
-.craft-note { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 2px; font-size: 12.5px; color: var(--ink-soft); font-weight: 600; }
-.craft-note[hidden] { display: none; }
-.craft-note .text-btn { min-height: 36px; padding: 0 4px; font-size: 13px; }
 .craft-search { display: flex; align-items: center; gap: 8px; height: 40px; margin: 2px 0 8px; padding: 0 12px; border-radius: 12px; background: var(--hover); border: 1px solid var(--line); color: var(--ink-soft); }
 .craft-search[hidden] { display: none; }
 .craft-search svg { width: 16px; height: 16px; flex: none; }
@@ -210,19 +207,54 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .craft-chip.on { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
 .craft-more { margin: 10px 0 2px; text-align: center; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
 .craft-more[hidden] { display: none; }
-button.craft-head { padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
-.craft-group { padding: 8px 0 2px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-faint); }
-.craft-list { list-style: none; margin: 0; padding: 0; display: grid; }
-.craft-card { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px 10px; padding: 10px 0; border-top: 1px solid var(--line); }
-.craft-card:first-child, .craft-group + .craft-card { border-top: 0; }
-.craft-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.craft-head .dot { flex: none; }
-.craft-words { display: grid; min-width: 0; }
-.craft-words strong { font-size: 14px; }
-.craft-words small { font-size: 11.5px; color: var(--ink-soft); font-weight: 600; }
-.craft-needs { grid-column: 1; display: flex; flex-wrap: wrap; gap: 6px; padding-left: 24px; }
-.craft-card > .small-btn { grid-column: 2; grid-row: 1 / span 2; }
-.craft-card > .small-btn:disabled { opacity: 1; color: var(--ink-faint); } /* still looks like a button, just not one you can press yet */
+.craft-needs { display: flex; flex-wrap: wrap; gap: 6px; }
+/* the craft mat (0.1.8): in the inventory, above your bag. Put things on it; Make lights up when they go together */
+.bag.crafting { max-height: 80%; }
+.bag-head-btns { display: flex; align-items: center; gap: 2px; }
+.craft-toggle { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; }
+.craft-toggle svg { width: 15px; height: 15px; }
+.craft-toggle.on { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.mat { display: grid; gap: 8px; margin: 6px 0 10px; }
+.mat[hidden] { display: none; }
+.mat-spot { min-height: 84px; padding: 10px; border: 1.5px dashed var(--line-strong); border-radius: 14px; background: rgba(255, 255, 255, 0.04); display: grid; place-items: center;
+  transition: border-color 0.15s ease, background 0.15s ease; }
+.mat.drop-here .mat-spot { border-color: var(--ink-soft); }
+.mat-spot.over { border-color: var(--accent); background: rgba(143, 212, 158, 0.1); }
+.mat-spot.match { border-style: solid; border-color: var(--accent); }
+.mat-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.mat-list:empty { display: none; }
+.mat-list li { display: flex; width: 56px; }
+.mat-tile.need { opacity: 0.45; border-style: dashed; cursor: default; }
+.mat-empty { margin: 0; max-width: 240px; text-align: center; font-size: 12.5px; font-weight: 600; line-height: 1.35; color: var(--ink-faint); }
+.mat-empty[hidden] { display: none; }
+.mat-out { display: flex; align-items: center; gap: 10px; min-height: 48px; }
+.mat-out[hidden] { display: none; }
+.mat-pic { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; border: 1.5px dashed var(--line); }
+.mat-pic:empty { visibility: hidden; }
+.mat-pic .pic { width: 100%; height: 100%; border: 0; background: none; }
+.mat-pic.match, .mat-pic.new { border: 1.5px solid var(--accent); background: rgba(143, 212, 158, 0.12); }
+.mat-pic.goal { opacity: 0.55; }
+.mat-pic.new { animation: matPop 0.5s ease; }
+@keyframes matPop { 0% { transform: scale(0.6); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
+.mat-q { font: 800 22px/1 var(--font-ui); color: var(--accent); }
+.mat-words { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.mat-words strong { font-size: 14.5px; }
+.mat-words small { font-size: 11.5px; font-weight: 600; line-height: 1.3; color: var(--ink-soft); }
+.mat-words small[hidden] { display: none; }
+.mat-out .text-btn { min-height: 40px; padding: 0 6px; font-size: 13px; }
+.mat-out .text-btn[hidden] { display: none; }
+#matMake { flex: none; min-width: 72px; }
+#matMake:disabled { opacity: 1; background: var(--hover); color: var(--ink-faint); border-color: var(--line); } /* still a button, just not lit */
+#matMake.glow { animation: matGlow 1.4s ease-in-out infinite; }
+@keyframes matGlow { 50% { box-shadow: 0 0 0 5px rgba(143, 212, 158, 0.25); } }
+.mat-tabs { margin: 0; }
+#bagPart[hidden], .found[hidden] { display: none; }
+.found-list { list-style: none; margin: 0; padding: 0; display: grid; }
+.found-list li + li { border-top: 1px solid var(--line); }
+.found-row { width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.found-words { display: grid; gap: 5px; min-width: 0; }
+.found-words strong { font-size: 14px; }
+.found-none { padding: 10px 0; text-align: center; font-size: 13px; font-weight: 600; color: var(--ink-soft); }
 .need-chip { font-size: 11.5px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: rgba(240, 138, 122, 0.16); color: var(--warn); }
 .need-chip.ok { background: rgba(143, 212, 158, 0.16); color: var(--accent); }
 
@@ -373,7 +405,6 @@ button.craft-head { padding: 0; border: 0; background: none; color: inherit; fon
 .is-creating .hud-top, .is-creating .hud-bottom, .is-creating #labels, .is-creating .mist-top, .is-creating .hint, .is-creating .bag,
 .is-creating .queue, .is-creating .act-menu, .is-creating .chat, .is-creating .auto-chip { display: none; }
 .pic { width: 40px; height: 40px; border-radius: 10px; background: rgba(255, 255, 255, 0.07); border: 1px solid var(--line); object-fit: contain; flex: none; }
-.craft-needs { padding-left: 50px; }
 
 /* the Admin panel's tabs (Server, Players, Inbox, World, Settings) */
 .admin-page { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }

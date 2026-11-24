@@ -219,6 +219,7 @@ function applyMe(m, spawn = false) {
   you.carry = carry;
   you.wear = m.wear || {};
   you.seen = m.seen || you.seen || [];
+  you.found = Array.isArray(m.found) ? m.found : you.found || []; // the recipes found on the craft mat (inventory.js)
   if (!!m.sleeping !== !!you.sleeping) setSleeping(m.sleeping, true);
   you.collapsed = !!m.collapsed;
   you.lastKind = carry[you.lastKind] ? you.lastKind : (ITEMS[m.lastKind] && carry[m.lastKind] ? m.lastKind : Object.keys(carry)[0] || null);

@@ -1,6 +1,6 @@
 {
-  "version": "0.1.5",
-  "build": 1,
+  "version": "0.1.8",
+  "build": 2,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -81,6 +81,7 @@
         "health": -0.5
       },
       "fullLabel": "Not hungry",
+      "gainLabel": "food",
       "whileAsleep": -2.5
     },
     {
@@ -95,6 +96,7 @@
         "health": -2
       },
       "fullLabel": "Not thirsty",
+      "gainLabel": "water",
       "whileAsleep": -3
     },
     {
@@ -186,7 +188,7 @@
     },
     "stone": {
       "name": "Stone",
-      "about": "For stone tools and building campfires.",
+      "about": "For tools and campfires. Try knocking two together.",
       "plural": "Stones",
       "weight": 1,
       "look": {
@@ -210,9 +212,73 @@
       },
       "startInWorld": 0
     },
+    "sharp-stone": {
+      "name": "Sharp stone",
+      "about": "Knocked off a stone. Cuts and shapes things, and you keep it when you do.",
+      "plural": "Sharp stones",
+      "weight": 1,
+      "look": {
+        "shape": "flake",
+        "size": 0.11,
+        "colour": "#8f8a80"
+      },
+      "startInWorld": 0
+    },
+    "twig": {
+      "name": "Twig",
+      "about": "Cut from a stick. Kindling for a campfire, and it burns fast.",
+      "plural": "Twigs",
+      "weight": 1,
+      "look": {
+        "shape": "rod",
+        "length": 0.3,
+        "thickness": 0.012,
+        "colour": "#a8875f",
+        "twig": true
+      },
+      "startInWorld": 0
+    },
+    "long-stick": {
+      "name": "Long stick",
+      "about": "Two sticks tied together. Long enough for a spear.",
+      "plural": "Long sticks",
+      "weight": 2,
+      "look": {
+        "shape": "rod",
+        "length": 1.1,
+        "thickness": 0.032,
+        "colour": "#8a6847",
+        "lashing": "#c9b77a"
+      },
+      "startInWorld": 0
+    },
+    "axe-head": {
+      "name": "Axe head",
+      "about": "A stone shaped into a blade. Tie it to a stick to make an axe.",
+      "plural": "Axe heads",
+      "weight": 1,
+      "look": {
+        "shape": "head",
+        "head": "axe",
+        "colour": "#8f8a80"
+      },
+      "startInWorld": 0
+    },
+    "pick-head": {
+      "name": "Pick head",
+      "about": "Sharp stones shaped into a point at each end. Tie it to a stick to make a pickaxe.",
+      "plural": "Pick heads",
+      "weight": 1,
+      "look": {
+        "shape": "head",
+        "head": "pick",
+        "colour": "#8f8a80"
+      },
+      "startInWorld": 0
+    },
     "berry": {
       "name": "Berry",
-      "about": "Picked from berry bushes. Eat one at a time to fill hunger.",
+      "about": "Picked from berry bushes. Eat one to feel less hungry.",
       "plural": "Berries",
       "weight": 1,
       "look": {
@@ -226,9 +292,9 @@
       }
     },
     "fish": {
-      "name": "Fish",
+      "name": "Raw fish",
       "about": "Caught at the pond with a fishing spear. Cook it on a lit campfire before you eat it.",
-      "plural": "Fish",
+      "plural": "Raw fish",
       "weight": 1,
       "look": {
         "shape": "fish",
@@ -354,11 +420,21 @@
   },
   "recipes": [
     {
+      "id": "sharp-stone",
+      "needs": {
+        "stone": 2
+      },
+      "makes": {
+        "sharp-stone": 1
+      },
+      "about": "Knock two stones together"
+    },
+    {
       "id": "knife",
       "name": "Stone knife",
       "needs": {
+        "sharp-stone": 1,
         "stick": 1,
-        "stone": 1,
         "twine": 1
       },
       "makes": {
@@ -367,37 +443,35 @@
       "about": "Cuts tall grass fast and picks 2 berries at a time"
     },
     {
-      "id": "stone-axe",
-      "name": "Stone axe",
+      "id": "twig",
       "needs": {
-        "stick": 2,
-        "stone": 3,
-        "twine": 1
+        "stick": 1
+      },
+      "keeps": {
+        "sharp-stone": 1
       },
       "makes": {
-        "stone-axe": 1
+        "twig": 1
       },
-      "about": "Chops trees, stumps and logs"
+      "about": "Cut down a stick with a sharp stone (you keep the stone)"
     },
     {
-      "id": "stone-pickaxe",
-      "name": "Stone pickaxe",
+      "id": "long-stick",
       "needs": {
         "stick": 2,
-        "stone": 3,
         "twine": 1
       },
       "makes": {
-        "stone-pickaxe": 1
+        "long-stick": 1
       },
-      "about": "Breaks rocks and mines boulders for stones"
+      "about": "Tie two sticks together"
     },
     {
       "id": "fishing-spear",
       "name": "Fishing spear",
       "needs": {
-        "stick": 2,
-        "stone": 1,
+        "long-stick": 1,
+        "sharp-stone": 1,
         "twine": 1
       },
       "makes": {
@@ -406,12 +480,61 @@
       "about": "Catches fish at the pond"
     },
     {
+      "id": "axe-head",
+      "needs": {
+        "stone": 1
+      },
+      "keeps": {
+        "sharp-stone": 1
+      },
+      "makes": {
+        "axe-head": 1
+      },
+      "about": "Shape a stone with a sharp stone (you keep the sharp stone)"
+    },
+    {
+      "id": "stone-axe",
+      "name": "Stone axe",
+      "needs": {
+        "axe-head": 1,
+        "stick": 1,
+        "twine": 1
+      },
+      "makes": {
+        "stone-axe": 1
+      },
+      "about": "Chops trees, stumps and logs"
+    },
+    {
+      "id": "pick-head",
+      "needs": {
+        "sharp-stone": 2
+      },
+      "makes": {
+        "pick-head": 1
+      },
+      "about": "Shape two sharp stones into a pick head"
+    },
+    {
+      "id": "stone-pickaxe",
+      "name": "Stone pickaxe",
+      "needs": {
+        "pick-head": 1,
+        "stick": 1,
+        "twine": 1
+      },
+      "makes": {
+        "stone-pickaxe": 1
+      },
+      "about": "Breaks rocks and mines boulders for stones"
+    },
+    {
       "id": "campfire",
       "name": "Campfire",
       "needs": {
         "log": 1,
-        "stick": 3,
-        "stone": 4
+        "twig": 2,
+        "stone": 2
       },
       "makes": {
         "campfire": 1
@@ -445,7 +568,8 @@
         "maxFuel": 24,
         "maxHours": 72,
         "otherFuels": {
-          "log": 28800
+          "log": 28800,
+          "twig": 120
         },
         "lightSeconds": 3
       },
@@ -797,18 +921,18 @@
   },
   "help": {
     "settings": "carryCapacity is the most weight a person can carry. walkSpeed is in metres per second. worldSize is how wide the square world is in metres (100 makes it 100 m x 100 m, with the clearing in the middle); it can be 40 to 300, and the bigger it is the more your phone has to draw. needsSpeed is 1 for real time; set it higher to test, for example 60 makes an hour of hunger and thirst pass in a minute. autoName fills in a name from testNames on the Make your person screen (handy while testing; set it to false for the real game). respawnMinutes is how often (online) the world adds one stick and one stone, if there are fewer on the ground than startInWorld: sticks under trees, stones by boulders. maxPlaying is how many people can play at once (20 for now, to stay inside Cloudflare's free plan); anyone else waits in line on the main menu and joins by themselves when a spot opens. Run tools/worlds.py test-build after changing it. worldTimeZone is the one clock the whole world runs on (date, time, day and night), the same for every player: Australia/Darwin for the Oceania world. craftSearchFrom: Craft shows a search box once you know this many recipes.",
-    "items": "To add an item, copy one of the items above, give it a new id (lower case, no spaces) and set its name, plural, weight and look. It then shows up by itself in the Inventory, in Craft (if a recipe makes it) and in the admin's Add list, with a picture drawn from its look. Shapes and their looks: rod (length, thickness, colour, twig), rock (size, colour), ball (size, colour, leaf: a colour or false), axe (length, thickness, colour, head, lashing), log (length, radius, colour, end), knife (length, thickness, colour, blade, lashing), coil (size, colour), campfire (size, colour, stone, ash), spear (length, thickness, colour, head, lashing), fish (length, colour, belly), box (width, height, depth, colour). An unknown shape is drawn as a rock. eat is what eating one gives (a berry gives hunger 10), which adds an Eat button in the inventory. tool: {\"uses\": 20} makes it a tool that wears out after that many uses (a wear bar in the inventory); a tool shows in your hand only while you use it (chopping, cutting). startInWorld is how many lie around when the world starts (0 for things you can only make), and startNear is how many of those start close to where you appear. After changing items, run python3 tools/worlds.py test-build so the server knows about them. about (optional) is a short line shown when you tap it in the Inventory; without it, the about of the recipe that makes it is used. startInWorld: how many lie about the world; while there are fewer, one more turns up every settings.respawnMinutes, at a spot by spawnsNear (trees or boulders). A new item with startInWorld and spawnsNear starts turning up by itself, no reset needed (run tools/worlds.py test-build).",
-    "recipes": "To add a recipe, put it in the recipes list like this: {\"id\": \"stone-axe\", \"name\": \"Stone axe\", \"needs\": {\"stick\": 2, \"stone\": 3}, \"makes\": {\"stone-axe\": 1}, \"about\": \"Chops trees\"}. Every item in needs and makes must exist in items. Recipes show up in the Craft sheet (the hammer button) automatically. about is a short line on the recipe card (optional). The server checks crafting too, so run python3 tools/worlds.py test-build after changing recipes. near (optional) is a placeable id, like campfire: the recipe can then only be made close to a built one (a fire has to be lit), Craft shows a 'By a lit campfire' chip, and it's listed in that thing's tap menu under its craftLabel (Cook). Use it for cooking. seconds (optional) is how long making it takes, like cooking at a fire (20): the things are used up when it finishes. A recipe shows in Craft once you've had all but one of the things it needs (at least one), so players discover recipes as they find new things. group (optional) puts it under a button in Craft (Tools, Food, Building, Clothes, Materials); without it tools go under Tools, food under Food, things you place under Building and the rest under Materials.",
+    "items": "To add an item, copy one of the items above, give it a new id (lower case, no spaces) and set its name, plural, weight and look. It then shows up by itself in the Inventory, on the craft mat and in its Found list (if a recipe makes it) and in the admin's Add list, with a picture drawn from its look. Shapes and their looks: rod (length, thickness, colour, twig, lashing: a twine colour tied round the middle, like a long stick), flake (size, colour: a sharp stone), head (head: axe or pick, colour: a stone tool head on its own), rock (size, colour), ball (size, colour, leaf: a colour or false), axe (length, thickness, colour, head, lashing), log (length, radius, colour, end), knife (length, thickness, colour, blade, lashing), coil (size, colour), campfire (size, colour, stone, ash), spear (length, thickness, colour, head, lashing), fish (length, colour, belly), box (width, height, depth, colour). An unknown shape is drawn as a rock. eat is what eating one gives (a berry gives hunger 10), which adds an Eat button in the inventory. tool: {\"uses\": 20} makes it a tool that wears out after that many uses (a wear bar in the inventory); a tool shows in your hand only while you use it (chopping, cutting). startInWorld is how many lie around when the world starts (0 for things you can only make), and startNear is how many of those start close to where you appear. After changing items, run python3 tools/worlds.py test-build so the server knows about them. about (optional) is a short line shown when you tap it in the Inventory; without it, the about of the recipe that makes it is used. startInWorld: how many lie about the world; while there are fewer, one more turns up every settings.respawnMinutes, at a spot by spawnsNear (trees or boulders). A new item with startInWorld and spawnsNear starts turning up by itself, no reset needed (run tools/worlds.py test-build).",
+    "recipes": "To add a recipe, put it in the recipes list like this: {\"id\": \"stone-axe\", \"name\": \"Stone axe\", \"needs\": {\"axe-head\": 1, \"stick\": 1, \"twine\": 1}, \"makes\": {\"stone-axe\": 1}, \"about\": \"Chops trees\"}. Every item in needs, keeps and makes must exist in items. Players make things on the craft mat (0.1.8): they put things from their bag on it, and when what is on the mat is exactly a recipe's needs plus its keeps (the same things, the same number of each), Make lights up. A recipe they have never made shows as \"Something new\" until they make it once; then it is in their Found list (the server keeps it, and their next person keeps it too). So keep recipes guessable: 2 or 3 things, at most 2 of each, and make big things from smaller steps (an axe head first, then the axe). No two recipes can want the same things on the mat (lint checks). keeps (optional) are tools the recipe needs on the mat but does not use up, like {\"sharp-stone\": 1} to cut a stick into a twig. about is a short line shown on the mat and in Found (optional). The server checks crafting too, so run python3 tools/worlds.py test-build after changing recipes. near (optional) is a placeable id, like campfire: the recipe can then only be made close to a built one (a fire has to be lit), and it is listed in that thing's tap menu under its craftLabel (Cook) without having to be found first. Use it for cooking. seconds (optional) is how long making it takes, like cooking at a fire (20): the things are used up when it finishes. group (optional) puts it under a button in Found (Tools, Food, Building, Clothes, Materials); without it tools go under Tools, food under Food, things you place under Building and the rest under Materials.",
     "looks": "Each list here is a set of choices on the Make your person screen. Add an entry to add a choice.",
-    "stats": "Stats run in real time. Every stat goes from 0 to 100. perHour is how much it changes each real hour, and whileAsleep is used instead while sleeping. lowAt shows the warning (the ring pulses red, and under 10 it flashes). atZero is what happens to other stats each hour while this one is empty. Health heals (4 an hour, 8 asleep, so about a day to full) when nothing is empty, and the person dies when health reaches 0. fullLabel is shown when you try to eat or drink but don't need to. Hunger lasts about a day (a berry fills 10), thirst about 16 hours awake (a drink fills 15), Rest about 16 hours awake and 8 asleep (whileAsleepAtNight: faster at night, about 6 hours). With no water you die in about 3 days, with no food in about a week. collapseAtZero (Rest): when it runs out your person collapses asleep where they stand and can't be woken until it's back to wakeAt (25). Energy is not deadly. icon: heart, food, drop, moon or bolt. The server uses the same numbers (copied by tools/worlds.py).",
+    "stats": "Stats run in real time. Every stat goes from 0 to 100. perHour is how much it changes each real hour, and whileAsleep is used instead while sleeping. lowAt shows the warning (the ring pulses red, and under 10 it flashes). atZero is what happens to other stats each hour while this one is empty. Health heals (4 an hour, 8 asleep, so about a day to full) when nothing is empty, and the person dies when health reaches 0. fullLabel is shown when you try to eat or drink but don't need to. gainLabel is the word in the pop-up when eating or drinking fills it (+10 food, +15 water), since '+10 Hunger' would read like getting hungrier; without it the need's name is used. Hunger lasts about a day (a berry fills 10), thirst about 16 hours awake (a drink fills 15), Rest about 16 hours awake and 8 asleep (whileAsleepAtNight: faster at night, about 6 hours). With no water you die in about 3 days, with no food in about a week. collapseAtZero (Rest): when it runs out your person collapses asleep where they stand and can't be woken until it's back to wakeAt (25). Stamina (id energy) is not deadly. icon: heart, food, drop, moon or bolt. The server uses the same numbers (copied by tools/worlds.py).",
     "sources": "Things in the world you can use, matched by name (\"Pond\", \"Berry bush\"). action is the button in the tap menu, like \"Drink\". gives adds to stats each time (one drink at the pond gives 15 thirst). harvest is what one pick puts in your inventory (1 berry), holds is how many a full bush has (up to 15), and regrowHours is how long a picked-bare bush takes to grow them all back; picked berries grow back one at a time. seconds is how long it takes. pose is kneel, pick or bend. fish (the pond has it): action and verb are the tap menu button and the busy word, seconds how long a try takes, tool what you need to carry (it wears each try), catch what a catch gives, chance the share of tries that catch one (0.5), holds how many fish the pond has for everyone and regrowMinutes how often one comes back; the server keeps the count (run tools/worlds.py test-build after changing it). tool and toolHarvest: with that tool you get toolHarvest per pick instead (a knife picks 2 berries), and the tool wears.",
     "defaultLook": "How a new person starts on the Make your person screen.",
-    "daylight": "Day and night follow the player's real local time. Each entry is how the world looks at that hour, and the game blends between them. sky is the haze colour, skyLight and groundLight light things from above and below, brightness is how strong that is, sun is the sun or moon colour, sunStrength how strong, sunHeight its angle in degrees.",
+    "daylight": "Day and night follow the world's clock (settings.worldTimeZone), the same for every player; on the main menu a world that isn't open shows its own region's time. Each entry is how the world looks at that hour, and the game blends between them. sky is the haze colour, skyLight and groundLight light things from above and below, brightness is how strong that is, sun is the sun or moon colour, sunStrength how strong, sunHeight its angle in degrees.",
     "version": "version is the game version and build counts the test copies of that version (start build at 1 for each new version, count up for each test copy). Both only need changing here.",
     "era": "era only goes up if the version numbers are ever reset lower (they were once, 23 Nov 2026: 0.3.8 became 0.1.0), so games from before still get moved on to the newest version.",
-    "server": "server is the address of the online world. The test link joins the test world and the release joins the live world. Leave it empty to play offline.",
+    "server": "server is the address of the online world. The test link and the release both join the same live world (there's no separate test world). Leave it empty to play offline.",
     "chatFilter": "Words kept out of speech bubbles (shown as stars) and names (pick another). anywhere: caught even inside a longer word. words: only caught as a whole word (so 'class' is fine), plus endings like s, ed, ing. phrases: caught as a run of words. Numbers and symbols standing in for letters (sh1t, @ss) are caught too. The server gets a copy: tools/worlds.py test-build copies it to server/words.json. names: extra words only kept out of names, so nobody can pretend to be the admin.",
-    "away": "How a person looks after themselves while their player is away (the server does this). near: 'pond' keeps them strolling round the main pond (anything else: round where you left them). wanderMin and wanderMax: how far in metres from there they stroll. strollSpeed in metres per second. They eat what they carry when hunger is under eatBelow, go for berries if they have none, and drink at the pond when thirst is under drinkBelow. After sleepAfterHours away they lie down asleep: hunger and thirst keep dropping slowly (the asleep rates) but stop at asleepFloor, so they can't die; after goneAfterDays asleep (3 days away in all) they leave the world and their things stay where they slept. A grave marks where someone died for graveHours. idleMinutes: if you're in the game but don't touch anything for this long, your person goes on autopilot and does the same, until you tap. sleepBelow: someone on autopilot or away lies down to sleep when Rest is under this, and gets up when it's full. At night (see night) they go to sleep until morning. comeBackSeconds: for this long after a player's connection goes, their person stays right where they are, so a short break in the connection changes nothing (the game carries on from where it was). With a claim (see claims) they stay within it instead of by the pond, keep its fire fed from their bag, and still walk to the pond to drink.",
+    "away": "How a person looks after themselves while their player is away (the server does this). near: 'pond' keeps them strolling round the main pond (anything else: round where you left them). wanderMin and wanderMax: how far in metres from there they stroll. strollSpeed in metres per second. While away they first carry on with what's left of their task list (the game sends it to the server, which does each task the same way: server/src/tasks.js), stopping to eat and drink as above and to sleep when tired (not just because it's night); things that have gone are skipped. Coming back, what's left of the list is back on your screen. They eat what they carry when hunger is under eatBelow, go for berries if they have none, and drink at the pond when thirst is under drinkBelow. After sleepAfterHours away they lie down asleep: hunger and thirst keep dropping slowly (the asleep rates) but stop at asleepFloor, so they can't die; after goneAfterDays asleep (3 days away in all) they leave the world and their things stay where they slept. A grave marks where someone died for graveHours. idleMinutes: if you're in the game but don't touch anything for this long, your person goes on autopilot and does the same, until you tap. sleepBelow: someone on autopilot or away lies down to sleep when Rest is under this, and gets up when it's full. At night (see night) they go to sleep until morning. comeBackSeconds: for this long after a player's connection goes, their person stays right where they are, so a short break in the connection changes nothing (the game carries on from where it was). With a claim (see claims) they stay within it instead of by the pond, keep its fire fed from their bag, and still walk to the pond to drink.",
     "berryBushes": "extra: how many more berry bushes grow out in the wider world, besides the ones by the start. seed: their own random numbers, so they're in the same places on every phone (change it to move them all).",
     "devlog": "What's new, shown in the Menu. Newest first, one entry per version: version, date (the release day, with from for a range), an optional title, and short lines for players in added (+ new features), improved (~ changes to what's there) and fixed (− bug fixes and removed issues). No full stop at the end.",
     "energyCosts": "Stamina (the yellow ring, id energy) is short-term: every task takes these amounts and walking takes walkPerMetre for each metre. It comes back by itself quickly (perHour in its need: 600 an hour, so empty to full in about 10 minutes; whileAsleep 1500 when sleeping, whileSitting 2400 when sitting by a fire). Below slowBelow (20) your person is out of breath: walking and tasks take slowBy (1.5) times as long. It never stops you and it's not deadly. The server uses the same numbers.",
@@ -816,13 +940,13 @@
     "plants": "Plants you cut, like tall grass. Each kind is laid out by itself: count clumps (nearStart of them near the start), on its own random numbers (seed) so nothing else moves. action is the tap menu button, verb what shows while doing it. gives goes into your inventory each cut. seconds is how long by hand, toolSeconds with the tool (each use wears the tool). regrowHours [lo, hi]: a cut clump grows back at a random time in between. look: blades per clump, height, colour and tips (the seed heads). Run tools/worlds.py test-build after changing plants.",
     "regions": "The worlds (regions) on the main menu, under Play. Each is its own world on its own clock (timeZone). open: false shows it as Coming soon; tapping it shows this world's view at that region's time of day. For now only one world exists, so only one region can be open, and its timeZone should match settings.worldTimeZone.",
     "night": "Night in the world's clock (settings.worldTimeZone), from the hour 'from' to the hour 'to'. Sleeping at night fills Rest at whileAsleepAtNight instead of whileAsleep. People away or on autopilot go to sleep when night starts and get up in the morning. The server uses the same numbers.",
-    "placeables": "Things you place in the world and build, like the campfire. An item with places (the id of an entry here) gets a Place button in the Inventory: you pick a spot, your person puts it down as an unbuilt site, then builds it (buildSeconds; buildVerb shows while building). solid is how big it is for walking round (metres). fire makes it a fire you can light and put out: fuel is the item you add (sticks), secondsEach is how long one burns (300 = 5 minutes), otherFuels are more items it burns with their seconds each (log: 1800), maxHours is the most it holds in hours of burning (72 = 3 days, so a claim's fire can last the 3-day away timer; without maxHours, maxFuel counts it in fuel items), lightSeconds how long lighting takes. It only burns while lit, keeps burning while players are away, and goes out by itself when the fuel runs out. seats: people can sit round it (count places, distance metres from the middle). Sitting is a task with no set time: your person sits until you stand up, do something else or the fire goes out, and keeps sitting while you're away. Run tools/worlds.py test-build after changing placeables. craftLabel names the tap menu list of recipes made there (recipes with near), like Cook.",
+    "placeables": "Things you place in the world and build, like the campfire. An item with places (the id of an entry here) gets a Place button in the Inventory: you pick a spot, your person puts it down as an unbuilt site, then builds it (buildSeconds; buildVerb shows while building). solid is how big it is for walking round (metres). fire makes it a fire you can light and put out: fuel is the item you add (sticks), secondsEach is how long one burns (300 = 5 minutes), otherFuels are more items it burns with their seconds each (log: 28800, 8 hours), maxHours is the most it holds in hours of burning (72 = 3 days, so a claim's fire can last the 3-day away timer; without maxHours, maxFuel counts it in fuel items), lightSeconds how long lighting takes. It only burns while lit, keeps burning while players are away, and goes out by itself when the fuel runs out. seats: people can sit round it (count places, distance metres from the middle). Sitting is a task with no set time: your person sits until you stand up, do something else or the fire goes out, and keeps sitting while you're away. Run tools/worlds.py test-build after changing placeables. craftLabel names the tap menu list of recipes made there (recipes with near), like Cook.",
     "mining": "Mining with a tool (tool: the item you need, the stone pickaxe). rock: breaking a small rock (seconds, and what falls: gives); the rock is then gone, but one broken rock comes back by a boulder every rockBackHours. boulder: mining a boulder; gives can be a range like [3, 5]. A mined boulder stays (it can't be removed) and can be mined again after regrowDays real days (the same as trees). Each hit wears the tool by one use and takes energyCosts.chop energy. The server uses the same rules.",
     "liveSettings": "Numbers the admin can change live from the Admin panel (Settings tab) without a new build. Each one's id is wired up in code (server/src/live.js and test/game/admin.js); name, group, unit, min, max and step are just how it shows. The normal value still comes from the rest of this file (settings, chopping, mining, sources, stats); a live change wins until the admin taps Reset.",
     "testNames": "Only for testing: with settings.autoName on, Make your person fills in a random name from this list. autoName is off in the real game, so players type their own name (the checks in tools/tests switch it on for themselves).",
-    "bodyShapes": "The body builds on Make your person (slim, average and so on): how much wider or taller each part of the body is drawn. Add one by copying an entry; it shows up as a choice by itself.",
-    "claims": "Claims (0.3.0): your first campfire becomes your claim when you light it: radius metres round it, yours only while the fire burns (once it's out the land is free and anyone can take the cold fire apart). One claim each. Claims can't overlap and can't reach into the free area round the main pond (spawnRadius metres from the pond's middle; the pond itself is about 6 m across from its middle). Inside someone else's claim others can only walk through. placeable: the kind that claims. ringShowsWithin: how near you have to be to see a claim's faint ring. Run tools/worlds.py test-build after changing it.",
-    "societies": "Player groups inside the world (built 0.1.4, reworked 0.1.5). Your claim is your society: lighting your first campfire starts both (named \"<name>'s camp\" until the leader renames it, 2 to nameMax letters, no two the same) and the fire going out ends both. Up to maxMembers people (also a live setting, Admin > Settings). Members can do everything in the claim and keep its fire fed; only the leader can put it out; their own fires are just fires. The leader invites someone playing within inviteReach metres; they have inviteMinutes to tap Join, and must put out their own claim's fire (or leave their society) first. Anyone can leave; the leader can remove people. If the leader leaves or is gone, the member who joined first leads. The last one out ends it and its fire goes out. A player with no person in the world for 3 days (the away timer) leaves."
+    "bodyShapes": "How each body is drawn, one for each choice in looks.sex (female, male): its height and how wide or long each part is. The builds on Make your person (looks.build: slim, medium, broad) then make it wider or narrower. A new looks.sex choice needs an entry here with the same id.",
+    "claims": "Claims (players see a claim as a camp: docs/design/wording.md): your first campfire becomes your claim when you light it: radius metres round it, yours only while the fire burns (once it's out the land is free and anyone can take the cold fire apart). One claim each. Claims can't overlap and can't reach into the free area round the main pond (spawnRadius metres from the pond's middle; the pond itself is about 6 m across from its middle). Inside someone else's claim others can only walk through. placeable: the kind that claims. ringShowsWithin: how near you have to be to see a claim's faint ring. Run tools/worlds.py test-build after changing it.",
+    "societies": "Player groups inside the world (built 0.1.4, reworked 0.1.5). Players see a society and its claim as one camp (0.1.6: Menu > Camp, Invite to camp); only the code and the admin say society and claim. Your claim is your society: lighting your first campfire starts both (named \"<name>'s camp\" until the leader renames it, 2 to nameMax letters, no two the same) and the fire going out ends both. Up to maxMembers people (also a live setting, Admin > Settings). Members can do everything in the claim and keep its fire fed; only the leader can put it out; their own fires are just fires. The leader invites someone playing within inviteReach metres; they have inviteMinutes to tap Join, and must put out their own claim's fire (or leave their society) first. Anyone can leave; the leader can remove people. If the leader leaves or is gone, the member who joined first leads. The last one out ends it and its fire goes out. A player with no person in the world for 3 days (the away timer) leaves."
   },
   "chatFilter": {
     "anywhere": [
@@ -911,10 +1035,50 @@
   },
   "devlog": [
     {
+      "version": "0.1.8",
+      "date": "2026-11-25",
+      "title": "The craft mat",
+      "added": [
+        "Craft mat: put things from your bag together and discover what they make",
+        "Found list: tap a recipe you've made to put its things back on the mat",
+        "New things to make: sharp stone, twig, long stick, axe head and pick head"
+      ],
+      "improved": [
+        "Craft is in your inventory now, so the hammer button at the bottom is gone",
+        "Tools are made in steps now, like a sharp stone first, then a stone knife",
+        "A campfire takes a log, 2 twigs and 2 stones, and twigs burn as quick fuel",
+        "Recipes you find stay with you when you start again as a new person"
+      ]
+    },
+    {
+      "version": "0.1.7",
+      "date": "2026-11-24",
+      "added": [
+        "Your person carries on with your task list while you're away, then looks after themselves"
+      ],
+      "improved": [
+        "Your person keeps working while the Menu, Camp or What's new is open",
+        "Welcome back says how many things on your task list got done"
+      ]
+    },
+    {
+      "version": "0.1.6",
+      "date": "2026-11-24",
+      "improved": [
+        "Claims and societies are now just called camps",
+        "Clearer wording all over, and tap menus now match the task list"
+      ],
+      "fixed": [
+        "Eating and drinking now show +10 food or +15 water, not +10 Hunger",
+        "Fish is now called raw fish, so it's clear it needs cooking",
+        "The Menu no longer says Paused, since the world keeps going"
+      ]
+    },
+    {
       "version": "0.1.5",
       "date": "2026-11-24",
       "improved": [
-        "Lighting your first campfire starts your society, and its fire going out ends it",
+        "Lighting your first campfire starts your society, and it ends when that fire goes out",
         "The leader can rename the society in Menu > Society",
         "Only the leader can put the society's fire out",
         "A society's name shows under name tags once it has 2 or more people"
@@ -924,7 +1088,7 @@
       "version": "0.1.4",
       "date": "2026-11-24",
       "added": [
-        "Societies: start one in the Menu, then tap people nearby to invite them",
+        "Societies: groups of players who share one claim, and the leader invites people nearby",
         "A society shares one claim: its leader's lit campfire. Members can use everything in it",
         "Your society shows under your name"
       ],
@@ -983,7 +1147,7 @@
         "Campfires, recipes you find as you go, and a grid inventory",
         "Claims: your lit campfire makes the land round it yours",
         "Fishing with a spear at the pond, and cooking fish on a campfire",
-        "Drag items out of the Inventory, and a glow on loose items under your mouse"
+        "Drag items out of the Inventory, and on a computer loose items glow under the mouse"
       ],
       "improved": [
         "New dark glass look with needs as rings, and nicer sticks, stones, berries and logs"

@@ -119,7 +119,7 @@ function setTreeState(i, state, since) {
   if (state === 'gone') removeSpotNear(t.x, t.z);
   t.state = state;
 }
-// how long until a stump grows back into a tree, like "2 days 5 h" or "40 min"
+// how long until a stump grows back into a tree, like "2 d 5 h" or "40 min" (the same as a fire's fuel)
 const stumpGrowsIn = (t) => growsBackIn(t.since, CHOP.regrowDays || 3);
 function growsBackIn(since, days) {
   const mins = Math.max(1, Math.ceil(((since || Date.now()) + days * 86400000 - Date.now()) / 60000));
@@ -127,7 +127,7 @@ function growsBackIn(since, days) {
   const h = Math.round(mins / 60);
   if (h < 24) return `${h} h`;
   const d = Math.floor(h / 24), rh = h % 24;
-  return `${d} ${d === 1 ? 'day' : 'days'}${rh ? ` ${rh} h` : ''}`;
+  return `${d} d${rh ? ` ${rh} h` : ''}`;
 }
 /* ---------- mining rocks and boulders (0.2.9): a rock breaks and is gone (one comes back now and then), a boulder stays and can be mined again ---------- */
 const MINE = DATA.mining || {};

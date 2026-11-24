@@ -270,7 +270,7 @@ function menuActions(t) {
   const acts = thingActions(t), at = t && targetSpot(t), c = at && notMineAt(at[0], at[1]);
   if (!c) return acts;
   const soc = String(c.claim.who).startsWith('s:'); // a society's claim (0.1.5: every claim is one), called by its name
-  return [{ label: soc ? c.claim.name : `${c.claim.name}'s claim`, note: soc ? 'Only its members can use things here' : 'Only they can use things here', disabled: true }, ...acts.filter((a) => a.foot || a.admin || a.label === 'Walk here')];
+  return [{ label: soc ? c.claim.name : `${c.claim.name}'s camp`, note: soc ? 'Only its members can use things here' : 'Only they can use things here', disabled: true }, ...acts.filter((a) => a.foot || a.admin || a.label === 'Walk here')];
 }
 // the small menu for a thing: Pick up Stick, Pick berries, Drink, Chop tree...
 function thingActions(t) {
@@ -324,7 +324,7 @@ function thingActions(t) {
   if (t.kind === 'item') {
     const it = t.item;
     const chopIt = CHOP[it.kind] && CHOP.tool;
-    return [{ label: `Pick up ${ITEMS[it.kind].name}`, note: it.uses != null ? `${it.uses} ${it.uses === 1 ? 'use' : 'uses'} left` : '', run: () => queueTask({ type: 'pickup', id: it.id }) },
+    return [{ label: `Pick up ${ITEMS[it.kind].name.toLowerCase()}`, note: it.uses != null ? `${it.uses} ${it.uses === 1 ? 'use' : 'uses'} left` : '', run: () => queueTask({ type: 'pickup', id: it.id }) },
       ...(chopIt ? [{ label: 'Chop into sticks', note: you.carry[CHOP.tool] ? `${CHOP[it.kind].seconds || 8} s` : `Needs a ${ITEMS[CHOP.tool].name.toLowerCase()}`, disabled: !you.carry[CHOP.tool],
         run: () => queueTask({ type: 'chop', what: it.kind, id: it.id, x: it.x, z: it.z }) }] : []),
       { label: 'Walk here', foot: true, run: () => walkFirst(V(it.x, 0, it.z)) }];
@@ -352,7 +352,7 @@ function thingActions(t) {
 function openMenuAt(px, py, known) {
   if (ui.mode !== 'world' || !player || you.dead || paused || placing.on) return false;
   const t = known || pickTarget(px, py);
-  if (t && t.kind === 'item' && queuedItem(t.item.id)) { closeMenu(); showTag('Already in your queue', headTop(), 2); return true; } // till it's done or taken off the list
+  if (t && t.kind === 'item' && queuedItem(t.item.id)) { closeMenu(); showTag('Already in your task list', headTop(), 2); return true; } // till it's done or taken off the list
   const acts = menuActions(t);
   hideHint(); // the tip has done its job once you've tapped something
   if (!acts.length) { closeMenu(); return false; }

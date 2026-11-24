@@ -4,11 +4,12 @@ from lib import world, join, idle, text, shown, shot, expect, HERE
 
 KNIFE_USES = json.load(open(os.path.join(HERE, '..', '..', 'test', 'game-data.json')))['items']['knife']['tool']['uses']
 
-# Make something on the craft mat (0.1.8) the way a player does: open Craft (the hammer), tap each thing in the bag to
+# Make something on the craft mat (0.1.8) the way a player does: open the inventory and its Craft, tap each thing in the bag to
 # put it on the mat, then Make. things: [(kind, how many)]. Returns what the mat said before Make (its name line).
 async def mat_make(pg, things, close=True):
     if not await pg.evaluate("document.getElementById('bag').classList.contains('open') && !document.getElementById('mat').hidden"):
-        await pg.click('#craftBtn'); await pg.wait_for_timeout(300)
+        if not await pg.evaluate("document.getElementById('bag').classList.contains('open')"): await pg.click('#bagBtn')
+        await pg.click('#bagCraft'); await pg.wait_for_timeout(300)
     if await pg.evaluate("!document.getElementById('matClear').hidden"): await pg.click('#matClear')
     for kind, n in things:
         for _ in range(n):
@@ -145,7 +146,7 @@ async def grass_and_tools():
         expect(await a.evaluate('__pl.you.carry.twine || 0') == before + 1, 'cutting grass by hand gives 1 twine')
         said = await mat_make(a, [('stone', 2)])
         expect(said == 'Something new' and await a.evaluate('__pl.you.carry["sharp-stone"] === 1 && __pl.you.carry.stone === 1'), f'2 stones on the craft mat make a sharp stone ({said})')
-        await a.click('#craftBtn'); await a.wait_for_timeout(300); await shot(a, 'craft')
+        await a.click('#bagBtn'); await a.click('#bagCraft'); await a.wait_for_timeout(300); await shot(a, 'craft')
         said = await mat_make(a, [('sharp-stone', 1), ('stick', 1), ('twine', 1)])
         expect(await a.evaluate('!!__pl.you.carry.knife && !__pl.you.carry["sharp-stone"]'), f'made a stone knife from a sharp stone, stick and twine ({said})')
         await a.evaluate("""(() => { const P = __pl.plants.tallGrass, p = __pl.player.position;
@@ -194,7 +195,7 @@ async def screens():
             await join(pg); await shot(pg, f'{tag}_02_world')
             await pg.click('#needs'); await shot(pg, f'{tag}_03_needs'); await pg.click('#needs')
             await pg.click('#bagBtn'); await shot(pg, f'{tag}_04_inventory'); await pg.click('#bagClose')
-            await pg.click('#craftBtn'); await pg.click('#bagList .bag-tile[data-kind="stone"]'); await pg.click('#bagList .bag-tile[data-kind="stone"]'); await shot(pg, f'{tag}_05_craft'); await pg.click('#bagClose')
+            await pg.click('#bagBtn'); await pg.click('#bagCraft'); await pg.click('#bagList .bag-tile[data-kind="stone"]'); await pg.click('#bagList .bag-tile[data-kind="stone"]'); await shot(pg, f'{tag}_05_craft'); await pg.click('#bagClose')
             await pg.click('#sayBtn'); await pg.fill('#sayInput', 'hello there'); await pg.press('#sayInput', 'Enter'); await shot(pg, f'{tag}_06_chat')
             await pg.mouse.click(w // 2, int(h * 0.3)); await pg.wait_for_timeout(300)
             await pg.click('#menuBtn'); await shot(pg, f'{tag}_07_pause'); await pg.click('#resumeBtn')
@@ -358,12 +359,13 @@ async def smoke():
           const t = [...document.querySelectorAll('#bagList .bag-tile[data-kind="knife"]')].map((b) => b.getAttribute('aria-label'));
           document.getElementById('bagClose').click(); return t; })()""")
         expect(tools == ['Stone knife, 5 uses left', 'Stone knife, spare, 12 uses'], f'each tool gets its own tile: the one in use, then a spare ({tools})')
-        await a.click('#craftBtn')
-        expect(await shown(a, '#bag') and await a.evaluate("!document.getElementById('mat').hidden && !document.getElementById('matEmpty').hidden"), 'the hammer opens the inventory with the craft mat, empty')
+        expect(not await a.evaluate("!!document.getElementById('craftBtn')"), 'no hammer button at the bottom: Craft is in the inventory')
+        await a.click('#bagBtn'); await a.click('#bagCraft')
+        expect(await shown(a, '#bag') and await a.evaluate("!document.getElementById('mat').hidden && !document.getElementById('matEmpty').hidden"), 'Craft in the inventory shows the craft mat, empty')
         await a.click('#bagClose')
         found = await a.evaluate("""(() => { const out = [];
           for (const f of [[], ['sharp-stone'], ['sharp-stone', 'knife', 'campfire']]) {
-            __pl.you.carry = {}; __pl.you.found = f; document.getElementById('craftBtn').click(); document.getElementById('matTabFound').click();
+            __pl.you.carry = {}; __pl.you.found = f; document.getElementById('bagBtn').click(); document.getElementById('bagCraft').click(); document.getElementById('matTabFound').click();
             out.push([document.querySelectorAll('#foundList .found-row').length, document.querySelectorAll('#foundChips .craft-chip').length, !document.getElementById('foundMore').hidden]);
             document.getElementById('bagClose').click(); }
           return out; })()""")
@@ -1390,7 +1392,7 @@ async def live_items_game():
         told = await ask(f"{{ t: 'a.found', id: '{pid}', all: true }}")
         await p.wait_for_function("__pl.you.found.includes('knife')", timeout=20000)
         expect('found every recipe' in str(told), f'the admin gives them every recipe ({told})')
-        await p.click('#craftBtn'); await p.click('#matTabFound'); await p.wait_for_function(f"!!({card})", timeout=20000)
+        await p.click('#bagBtn'); await p.click('#bagCraft'); await p.click('#matTabFound'); await p.wait_for_function(f"!!({card})", timeout=20000)
         c0 = await p.evaluate(card)
         expect(c0['canMake'] and c0['chips'] == ['Sharp stones 1/1', 'Sticks 1/1', 'Twine 1/1'], f"the player can make a stone knife from what they carry ({c0['chips']})")
         await ask("{ t: 'a.liveItem', at: ['recipes', 'knife', 'needs', 'stick'], value: 3 }")
@@ -1677,8 +1679,8 @@ async def craft_mat():
     count = lambda k: f"(() => {{ const t = document.querySelector('#bagList .bag-tile[data-kind=\"{k}\"] .count'); return t ? Number(t.textContent) : document.querySelector('#bagList .bag-tile[data-kind=\"{k}\"]') ? 1 : 0; }})()"
     async with world(CRAFTKIT=1) as W:
         a = await W.page('matA'); await join(a)
-        await a.click('#craftBtn'); await a.wait_for_timeout(300)
-        expect(await a.evaluate("!document.getElementById('mat').hidden && !document.getElementById('matEmpty').hidden && document.getElementById('matMake').disabled"), 'the hammer opens the inventory with an empty craft mat, Make not lit')
+        await a.click('#bagBtn'); await a.click('#bagCraft'); await a.wait_for_timeout(300)
+        expect(await a.evaluate("!document.getElementById('mat').hidden && !document.getElementById('matEmpty').hidden && document.getElementById('matMake').disabled"), 'Craft in the inventory shows an empty craft mat, Make not lit')
         await shot(a, 'mat-empty')
         await a.click(tile('stone'))
         expect(await a.evaluate(said) == "Something's missing" and await a.evaluate(count('stone')) == 3, f"one stone on the mat: something's missing, and the bag shows 3 left ({await a.evaluate(said)})")

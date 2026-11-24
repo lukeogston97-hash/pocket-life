@@ -257,7 +257,6 @@ function drawBag() {
   $('mat').hidden = !matOn;
   $('bagCraft').classList.toggle('on', matOn);
   $('bagCraft').setAttribute('aria-pressed', String(matOn));
-  $('craftBtn').setAttribute('aria-expanded', String(craftOpen()));
   $('bagPart').hidden = matOn && matTab !== 'bag';
   $('found').hidden = !matOn || matTab !== 'found';
   if (matOn) { drawMat(); if (matTab === 'found') drawFound(); }
@@ -276,7 +275,7 @@ function drawBag() {
 }
 
 /* ---------- the craft mat (0.1.8, Luke's idea): put things together and see what they make ----------
-   Craft (the hammer, or Craft in the inventory) shows the mat above your bag. Tap a thing in your bag, or drag it, to put
+   Craft in the inventory's header shows the mat above your bag (the hammer at the bottom went in 0.1.8: Luke). Tap a thing in your bag, or drag it, to put
    one on the mat; tap it on the mat to take it back. When what's on the mat is exactly a recipe's things (matIs in
    rules.js), Make lights up. One you've never made shows as "Something new" until you make it; then it's in your Found
    list (the server keeps p.found, and your next person keeps them too). Under the mat: your Bag, or Found, where tapping a
@@ -500,14 +499,12 @@ function openBag(crafting) {
   onTheMat = {}; matGoal = null; matNew = null; matTab = 'bag';
   bagPick = null; bagDrawn = ''; craftDrawn = ''; foundDrawn = '';
   drawBag();
-  $('bag').classList.add('open'); $('bagBtn').setAttribute('aria-expanded', 'true'); $('craftBtn').setAttribute('aria-expanded', String(matOn)); hideHint();
+  $('bag').classList.add('open'); $('bagBtn').setAttribute('aria-expanded', 'true'); hideHint();
 }
 function closeBag() {
-  $('bag').classList.remove('open'); $('bagBtn').setAttribute('aria-expanded', 'false'); $('craftBtn').setAttribute('aria-expanded', 'false');
+  $('bag').classList.remove('open'); $('bagBtn').setAttribute('aria-expanded', 'false');
   matOn = false; onTheMat = {}; matGoal = null; matNew = null; foundQuery = ''; $('foundQuery').value = '';
 }
-// the bag and hammer buttons work like two tabs of one sheet: the other one switches, the same one closes it
-$('bagBtn').addEventListener('click', () => (!bagOpen() ? openBag(false) : matOn ? setMat(false) : closeBag()));
-$('craftBtn').addEventListener('click', () => (!bagOpen() ? openCraft() : !matOn ? setMat(true) : closeBag()));
+$('bagBtn').addEventListener('click', () => (bagOpen() ? closeBag() : openBag(false)));
 $('bagCraft').addEventListener('click', () => setMat(!matOn));
 $('bagClose').addEventListener('click', closeBag);

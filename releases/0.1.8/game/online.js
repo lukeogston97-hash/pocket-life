@@ -57,6 +57,7 @@ function goOnline() {
     else if (m.t === 'turn') { if (net.mode === 'play' && ui.mode === 'menu') { menuLine = 0; menuJoining = true; drawMenu(); sendHello(); } } // a spot opened: in we go
     else if (m.t === 'me') { const fresh = !player; applyMe(m); if (fresh) enterWorld(); }
     else if (m.t === 'died') die(m);
+    else if (m.t === 'stopTasks') { if (player) stopQueue(); } // the admin cleared your task list
     else if (m.t === 'badName') { $('nameErr').textContent = 'Pick a different name.'; $('nameErr').hidden = false; creating = false; }
     else if (m.t === 'elsewhere') { net.stopped = true; showMaintenance('Your person is being played in another tab or window. Reload this page to play here instead.', 'Playing somewhere else', ''); }
     else if (m.t === 'state') setOtherState(m);
@@ -91,7 +92,7 @@ function goOnline() {
     else if (m.t === 'sit') setOtherSit(m);
     else if (m.t === 'added') for (const it of m.items || []) { if (ITEMS[it.kind]) addWorldItem(it.kind, it.x, it.z, it.rot, it.id, it.uses); }
     else if (m.t === 'took') tookBack(m);
-    else if (m.t === 'fished') { if (m.caught && ITEMS[m.caught]) showGain(`+1 ${ITEMS[m.caught].name}`); else showTag(m.why || 'Nothing bites', headTop(), 2.5); }
+    else if (m.t === 'fished') { if (m.caught && ITEMS[m.caught]) showGain(`+1 ${ITEMS[m.caught].name.toLowerCase()}`); else showTag(m.why || 'Nothing bites', headTop(), 2.5); }
     else if (m.t === 'bush') { const b = berryBushes[m.bush]; if (b) { b.userData.count = m.count; b.userData.growFrom = m.growFrom; drawBerries(b); } }
     else if (m.t === 'picked' && !m.ok) {
       if (takeFromCarry(Object.keys((BERRY_SOURCE() || {}).harvest || {})[0], you.lastPick || 1)) { drawHeld(); drawCarry(); }
@@ -168,15 +169,19 @@ function welcome(m) {
   if (m.me) {
     forgetSit(); // the server says whether you're still sitting (below)
     forgetOldTakes();
-    if (!player) { applyMe(m.me, true); enterWorld(); }
+    let back = null; // what's left of your task list, which the server carried on with while you were away (0.1.7)
+    if (!player) { applyMe(m.me, true); enterWorld(); back = m.tasks; }
     else {
       applyMe(m.me);
-      // Gone a while: they may have strolled off, so you're where the server has them. A short break in the connection
-      // (under away.comeBackSeconds): they stayed put, so you carry on from where you are and whatever you were doing.
-      if (restored || (m.away && !(m.away.ms < BLIP_MS))) snapTo(m.me.x, m.me.z);
+      // Gone a while: they may have strolled off, so you're where the server has them, with what's left of the list. A
+      // short break in the connection (under away.comeBackSeconds): they stayed put, so you carry on from where you are
+      // and whatever you were doing.
+      if (restored || (m.away && !(m.away.ms < BLIP_MS))) { snapTo(m.me.x, m.me.z); if (!restored) back = m.tasks; }
     }
+    tasksSent = ''; // (the server's copy is sent again at the next change)
     if (m.me.sit) resumeSit(m.me.sit); // left sitting by the fire, and the time isn't up yet
-    else if (!tasks.current && tasks.list.length && !action) nextTask();
+    if (Array.isArray(back)) takeTasksBack(back);
+    else if (!m.me.sit && !tasks.current && tasks.list.length && !action) nextTask();
     if (m.away) showWelcomeBack(m.away);
     flushOutbox(); // what you did while the connection was down
   } else if (!(player && you.dead)) {
@@ -214,6 +219,7 @@ function applyMe(m, spawn = false) {
   you.carry = carry;
   you.wear = m.wear || {};
   you.seen = m.seen || you.seen || [];
+  you.found = Array.isArray(m.found) ? m.found : you.found || []; // the recipes found on the craft mat (inventory.js)
   if (!!m.sleeping !== !!you.sleeping) setSleeping(m.sleeping, true);
   you.collapsed = !!m.collapsed;
   you.lastKind = carry[you.lastKind] ? you.lastKind : (ITEMS[m.lastKind] && carry[m.lastKind] ? m.lastKind : Object.keys(carry)[0] || null);

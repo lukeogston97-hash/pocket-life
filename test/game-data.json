@@ -1,6 +1,6 @@
 {
   "version": "0.1.8",
-  "build": 1,
+  "build": 2,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -1044,6 +1044,7 @@
         "New things to make: sharp stone, twig, long stick, axe head and pick head"
       ],
       "improved": [
+        "Craft is in your inventory now, so the hammer button at the bottom is gone",
         "Tools are made in steps now, like a sharp stone first, then a stone knife",
         "A campfire takes a log, 2 twigs and 2 stones, and twigs burn as quick fuel",
         "Recipes you find stay with you when you start again as a new person"
