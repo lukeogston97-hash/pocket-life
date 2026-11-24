@@ -255,7 +255,7 @@ function queueTask(t) {
     const why = cantUse(t, true);
     if (why) { showTag(why, headTop(), 2); return; }
   }
-  if (allTasks().length >= MAX_QUEUE) { showTag('Your queue is full', headTop(), 2); return; }
+  if (allTasks().length >= MAX_QUEUE) { showTag('Your task list is full', headTop(), 2); return; }
   hideHint();
   if (t.type === 'sit' && you.sit) return; // already sitting
   tasks.list.push(t);
@@ -330,7 +330,7 @@ for (const ev of ['pointerdown', 'keydown', 'wheel']) document.addEventListener(
 function busy() { return !!(tasks.current || tasks.list.length || action || walk.target); }
 function autopilot() {
   const now = performance.now();
-  if (ui.mode !== 'world' || !player || you.dead || paused || !online() || !you.stats) return;
+  if (ui.mode !== 'world' || !player || you.dead || maint.on || !online() || !you.stats) return; // (the Menu being open doesn't stop it)
   if (!auto.on) {
     if (busy() || now - lastInput < AWAY.idleMinutes * 60000) return;
     auto.on = true;
@@ -405,7 +405,7 @@ const REST = STATS.find((s) => s.id === 'rest');
 const tooTiredToWake = () => !!(you.collapsed && REST && you.stats && you.stats.rest < (REST.wakeAt || 0));
 function wakeUp() {
   if (!you.sleeping) return true;
-  if (tooTiredToWake()) { showTag(`Too tired to get up yet (Rest ${Math.floor(you.stats.rest)}%)`, headTop(), 2.5); return false; }
+  if (tooTiredToWake()) { showTag(`Too tired to get up yet (Rest ${Math.floor(you.stats.rest)} of ${REST.wakeAt})`, headTop(), 2.5); return false; }
   setSleeping(false);
   return true;
 }
@@ -421,7 +421,7 @@ function walkFirst(p) {
     walk.onArrive = walk.onFail = null;
     tasks.current = null;
   }
-  if (allTasks().length >= MAX_QUEUE) { showTag('Your queue is full', headTop(), 2); return; }
+  if (allTasks().length >= MAX_QUEUE) { showTag('Your task list is full', headTop(), 2); return; }
   hideHint();
   tasks.list.push(t);
   if (!tasks.current && !action) nextTask();
@@ -439,7 +439,7 @@ function doPickup(item) {
     shareTake(item); // online: tell the world (if someone beat you to it, it comes back out of your inventory)
     drawHeld();
     drawCarry();
-    showGain(`+1 ${ITEMS[item.kind].name}`);
+    showGain(`+1 ${ITEMS[item.kind].name.toLowerCase()}`);
     drawQueue();
   } });
 }
@@ -465,7 +465,7 @@ function applyGives(gives) {
     const before = you.stats[k];
     you.stats[k] = clampStat(before + v);
     const d = Math.round(you.stats[k] - before);
-    if (d) shown.push(`${d > 0 ? '+' : ''}${d} ${STAT[k].name}`);
+    if (d) shown.push(`${d > 0 ? '+' : ''}${d} ${STAT[k].gainLabel || STAT[k].name.toLowerCase()}`); // "+10 food": "+10 Hunger" read like getting hungrier
   }
   if (shown.length) showGain(shown.join(', '));
   drawNeeds();
@@ -484,7 +484,7 @@ function harvestFrom(src, t) {
   if (b) { for (let k = 0; k < you.lastPick; k++) pickBerry(b); drawBerries(b); sharePick(t.bush); }
   drawHeld();
   drawCarry();
-  showGain(Object.entries(got).map(([k, n]) => `+${countLabel(k, n)}`).join(', '));
+  showGain(Object.entries(got).map(([k, n]) => `+${countLabel(k, n).toLowerCase()}`).join(', '));
 }
 // eating food you carry happens straight away, one at a time
 function eatOne(kind) {
@@ -518,7 +518,7 @@ function doCut(t) {
     sendAct({ t: 'cut', plant: t.plant, i: t.i });
     drawHeld();
     drawCarry();
-    showGain(Object.entries(def.gives || {}).map(([k, n]) => `+${countLabel(k, n)}`).join(', '));
+    showGain(Object.entries(def.gives || {}).map(([k, n]) => `+${countLabel(k, n).toLowerCase()}`).join(', '));
   } });
 }
 // chopping: swing the axe for a while, then the server says what came of it
@@ -529,7 +529,7 @@ function doChop(t) {
   if (CHOP.tool) { you.tool = CHOP.tool; drawHeld(); }
   if ((t.what === 'tree' && trees[t.idx] && trees[t.idx].state !== 'tree') || (t.what === 'stump' && trees[t.idx] && trees[t.idx].state !== 'stump')) { nextTask(); return; }
   face(t.x, t.z);
-  showTag(t.what === 'tree' ? 'Chopping…' : t.what === 'stump' || t.what === 'oldStump' ? 'Digging out the stump…' : 'Chopping…', headTop(), 2, (rule.seconds || 10) + 0.3);
+  showTag(`${taskName(t, true)}…`, headTop(), 2, (rule.seconds || 10) + 0.3); // (the same words as the task list)
   tagLabel.busy = true;
   startAction({ pose: 'chop', seconds: rule.seconds || 10, tool: CHOP.tool, end: () => {
     spendEnergy('chop');
@@ -543,7 +543,7 @@ function doMine(t) {
   const rule = MINE[r.boulder ? 'boulder' : 'rock'] || {};
   if (MINE.tool && !you.carry[MINE.tool]) { showTag(`You need a ${ITEMS[MINE.tool].name.toLowerCase()}`, headTop(), 2); nextTask(); return; }
   face(r.x, r.z);
-  showTag(r.boulder ? 'Mining the boulder…' : 'Breaking the rock…', headTop(), 2, (rule.seconds || 10) + 0.3);
+  showTag(`${taskName(t, true)}…`, headTop(), 2, (rule.seconds || 10) + 0.3);
   tagLabel.busy = true;
   startAction({ pose: 'chop', seconds: rule.seconds || 10, tool: MINE.tool, end: () => {
     spendEnergy('chop');
@@ -651,18 +651,18 @@ function drawDropGhosts() {
     dropGhosts.set(t, model);
   }
 }
-// what a task is called in the queue list: "Pick up Stick" next, "Picking up Stick" now
+// what a task is called in the task list: "Pick up stick" next, "Picking up stick" now (the same words as the tap menu)
 function taskName(t, now) {
-  if (t.type === 'pickup') { const it = getItem(t.id); const n = it ? ITEMS[it.kind].name : 'item'; return now ? `Picking up ${n}` : `Pick up ${n}`; }
+  if (t.type === 'pickup') { const it = getItem(t.id); const n = it ? ITEMS[it.kind].name.toLowerCase() : 'item'; return now ? `Picking up ${n}` : `Pick up ${n}`; }
   if (t.type === 'use') {
     const src = SOURCES[t.source];
     if (!src) return 'Use';
     if (now) return src.verb;
     return src.action || (harvests(src) ? `Pick ${ITEMS[Object.keys(src.harvest)[0]].plural.toLowerCase()}` : `Use ${src.name.toLowerCase()}`);
   }
-  if (t.type === 'drop') return now ? 'Putting down' : `Drop ${countLabel(t.kind, t.n)}`;
+  if (t.type === 'drop') return now ? 'Putting down' : `Drop ${countLabel(t.kind, t.n).toLowerCase()}`;
   if (t.type === 'cut') return now ? `${(PLANTS[t.plant] || {}).verb || 'Cutting'}` : (PLANTS[t.plant] || {}).action || 'Cut';
-  if (t.type === 'chop') return t.what === 'tree' ? (now ? 'Chopping a tree' : 'Chop tree') : t.what === 'stump' || t.what === 'oldStump' ? (now ? 'Removing a stump' : 'Remove stump') : (now ? 'Chopping a log' : 'Chop log');
+  if (t.type === 'chop') return t.what === 'tree' ? (now ? 'Chopping a tree' : 'Chop tree') : t.what === 'stump' || t.what === 'oldStump' ? (now ? 'Removing a stump' : 'Remove stump') : (now ? 'Chopping into sticks' : 'Chop into sticks');
   if (t.type === 'walk') return now ? 'Walking' : 'Walk there';
   if (TASK_KINDS[t.type]) return TASK_KINDS[t.type].name(t, now);
   return '';
@@ -670,6 +670,7 @@ function taskName(t, now) {
 // the list above the bottom bar: what your person is doing now, then what's next
 let queueOpen = false; // the full list is showing
 function drawQueue() {
+  syncTasksSoon(); // (the server keeps a copy, for while you're away)
   drawDropGhosts();
   for (const b of badges) removeLabel(b);
   badges = [];
@@ -726,3 +727,41 @@ function drawQueue() {
   });
 }
 $('queueStop').addEventListener('click', stopQueue);
+
+/* ---------- your task list on the server (0.1.7): your person carries on with it while you're away (server/src/tasks.js) ----------
+   The list is sent a few seconds after it changes (only if it did), and straight away when you leave (Exit, or the game
+   being hidden). Autopilot's little jobs aren't sent: the server's away routine does those anyway. */
+let tasksSent = '', tasksTimer = 0;
+function taskListForServer() {
+  if (auto.on || !player || you.dead) return [];
+  const pending = new Set(allTasks().filter((q) => q.type === 'pickup').map((q) => q.id));
+  const out = [];
+  for (const t of allTasks()) {
+    if (t.type === 'drop' && t.landed) continue; // already put down
+    if (t === tasks.current && t.type === 'sit' && you.sit) continue; // already sitting: the server knows
+    const c = { ...t };
+    delete c.landed;
+    if (c.from != null) { // the second half of moving a loose item: only if its pick-up happens
+      if (took.has(c.from)) delete c.from; // it did
+      else if (!pending.has(c.from)) continue; // it never will
+    }
+    if (c.type === 'mine' && rocks[c.idx]) c.what = rocks[c.idx].boulder ? 'boulder' : 'rock'; // (the server's layout doesn't say which)
+    out.push(c);
+  }
+  return out.slice(0, MAX_QUEUE);
+}
+function sendTasks() {
+  clearTimeout(tasksTimer); tasksTimer = 0;
+  if (!online() || !player || you.dead) return;
+  const text = JSON.stringify(taskListForServer());
+  if (text === tasksSent) return;
+  tasksSent = text;
+  net.sock.send(`{"t":"tasks","list":${text}}`);
+}
+function syncTasksSoon() { if (!tasksTimer) tasksTimer = setTimeout(sendTasks, 3000); }
+// back after a while away: what's left of the list the server was working through (the same shapes as here)
+function takeTasksBack(list) {
+  tasks.list = (Array.isArray(list) ? list : []).filter((t) => t && typeof t.type === 'string').slice(0, MAX_QUEUE);
+  tasksSent = '';
+  if (!tasks.current && tasks.list.length && !action && !you.sit) nextTask(); else drawQueue();
+}

@@ -142,7 +142,7 @@ function adminPlacedActions(th) {
   if (!admin.on) return [];
   const F = PLACEABLES[th.kind] && PLACEABLES[th.kind].fire;
   const fire = (what) => () => adminSend({ t: 'a.fire', id: th.id, do: what });
-  const whose = th.claim ? `Ends ${th.claim.name}'s claim` : '';
+  const whose = th.claim ? `Ends ${th.claim.name}` : ''; // (a claim is a society: 0.1.5)
   return [{ label: 'Move', note: 'Then tap where it goes', run: () => startMove({ what: 'placed', id: th.id }) },
     ...(F && th.built ? [{ label: 'Fill with fuel', run: () => adminSend({ t: 'a.regrow', what: 'placed', id: th.id }) },
       th.lit ? (th.claim ? sure('Put out', fire('out'), whose) : { label: 'Put out', run: fire('out') }) : { label: 'Light', run: fire('light') }] : []),
@@ -392,6 +392,17 @@ function drawPlayer() {
     bag.appendChild(give);
     out.push(bag);
   }
+  if (alive) { // their task list (0.1.7): what their person carries on with while they're away (server/src/tasks.js)
+    const list = p.tasks || [], sec = entry('Task list', list.length ? '' : 'Empty');
+    list.slice(0, 10).forEach((t, i) => sec.appendChild(el('div', 'admin-row', `${i + 1}. ${taskName(t, false) || t.type}`)));
+    if (list.length > 10) sec.appendChild(el('div', 'admin-row', `+${list.length - 10} more`));
+    if (list.length) {
+      const bar = el('div', 'admin-btns'), clear = button('Clear task list', () => {});
+      twoTaps(clear, () => toPlayer({ t: 'a.clearTasks', id: p.id }), 'Tap again', 500);
+      bar.appendChild(clear); sec.appendChild(bar);
+    }
+    out.push(sec);
+  }
   if (p.soc) { // their society (0.1.4): taking them out is the same as them leaving it
     const sec = entry(el('div', 'admin-name', 'Society'), `${p.soc.name}${p.soc.lead ? ' · leads it' : ''} · ${p.soc.n} in it`), bar = el('div', 'admin-btns');
     const out1 = button('Take out of society', () => {});
@@ -486,11 +497,11 @@ function drawFires() {
   box.replaceChildren(...[...d.list].sort((a, b) => !!b.claim - !!a.claim || b.lit - a.lit).map((f) => { // claims first, then burning ones
     const kind = (PLACEABLES[f.kind] || {}).name || f.kind, head = el('div');
     const state = !f.built ? 'not built yet' : f.lit ? `burning · ${hoursText(f.fuel)} left` : f.fuel > 0 ? `out · ${hoursText(f.fuel)} of fuel` : 'out · no fuel';
-    head.append(el('div', 'admin-name', f.claim ? `${f.claim.name}'s claim` : kind), el('div', 'admin-tag', [state, !f.claim && f.by ? `built by ${f.by}` : '', `at ${Math.round(f.x)}, ${Math.round(f.z)}`].filter(Boolean).join(' · ')));
+    head.append(el('div', 'admin-name', f.claim ? f.claim.name : kind), el('div', 'admin-tag', [f.claim ? 'claim' : '', state, !f.claim && f.by ? `built by ${f.by}` : '', `at ${Math.round(f.x)}, ${Math.round(f.z)}`].filter(Boolean).join(' · ')));
     const e = entry(head), bar = el('div', 'admin-btns');
     e.dataset.fire = f.id;
     bar.appendChild(button('Fly to', () => adminFlyTo(f.x, f.z)));
-    if (f.built && f.lit) { const b = button('Put out', () => {}); if (f.claim) twoTaps(b, () => send(f, { t: 'a.fire', do: 'out' }), `Tap again: ends ${f.claim.name}'s claim`, 500); else b.addEventListener('click', () => send(f, { t: 'a.fire', do: 'out' })); bar.appendChild(b); }
+    if (f.built && f.lit) { const b = button('Put out', () => {}); if (f.claim) twoTaps(b, () => send(f, { t: 'a.fire', do: 'out' }), `Tap again: ends ${f.claim.name}`, 500); else b.addEventListener('click', () => send(f, { t: 'a.fire', do: 'out' })); bar.appendChild(b); }
     if (f.built && !f.lit) bar.appendChild(button('Light', () => send(f, { t: 'a.fire', do: 'light' })));
     if (f.claim) { const b = button('End claim', () => {}); twoTaps(b, () => send(f, { t: 'a.claim', do: 'end' }), 'Tap again: the land is free', 500); bar.appendChild(b); }
     if (f.built) bar.appendChild(button(openFire === f.id ? 'Less' : 'More', () => { openFire = openFire === f.id ? null : f.id; drawFires(); }));

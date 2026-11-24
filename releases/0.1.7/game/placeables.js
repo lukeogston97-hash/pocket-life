@@ -237,7 +237,7 @@ function cantPlaceAt(x, z, kind) {
   if (!roomAt(x, z, r + 0.25, 0.4)) return 'Not enough room here';
   if ([...placed.values()].some((th) => Math.hypot(th.x - x, th.z - z) < r + PLACEABLES[th.kind].solid + 1)) return 'Too close to another one';
   const c = notMineAt(x, z);
-  if (c) return `That's ${c.claim.name}'s claim`;
+  if (c) return `That belongs to ${c.claim.name}`;
   return null;
 }
 function startPlacing(item) {
@@ -349,7 +349,7 @@ Object.assign(TASK_KINDS, {
         startAction({ pose: 'bend', seconds: th.built ? 2 : 0.9, mid: () => sendNow({ t: 'unplace', id: th.id }) });
       });
     },
-    name: (t, now) => { const th = placed.get(t.id); return th && th.built ? (now ? 'Packing it up' : 'Pack it up') : (now ? 'Picking it up' : 'Pick it up'); },
+    name: (t, now) => { const th = placed.get(t.id); if (!th) return now ? 'Picking it up' : 'Pick it up'; const n = PLACEABLES[th.kind].name.toLowerCase(); return th.built ? (now ? 'Packing up' : 'Pack up') : (now ? `Picking up ${n}` : `Pick up ${n}`); },
     spot: placedSpot,
   },
   // taking a built one apart: its parts land on the ground round it (the server says what)
@@ -362,7 +362,7 @@ Object.assign(TASK_KINDS, {
         startAction({ pose: 'kneel', seconds: 3, mid: () => sendNow({ t: 'apart', id: th.id }) });
       });
     },
-    name: (t, now) => (now ? 'Taking it apart' : 'Take it apart'),
+    name: (t, now) => (now ? 'Taking apart' : 'Take apart'),
     spot: placedSpot,
   },
   // a fire: add sticks, light it, put it out
@@ -393,7 +393,7 @@ Object.assign(TASK_KINDS, {
             showGain(`+${timeLeft(n * each)} of fuel`);
             drawHeld(); drawCarry();
           } else if (t.do === 'light') { if (fuelLeft(th) <= 0) return; th.lit = true; th.burnt = true; th.at = Date.now(); showGain('The fire is lit'); }
-          else { th.lit = false; showGain('Fire put out'); }
+          else { th.lit = false; showGain('The fire is out'); }
           spendEnergy('tend');
           drawPlaced(th);
           sendNow({ t: 'fire', id: th.id, do: t.do, n, fuel: kind });
@@ -404,7 +404,7 @@ Object.assign(TASK_KINDS, {
       const th = placed.get(t.id), F = th && PLACEABLES[th.kind].fire, fuel = ITEMS[t.fuel] || (F ? ITEMS[F.fuel] : ITEMS.stick);
       if (t.do === 'light') return now ? 'Lighting the fire' : 'Light fire';
       if (t.do === 'out') return now ? 'Putting out the fire' : 'Put out fire';
-      return now ? `Adding ${fuel.plural.toLowerCase()}` : `Add ${t.n > 1 ? `${t.n} ${fuel.plural.toLowerCase()}` : fuel.name.toLowerCase()}`;
+      return now ? `Adding ${fuel.plural.toLowerCase()}` : `Add ${countLabel(fuel.id, t.n || 1).toLowerCase()}`;
     },
     spot: placedSpot,
   },
@@ -504,8 +504,12 @@ function placedActions(th) {
       return { label: recipeName(r), note: why, disabled: !!why, run: () => queueTask({ type: 'make', id: th.id, recipe: r.id }) };
     }) });
   }
-  if (P.seats && (!F || lit)) out.push({ label: `Sit by ${name}`, run: () => queueTask({ type: 'sit', id: th.id }) });
-  if (lit) out.push({ label: 'Put out fire', run: () => queueTask({ type: 'tend', id: th.id, do: 'out' }) });
+  if (P.seats && (!F || lit)) out.push({ label: F ? 'Sit by the fire' : `Sit by the ${name}`, run: () => queueTask({ type: 'sit', id: th.id }) });
+  if (lit) { // a society's fire (0.1.5): putting it out ends the society, so only its leader can (the server checks too)
+    const lead = you.soc && th.claim && th.claim.who === `s:${you.soc.id}` ? you.soc.members.find((x) => x.lead) : null, notLeader = lead && lead.id !== net.myId;
+    out.push({ label: 'Put out fire', note: notLeader ? `Only ${lead.name} can put it out` : th.claim && claimMine(th) ? `Ends ${you.soc ? you.soc.name : 'your camp'}` : '', disabled: !!notLeader,
+      run: () => queueTask({ type: 'tend', id: th.id, do: 'out' }) });
+  }
   else { // once it's out: pack it into your inventory, or take it apart for what it's made of (only who built it; the server checks)
     const heavy = carried() + ITEMS[P.item].weight > SETTINGS.carryCapacity;
     out.push({ label: 'Pack up', disabled: heavy, note: heavy ? 'Too heavy' : F && fuelLeft(th) > 0 ? 'Fuel left is lost' : 'Into your inventory', run: () => queueTask({ type: 'unplace', id: th.id }) });
@@ -552,27 +556,29 @@ Object.assign(TASK_KINDS, {
   },
 });
 
-/* ---------- claims (0.3.0): your first lit campfire claims the land round it while it burns ----------
+/* ---------- claims (0.3.0): your first lit campfire claims the land round it while it burns. Since 0.1.5 your claim is
+   your society: lighting your first fire starts both and the fire going out ends both (society.js) ----------
    The server decides (server/src/claims.js) and says whose claim a fire is (th.claim: { who, name }); a claim only
    counts while its fire is lit. Inside someone else's claim you can only walk through: the tap menus say so
    (menuActions in input.js), placing there is refused, and autopilot leaves their things alone. */
 const CLAIMS = { radius: 10, spawnRadius: 16, placeable: 'campfire', ringShowsWithin: 25, ...(DATA.claims || {}) };
 const claimOn = (th) => !!th.claim && isLit(th);
-// yours to use: your own claim, or your society's (0.1.4: a society's claim is 's:<id>', society.js)
+// yours to use: your society's claim ('s:<id>', society.js), or one from before 0.1.5 (your own id)
 const claimMine = (th) => !!th.claim && (th.claim.who === net.myId || (!!you.soc && th.claim.who === `s:${you.soc.id}`));
-const claimName = (th) => (th.claim.who === net.myId ? 'Your claim' : claimMine(th) ? "Your society's claim" : `${th.claim.name}'s claim`);
+// what a claim is called: yours, or by its society's name ("Luke's camp", "Rivers"). Players see a claim as a camp (0.1.6)
+const claimName = (th) => (claimMine(th) ? 'Your camp' : th.claim.name);
 const claimAt = (x, z) => { for (const th of placed.values()) if (claimOn(th) && Math.hypot(th.x - x, th.z - z) <= CLAIMS.radius) return th; return null; };
 // someone else's claim at x, z (the admin can do anything anywhere)
 const notMineAt = (x, z) => { const c = claimAt(x, z); return c && !claimMine(c) ? c : null; };
 // placing a campfire: would lighting it there claim the land? { ok, text } (the server has the final say)
 function claimHere(x, z) {
-  const soc = you.soc;
-  if (soc && !soc.lead) return { ok: false, text: `Just a fire: only ${soc.name}'s leader can claim land` }; // (one claim per society: the leader's fire)
+  const soc = you.soc; // one claim each: your society's (0.1.5)
+  if (soc) return { ok: false, text: soc.lead ? 'You have a camp, so this is just a fire' : `You're in ${soc.name}, so this is just a fire` };
   const all = [...placed.values()].filter(claimOn);
   const no = claimProblem(x, z, { radius: CLAIMS.radius, spawnRadius: CLAIMS.spawnRadius, pond: POND, hasClaim: all.some(claimMine),
     claims: all.map((th) => ({ x: th.x, z: th.z, name: th.claim.name })) }); // rules.js, the same on the server
-  if (!no) return { ok: true, text: soc ? `Light it to claim the land round it for ${soc.name}` : 'Light it to claim the land round it' };
-  return { ok: false, text: no.why === 'has' ? (soc ? `Just a fire: ${soc.name} already has a claim` : 'Just a fire: you already have a claim') : no.why === 'pond' ? 'Just a fire: too close to the pond to claim' : `Just a fire: too close to ${no.name}'s claim` };
+  if (!no) return { ok: true, text: 'Light it to start your camp here' };
+  return { ok: false, text: no.why === 'has' ? 'You have a camp, so this is just a fire' : no.why === 'pond' ? 'Too close to the pond to start your camp' : `Too close to ${no.name} to start your own` };
 }
 // a soft ring on the ground at a claim's edge, following the hills
 const ringMats = { mine: new THREE.MeshBasicMaterial({ color: '#9fd88a', transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide }),
