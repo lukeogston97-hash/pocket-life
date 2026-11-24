@@ -41,12 +41,14 @@ function addOther(p) {
   drawTag(o);
   poseOther(o);
 }
-// a name tag, with their society (0.1.4) and "away" or "asleep" under it when their player isn't here
+// what someone is doing when they aren't just playing: the same words on name tags and in the Camp panel (society.js)
+const PERSON_STATE_WORDS = { away: 'away', asleep: 'away, asleep', sleeping: 'asleep' };
+// a name tag, with their camp (0.1.4) and "away" or "asleep" under it
 function drawTag(o) {
   const el = o.name.el;
   o.name.bw = o.name.bh = 0;
   el.textContent = o.title;
-  const state = o.state === 'asleep' ? 'away · fast asleep' : o.state === 'sleeping' ? 'sleeping · zz' : o.state === 'away' ? 'away' : '';
+  const state = PERSON_STATE_WORDS[o.state] || '';
   const line = [o.soc, state].filter(Boolean).join(' · ');
   if (line) {
     const sub = document.createElement('small');

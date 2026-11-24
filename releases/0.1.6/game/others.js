@@ -34,22 +34,26 @@ function addOther(p) {
   name.off = true; name.el.style.display = 'none'; // until they're picked to be drawn
   const o = { id: p.id, who: p.who || p.id, title: p.name || 'Someone', state: p.state || 'online', look: cleanLook({ ...p.look, name: p.name }), mesh, body: null,
     tx: x, tz: z, tr: mesh.rotation.y, phase: 0, name, bubble: null,
-    speed: p.speed || null, due: p.ms ? elapsed + p.ms / 1000 : null, shown: false, sit: Array.isArray(p.sit) ? p.sit : null };
+    speed: p.speed || null, due: p.ms ? elapsed + p.ms / 1000 : null, shown: false, sit: Array.isArray(p.sit) ? p.sit : null, soc: p.soc || null };
   shownAt = -1; // work out again who's drawn
   if (p.tx != null) Object.assign(o, { tx: p.tx, tz: p.tz });
   others.set(p.id, o);
   drawTag(o);
   poseOther(o);
 }
-// a name tag, with "away" or "asleep" under it when their player isn't here
+// what someone is doing when they aren't just playing: the same words on name tags and in the Camp panel (society.js)
+const PERSON_STATE_WORDS = { away: 'away', asleep: 'away, asleep', sleeping: 'asleep' };
+// a name tag, with their camp (0.1.4) and "away" or "asleep" under it
 function drawTag(o) {
   const el = o.name.el;
   o.name.bw = o.name.bh = 0;
   el.textContent = o.title;
-  if (o.state === 'away' || o.state === 'asleep' || o.state === 'sleeping') {
+  const state = PERSON_STATE_WORDS[o.state] || '';
+  const line = [o.soc, state].filter(Boolean).join(' · ');
+  if (line) {
     const sub = document.createElement('small');
     sub.className = 'tag-sub';
-    sub.textContent = o.state === 'asleep' ? 'away · fast asleep' : o.state === 'sleeping' ? 'sleeping · zz' : 'away';
+    sub.textContent = line;
     el.appendChild(sub);
   }
 }

@@ -79,6 +79,7 @@ function goOnline() {
     else if (m.t === 'live') applyLive(m.live);
     else if (m.t === 'liveItems') applyLiveItems(m.liveItems);
     else if (m.t === 'claimNote') showTag(m.text, headTop(), 3.5);
+    else if (m.t.startsWith('soc')) societyMessage(m); // societies (society.js)
     else if (m.t === 'pos') snapTo(m.x, m.z);
     else if (m.t === 'moved') moveLayoutThing(m.what, m.idx, m.x, m.z);
     else if (m.t === 'removed') removeLayoutThing(m.what, m.idx);
@@ -90,7 +91,7 @@ function goOnline() {
     else if (m.t === 'sit') setOtherSit(m);
     else if (m.t === 'added') for (const it of m.items || []) { if (ITEMS[it.kind]) addWorldItem(it.kind, it.x, it.z, it.rot, it.id, it.uses); }
     else if (m.t === 'took') tookBack(m);
-    else if (m.t === 'fished') { if (m.caught && ITEMS[m.caught]) showGain(`+1 ${ITEMS[m.caught].name}`); else showTag(m.why || 'Nothing bites', headTop(), 2.5); }
+    else if (m.t === 'fished') { if (m.caught && ITEMS[m.caught]) showGain(`+1 ${ITEMS[m.caught].name.toLowerCase()}`); else showTag(m.why || 'Nothing bites', headTop(), 2.5); }
     else if (m.t === 'bush') { const b = berryBushes[m.bush]; if (b) { b.userData.count = m.count; b.userData.growFrom = m.growFrom; drawBerries(b); } }
     else if (m.t === 'picked' && !m.ok) {
       if (takeFromCarry(Object.keys((BERRY_SOURCE() || {}).harvest || {})[0], you.lastPick || 1)) { drawHeld(); drawCarry(); }
@@ -216,6 +217,7 @@ function applyMe(m, spawn = false) {
   if (!!m.sleeping !== !!you.sleeping) setSleeping(m.sleeping, true);
   you.collapsed = !!m.collapsed;
   you.lastKind = carry[you.lastKind] ? you.lastKind : (ITEMS[m.lastKind] && carry[m.lastKind] ? m.lastKind : Object.keys(carry)[0] || null);
+  setSociety(m.soc); // your society, if you're in one (society.js)
   tickStats();
   drawNeeds();
   drawCarry();

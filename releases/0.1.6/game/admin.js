@@ -31,6 +31,7 @@ function adminMessage(m) {
     if (m.text && adminTab === 'log' && !$('adminPanel').hidden) adminSend({ t: 'a.log' }); // the Log is open: the line for what was just done shows
   } else if (m.t === 'adminItems') { itemsData = m.list || []; if (adminTab === 'items') drawItems(); }
   else if (m.t === 'adminFires') { firesData = m; if (adminTab === 'world') drawFires(); }
+  else if (m.t === 'adminSocs') { socsData = m.list || []; if (adminTab === 'world') drawSocs(); }
   else if (m.t === 'adminLog') { logData = m.list || []; if (adminTab === 'log') drawLog(); }
   else if (m.t === 'adminList') { inboxData = m; drawInbox(); }
   else if (m.t === 'adminPlayers') { playersData = m; drawPlayers(); }
@@ -67,6 +68,7 @@ $('announce').addEventListener('click', () => { $('announce').hidden = true; });
 const BERRY_SOURCE = () => Object.values(SOURCES).find(harvests);
 const LIVE_SET = {
   maxPlaying: (v) => { SETTINGS.maxPlaying = v; },
+  societyMax: (v) => { SOCIETY.maxMembers = v; }, // (society.js; members are told the number with their society too)
   respawnMinutes: (v) => { SETTINGS.respawnMinutes = v; },
   berryRegrowHours: (v) => { const s = BERRY_SOURCE(); if (s && s.regrowHours !== v) { s.regrowHours = v; for (const b of berryBushes) { b.userData.shown = -1; drawBerries(b); } } },
   treeRegrowDays: (v) => { CHOP.regrowDays = v; },
@@ -76,7 +78,7 @@ const LIVE_SET = {
   thirstPerHour: (v) => { if (STAT.thirst) STAT.thirst.perHour = -v; },
   restPerHour: (v) => { if (STAT.rest) STAT.rest.perHour = -v; },
 };
-const LIVE_BASE = { maxPlaying: SETTINGS.maxPlaying, respawnMinutes: SETTINGS.respawnMinutes, berryRegrowHours: (BERRY_SOURCE() || {}).regrowHours,
+const LIVE_BASE = { maxPlaying: SETTINGS.maxPlaying, societyMax: (DATA.societies || {}).maxMembers ?? 3, respawnMinutes: SETTINGS.respawnMinutes, berryRegrowHours: (BERRY_SOURCE() || {}).regrowHours,
   treeRegrowDays: CHOP.regrowDays ?? 3, boulderRegrowDays: MINE.regrowDays ?? 3, rockBackHours: MINE.rockBackHours ?? 4,
   hungerPerHour: -((STAT.hunger || {}).perHour || 0), thirstPerHour: -((STAT.thirst || {}).perHour || 0), restPerHour: -((STAT.rest || {}).perHour || 0) };
 function applyLive(live) {
@@ -140,7 +142,7 @@ function adminPlacedActions(th) {
   if (!admin.on) return [];
   const F = PLACEABLES[th.kind] && PLACEABLES[th.kind].fire;
   const fire = (what) => () => adminSend({ t: 'a.fire', id: th.id, do: what });
-  const whose = th.claim ? `Ends ${th.claim.name}'s claim` : '';
+  const whose = th.claim ? `Ends ${th.claim.name}` : ''; // (a claim is a society: 0.1.5)
   return [{ label: 'Move', note: 'Then tap where it goes', run: () => startMove({ what: 'placed', id: th.id }) },
     ...(F && th.built ? [{ label: 'Fill with fuel', run: () => adminSend({ t: 'a.regrow', what: 'placed', id: th.id }) },
       th.lit ? (th.claim ? sure('Put out', fire('out'), whose) : { label: 'Put out', run: fire('out') }) : { label: 'Light', run: fire('light') }] : []),
@@ -242,7 +244,7 @@ function showAdminTab(tab) {
   for (const p of document.querySelectorAll('[data-admin-page]')) p.hidden = p.dataset.adminPage !== tab;
   if (tab === 'players') findPlayers();
   if (tab === 'inbox') drawInbox();
-  if (tab === 'world') { drawCounts(); drawRestore(); adminSend({ t: 'a.fires' }); drawFires(); }
+  if (tab === 'world') { drawCounts(); drawRestore(); adminSend({ t: 'a.fires' }); drawFires(); adminSend({ t: 'a.socs' }); drawSocs(); }
   if (tab === 'log') { adminSend({ t: 'a.log' }); drawLog(); }
   if (tab === 'settings') drawSettings();
   if (tab === 'items') { adminSend({ t: 'a.items' }); drawItems(); }
@@ -390,6 +392,12 @@ function drawPlayer() {
     bag.appendChild(give);
     out.push(bag);
   }
+  if (p.soc) { // their society (0.1.4): taking them out is the same as them leaving it
+    const sec = entry(el('div', 'admin-name', 'Society'), `${p.soc.name}${p.soc.lead ? ' · leads it' : ''} · ${p.soc.n} in it`), bar = el('div', 'admin-btns');
+    const out1 = button('Take out of society', () => {});
+    twoTaps(out1, () => toPlayer({ t: 'a.socRemove', id: p.soc.id, who: p.id }), p.soc.n === 1 ? 'Tap again: it ends' : 'Tap again', 500);
+    bar.appendChild(out1); sec.appendChild(bar); out.push(sec);
+  }
   const acts = [];
   if (alive && p.x != null) acts.push(['Fly to', () => adminFlyTo(p.x, p.z)]);
   if (alive && others.has(p.id)) acts.push(['Follow', () => adminFollow(p.id)]);
@@ -478,11 +486,11 @@ function drawFires() {
   box.replaceChildren(...[...d.list].sort((a, b) => !!b.claim - !!a.claim || b.lit - a.lit).map((f) => { // claims first, then burning ones
     const kind = (PLACEABLES[f.kind] || {}).name || f.kind, head = el('div');
     const state = !f.built ? 'not built yet' : f.lit ? `burning · ${hoursText(f.fuel)} left` : f.fuel > 0 ? `out · ${hoursText(f.fuel)} of fuel` : 'out · no fuel';
-    head.append(el('div', 'admin-name', f.claim ? `${f.claim.name}'s claim` : kind), el('div', 'admin-tag', [state, !f.claim && f.by ? `built by ${f.by}` : '', `at ${Math.round(f.x)}, ${Math.round(f.z)}`].filter(Boolean).join(' · ')));
+    head.append(el('div', 'admin-name', f.claim ? f.claim.name : kind), el('div', 'admin-tag', [f.claim ? 'claim' : '', state, !f.claim && f.by ? `built by ${f.by}` : '', `at ${Math.round(f.x)}, ${Math.round(f.z)}`].filter(Boolean).join(' · ')));
     const e = entry(head), bar = el('div', 'admin-btns');
     e.dataset.fire = f.id;
     bar.appendChild(button('Fly to', () => adminFlyTo(f.x, f.z)));
-    if (f.built && f.lit) { const b = button('Put out', () => {}); if (f.claim) twoTaps(b, () => send(f, { t: 'a.fire', do: 'out' }), `Tap again: ends ${f.claim.name}'s claim`, 500); else b.addEventListener('click', () => send(f, { t: 'a.fire', do: 'out' })); bar.appendChild(b); }
+    if (f.built && f.lit) { const b = button('Put out', () => {}); if (f.claim) twoTaps(b, () => send(f, { t: 'a.fire', do: 'out' }), `Tap again: ends ${f.claim.name}`, 500); else b.addEventListener('click', () => send(f, { t: 'a.fire', do: 'out' })); bar.appendChild(b); }
     if (f.built && !f.lit) bar.appendChild(button('Light', () => send(f, { t: 'a.fire', do: 'light' })));
     if (f.claim) { const b = button('End claim', () => {}); twoTaps(b, () => send(f, { t: 'a.claim', do: 'end' }), 'Tap again: the land is free', 500); bar.appendChild(b); }
     if (f.built) bar.appendChild(button(openFire === f.id ? 'Less' : 'More', () => { openFire = openFire === f.id ? null : f.id; drawFires(); }));
@@ -506,6 +514,43 @@ function drawFires() {
         give.addEventListener('submit', (ev) => { ev.preventDefault(); if (who.value) send(f, { t: 'a.claim', do: 'give', to: who.value }); });
         if (who.options.length) e.appendChild(give);
       }
+    }
+    return e;
+  }));
+}
+
+/* ---------- Societies (World tab, 0.1.4): every society, who leads it, its members and its claim (server/src/societies.js) ----------
+   The server sends the list (a.socs) when the tab opens and after each change. Rename, take someone out, end one. */
+let socsData = null, openSoc = null; // openSoc: the society whose members and Rename box are showing
+function drawSocs() {
+  const box = $('adminSocs'), list = socsData;
+  if (!list) { $('adminSocsState').textContent = ''; box.replaceChildren(emptyNote('Loading…')); return; }
+  $('adminSocsState').textContent = list.length ? `${list.length} ${list.length === 1 ? 'society' : 'societies'}` : '';
+  if (!list.length) { box.replaceChildren(emptyNote('No societies yet')); return; }
+  box.replaceChildren(...list.map((s) => {
+    const head = el('div'), claim = s.claim ? `claim burning · ${hoursText(s.claim.fuel)} left` : 'no claim';
+    head.append(el('div', 'admin-name', s.name), el('div', 'admin-tag', [`led by ${s.leader}`, `${s.members.length} of ${s.max}`, claim].join(' · ')));
+    const e = entry(head), bar = el('div', 'admin-btns');
+    if (s.claim) bar.appendChild(button('Fly to', () => adminFlyTo(s.claim.x, s.claim.z)));
+    bar.appendChild(button(openSoc === s.id ? 'Less' : 'Members', () => { openSoc = openSoc === s.id ? null : s.id; drawSocs(); }));
+    const end = button('End', () => {});
+    twoTaps(end, () => adminSend({ t: 'a.socEnd', id: s.id }), s.claim ? 'Tap again: the claim goes to the leader' : 'Tap again to end it', 500);
+    bar.appendChild(end);
+    e.appendChild(bar);
+    if (openSoc === s.id) {
+      for (const m of s.members) {
+        const row = el('div', 'admin-row'), out = button('Take out', () => {});
+        row.append(el('span', 'admin-tag', `${m.name}${m.lead ? ' · leader' : ''} · ${STATE_WORDS[m.state] || m.state}`), out);
+        twoTaps(out, () => adminSend({ t: 'a.socRemove', id: s.id, who: m.id }), 'Tap again', 500);
+        e.appendChild(row);
+      }
+      const form = el('form', 'admin-inline'), name = el('input', 'admin-input'), go = el('button', 'small-btn', 'Rename');
+      Object.assign(name, { maxLength: 20, value: s.name, placeholder: 'Society name', autocomplete: 'off' });
+      name.setAttribute('aria-label', 'Society name');
+      go.type = 'submit';
+      form.append(name, go);
+      form.addEventListener('submit', (ev) => { ev.preventDefault(); const v = name.value.trim(); if (v && v !== s.name) adminSend({ t: 'a.socRename', id: s.id, name: v }); });
+      e.appendChild(form);
     }
     return e;
   }));
@@ -665,8 +710,8 @@ $('adminItemsCopy').addEventListener('click', async () => {
 
 /* ---------- leaving admin mode: nothing the dashboard was showing stays on the page (names, feedback, reports, the Log) ---------- */
 function forgetAdminData() {
-  playersData = null; playerData = null; inboxData = null; itemsData = null; firesData = null; logData = null; editStats = null; openFire = null;
-  for (const id of ['adminPlayers', 'adminPlayer', 'adminInbox', 'adminItems', 'adminFires', 'adminLog']) $(id).replaceChildren();
+  playersData = null; playerData = null; inboxData = null; itemsData = null; firesData = null; logData = null; editStats = null; openFire = null; socsData = null; openSoc = null;
+  for (const id of ['adminPlayers', 'adminPlayer', 'adminInbox', 'adminItems', 'adminFires', 'adminSocs', 'adminLog']) $(id).replaceChildren();
   $('adminItemsText').value = ''; $('adminItemsText').hidden = true;
 }
 
