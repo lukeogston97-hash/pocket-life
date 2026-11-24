@@ -119,7 +119,7 @@ function die(m) {
   player.rotation.x = -Math.PI / 2; // lying where they fell
   player.position.y = playerGround + 0.2;
   $('deathTitle').textContent = `${m.name || you.look.name} has died`;
-  $('deathText').textContent = `${m.cause ? `They died of ${m.cause}` : 'They died'} at ${m.age || you.look.age}. What they were carrying is on the ground where they fell.`;
+  $('deathText').textContent = `${m.cause ? `They died of ${m.cause}` : 'They died'} at ${m.age || you.look.age}. Their things are on the ground where they fell.`;
   $('death').hidden = false;
   $('deathBtn').focus();
 }
@@ -200,7 +200,7 @@ function drawMenu() {
     return drawMenuNet();
   }
   $('playText').textContent = menuLine ? 'World is full' : 'Play';
-  $('playSub').textContent = menuLine ? `You're ${ordinal(menuLine)} in line. You'll join by yourself.` : menuYours ? `as ${menuYours.name} · ${menuYours.age}` : menuYours === null ? 'Make your person' : '';
+  $('playSub').textContent = menuLine ? `You're ${ordinal(menuLine)} in line. You'll join automatically.` : menuYours ? `as ${menuYours.name} · ${menuYours.age}` : menuYours === null ? 'Make your person' : '';
   $('playBtn').disabled = menuJoining || menuLine > 0;
   drawMenuNet();
 }
@@ -270,24 +270,26 @@ function showGoneCard(d) {
   const away = d.away ? ' while you were away' : '';
   $('deathTitle').textContent = d.gone ? `${d.name} has left the world` : `${d.name} has died`;
   $('deathText').textContent = d.gone
-    ? `They slept for a long time and left the world.${d.had ? ' Their things were left where they slept.' : ''}`
-    : `They died of ${d.cause || 'weakness'}${away}, at ${d.age}.${d.had ? ' Their things were left where they fell.' : ''}`;
+    ? `They slept for a long time and left the world.${d.had ? ' Their things are where they slept.' : ''}`
+    : `They died of ${d.cause || 'weakness'} at ${d.age}${away}.${d.had ? ' Their things are on the ground where they fell.' : ''}`;
   $('death').hidden = false;
 }
 // what your person did while you were away
 function showWelcomeBack(a) {
   const hrs = a.ms / 3600000;
-  const long = hrs >= 1 ? `${Math.round(hrs)} hour${Math.round(hrs) === 1 ? '' : 's'}` : `${Math.max(1, Math.round(a.ms / 60000))} minutes`;
+  const mins = Math.max(1, Math.round(a.ms / 60000));
+  const long = hrs >= 1 ? `${Math.round(hrs)} hour${Math.round(hrs) === 1 ? '' : 's'}` : `${mins} minute${mins === 1 ? '' : 's'}`;
   const bits = [];
-  const fruit = ITEMS[Object.keys((BERRY_SOURCE() || {}).harvest || {})[0]] || { name: 'berry', plural: 'berries' }; // what people away pick and eat
-  if (a.ate) bits.push(`ate ${a.ate} ${(a.ate === 1 ? fruit.name : fruit.plural).toLowerCase()}`);
-  if (a.picked) bits.push(`picked ${a.picked}`);
-  if (a.drank) bits.push(`drank ${a.drank} time${a.drank === 1 ? '' : 's'}`);
+  const fruit = ITEMS[Object.keys((BERRY_SOURCE() || {}).harvest || {})[0]] || { name: 'berry', plural: 'berries' }; // what people away pick
+  const times = (n) => (n === 1 ? 'once' : n === 2 ? 'twice' : `${n} times`); // (they eat whatever they carry, so no food is named)
+  if (a.picked) bits.push(`picked ${a.picked} ${(a.picked === 1 ? fruit.name : fruit.plural).toLowerCase()}`);
+  if (a.ate) bits.push(`ate ${times(a.ate)}`);
+  if (a.drank) bits.push(`drank ${times(a.drank)}`);
   if (a.fed) bits.push('kept the fire going');
   if (a.slept) bits.push('slept');
   if (a.ms < 5 * 60000 && !bits.length) return; // only gone a moment
   const days = Math.round(((AWAY.sleepAfterHours || 24) + (AWAY.goneAfterDays || 1) * 24) / 24); // away this long and they leave the world
-  $('backText').textContent = `You were away ${long}.${bits.length ? ` ${you.look.name} ${bits.join(', ').replace(/, ([^,]*)$/, ' and $1')}.` : ` ${you.look.name} rested.`} Come back within ${days} days or they'll leave the world.`;
+  $('backText').textContent = `You were away for ${long}.${bits.length ? ` ${you.look.name} ${bits.join(', ').replace(/, ([^,]*)$/, ' and $1')}.` : ` ${you.look.name} rested.`} Come back within ${days} days or they'll leave the world.`;
   $('back').hidden = false;
 }
 $('backBtn').addEventListener('click', () => { $('back').hidden = true; });

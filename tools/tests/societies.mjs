@@ -55,10 +55,10 @@ console.log('A. lighting your first fire starts your society; the leader can ren
 let got = await S.ask(pat, { t: 'fire', id: 1, do: 'light' });
 let me = meOf(got);
 expect(placed(1).claim === 's:1' && me && me.soc && me.soc.name === "Pat's camp" && me.soc.lead && me.soc.members.length === 1 && me.soc.max === MAX, "Pat lit fire 1: it's Pat's claim and Pat's society, Pat's camp", `${placed(1).claim} ${JSON.stringify(me && me.soc)}`);
-expect(/your claim while it burns/.test(said(got)), 'Pat is told', said(got));
+expect(/your camp while it burns/.test(said(got)), 'Pat is told', said(got));
 expect(!S.w.people(null).find((p) => p.id === 'pat').soc, 'with only Pat in it, nothing shows under Pat\'s name');
 got = await S.ask(pat, { t: 'fire', id: 2, do: 'light' });
-expect(placed(2).lit && !placed(2).claim && /already have a claim/.test(said(got)), 'a second fire is just a fire', said(got));
+expect(placed(2).lit && !placed(2).claim && /already have a camp/.test(said(got)), 'a second fire is just a fire', said(got));
 let took = await take(sam, 10);
 expect(took && took.ok === false && /belongs to Pat's camp/.test(took.why || ''), 'Sam can\'t pick up a stick inside it', took && took.why);
 got = await S.ask(pat, { t: 'socRename', name: '  Rivers  ' });

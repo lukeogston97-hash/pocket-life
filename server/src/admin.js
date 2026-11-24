@@ -479,7 +479,7 @@ export const adminMethods = {
         } else return;
         th.at = Date.now();
         this.burn(th); // out: a claim on it ends with it
-        if (was && !th.claim) { text += wasSoc ? `. ${whose} ended with it` : `. ${whose}'s claim ended with it`; if (!wasSoc) this.tellClaim(was, 'The fire is out, so the claim has ended'); } // (a society's members are told when it ends: societies.js)
+        if (was && !th.claim) { text += wasSoc ? `. ${whose} ended with it` : `. ${whose}'s claim ended with it`; if (!wasSoc) this.tellClaim(was, 'The fire is out, so your camp has ended'); } // (a society's members are told when it ends: societies.js)
         await this.save();
         this.sendPlaced(th);
         reply(this.firesView());
@@ -496,7 +496,7 @@ export const adminMethods = {
           if (!th.claim) return done("It's nobody's claim");
           const soc = this.socOfClaim(th.claim);
           th.claim = null; // the fire is still its builder's to pack up (th.by)
-          if (soc) this.socEnd(soc, `${soc.name} has ended: the admin ended its claim`);
+          if (soc) this.socEnd(soc, `${soc.name} has ended: the admin ended it`);
           text = soc ? `${whose} ended. The fire burns on` : `${whose}'s claim ended. The fire burns on`;
         } else if (m.do === 'give') { // the same as them lighting it: a new society, theirs (one claim each)
           const to = this.persons.get(clean(m.to, 40));
@@ -507,13 +507,13 @@ export const adminMethods = {
           if (!th.built || !th.lit) return done('Light it first: a claim lasts only while its fire burns');
           const no = this.claimFit(th, to); // the same rules as lighting a first fire: one claim each, clear of the pond and of other claims
           if (no) return done(no.why === 'has' ? `${to.name} already has a claim` : no.why === 'pond' ? "It's too close to the pond to be a claim" : `It's too close to ${no.name}`);
-          if (wasSoc) { th.claim = null; this.socEnd(wasSoc, `${wasSoc.name} has ended: the admin gave its claim to someone else`); } // (its fire burns on, for them)
+          if (wasSoc) { th.claim = null; this.socEnd(wasSoc, `${wasSoc.name} has ended: the admin gave its fire to someone else`); } // (its fire burns on, for them)
           const made = this.socNew(to, th);
           text = `Now ${to.name}'s claim, as ${made.name}${whose ? ` (it was ${whose})` : ''}`;
-          this.tell(to.who, { t: 'claimNote', text: 'The land round this fire is now your claim, while it burns' });
+          this.tell(to.who, { t: 'claimNote', text: 'This fire is now your camp, while it burns' });
           this.tell(to.who, this.mine(to));
         } else return;
-        if (was && was !== th.claim && !wasSoc) this.tellClaim(was, 'The claim has ended');
+        if (was && was !== th.claim && !wasSoc) this.tellClaim(was, 'Your camp has ended');
         await this.save();
         this.sendPlaced(th);
         reply(this.firesView());
@@ -533,7 +533,7 @@ export const adminMethods = {
         await this.saveSocs();
         for (const mem of soc.members) this.socTag(mem.who); // the line under their name tags
         this.socTellMembers(soc);
-        this.socNote(soc, `Your society is now called ${name}`);
+        this.socNote(soc, `Your camp is now called ${name}`);
         const th = this.socFire(soc);
         if (th) this.sendPlaced(th); // the claim's name
         reply({ t: 'adminSocs', list: this.socsView() });

@@ -41,13 +41,13 @@ export const claimsMethods = {
   ownerName(th) {
     const s = this.socOfClaim(th.claim);
     if (s) return s.name;
-    if (String(th.claim).startsWith('s:')) return 'A society';
+    if (String(th.claim).startsWith('s:')) return 'A camp';
     const o = this.persons.get(th.claim); return o ? o.name : 'Someone';
   },
   // a few words for whoever a claim belongs to: the player, or every member of the society playing right now
   tellClaim(key, text) { const s = this.socOfClaim(key); if (s) this.socNote(s, text); else this.tell(key, { t: 'claimNote', text }); },
   // the answer when someone tries something inside another person's claim
-  claimNo(c) { return this.socOfClaim(c.claim) ? `This belongs to ${this.ownerName(c)}` : `This is ${this.ownerName(c)}'s claim`; },
+  claimNo(c) { return `This belongs to ${this.ownerName(c)}`; }, // (players call a claim a camp: docs/design/wording.md)
   // a claim's fire went out (burn in placed.js): the land is free, the cold fire is anyone's, and its society ends with it
   claimLost(th) {
     const key = th.claim;
@@ -66,10 +66,10 @@ export const claimsMethods = {
   tryClaim(th, p) {
     if (th.kind !== C.placeable || th.claim) return '';
     const s = this.socOf(p.who);
-    if (s) return s.leader === p.who ? 'Lit. You already have a claim, so this is just a fire' : `Lit. You're in ${s.name}, so this is just a fire`;
+    if (s) return s.leader === p.who ? 'Fire lit. You already have a camp, so this one is just a fire' : `Fire lit. You're in ${s.name}, so this one is just a fire`;
     const no = this.claimFit(th, p);
-    if (no) return no.why === 'has' ? 'Lit. You already have a claim, so this is just a fire' : no.why === 'pond' ? "Lit. It's too close to the pond to claim land" : `Lit. Too close to ${no.name} to claim land`;
+    if (no) return no.why === 'has' ? 'Fire lit. You already have a camp, so this one is just a fire' : no.why === 'pond' ? "Fire lit, but it's too close to the pond to start your camp" : `Fire lit, but it's too close to ${no.name} to start your own`;
     this.socNew(p, th); // (societies.js: named "<name>'s camp", theirs to lead)
-    return "Lit. It's your claim while it burns. Tap people nearby to invite them";
+    return 'Fire lit. This is your camp while it burns. Tap people nearby to invite them';
   },
 };

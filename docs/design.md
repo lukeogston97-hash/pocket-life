@@ -14,6 +14,7 @@ Every decision so far, split by area so an update only reads the file it needs. 
 - docs/design/societies.md: societies (your claim is your society: lighting starts it, invites, leader, leaving, the admin's list)
 - docs/design/inventory-and-menus.md: inventory grid, Craft, recipe discovery, tap menus, stations, pack up
 - docs/design/admin.md: admin mode (the way in, the dashboard, tapping things), live settings and item numbers, people, fires and claims, the Log, Restore
+- docs/design/wording.md: the words players see (camp, +10 food, capitals, times, the same words in tap menus and the task list)
 - docs/design/later.md: sign-in, buildings, later ideas
 - docs/design/code.md: how the code is laid out, the server, Cloudflare's free plan
 - docs/design/working.md: versions, test then release, checks

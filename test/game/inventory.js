@@ -64,7 +64,7 @@ const bagGroup = (it) => (Object.keys(it.eat || {}).length ? 0 : it.uses ? 1 : i
 const bagKinds = () => Object.keys(you.carry).filter((k) => ITEMS[k] && you.carry[k] > 0)
   .sort((a, b) => bagGroup(ITEMS[a]) - bagGroup(ITEMS[b]) || ITEM_ORDER.indexOf(a) - ITEM_ORDER.indexOf(b));
 // a line about it: its own "about" in game-data.json, else the about of the recipe that makes it
-const itemAbout = (kind) => ITEMS[kind].about || (RECIPES.find((r) => r.makes[kind]) || {}).about || '';
+const itemAbout = (kind) => { const a = ITEMS[kind].about || (RECIPES.find((r) => r.makes[kind]) || {}).about || ''; return a && !/[.!?]$/.test(a) ? `${a}.` : a; }; // (a recipe's line has no full stop)
 // a tool's uses left, one per tool you carry, the one in use first (the server sends a list; before 0.2.6 one number)
 function wearList(kind) {
   const n = you.carry[kind] || 0, w = you.wear[kind];
@@ -188,7 +188,7 @@ function bagDropAt(s, e, loose) {
   if (t && t.kind === 'placed' && t.th.built) {
     const th = t.th, P = PLACEABLES[th.kind];
     if (P.fire && P.fire.fuels[kind]) {
-      if (roomFor(th, kind) < 1) say('Fire is full'); else then({ type: 'tend', id: th.id, do: 'add', n: 1, fuel: kind });
+      if (roomFor(th, kind) < 1) say('The fire is full'); else then({ type: 'tend', id: th.id, do: 'add', n: 1, fuel: kind });
       return;
     }
     const r2 = RECIPES.find((q) => q.near === th.kind && q.needs[kind] && recipeKnown(q));
@@ -205,7 +205,7 @@ function bagDropAt(s, e, loose) {
   const at = t && t.kind === 'item' ? { x: t.item.x + 0.3, z: t.item.z + 0.3 } : t && t.kind === 'ground' ? { x: t.point.x, z: t.point.z }
     : gh && !['shore', 'use'].includes(t && t.kind) ? { x: gh.point.x, z: gh.point.z } : null;
   if (!at) { say("Can't put it there"); return; } // the pond, a bush
-  if (!loose && spareInBag(kind) < 1) { say('Already in your queue'); return; } // every one you carry is already queued to go somewhere
+  if (!loose && spareInBag(kind) < 1) { say('Already in your task list'); return; } // every one you carry is already queued to go somewhere
   then({ type: 'drop', kind, n: 1, ...(!loose && it.uses ? { which: s.i } : {}), x: at.x, z: at.z });
 }
 // the bar under the grid: what it is, and what you can do with it (the main thing in green)
@@ -291,7 +291,7 @@ function make(r) {
     if (bagOpen()) drawBag();
     drawHeld();
     drawCarry();
-    showGain(`Made ${recipeName(r)}`);
+    showGain(`Made ${recipeName(r).toLowerCase()}`);
   };
   if (r.seconds) { startAction({ pose: 'kneel', seconds: r.seconds, end: finish }); return; }
   startAction({ pose: 'kneel', seconds: 1.6 });

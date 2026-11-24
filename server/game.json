@@ -39,6 +39,7 @@
         "health": -0.5
       },
       "fullLabel": "Not hungry",
+      "gainLabel": "food",
       "whileAsleep": -2.5
     },
     {
@@ -53,6 +54,7 @@
         "health": -2
       },
       "fullLabel": "Not thirsty",
+      "gainLabel": "water",
       "whileAsleep": -3
     },
     {

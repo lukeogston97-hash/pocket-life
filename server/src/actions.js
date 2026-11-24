@@ -415,7 +415,7 @@ export const ACTIONS = {
   // the leader invites someone nearby who is playing; the invite waits on their connection for SOC.inviteMinutes
   socInvite: { when: 'alive', async run({ m, p, reply }) {
     const s = this.socOf(p.who), no = (why) => reply({ t: 'socNo', why });
-    if (!s) return no('Light a campfire first: that starts your society');
+    if (!s) return no('Light a campfire first: that starts your camp');
     if (s.leader !== p.who) return no('Only the leader can invite people');
     if (s.members.length >= socMax()) return no(`${s.name} is full (${socMax()} people)`);
     const them = this.persons.get(m.id), sock = this.socketOf(m.id);
@@ -441,7 +441,7 @@ export const ACTIONS = {
     if (mine === s) { drop(); reply({ t: 'socNo', why: `You're already in ${s.name}` }); return; }
     if (s.members.length >= socMax()) { drop(); reply({ t: 'socNo', why: `${s.name} is full` }); return; }
     if (mine && mine.members.length > 1) { reply({ t: 'socNo', why: `Leave ${mine.name} first` }); return; }
-    if (mine || this.claimOf(p.who)) { reply({ t: 'socNo', why: 'Put your fire out first: it holds your claim' }); return; }
+    if (mine || this.claimOf(p.who)) { reply({ t: 'socNo', why: 'Put your fire out first: that ends your camp' }); return; }
     drop();
     this.socJoin(s, p);
     await this.saveSocs();

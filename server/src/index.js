@@ -255,7 +255,7 @@ export class World extends DurableObject {
   }
 
   async hello(ws, me, m, reply) {
-    if (m.proto !== PROTOCOL) { this.boot(ws, { t: 'maintenance', text: 'A big update is on its way. Back soon.' }); return; } // an older game
+    if (m.proto !== PROTOCOL) { this.boot(ws, { t: 'maintenance', text: 'A big update is on its way.' }); return; } // an older game
     const link = m.link === 'test' ? 'test' : 'release';
     const min = (WORLDS.minVersion || {})[link];
     const asksAdmin = !!m.watch && !!m.admin && !!m.adminCode; // admin mode: watching only, never while playing a person

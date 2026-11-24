@@ -95,7 +95,7 @@ expect(await S.tool({ t: 'a.claim', id: 1, do: 'give', to: 'pat' }) === 'Light i
 await S.tool({ t: 'a.fire', id: 1, do: 'light' });
 text = await S.tool({ t: 'a.claim', id: 1, do: 'give', to: 'pat' });
 expect(text === "Now Pat's claim, as Pat's camp" && placed(1).claim === patKey() && placed(1).by === 'pat', 'Give makes the burning fire Pat\'s claim (a new society)', text);
-expect(pat.got.some((m) => m.t === 'claimNote' && /now your claim/.test(m.text)) && lastPlaced(sam, 1).thing.claim.name === "Pat's camp", 'Pat is told, and every game sees whose it is');
+expect(pat.got.some((m) => m.t === 'claimNote' && /now your camp/.test(m.text)) && lastPlaced(sam, 1).thing.claim.name === "Pat's camp", 'Pat is told, and every game sees whose it is');
 took = await samTakes(11);
 expect(took && took.ok === false && /Pat's camp/.test(took.why || ''), 'and the rules hold Sam to it again', took && took.why);
 expect(await S.tool({ t: 'a.claim', id: 1, do: 'give', to: 'pat' }) === 'Pat already has a claim', 'giving it to its owner says so');

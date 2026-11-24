@@ -347,7 +347,7 @@ async def campfire():
             if (!__pl.cantPlaceAt(x, z, 'campfire')) { __pl.movePlacing(x, z); return [x, z]; } } return null; })()""")
         expect(spot is not None, f'found a spot to put it ({spot})')
         # the longest note there is fits on one or two lines across the bar (it once squeezed to a word a line)
-        await a.evaluate("document.getElementById('placeText').textContent = \"Just a fire: too close to Alexandra's claim\"")
+        await a.evaluate("document.getElementById('placeText').textContent = \"Too close to Alexandra's camp to start your own\"")
         box = await a.evaluate("(() => { const t = document.getElementById('placeText').getBoundingClientRect(), b = document.getElementById('placeBar').getBoundingClientRect(); return [t.width, t.height, b.width, innerWidth]; })()")
         expect(box[1] < 40 and box[0] > 120 and box[2] > box[3] * 0.8, f'a long note fits in the place bar on one or two lines (note {box[0]:.0f} x {box[1]:.0f}, bar {box[2]:.0f} of {box[3]})')
         await a.evaluate(f"__pl.movePlacing({spot[0]}, {spot[1]})")
@@ -371,7 +371,7 @@ async def campfire():
         await a.evaluate(f"__pl.queueTask({{ type: 'tend', id: {fid}, do: 'light' }})"); await idle(a, 15); await a.wait_for_timeout(800)
         expect(await a.evaluate(f'__pl.isLit(__pl.placed.get({fid}))') and await b.evaluate(f'__pl.isLit(__pl.placed.get({fid}))'), 'lit, on both phones')
         acts = await a.evaluate(f"__pl.placedActions(__pl.placed.get({fid})).map((x) => x.label)")
-        expect('Light fire' not in acts and acts.index('Put out fire') > acts.index('Sit by campfire'), f'lit: Put out fire comes after Sit ({acts})')
+        expect('Light fire' not in acts and acts.index('Put out fire') > acts.index('Sit by the fire'), f'lit: Put out fire comes after Sit ({acts})')
         f1 = await a.evaluate(f'__pl.fuelLeft(__pl.placed.get({fid}))'); await a.wait_for_timeout(3000)
         f2 = await a.evaluate(f'__pl.fuelLeft(__pl.placed.get({fid}))')
         expect(2000 < f1 - f2 < 4500, f'it burns fuel while lit ({f1 - f2} ms in 3 s)')
@@ -586,7 +586,7 @@ async def claims():
 
 
 async def societies():
-    """Societies (0.1.4, reworked 0.1.5): lighting your first fire starts your society ("<name>'s camp"), Menu > Society
+    """Societies (0.1.4, reworked 0.1.5): lighting your first fire starts your society ("<name>'s camp", players see camps), Menu > Camp
     renames it, invite someone by tapping them, they join from the invite card, name tags show it with 2 or more, members
     share the claim but only the leader puts the fire out, the admin's World tab lists and renames it, leaving takes two
     taps, and the last one out ends it with its fire."""
@@ -599,7 +599,7 @@ async def societies():
         await a.evaluate("__pl.queueTask({ type: 'walk', x: 28, z: 6 })"); await idle(a, 50); await a.wait_for_timeout(1500)
         spot = await a.evaluate("(() => { const p = __pl.player.position; for (let k = 0; k < 16; k++) { const ang = k / 16 * Math.PI * 2, x = p.x + Math.cos(ang) * 1.8, z = p.z + Math.sin(ang) * 1.8; if (!__pl.cantPlaceAt(x, z, 'campfire')) return [x, z]; } return null; })()")
         expect(spot is not None, f'a spot for the fire ({spot})')
-        expect(await a.evaluate(f"__pl.claimHere({spot[0]:.2f}, {spot[1]:.2f}).text") == 'Light it to claim the land and start your society', 'placing it says lighting it starts your society')
+        expect(await a.evaluate(f"__pl.claimHere({spot[0]:.2f}, {spot[1]:.2f}).text") == 'Light it to start your camp here', 'placing it says lighting it starts your camp')
         await a.evaluate(f"({send})({{ t: 'place', kind: 'campfire', x: {spot[0]:.2f}, z: {spot[1]:.2f}, rot: 0 }})"); await a.wait_for_timeout(800)
         fid = await a.evaluate("[...__pl.placed.keys()][0]")
         for m in [f"{{ t: 'build', id: {fid} }}", f"{{ t: 'fire', id: {fid}, do: 'add', n: 5, fuel: 'stick' }}", f"{{ t: 'fire', id: {fid}, do: 'light' }}"]:
@@ -608,22 +608,22 @@ async def societies():
         # Menu > Society: rename it
         await a.click('#menuBtn'); await a.wait_for_timeout(400)
         await a.click('#pauseSocietyBtn'); await a.wait_for_timeout(400)
-        expect(await text(a, '#socTitle') == f"{name_a}'s camp" and await shown(a, '#socNameForm') and 'You lead it' in await text(a, '#socText'), 'the Society panel shows it, with a Rename box for the leader')
+        expect(await text(a, '#socTitle') == f"{name_a}'s camp" and await shown(a, '#socNameForm') and 'You lead this camp' in await text(a, '#socText'), 'the Camp panel shows it, with a Rename box for the leader')
         await a.fill('#socName', 'Rivers'); await a.click('#socNameForm button[type=submit]'); await a.wait_for_timeout(1500)
         expect(await a.evaluate("(__pl.you.soc || {}).name") == 'Rivers' and await text(a, '#socTitle') == 'Rivers', 'A renamed it Rivers')
-        expect(await text(a, '#socLeave') == 'End it' and 'fire goes out' in await text(a, '#socFoot'), 'alone, Leave says End it: its fire goes out')
+        expect(await text(a, '#socLeave') == 'End camp' and 'fire goes out' in await text(a, '#socFoot'), 'alone, Leave says End camp: its fire goes out')
         await shot(a, 'society-panel')
         await a.click('#socClose'); await a.wait_for_timeout(300)
-        # B comes over; A taps B: Invite to society
+        # B comes over; A taps B: Invite to camp
         b = await W.page('memberB'); await join(b); await b.wait_for_timeout(800)
         ax, az = await a.evaluate("[__pl.player.position.x, __pl.player.position.z]")
         await b.evaluate(f"__pl.queueTask({{ type: 'walk', x: {ax + 1.6:.2f}, z: {az:.2f} }})"); await idle(b, 60); await b.wait_for_timeout(1500)
         expect(await b.evaluate(f"!!__pl.notMineAt({spot[0]:.2f}, {spot[1]:.2f})"), "B isn't in Rivers yet: its claim is someone else's to B")
         pick = "(() => { const o = [...__pl.others.values()][0]; return __pl.menuActions({ kind: 'person', person: o, name: o.title }); })()"
         acts = await a.evaluate(f"{pick}.map((x) => [x.label, !!x.disabled, x.note || ''])")
-        inv = next((x for x in acts if x[0] == 'Invite to society'), None)
-        expect(inv is not None and not inv[1], f"A's tap menu on B has Invite to society ({acts})")
-        await a.evaluate(f"{pick}.find((x) => x.label === 'Invite to society').run()")
+        inv = next((x for x in acts if x[0] == 'Invite to camp'), None)
+        expect(inv is not None and not inv[1], f"A's tap menu on B has Invite to camp ({acts})")
+        await a.evaluate(f"{pick}.find((x) => x.label === 'Invite to camp').run()")
         await b.wait_for_function("!document.getElementById('socInvite').hidden", timeout=20000)
         expect(await text(b, '#socInviteText') == f'{name_a} invites you to join Rivers', f"B's invite card says who and which ({await text(b, '#socInviteText')})")
         await shot(b, 'society-invite')
@@ -632,9 +632,9 @@ async def societies():
         expect(not await b.evaluate(f"!!__pl.notMineAt({spot[0]:.2f}, {spot[1]:.2f})"), "now B can use things in Rivers' claim")
         tag = await a.evaluate("[...__pl.others.values()][0].name.el.textContent")
         expect('Rivers' in tag, f"with 2 in it, A sees Rivers under B's name ({tag})")
-        expect(await b.evaluate("__pl.claimHere(0, 0).text") == "Just a fire: you're in Rivers", "B's own fires are just fires")
+        expect(await b.evaluate("__pl.claimHere(0, 0).text") == "You're in Rivers, so this is just a fire", "B's own fires are just fires")
         out = await b.evaluate(f"__pl.placedActions(__pl.placed.get({fid})).filter((x) => x.label === 'Put out fire').map((x) => [!!x.disabled, x.note || ''])")
-        expect(out == [[True, f'Only {name_a} can']], f"only the leader can put Rivers' fire out ({out})")
+        expect(out == [[True, f'Only {name_a} can put it out']], f"only the leader can put Rivers' fire out ({out})")
         # the admin's World tab lists it; Members, then Rename
         c = await W.page('adminC'); await open_admin(c)
         await c.click('#adminDashBtn'); await c.click('[data-admin-tab="world"]'); await c.wait_for_timeout(1500)
