@@ -233,7 +233,8 @@
       "makes": {
         "cooked-fish": 1
       },
-      "near": "campfire"
+      "near": "campfire",
+      "seconds": 20
     }
   },
   "sources": {
@@ -255,7 +256,9 @@
         "chance": 0.5,
         "holds": 10,
         "regrowMinutes": 60
-      }
+      },
+      "seconds": 2,
+      "pose": "kneel"
     },
     "berryBush": {
       "gives": null,
@@ -268,7 +271,9 @@
         "berry": 2
       },
       "regrowHours": 4,
-      "fish": null
+      "fish": null,
+      "seconds": 2,
+      "pose": "pick"
     }
   },
   "plants": {
@@ -281,7 +286,10 @@
         1,
         4
       ],
-      "tool": "knife"
+      "tool": "knife",
+      "seconds": 6,
+      "toolSeconds": 2,
+      "pose": "pick"
     }
   },
   "berryKind": "berry",

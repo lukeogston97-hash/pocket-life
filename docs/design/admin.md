@@ -21,6 +21,7 @@
 - Copy my changes: lines like `items.knife.weight: 1 -> 4`, to send to Claude. Claude writes them into game-data.json, then they are Reset in admin. That is how a change becomes permanent.
 
 ## People (admin mode)
+- A person's page also shows their task list as the server has it (what they carry on with while away, 0.1.7), with Clear task list (two taps; their game stops too if they're playing).
 - A person's page: needs as bars, and Edit needs and age opens boxes to type in. Needs go 0 to 100, health never below 1 (typing can't kill: Remove from world is its own button), age 13 to 120 (Claude's choices, 24 Nov). Only the boxes that were changed are sent.
 - Rename: any name, for one the filter missed. Their own game and everyone else's show it straight away.
 - A message only they see: shown like a message to everyone, only while they're online. It isn't kept for later.

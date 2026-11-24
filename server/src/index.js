@@ -24,6 +24,7 @@ import { societiesMethods, freshSocieties } from './societies.js';
 import { restoreMethods } from './restore.js';
 import { guardMethods } from './guard.js';
 import { activityMethods, BACK_AFTER, longText } from './activity.js';
+import { taskMethods } from './tasks.js';
 import { ACTIONS } from './actions.js';
 
 export class World extends DurableObject {
@@ -289,7 +290,7 @@ export class World extends DurableObject {
     for (const s of this.sockets()) if (s.p.who === who && s.ws !== ws) { s.p.alive = false; this.attach(s.ws, s.p); this.boot(s.ws, { t: 'elsewhere' }); }
     Object.assign(me, { id: who, who, watch: false, admin: false, said: me.said || [], v: clean(m.v, 20), b: Math.floor(Number(m.b)) || 0, e: Math.floor(Number(m.e)) || 0, link, alive: false });
     const p = this.persons.get(who);
-    let away = null, dead = null;
+    let away = null, dead = null, tasks = null;
     if (p && this.alive(p)) {
       this.thaw(p); // maintenance paused them: their clocks carry on from where they stopped
       if (p.asleep) this.catchUp(p, Date.now()); // asleep away: hunger and thirst dropped slowly to the floor
@@ -297,6 +298,7 @@ export class World extends DurableObject {
         this.advanceAway(p, Date.now());
         if (this.alive(p)) {
           away = { ms: Date.now() - p.leftAt, ...(p.log || {}) };
+          tasks = p.tasks = this.tasksBack(p); p.took = []; // what's left of their task list goes back to their game (tasks.js)
           if (away.ms >= BACK_AFTER) this.note('world', `${p.name} came back after ${longText(away.ms)}`);
           p.plan = null; p.asleep = false; p.sleeping = false; p.collapsed = false; p.leftAt = 0; p.log = { ate: 0, drank: 0, picked: 0 }; // back: awake
           this.touch(p);
@@ -314,7 +316,7 @@ export class World extends DurableObject {
     if (p) await this.flush(who);
     const w = this.world;
     reply({ t: 'welcome', id: who, people: this.people(who), world: this.view(), needSeed: !w, needLayout: this.needLayout(me),
-      count: this.playing(), me: me.alive ? this.mine(p) : null, away, dead, speed: this.speed, live: this.live, liveItems: this.liveItems });
+      count: this.playing(), me: me.alive ? this.mine(p) : null, away, tasks, dead, speed: this.speed, live: this.live, liveItems: this.liveItems });
     if (me.alive) this.send({ t: 'join', person: this.pub(p) }, who);
     this.sendCount();
   }
@@ -407,7 +409,7 @@ export class World extends DurableObject {
     const p = this.persons.get(who);
     if (wasAlive && this.alive(p) && !this.socketOf(who)) { // away now: they start looking after themselves
       p.leftAt = Date.now(); p.simAt = p.leftAt; p.statsAt = Math.min(p.statsAt, p.leftAt);
-      p.home = [p.x, p.z]; p.asleep = false; p.wanderNext = true; p.log = { ate: 0, drank: 0, picked: 0 };
+      p.home = [p.x, p.z]; p.asleep = false; p.wanderNext = true; p.log = { ate: 0, drank: 0, picked: 0 }; p.took = []; // (p.tasks: what's left of their task list, carried on with while they're away: tasks.js)
       // they stay put for a few seconds (away.comeBackSeconds), so a short break in the connection changes nothing; then off for a stroll
       p.plan = { kind: 'idle', start: p.leftAt, arrive: p.leftAt + (AWAY.comeBackSeconds || 0) * 1000 };
       this.touch(p);
@@ -421,7 +423,7 @@ export class World extends DurableObject {
 
 }
 // the rest of the world's methods, kept in their own files by topic
-Object.assign(World.prototype, lineMethods, personsMethods, awayMethods, natureMethods, adminMethods, placedMethods, liveMethods, liveItemsMethods, claimsMethods, societiesMethods, guardMethods, restoreMethods, activityMethods);
+Object.assign(World.prototype, lineMethods, personsMethods, awayMethods, natureMethods, adminMethods, placedMethods, liveMethods, liveItemsMethods, claimsMethods, societiesMethods, guardMethods, restoreMethods, activityMethods, taskMethods);
 
 export default {
   async fetch(request, env) {

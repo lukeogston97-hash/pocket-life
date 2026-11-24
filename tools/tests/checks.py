@@ -264,6 +264,38 @@ async def strolling():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
+async def tasks_away():
+    """Your person keeps working while the Menu is open, and after you leave the server carries on with your task list
+    (0.1.7, server/src/tasks.js): things on it get done, Welcome back says so, and what's left comes back to your list."""
+    away = {**json.load(open(os.path.join(HERE, '..', '..', 'test', 'game-data.json')))['away'], 'comeBackSeconds': 1}  # (the short break after leaving, cut down: a quick check)
+    async with world({'away': away}) as W:
+        a = await W.page('tasksA', data={'away': {'comeBackSeconds': 1}}); await join(a)
+        here = "[__pl.player.position.x, __pl.player.position.z]"
+        p0 = await a.evaluate(here)
+        await a.evaluate("(() => { const p = __pl.player.position; __pl.queueTask({ type: 'walk', x: p.x + 5, z: p.z + 0.5 }); })()")
+        await a.click('#menuBtn'); await a.wait_for_timeout(4500)
+        p1 = await a.evaluate(here)
+        moved = ((p1[0] - p0[0]) ** 2 + (p1[1] - p0[1]) ** 2) ** 0.5
+        expect(moved > 3.5, f'a walk carries on while the Menu is open ({moved:.1f} m)')
+        await a.click('#resumeBtn')
+        # the two nearest loose things to pick up, then a long walk, and Exit straight away
+        ids = await a.evaluate("(() => { const p = __pl.player.position; return [...__pl.world.items].filter((it) => it.kind === 'stick' || it.kind === 'stone')"
+                               ".sort((x, y) => Math.hypot(x.x - p.x, x.z - p.z) - Math.hypot(y.x - p.x, y.z - p.z)).slice(0, 2).map((it) => it.id); })()")
+        await a.evaluate(f"(() => {{ for (const id of {ids}) __pl.queueTask({{ type: 'pickup', id }}); __pl.queueTask({{ type: 'walk', x: -30, z: 30 }}); }})()")
+        await a.wait_for_timeout(300)
+        await a.click('#menuBtn'); await a.wait_for_timeout(300); await a.click('#exitBtn')
+        await a.wait_for_timeout(9000)
+        await join(a)
+        left = await a.evaluate(f"{ids}.filter((id) => __pl.getItem(id)).length")
+        carried = await a.evaluate("Object.values(__pl.you.carry).reduce((n, c) => n + c, 0)")
+        expect(left == 0 and carried >= 2, f'while you were away your person picked both up ({left} still on the ground, carrying {carried})')
+        back = await a.evaluate("document.getElementById('backText').textContent")
+        expect('on your task list' in back, f'Welcome back says so ({back})')
+        rest = await a.evaluate("[__pl.tasks.current, ...__pl.tasks.list].filter(Boolean).map((t) => t.type)")
+        expect(rest[:1] == ['walk'], f'the long walk still to finish is back on your list ({rest})')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
 async def regions():
     """The world picker under Play: Oceania is open; Europe and Americas say Coming soon and can't be played."""
     async with world() as W:
@@ -1618,18 +1650,18 @@ async def admin_phone():
 
 
 async def server_tests():
-    """The server's own code, tested with no browser (quick): the admin's fire, claim, Log, rename and message tools, live item numbers, that an old admin flag gives a player nothing, that things which aren't in the world can't be chopped, mined or picked, and societies."""
+    """The server's own code, tested with no browser (quick): the admin's fire, claim, Log, rename and message tools, live item numbers, that an old admin flag gives a player nothing, that things which aren't in the world can't be chopped, mined or picked, societies, and task lists carried on while away."""
     import subprocess
     from lib import bundle
     bundle()
-    for f in ['admin_extras.mjs', 'live_items.mjs', 'stale_admin.mjs', 'cheats.mjs', 'societies.mjs']:
+    for f in ['admin_extras.mjs', 'live_items.mjs', 'stale_admin.mjs', 'cheats.mjs', 'societies.mjs', 'tasks.mjs']:
         r = subprocess.run(['node', f], cwd=HERE, capture_output=True, text=True, timeout=180)
         last = (r.stdout.strip().splitlines() or ['(nothing printed)'])[-1]
         if r.returncode: print(r.stdout[-4000:], r.stderr[-2000:])
         expect(r.returncode == 0, f'{f}: {last[:160]}')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'server_tests': server_tests}
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'tasks_away': tasks_away, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'server_tests': server_tests}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

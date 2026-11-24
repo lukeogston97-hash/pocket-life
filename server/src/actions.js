@@ -28,6 +28,13 @@ export const ACTIONS = {
     reply({ t: 'reported', ok: true });
     return;
   } },
+  // their task list (0.1.7): the game sends what's left of it when it changes and when they leave, so their person can
+  // carry on with it while they're away (tasks.js). Saved with them; only run while they're away.
+  tasks: { when: 'alive', async run({ m, p }) {
+    p.tasks = this.cleanTasks(m.list);
+    p.took = [];
+    this.touchLater(p);
+  } },
   // the game asks for its person again (after sending what it did while the connection was down)
   sync: { when: 'alive', async run({ p, reply }) { reply(this.mine(p)); } },
   // making a new person

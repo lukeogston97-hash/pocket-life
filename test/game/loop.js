@@ -11,7 +11,7 @@ function frame() {
 function frameStep() {
   const raw = clock.getDelta();
   const dt = Math.min(raw, 0.05);
-  if (!paused) elapsed += Math.min(raw, 0.25);
+  if (!maint.on) elapsed += Math.min(raw, 0.25); // (only maintenance stops the clock: the world is closed)
   const w = app.clientWidth, h = app.clientHeight;
   if (ui.mode === 'creator') {
     if (!previewDrag && !reduceMotion) previewSpin += dt * 0.35;
@@ -26,7 +26,9 @@ function frameStep() {
   } else if (ui.mode === 'admin') {
     adminFrame(dt, raw, w, h);
   } else if (player) {
-    if (!you.dead && !paused && !you.sleeping) updatePlayer(dt);
+    // the Menu, the Camp panel and What's new don't stop your person: the world keeps going, and so does what they're
+    // doing (0.1.7). Only taps and keys wait until it's closed (paused). Maintenance stops everything.
+    if (!you.dead && !maint.on && !you.sleeping) updatePlayer(dt);
     if (!paused) { keyCamera(dt); edgePan(dt); }
     updateOthers(dt);
     fadeTapRing(dt);

@@ -1,4 +1,5 @@
-// Away: while a player is gone their person looks after themselves (strolls, eats, drinks, picks berries, sleeps), played forward to now.
+// Away: while a player is gone their person carries on with their task list (tasks.js) and looks after themselves (strolls,
+// eats, drinks, picks berries, sleeps), played forward to now.
 // These are methods of the World (index.js adds them to it), so `this` is the world.
 import { G, HOUR, MINUTE, advanceStats, addCarry, takeCarry, applyGives, eatOne, posAt, dist, sleepMs, spend, num, AWAY, pickRandom, isNight, morningAfter } from './shared.js';
 import { fireRule } from './placed.js';
@@ -33,6 +34,7 @@ export const awayMethods = {
     }
   },
   arrive(p, plan, t) {
+    if (plan.then === 'task') { if (plan.kind === 'work') this.finishTask(p, t); return; } // a task on their list: done now (tasks.js); walked over: decide starts it
     if (plan.kind === 'sit') { // sat by the fire for as long as they were asked to: up again
       this.standUp(p, plan.arrive > Date.now() - 30000);
       return;
@@ -67,6 +69,11 @@ export const awayMethods = {
     const kind = Object.keys(f.fuels).filter((k) => p.carry[k] > 0 && Math.max(f.fuels[k], least) <= room).sort((a, b) => f.fuels[b] - f.fuels[a])[0];
     return kind ? [th, kind] : null;
   },
+  // is there a bush with berries on it they may pick (not in someone else's camp)? (hungry with tasks to do: berries first if there are any)
+  ripeBushNear(p, at, t) {
+    const L = this.world && this.world.layout;
+    return !!(L && L.bushes.some((b, i) => !(this.world.removed || {})[`bush:${i}`] && !this.notYours(p, b[0], b[1]) && this.berriesOn(i, t) > 0));
+  },
   // put everything that fits on their claim's fire from their bag (logs first, then sticks)
   feedFire(p) {
     let fed = 0;
@@ -86,7 +93,8 @@ export const awayMethods = {
     if (th) this.sendPlaced(th, null);
     this.touch(p);
   },
-  // what to do next: eat if hungry, then water, then berries, then keep their claim's fire going, otherwise potter about near home
+  // what to do next: eat if hungry, then water, then berries, then the next thing on their task list (tasks.js), then keep
+  // their claim's fire going, otherwise potter about near home
   decide(p, t, now, L) {
     while (p.stats.hunger != null && p.stats.hunger < AWAY.eatBelow && eatOne(p, G)) p.log.ate++;
     const at = [p.x, p.z];
@@ -94,9 +102,9 @@ export const awayMethods = {
     const out = p.sit ? this.fireOutAt(p.sit.fire, t) : 0;
     if (p.sit && p.sit.until > t && out > t) { p.plan = { kind: 'sit', start: t, arrive: Math.min(p.sit.until, out) }; return; }
     if (p.sit) this.standUp(p, false);
-    // night: off to bed until morning. Tired (or already lying down): sleep where they are until rest is full
-    const night = isNight(t, G);
-    if (night || p.sleeping || (p.stats.rest != null && p.stats.rest < AWAY.sleepBelow)) {
+    // night: off to bed until morning, once their task list is done. Tired (or already lying down): sleep where they are until rest is full
+    const night = isNight(t, G), working = !!(p.tasks && p.tasks.length);
+    if ((night && !working) || p.sleeping || (p.stats.rest != null && p.stats.rest < AWAY.sleepBelow)) {
       const was = p.sleeping;
       p.sleeping = true;
       const fast = this.speed && t < this.speed.until ? this.speed.x : 1;
@@ -112,14 +120,13 @@ export const awayMethods = {
       if (p.plan.arrive > now) this.send({ t: 'stroll', id: p.who, x: p.plan.to[0], z: p.plan.to[1], speed: AWAY.strollSpeed, ms: Math.round(p.plan.arrive - now), then: extra && extra.then }, null);
     };
     const idle = (ms) => { p.plan = { kind: 'idle', start: t, arrive: t + ms }; };
-    if (!L) { idle(10 * MINUTE); return; }
     const water = Object.keys(G.sources).find((k) => G.sources[k].gives && G.sources[k].water);
-    if (water && p.stats.thirst != null && p.stats.thirst < AWAY.drinkBelow && L.shore.length) {
+    if (L && water && p.stats.thirst != null && p.stats.thirst < AWAY.drinkBelow && L.shore.length) {
       const to = L.shore.reduce((a, b) => (dist(at, a) < dist(at, b) ? a : b));
       walk(to, { then: 'drink', source: water });
       return;
     }
-    if (p.stats.hunger != null && p.stats.hunger < AWAY.eatBelow && L.bushes.length) {
+    if (L && p.stats.hunger != null && p.stats.hunger < AWAY.eatBelow && L.bushes.length && !(working && !this.ripeBushNear(p, at, t))) { // (with tasks to do and no ripe berries: the tasks)
       const near = L.bushes.map((b, i) => ({ i, b, d: dist(at, b) })).filter((n) => !(this.world.removed || {})[`bush:${n.i}`] && !this.notYours(p, n.b[0], n.b[1])) // not ones in someone else's claim
         .sort((a, b) => a.d - b.d);
       const ripe = near.find((n) => this.berriesOn(n.i, t) > 0);
@@ -130,6 +137,9 @@ export const awayMethods = {
       walk(stand, ripe ? { then: 'pick', bush: go.i } : {});
       return;
     }
+    // the next thing on their task list (tasks.js)
+    if (working && this.taskStep(p, t, now, L)) return;
+    if (!L) { idle(10 * MINUTE); return; }
     // their claim's fire has room for a log or stick they carry: go and put it on
     const feed = this.fireToFeed(p);
     if (feed) {
