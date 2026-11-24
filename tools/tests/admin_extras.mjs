@@ -215,6 +215,36 @@ expect(text === "Pat is away, so they wouldn't see it", 'a message to someone aw
 list = await S.log();
 expect(list.some((l) => l.text === 'Rename: Pat is now Patricia') && list.some((l) => l.text === 'Message: Sent to Pat'), 'both are in the log');
 
+console.log('D2. found recipes (the craft mat, 0.1.8): made the player\'s way, kept tools stay, the admin gives all or clears, a new person keeps them');
+const pat3 = S.playing('pat'); S.w.fresh();
+const patP = () => S.w.persons.get('pat');
+patP().carry = { stone: 2 }; patP().found = [];
+await S.ask(pat3, { t: 'craft', id: 'sharp-stone' });
+let mine = pat3.got.filter((m) => m.t === 'me').pop();
+expect(patP().carry['sharp-stone'] === 1 && !patP().carry.stone && mine && mine.found.includes('sharp-stone'), 'Pat knocks 2 stones into a sharp stone: it is in their found recipes, and their game is told', JSON.stringify(mine && mine.found));
+patP().carry = { stick: 1 };
+await S.ask(pat3, { t: 'craft', id: 'twig' });
+expect(!patP().carry.twig && patP().carry.stick === 1, 'a twig needs a sharp stone on the mat too, even though it is kept');
+patP().carry = { stick: 1, 'sharp-stone': 1 };
+await S.ask(pat3, { t: 'craft', id: 'twig' });
+expect(patP().carry.twig === 1 && patP().carry['sharp-stone'] === 1 && !patP().carry.stick && patP().found.includes('twig'), 'with one, the stick becomes a twig and the sharp stone is kept', JSON.stringify(patP().carry));
+await S.ask(pat3, { t: 'a.found', id: 'pat', all: true });
+expect(patP().found.length === 2, 'a player sending the admin\'s Found tool gets nothing', JSON.stringify(patP().found));
+text = await S.tool({ t: 'a.found', id: 'pat', all: true });
+mine = pat3.got.filter((m) => m.t === 'me').pop();
+expect(text === 'Pat has found every recipe' && mine.found.length === Object.keys(FILE.recipes).length, 'Find all gives them every recipe, and their game is told', text);
+const foundPage = S.admin.got.filter((m) => m.t === 'adminPlayer').pop();
+expect(foundPage && foundPage.found.length === Object.keys(FILE.recipes).length, 'the admin\'s page for them shows it');
+text = await S.tool({ t: 'a.found', id: 'pat', all: false });
+expect(text === "Pat's found recipes are cleared" && patP().found.length === 0, 'Clear found empties them', text);
+expect(await S.tool({ t: 'a.found', id: 'nobody', all: true }) === "They've gone", 'someone who isn\'t there has none to change');
+patP().found = ['knife', 'no-such-recipe'];
+patP().state = 'dead';
+await S.ask(pat3, { t: 'create', name: 'Pat', look: {}, age: 30 });
+expect(S.w.alive(patP()) && JSON.stringify(patP().found) === '["knife"]', 'a new person after dying keeps the recipes the last one found (ones the game no longer has are dropped)', JSON.stringify(patP().found));
+list = await S.log();
+expect(list.some((l) => /^Found recipes/.test(l.text)), 'the admin\'s changes are in the log');
+
 console.log('E. Reset everything starts the log again');
 await S.ask(S.admin, { t: 'a.reset', all: true }); await tick();
 // (everyone is sent away by a reset, the admin too: a fresh admin connection reads the log)

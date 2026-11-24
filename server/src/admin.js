@@ -22,7 +22,7 @@ const TOOLS = { 'a.maintenance': 'Maintenance', 'a.announce': 'Message to everyo
   'a.mute': 'Mute', 'a.fill': 'Fill needs', 'a.give': 'Give', 'a.take': 'Take', 'a.wake': 'Wake', 'a.sleep': 'Send to sleep', 'a.movePerson': 'Move person',
   'a.setStats': 'Edit person', 'a.removePerson': 'Remove person', 'a.regrowAll': 'Regrow everything', 'a.clear': 'Clear loose items', 'a.move': 'Move', 'a.regrow': 'Regrow',
   'a.remove': 'Remove', 'a.live': 'Setting', 'a.liveItem': 'Item number', 'a.fire': 'Fire', 'a.claim': 'Claim', 'a.rename': 'Rename', 'a.tell': 'Message',
-  'a.socRename': 'Rename society', 'a.socRemove': 'Take out of society', 'a.socEnd': 'End society', 'a.clearTasks': 'Clear task list' };
+  'a.socRename': 'Rename society', 'a.socRemove': 'Take out of society', 'a.socEnd': 'End society', 'a.clearTasks': 'Clear task list', 'a.found': 'Found recipes' };
 // which thing a tool was used on, when its answer doesn't say (server: the World)
 function aboutOf(m, server) {
   const short = (v) => clean(String(v == null ? '' : v), 40);
@@ -65,7 +65,8 @@ export const adminMethods = {
     if (p && !this.alive(p)) past.unshift({ name: p.name, age: ageOf(p, p.diedAt || Date.now()), born: p.born || 0, until: p.diedAt || 0, cause: p.state === 'gone' ? 'left' : p.cause || '' });
     const reports = ((await this.ctx.storage.get('reports')) || []).filter((r) => r.about && r.about.who === who).length;
     const out = { t: 'adminPlayer', id: who, muted: this.admin.muted.includes(who), banned: this.admin.banned.includes(who), reports, past, v: s ? s.p.v : '', link: s ? s.p.link : '' };
-    if (this.alive(p)) Object.assign(out, this.playerRow(p), { born: p.born || 0, stats: p.stats, carry: p.carry || {}, x: num(p.x), z: num(p.z), tasks: p.tasks || [] }); // tasks: their task list as the server has it (tasks.js)
+    if (this.alive(p)) Object.assign(out, this.playerRow(p), { born: p.born || 0, stats: p.stats, carry: p.carry || {}, x: num(p.x), z: num(p.z), tasks: p.tasks || [], // tasks: their task list as the server has it (tasks.js)
+      found: (p.found || []).filter((id) => Object.hasOwn(G.recipes || {}, id)) }); // found: the recipes they've made at least once (the craft mat's Found list)
     else Object.assign(out, { name: past[0] ? past[0].name : `Phone ${who}`, state: 'gone' });
     const soc = this.socOf(who);
     if (soc) out.soc = { id: soc.id, name: soc.name, lead: soc.leader === who, n: soc.members.length }; // their society (societies.js)
@@ -206,6 +207,14 @@ export const adminMethods = {
         if (m.on) this.admin.muted.push(who);
         await this.saveAdmin();
         return done(m.on ? 'Muted for everyone' : 'Unmuted for everyone');
+      }
+      case 'a.found': { // someone's found recipes (the craft mat's Found list, 0.1.8): all of them, or none
+        if (!this.alive(them)) return done("They've gone");
+        them.found = m.all ? Object.keys(G.recipes || {}) : [];
+        this.touch(them); await this.flush(them.who);
+        this.tell(them.who, this.mine(them));
+        reply(await this.playerPage(them.who));
+        return done(m.all ? `${them.name} has found every recipe` : `${them.name}'s found recipes are cleared`);
       }
       case 'a.clearTasks': // empty someone's task list (tasks.js); their game stops too, if they're playing
         if (!this.alive(them)) return done("They've gone");

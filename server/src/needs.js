@@ -1,7 +1,7 @@
 // People live on the server: their needs, what they carry and where they are.
 // G is server/game.json (copied from the game's game-data.json by tools/worlds.py).
 
-import { needsStep } from './rules.js';
+import { needsStep, recipeWants } from './rules.js';
 
 export const HOUR = 3600000, MINUTE = 60000;
 const clampStat = (v) => Math.max(0, Math.min(100, v));
@@ -128,9 +128,10 @@ export function posAt(p, t) {
 }
 export const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
 // make something from a recipe: true if it was made
+// (keeps: tools the recipe needs but doesn't use up, like a sharp stone: they have to be carried, and stay)
 export function craft(p, r, G) {
   if (!r) return false;
-  for (const [k, n] of Object.entries(r.needs)) if ((p.carry[k] || 0) < n) return false;
+  for (const [k, n] of Object.entries(recipeWants(r))) if ((p.carry[k] || 0) < n) return false;
   if (weightOf(p.carry, G) - weightOf(r.needs, G) + weightOf(r.makes, G) > G.carryCapacity + 1e-6) return false;
   for (const [k, n] of Object.entries(r.needs)) takeCarry(p, k, n);
   for (const [k, n] of Object.entries(r.makes)) {

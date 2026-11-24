@@ -98,6 +98,46 @@
       "startInWorld": 0,
       "spawnsNear": null
     },
+    "sharp-stone": {
+      "weight": 1,
+      "eat": null,
+      "uses": 0,
+      "places": null,
+      "startInWorld": 0,
+      "spawnsNear": null
+    },
+    "twig": {
+      "weight": 1,
+      "eat": null,
+      "uses": 0,
+      "places": null,
+      "startInWorld": 0,
+      "spawnsNear": null
+    },
+    "long-stick": {
+      "weight": 2,
+      "eat": null,
+      "uses": 0,
+      "places": null,
+      "startInWorld": 0,
+      "spawnsNear": null
+    },
+    "axe-head": {
+      "weight": 1,
+      "eat": null,
+      "uses": 0,
+      "places": null,
+      "startInWorld": 0,
+      "spawnsNear": null
+    },
+    "pick-head": {
+      "weight": 1,
+      "eat": null,
+      "uses": 0,
+      "places": null,
+      "startInWorld": 0,
+      "spawnsNear": null
+    },
     "berry": {
       "weight": 1,
       "eat": {
@@ -176,51 +216,98 @@
     }
   },
   "recipes": {
+    "sharp-stone": {
+      "needs": {
+        "stone": 2
+      },
+      "makes": {
+        "sharp-stone": 1
+      }
+    },
     "knife": {
       "needs": {
+        "sharp-stone": 1,
         "stick": 1,
-        "stone": 1,
         "twine": 1
       },
       "makes": {
         "knife": 1
       }
     },
-    "stone-axe": {
+    "twig": {
       "needs": {
-        "stick": 2,
-        "stone": 3,
-        "twine": 1
+        "stick": 1
       },
       "makes": {
-        "stone-axe": 1
+        "twig": 1
+      },
+      "keeps": {
+        "sharp-stone": 1
       }
     },
-    "stone-pickaxe": {
+    "long-stick": {
       "needs": {
         "stick": 2,
-        "stone": 3,
         "twine": 1
       },
       "makes": {
-        "stone-pickaxe": 1
+        "long-stick": 1
       }
     },
     "fishing-spear": {
       "needs": {
-        "stick": 2,
-        "stone": 1,
+        "long-stick": 1,
+        "sharp-stone": 1,
         "twine": 1
       },
       "makes": {
         "fishing-spear": 1
       }
     },
+    "axe-head": {
+      "needs": {
+        "stone": 1
+      },
+      "makes": {
+        "axe-head": 1
+      },
+      "keeps": {
+        "sharp-stone": 1
+      }
+    },
+    "stone-axe": {
+      "needs": {
+        "axe-head": 1,
+        "stick": 1,
+        "twine": 1
+      },
+      "makes": {
+        "stone-axe": 1
+      }
+    },
+    "pick-head": {
+      "needs": {
+        "sharp-stone": 2
+      },
+      "makes": {
+        "pick-head": 1
+      }
+    },
+    "stone-pickaxe": {
+      "needs": {
+        "pick-head": 1,
+        "stick": 1,
+        "twine": 1
+      },
+      "makes": {
+        "stone-pickaxe": 1
+      }
+    },
     "campfire": {
       "needs": {
         "log": 1,
-        "stick": 3,
-        "stone": 4
+        "twig": 2,
+        "stone": 2
       },
       "makes": {
         "campfire": 1
@@ -387,7 +474,8 @@
         "maxFuel": 24,
         "maxHours": 72,
         "otherFuels": {
-          "log": 28800
+          "log": 28800,
+          "twig": 120
         },
         "lightSeconds": 3
       },

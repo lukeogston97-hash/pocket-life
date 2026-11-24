@@ -54,8 +54,18 @@ def problems(d):
     for r in d.get('recipes', []):
         w = f'recipes.{r.get("id")}'
         if not r.get('needs') or not r.get('makes'): out.append(f'{w}: needs both "needs" and "makes"')
-        counts(r.get('needs'), f'{w}.needs'); counts(r.get('makes'), f'{w}.makes')
+        counts(r.get('needs'), f'{w}.needs'); counts(r.get('makes'), f'{w}.makes'); counts(r.get('keeps'), f'{w}.keeps')
         if r.get('near') is not None: known(r['near'], f'{w}.near', placeables, 'placeable')
+        both = set(r.get('needs') or {}) & set(r.get('keeps') or {})
+        if both: out.append(f'{w}: "{", ".join(sorted(both))}" is in both needs (used up) and keeps (kept): pick one')
+    # the craft mat (0.1.8) finds a recipe by exactly what's on it, so no two recipes can want the same things
+    wants = {}
+    for r in d.get('recipes', []):
+        want = dict(r.get('needs') or {})
+        for k, n in (r.get('keeps') or {}).items(): want[k] = want.get(k, 0) + n
+        key = tuple(sorted(want.items()))
+        if key in wants: out.append(f'recipes.{r.get("id")}: wants the same things on the craft mat as recipes.{wants[key]}, so the mat can\'t tell them apart')
+        else: wants[key] = r.get('id')
     for k, p in placeables.items():
         w = f'placeables.{k}'
         if not any(it.get('places') == k for it in items.values()): out.append(f'{w}: no item has "places": "{k}", so nobody could place it')
@@ -128,7 +138,7 @@ def server_files(d):
         'items': {k: {'weight': v.get('weight', 1), 'eat': v.get('eat'), 'uses': (v.get('tool') or {}).get('uses', 0), 'places': v.get('places'),
                        'startInWorld': v.get('startInWorld', 0), 'spawnsNear': v.get('spawnsNear')} for k, v in d['items'].items()},
         # (seconds and pose: how long a task takes and how it looks, for people carrying on with their task list while away, tasks.js)
-        'recipes': {r['id']: {'needs': r['needs'], 'makes': r['makes'], **({'near': r['near']} if r.get('near') else {}), **({'seconds': r['seconds']} if r.get('seconds') else {})} for r in d.get('recipes', [])},
+        'recipes': {r['id']: {'needs': r['needs'], 'makes': r['makes'], **({'keeps': r['keeps']} if r.get('keeps') else {}), **({'near': r['near']} if r.get('near') else {}), **({'seconds': r['seconds']} if r.get('seconds') else {})} for r in d.get('recipes', [])},
         'sources': {k: {'gives': v.get('gives'), 'harvest': v.get('harvest'), 'water': bool(v.get('water')), 'tool': v.get('tool'), 'toolHarvest': v.get('toolHarvest'), 'regrowHours': v.get('regrowHours', 0), 'fish': v.get('fish'), 'seconds': v.get('seconds', 2), 'pose': v.get('pose')} for k, v in srcs.items()},
         'plants': {k: {'gives': v.get('gives', {}), 'count': v.get('count', 40), 'regrowHours': v.get('regrowHours', 2), 'tool': v.get('tool'),
                        'seconds': v.get('seconds', 6), 'toolSeconds': v.get('toolSeconds'), 'pose': v.get('pose')} for k, v in d.get('plants', {}).items()},

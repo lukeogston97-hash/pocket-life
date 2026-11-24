@@ -8,7 +8,7 @@
 // These are methods of the World (index.js adds them to it), so `this` is the world.
 import { ACTIONS } from './actions.js';
 import { PLACEABLES, fireRule, seatAt } from './placed.js';
-import { fuelRoom } from './rules.js';
+import { fuelRoom, recipeWants } from './rules.js';
 import { weightOf } from './needs.js';
 import { G, num, dist, spend } from './shared.js';
 
@@ -202,7 +202,7 @@ export const taskMethods = {
       case 'make': {
         const th = this.placedById(task.id), r = has(G.recipes, task.recipe) ? G.recipes[task.recipe] : null;
         if (!th || !r || !th.built || (fireRule(th.kind) && !this.burn(th).lit)) return null; // cooking needs the fire lit
-        if (Object.entries(r.needs || {}).some(([k, n]) => (p.carry[k] || 0) < n)) return null; // not got what it takes
+        if (Object.entries(recipeWants(r)).some(([k, n]) => (p.carry[k] || 0) < n)) return null; // not got what it takes (tools it keeps too)
         return { to: nearThing(th), seconds: r.seconds || 1.6, pose: 'kneel' };
       }
       default: return null;

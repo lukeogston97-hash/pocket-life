@@ -22,6 +22,7 @@
 
 ## People (admin mode)
 - A person's page also shows their task list as the server has it (what they carry on with while away, 0.1.7), with Clear task list (two taps; their game stops too if they're playing).
+- And their recipes found on the craft mat (0.1.8): how many of how many, by name, with Find all (every recipe) and Clear found (two taps). Tool a.found { id, all } in server/src/admin.js, in the Log as Found recipes.
 - A person's page: needs as bars, and Edit needs and age opens boxes to type in. Needs go 0 to 100, health never below 1 (typing can't kill: Remove from world is its own button), age 13 to 120 (Claude's choices, 24 Nov). Only the boxes that were changed are sent.
 - Rename: any name, for one the filter missed. Their own game and everyone else's show it straight away.
 - A message only they see: shown like a message to everyone, only while they're online. It isn't kept for later.

@@ -45,7 +45,8 @@ export const ACTIONS = {
     const a = Math.random() * Math.PI * 2, r = Math.random() * 1.5;
     const np = { who: me.who, state: 'alive', name, look: cleanLook({ ...m.look, name }), age: Math.max(G.age.min, Math.min(G.age.max, Math.round(Number(m.age) || G.age.min))),
       born: Date.now(), x: num(START.x + Math.cos(a) * r), z: num(START.z + Math.sin(a) * r), ry: 0.62,
-      stats: freshStats(G), statsAt: Date.now(), carry: {}, lastKind: null, log: { ate: 0, drank: 0, picked: 0 } };
+      stats: freshStats(G), statsAt: Date.now(), carry: {}, lastKind: null, log: { ate: 0, drank: 0, picked: 0 },
+      found: (p && Array.isArray(p.found) ? p.found : []).filter((id) => Object.hasOwn(G.recipes || {}, id)) }; // the recipes the last person found carry over (Luke, 0.1.8)
     this.persons.set(me.who, np);
     this.note('world', `New person: ${name}, ${np.age}`);
     me.alive = true;
@@ -102,10 +103,16 @@ export const ACTIONS = {
     reply(this.mine(p));
     this.send({ t: 'state', id: me.id, state: p.sleeping ? 'sleeping' : 'online', x: num(p.x), z: num(p.z) }, me.id);
   } },
-  // making something from a recipe; one with "near" (cooking) needs a built one of that close by, a fire lit
+  // making something from a recipe; one with "near" (cooking) needs a built one of that close by, a fire lit.
+  // The first time someone makes one, it goes in their found recipes (p.found: the Found list on the craft mat, 0.1.8)
   craft: { when: 'alive', async run({ ws, me, m, p, w, reply, save }) {
     const r = Object.hasOwn(G.recipes || {}, String(m.id)) ? G.recipes[m.id] : null; // (only a real recipe: a name every object has, like 'constructor', isn't one)
-    if (r && (!r.near || this.stationFor(p, r.near)) && craft(p, r, G)) { spend(p, 'craft', G); save(); }
+    if (r && (!r.near || this.stationFor(p, r.near)) && craft(p, r, G)) {
+      spend(p, 'craft', G);
+      p.found = Array.isArray(p.found) ? p.found : [];
+      if (!p.found.includes(m.id)) p.found.push(m.id);
+      save();
+    }
     reply(this.mine(p));
   } },
   // eating one thing from your inventory

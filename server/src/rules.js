@@ -64,6 +64,24 @@ export function seatSpotOf(th, seats, k) {
   return [th.x + Math.sin(a) * d, th.z + Math.cos(a) * d];
 }
 
+/* ---------- crafting on the craft mat (0.1.8): put things together and see what they make ---------- */
+// everything a recipe wants on the mat: what it uses up (needs) and the tools it keeps (keeps, like a sharp stone)
+export function recipeWants(r) {
+  const out = { ...(r.needs || {}) };
+  for (const [k, n] of Object.entries(r.keeps || {})) out[k] = (out[k] || 0) + n;
+  return out;
+}
+// mat: what's on the mat { kind: how many }. Is it exactly what the recipe wants (the same things, the same number of each)?
+export function matIs(mat, r) {
+  const want = recipeWants(r), on = Object.entries(mat).filter(([, n]) => n > 0);
+  return on.length === Object.keys(want).length && on.every(([k, n]) => want[k] === n);
+}
+// is everything on the mat part of the recipe, with something still missing? (the mat says "Something's missing")
+export function matPartOf(mat, r) {
+  const want = recipeWants(r), on = Object.entries(mat).filter(([, n]) => n > 0);
+  return on.length > 0 && on.every(([k, n]) => (want[k] || 0) >= n) && !matIs(mat, r);
+}
+
 /* ---------- kinds of item: the buttons in Craft and the admin's item picker ---------- */
 export const ITEM_GROUPS = ['Tools', 'Food', 'Building', 'Clothes', 'Materials'];
 // it: { uses, eat, places } (a tool wears out, food has eat, a placeable has places)
