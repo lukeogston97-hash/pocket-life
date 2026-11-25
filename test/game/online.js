@@ -383,7 +383,7 @@ function showMaintenance(text, title = 'Back soon', note = 'Your person is safe.
   $('maintTitle').textContent = title;
   $('maintNote').textContent = note;
   $('adminPanel').hidden = true; $('adminPick').hidden = true; // (the admin's password box stays if it's open: it's the way in while maintenance is on)
-  closeFeedback(); closeReport(); closeSay(); closeMenu(); $('pause').hidden = true;
+  closeFeedback(); closeReport(); closeSay(); closeMenu(); closeRules(); $('pause').hidden = true;
   paused = true; // needs don't drain while the world is closed
   $('maintText').textContent = text || 'Pocket Life is being updated. It will be back in a few minutes.';
   $('maint').hidden = false;

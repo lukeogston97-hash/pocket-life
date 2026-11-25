@@ -268,6 +268,41 @@ $('pauseSettingsBtn').addEventListener('click', () => { closePause(); $('setting
 function closeSettings() { $('settings').hidden = true; }
 $('settingsClose').addEventListener('click', closeSettings);
 $('settings').addEventListener('click', (e) => { if (e.target === $('settings')) closeSettings(); });
+/* ---------- Privacy and rules (Settings): what the game keeps, and how to play nicely ----------
+   The words live in one place, privacy.html (a page of its own, for links from outside the game). The panel fetches
+   that page the first time it's opened and shows everything inside its #words. Edit the words there.
+   Like What's new it's for reading, so taps and keys wait until it's closed (paused); the world carries on. */
+let rulesLoaded = false;
+async function openRules() {
+  closeSettings();
+  paused = true;
+  $('rules').hidden = false;
+  $('rulesClose').focus();
+  if (rulesLoaded) return;
+  const body = $('rulesBody');
+  body.replaceChildren(el('p', 'admin-empty', 'Loading…'));
+  try {
+    const res = await fetch(`privacy.html?v=${VERSION}.${DATA.build || 0}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const words = new DOMParser().parseFromString(await res.text(), 'text/html').getElementById('words');
+    if (!words || !words.children.length) throw new Error('no words');
+    for (const bad of words.querySelectorAll('script, style, iframe, img')) bad.remove(); // (words only)
+    body.replaceChildren(...[...words.children].map((n) => document.importNode(n, true)));
+    for (const a of body.querySelectorAll('a[href]')) { a.target = '_blank'; a.rel = 'noopener'; } // a link never takes you out of the game
+    body.scrollTop = 0;
+    rulesLoaded = true;
+  } catch (err) { // offline, or the page didn't arrive: say so, with the way to it
+    const p = el('p', '', "Couldn't load this just now. Check your connection, or ");
+    const a = el('a', '', 'open the page');
+    a.href = 'privacy.html'; a.target = '_blank'; a.rel = 'noopener';
+    p.append(a, '.');
+    body.replaceChildren(p);
+  }
+}
+function closeRules() { if ($('rules').hidden) return; $('rules').hidden = true; paused = false; }
+$('rulesBtn').addEventListener('click', openRules);
+$('rulesClose').addEventListener('click', closeRules);
+$('rules').addEventListener('click', (e) => { if (e.target === $('rules')) closeRules(); });
 // coming back to a person who died or left while you were away
 function showGoneCard(d) {
   const away = d.away ? ' while you were away' : '';

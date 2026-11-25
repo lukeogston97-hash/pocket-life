@@ -1,6 +1,6 @@
 """The checks. Each is an async function taking nothing; run.py runs them. Add new ones at the bottom and to CHECKS."""
 import json, os
-from lib import world, join, idle, text, shown, shot, expect, HERE
+from lib import world, join, idle, text, shown, shot, expect, HERE, HTTP_PORT
 
 KNIFE_USES = json.load(open(os.path.join(HERE, '..', '..', 'test', 'game-data.json')))['items']['knife']['tool']['uses']
 
@@ -55,6 +55,23 @@ async def menu():
         expect(await text(a, '#playSub') == 'Make your person', 'Play says Make your person')
         await shot(a, 'menu')
         await a.click('#menuSettingsBtn'); expect(await shown(a, '#settings'), 'Settings opens'); await a.click('#settingsClose')
+        # Settings > Privacy and rules (0.1.10): the words of privacy.html, shown in the game
+        await a.click('#menuSettingsBtn'); await a.click('#rulesBtn')
+        await a.wait_for_function("document.querySelectorAll('#rulesBody h2').length >= 5", timeout=15000)
+        words = await text(a, '#rulesBody')
+        expect(await shown(a, '#rules') and not await shown(a, '#settings') and all(w in words for w in ('What the game keeps', 'Rules for playing', '13 or older')), "Settings > Privacy and rules shows the page's words in the game")
+        fits = await a.evaluate("(() => { const b = document.getElementById('rulesBody'), c = b.closest('.modal-card').getBoundingClientRect(); return [b.scrollHeight > b.clientHeight + 50, c.left >= 0 && c.right <= innerWidth && c.top >= 0 && c.bottom <= innerHeight]; })()")
+        expect(all(fits), f'the panel fits the phone, and its words scroll inside it ({fits})')
+        await shot(a, 'menu_rules')
+        await a.keyboard.press('Escape'); expect(not await shown(a, '#rules'), 'Escape puts it away')
+        # the same words as a page of its own (for links from outside the game), with a way back to the game
+        pv = await a.context.new_page()
+        await pv.route('https://fonts.**', lambda r: r.abort())
+        await pv.goto(f'http://127.0.0.1:{HTTP_PORT}/test/privacy.html')
+        alone = await pv.evaluate("[document.title, document.querySelectorAll('#words h2').length, document.querySelector('.top a').getAttribute('href'), document.getElementById('words').textContent]")
+        expect('Privacy and rules' in alone[0] and alone[1] >= 5 and alone[2] == './', 'privacy.html opens as a page of its own, with a link back to the game')
+        expect(''.join(alone[3].split()) == ''.join(words.split()), 'the game shows exactly the words of that page')  # (spaces between the page's lines aside)
+        await shot(pv, 'menu_rules_page'); await pv.close()
         await a.click('#menuNewsBtn'); expect(await shown(a, '#news'), "What's new opens"); await a.click('#newsClose')
         await a.click('#playBtn'); await a.wait_for_timeout(1500)
         expect(await shown(a, '#creator'), 'Play opens Make your person')
@@ -71,6 +88,9 @@ async def menu():
         # the pause menu has What's new, Settings and Feedback too, each closed with the same Close link
         await a.click('#pauseNewsBtn'); expect(await shown(a, '#news') and not await shown(a, '#pause'), "What's new opens from the pause menu"); await a.click('#newsClose')
         await a.click('#menuBtn'); await a.click('#pauseSettingsBtn'); expect(await shown(a, '#settings'), 'Settings opens from the pause menu'); await a.click('#settingsClose')
+        await a.click('#menuBtn'); await a.click('#pauseSettingsBtn'); await a.click('#rulesBtn')
+        expect(await shown(a, '#rules') and 'Rules for playing' in (await text(a, '#rulesBody') or ''), 'Privacy and rules opens from there too')
+        await a.click('#rulesClose'); expect(not await shown(a, '#rules'), 'Close puts it away')
         await a.click('#menuBtn'); await a.click('#pauseFeedbackBtn'); expect(await shown(a, '#feedback'), 'Feedback opens from the pause menu')
         px = await a.evaluate("[parseFloat(getComputedStyle(document.getElementById('feedbackText')).fontSize), parseFloat(getComputedStyle(document.getElementById('reportNote')).fontSize)]")
         expect(min(px) >= 16, f'on a touch screen the feedback box and the report note are 16 px or more, so an iPhone does not zoom the page ({px})')
@@ -90,6 +110,15 @@ async def menu():
         await c.fill('#nameInput', 'Tester'); await c.click('.start-btn')
         await c.wait_for_function("document.getElementById('mainMenu').hidden && !document.getElementById('app').classList.contains('is-creating')", timeout=30000)
         expect(await text(c, '#hudName') == 'Tester', 'in the world with the name they typed')
+        # Privacy and rules with no connection: the panel says so, and gives the way to the page
+        await c.route('**/privacy.html*', lambda r: r.abort())
+        await c.click('#menuBtn'); await c.click('#pauseSettingsBtn'); await c.click('#rulesBtn')
+        await c.wait_for_function("document.querySelector('#rulesBody a')", timeout=15000)
+        expect("Couldn't load this just now" in await text(c, '#rulesBody') and await c.evaluate("document.querySelector('#rulesBody a').getAttribute('href')") == 'privacy.html', "if the page can't be fetched the panel says so, with a link to it")
+        await c.unroute('**/privacy.html*'); await c.click('#rulesClose'); await c.click('#menuBtn'); await c.click('#pauseSettingsBtn'); await c.click('#rulesBtn')
+        await c.wait_for_function("document.querySelectorAll('#rulesBody h2').length >= 5", timeout=15000)
+        expect(True, 'and opening it again once the connection is back shows the words')
+        await c.click('#rulesClose')
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
@@ -198,7 +227,8 @@ async def screens():
             await pg.click('#bagBtn'); await pg.click('#bagCraft'); await pg.click('#bagList .bag-tile[data-kind="stone"]'); await pg.click('#bagList .bag-tile[data-kind="stone"]'); await shot(pg, f'{tag}_05_craft'); await pg.click('#bagClose')
             await pg.click('#sayBtn'); await pg.fill('#sayInput', 'hello there'); await pg.press('#sayInput', 'Enter'); await shot(pg, f'{tag}_06_chat')
             await pg.mouse.click(w // 2, int(h * 0.3)); await pg.wait_for_timeout(300)
-            await pg.click('#menuBtn'); await shot(pg, f'{tag}_07_pause'); await pg.click('#resumeBtn')
+            await pg.click('#menuBtn'); await shot(pg, f'{tag}_07_pause'); await pg.click('#pauseSettingsBtn'); await shot(pg, f'{tag}_07b_settings')
+            await pg.click('#rulesBtn'); await pg.wait_for_function("document.querySelectorAll('#rulesBody h2').length >= 5", timeout=15000); await shot(pg, f'{tag}_07c_rules'); await pg.click('#rulesClose')
             # admin mode, on a second screen of the same size, while the first is still playing (so there is someone to look at)
             ad = await W.page(f'screensadmin{tag}', w, h)
             await ad.evaluate('__pl.openAdminLogin()'); await ad.wait_for_function("!document.getElementById('adminLogin').hidden", timeout=5000)

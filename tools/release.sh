@@ -5,7 +5,7 @@
 set -e
 cd "$(dirname "$0")/.."
 VERSION=$(python3 -c "import json; print(json.load(open('test/game-data.json'))['version'])")
-FILES="index.html style.css game-data.json manifest.webmanifest"
+FILES="index.html style.css game-data.json manifest.webmanifest privacy.html"
 mkdir -p "releases/$VERSION"
 for f in $FILES; do cp "test/$f" "$f"; cp "test/$f" "releases/$VERSION/$f"; done
 # the game's code, one file per topic (index.html lists them), and its icons and the picture a shared link shows

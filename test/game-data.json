@@ -1,6 +1,6 @@
 {
   "version": "0.1.10",
-  "build": 1,
+  "build": 2,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -1040,7 +1040,8 @@
       "date": "2026-11-25",
       "added": [
         "A loading screen while the world gets ready, so Play always works when you see it",
-        "An app icon, and a picture and a few words when you share the game's link"
+        "An app icon, and a picture and a few words when you share the game's link",
+        "Privacy and rules in Settings: what the game keeps, and the rules for playing"
       ],
       "improved": [
         "Making your person now fits a phone held sideways",

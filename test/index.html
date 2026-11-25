@@ -11,6 +11,7 @@
 <link rel="icon" type="image/png" sizes="96x96" href="icons/favicon.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
+<link rel="privacy-policy" href="privacy.html">
 <!-- How a link to the game looks when it's shared (Facebook, Messenger, Discord, X). Always the release link: the picture is
      icons/share.jpg there, so it shows once this build has been released. -->
 <meta property="og:type" content="website">
@@ -225,6 +226,14 @@ setTimeout(function () { if (!window.__bootStarted) window.__bootFail("This brow
           <button type="button" class="seg-btn" data-gfx="high">High</button>
         </div>
       </div>
+      <div class="gfx-row"><span class="lbl">Privacy and rules</span><button id="rulesBtn" type="button" class="small-btn">Read</button></div>
+    </div>
+  </div>
+
+  <div id="rules" class="modal" hidden>
+    <div class="modal-card admin-card" role="dialog" aria-modal="true" aria-labelledby="rulesTitle">
+      <div class="bag-head"><h2 id="rulesTitle">Privacy and rules</h2><button id="rulesClose" class="text-btn" type="button">Close</button></div>
+      <div id="rulesBody" class="admin-list words"></div>
     </div>
   </div>
 

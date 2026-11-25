@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy and rules · Pocket Life</title>
+<meta name="description" content="What Pocket Life keeps about you, who can see it, and the rules for playing.">
+<meta name="theme-color" content="#e3e0c8">
+<link rel="icon" type="image/png" sizes="96x96" href="icons/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<style>
+/* Privacy and rules, as a page of its own (for links from outside the game: app stores and sign-in services ask for one).
+   The game shows the same words in Settings: it fetches this page and takes everything inside #words (openRules in
+   game/screens.js), so this file is the one place to edit them. Keep it plain: headings (h2), paragraphs and lists only. */
+html { background: #e3e0c8; }
+body { margin: 0; padding: 24px 14px 40px; color: #f2f3ee; font: 600 15px/1.5 "Nunito", "Trebuchet MS", "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+.page { max-width: 640px; margin: 0 auto; }
+.top { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 0 4px 14px; color: #2c2b21; }
+.top h1 { margin: 0; font-size: 28px; font-weight: 800; line-height: 1.1; letter-spacing: -0.3px; }
+.top a { flex: none; padding: 9px 16px; border-radius: 999px; background: rgba(18, 22, 20, 0.56); color: #f2f3ee; font-size: 13px; font-weight: 700; text-decoration: none; }
+.card { padding: 6px 20px 18px; border-radius: 18px; background: rgba(20, 24, 22, 0.9); border: 1px solid rgba(255, 255, 255, 0.13); }
+#words h2 { margin: 22px 0 6px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(242, 243, 238, 0.5); }
+#words p { margin: 0 0 10px; color: rgba(242, 243, 238, 0.78); }
+#words p.updated { margin-top: 14px; font-size: 12.5px; color: rgba(242, 243, 238, 0.5); }
+#words ul { margin: 0 0 10px; padding-left: 20px; color: rgba(242, 243, 238, 0.78); }
+#words li { margin: 0 0 5px; }
+#words strong { color: #f2f3ee; font-weight: 800; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="top"><h1>Privacy and rules</h1><a href="./">Back to the game</a></div>
+  <main class="card" id="words">
+    <p class="updated">Last updated 25 November 2026</p>
+    <p>Pocket Life is a small independent game, made in Australia. This page says what the game keeps about you, who can see it, and how we ask everyone to play.</p>
+
+    <h2>The short version</h2>
+    <ul>
+      <li>You never give the game your real name, your email or a password. There are no accounts yet.</li>
+      <li>The game keeps your person, so they can live in the world while you're away.</li>
+      <li>There are no ads and no tracking, and nothing is sold or passed on for marketing.</li>
+      <li>You must be 13 or older to play.</li>
+      <li>Be kind. Other people share this world with you.</li>
+    </ul>
+
+    <h2>What the game keeps</h2>
+    <p><strong>On your phone or computer</strong>, in your browser's own storage:</p>
+    <ul>
+      <li>A random id that says which person is yours. This is why clearing your browser's data, or using a different browser, means starting again as someone new.</li>
+      <li>Your graphics setting, and the players you've muted.</li>
+    </ul>
+    <p><strong>On the game's server:</strong></p>
+    <ul>
+      <li>Your person: the name you gave them, their look and age, where they are, their needs, what they carry, the recipes they've found, their task list and their camp.</li>
+      <li>A short note of the people you had before: their name, their age and how their life ended.</li>
+      <li>Feedback you send: your words, your person's name and where they were standing, the game's version, and the kind of browser and device you used. If the game hits an error it sends a short note about it by itself, with the same details, so it can be fixed.</li>
+      <li>Reports about players: who sent it, who it's about, the reason, the note, and the last few things the reported player said.</li>
+      <li>A short log of bigger events, such as someone arriving or dying, with the person's name.</li>
+      <li>Whether you've been muted or banned.</li>
+    </ul>
+    <p>What you say in chat goes to the other players as you say it. The server keeps no history of chat. It holds your last few lines only while you're connected, and they are saved only if someone reports you.</p>
+    <p>Your internet address is only used in scrambled form, for a short time, to stop flooding (too many reports, feedback or password tries). It is never stored with your person.</p>
+
+    <h2>What other players can see</h2>
+    <ul>
+      <li>Your person's name, look and age, where they are and what they're doing, the camp they're in, and what you say.</li>
+      <li>If your person dies, a small grave with their name stays where they fell for a day.</li>
+    </ul>
+    <p>So please don't put your full real name, or anything private, in your person's name or in chat.</p>
+
+    <h2>Who helps run the game</h2>
+    <p>Pocket Life uses a few services to work. As with any website, each one sees your internet address when your browser fetches something from it.</p>
+    <ul>
+      <li>Cloudflare hosts the game and its server, and keeps backups of the world for 30 days.</li>
+      <li>Google Fonts provides the lettering.</li>
+      <li>jsDelivr provides the library that draws the 3D world.</li>
+    </ul>
+    <p>These may handle that information outside Australia. No advertising or tracking services are used.</p>
+
+    <h2>How long things are kept</h2>
+    <ul>
+      <li>Your person stays for as long as you keep coming back. A person left alone for 3 days leaves the world.</li>
+      <li>A person who has died or left is removed when you come back, or after 30 days.</li>
+      <li>The short notes about your earlier people stay, the last 20 at most.</li>
+      <li>Feedback and reports are kept until they've been dealt with, and removed 30 days after that.</li>
+      <li>The log keeps only the last 200 events.</li>
+      <li>A mute or a ban stays until it's lifted.</li>
+      <li>Backups are gone after 30 days.</li>
+    </ul>
+
+    <h2>Your choices</h2>
+    <ul>
+      <li>To ask what the game holds about you, or to have your person removed, send a note from Feedback in the game and include your person's name.</li>
+      <li>Clearing your browser's data for this site removes the id from your phone or computer.</li>
+    </ul>
+
+    <h2>Rules for playing</h2>
+    <ul>
+      <li>You must be 13 or older.</li>
+      <li>Be kind. No bullying, threats, hate or harassment, in chat or in names.</li>
+      <li>Keep it suitable for everyone. No sexual or violent talk.</li>
+      <li>Don't share personal information, yours or anyone else's.</li>
+      <li>No spam and no advertising.</li>
+      <li>No cheating: no changed copies of the game, and nothing that plays for you.</li>
+      <li>If someone is breaking the rules, tap them and choose Report. You can also choose Mute to hide what they say.</li>
+      <li>Players who break the rules can be muted, removed from the world or banned.</li>
+    </ul>
+    <p>Pocket Life is still being built. Things will change, and now and then something may break or be reset.</p>
+
+    <h2>Changes to this page</h2>
+    <p>When this page changes, the date at the top changes too.</p>
+  </main>
+</div>
+</body>
+</html>
