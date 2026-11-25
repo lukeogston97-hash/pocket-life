@@ -47,6 +47,11 @@ function goOnline() {
     else if (m.t === 'maintenance') { if (adminMode.asking) adminLoginAnswer(false); showMaintenance(m.text); } // (a password on its way was refused too: never keep sending it)
     else if (m.t === 'thanks') showTag('Thanks for the feedback!', headTop(), 2.5);
     else if (m.t === 'forgotten') forgotten(); // Leave the world for good went through (screens.js)
+    else if (m.t === 'linkCode') linkGotCode(m); // Play on other devices (screens.js)
+    else if (m.t === 'linkAsk') linkAsk(m);
+    else if (m.t === 'linkNo') linkNo(m);
+    else if (m.t === 'linked') linked();
+    else if (m.t === 'unlinked') unlinked();
     else if (m.t === 'adminNo') adminLoginAnswer(false); // the admin password wasn't accepted (admin-mode.js)
     else if (m.t.startsWith('admin') || ['announce', 'kicked', 'banned', 'reset', 'restoring'].includes(m.t)) {
       // 'admin' is both the answer to the password and what every admin tool answers with. It only lets you in while the
@@ -62,7 +67,10 @@ function goOnline() {
     else if (m.t === 'me') { const fresh = !player; applyMe(m); if (fresh) enterWorld(); }
     else if (m.t === 'died') die(m);
     else if (m.t === 'stopTasks') { if (player) stopQueue(); } // the admin cleared your task list
-    else if (m.t === 'badName') { $('nameErr').textContent = 'Pick a different name.'; $('nameErr').hidden = false; creating = false; }
+    else if (m.t === 'badName') { // (taken: someone in the world already has it, server/src/persons.js nameTaken)
+      $('nameErr').textContent = m.taken ? 'Someone in the world already has that name. Try another one.' : 'Pick a different name.';
+      $('nameErr').hidden = false; creating = false;
+    }
     else if (m.t === 'elsewhere') { net.stopped = true; showMaintenance('Your person is being played in another tab or window. Reload this page to play here instead.', 'Playing somewhere else', ''); }
     else if (m.t === 'state') setOtherState(m);
     else if (m.t === 'stroll') { const o = others.get(m.id); if (o) Object.assign(o, { tx: m.x, tz: m.z, speed: m.speed || null, due: m.ms ? elapsed + m.ms / 1000 : null, then: m.then || null, act: null }); }
@@ -150,6 +158,7 @@ function drawGraves(list) {
 let creating = false;
 function welcome(m) {
   const restored = net.restored; // the admin just restored the world (admin.js): you're where the server has you
+  net.linked = !!m.linked; drawLinkRow(); // Play on other devices (screens.js)
   net.restored = false;
   net.fails = 0;
   net.myId = m.id;
@@ -180,7 +189,7 @@ function welcome(m) {
     forgetSit(); // the server says whether you're still sitting (below)
     forgetOldTakes();
     let back = null; // what's left of your task list, which the server carried on with while you were away (0.1.7)
-    if (!player) { applyMe(m.me, true); enterWorld(); back = m.tasks; }
+    if (!player) { applyMe(m.me, true); enterWorld(); back = m.tasks; linkNoteLater(); }
     else {
       applyMe(m.me);
       // Gone a while: they may have strolled off, so you're where the server has them, with what's left of the list. A

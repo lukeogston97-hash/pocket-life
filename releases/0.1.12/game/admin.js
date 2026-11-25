@@ -74,12 +74,13 @@ const LIVE_SET = {
   treeRegrowDays: (v) => { CHOP.regrowDays = v; },
   boulderRegrowDays: (v) => { MINE.regrowDays = v; },
   rockBackHours: (v) => { MINE.rockBackHours = v; },
+  fadeDays: (v) => { SETTINGS.fadeDays = v; }, // (only the server uses it: server/src/nature.js fadeOld)
   hungerPerHour: (v) => { if (STAT.hunger) STAT.hunger.perHour = -v; },
   thirstPerHour: (v) => { if (STAT.thirst) STAT.thirst.perHour = -v; },
   restPerHour: (v) => { if (STAT.rest) STAT.rest.perHour = -v; },
 };
 const LIVE_BASE = { maxPlaying: SETTINGS.maxPlaying, societyMax: (DATA.societies || {}).maxMembers ?? 3, respawnMinutes: SETTINGS.respawnMinutes, berryRegrowHours: (BERRY_SOURCE() || {}).regrowHours,
-  treeRegrowDays: CHOP.regrowDays ?? 3, boulderRegrowDays: MINE.regrowDays ?? 3, rockBackHours: MINE.rockBackHours ?? 4,
+  treeRegrowDays: CHOP.regrowDays ?? 3, boulderRegrowDays: MINE.regrowDays ?? 3, rockBackHours: MINE.rockBackHours ?? 4, fadeDays: SETTINGS.fadeDays ?? 7,
   hungerPerHour: -((STAT.hunger || {}).perHour || 0), thirstPerHour: -((STAT.thirst || {}).perHour || 0), restPerHour: -((STAT.rest || {}).perHour || 0) };
 function applyLive(live) {
   if (you.stats && !you.dead) tickStats(); // needs up to now at the old rate first
@@ -183,7 +184,7 @@ function drawPicker() {
   chips($('adminPickCount'), [[1, '1'], [5, '5'], [10, '10']], picker.n, (n) => { picker.n = n; drawPicker(); });
   const q = $('adminPickFind').value.trim().toLowerCase();
   const list = Object.values(ITEMS).filter((it) => (picker.group === 'All' || itemGroup(it) === picker.group) && (!q || it.name.toLowerCase().includes(q)))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => (q ? b.name.toLowerCase().startsWith(q) - a.name.toLowerCase().startsWith(q) : 0) || a.name.localeCompare(b.name)); // names that start with what was typed first (stone: Stone before Sharp stone)
   $('adminPickList').replaceChildren(...(list.length ? list.map((it) => button(it.name, () => { const f = picker.onPick, n = picker.n; closePicker(); if (f) f(it.id, n); }))
     : [emptyNote('Nothing called that')]));
 }
@@ -332,7 +333,7 @@ function drawPlayer() {
   const head = el('div');
   head.append(el('div', 'admin-name', p.name),
     el('div', 'admin-tag', [STATE_WORDS[p.state] || p.state, p.age != null ? `${p.age} yrs` : '', p.v ? `v${p.v} ${p.link} link` : '', p.muted ? 'muted' : '', p.banned ? 'banned' : '',
-      p.reports ? `${p.reports} ${p.reports === 1 ? 'report' : 'reports'}` : ''].filter(Boolean).join(' · ')));
+      p.reports ? `${p.reports} ${p.reports === 1 ? 'report' : 'reports'}` : '', p.linked ? `on ${p.linked + 1} devices` : ''].filter(Boolean).join(' · ')));
   out.push(entry(head));
   if (alive && p.stats) { // needs, as bars
     const sec = el('div', 'admin-entry');
@@ -433,6 +434,7 @@ function drawPlayer() {
   if (p.banned) ban.addEventListener('click', () => toPlayer({ t: 'a.unban', who: p.id }));
   else twoTaps(ban, () => toPlayer({ t: 'a.ban', id: p.id }), 'Tap again to ban');
   bar.appendChild(ban);
+  if (p.linked) { const so = button('Unlink all devices', () => {}); twoTaps(so, () => toPlayer({ t: 'a.unlinkAll', id: p.id }), 'Tap again: the other devices are guests'); bar.appendChild(so); }
   if (alive && p.state !== 'online') { const rm = button('Remove from world', () => {}); twoTaps(rm, () => toPlayer({ t: 'a.removePerson', id: p.id }), 'Tap again: drops their things'); bar.appendChild(rm); }
   if (bar.children.length) { careful.appendChild(bar); out.push(careful); }
   if ((p.past || []).length) out.push(entry('Past people', p.past.map((q) => `${q.name}, ${q.age} · ${q.cause === 'left' ? 'left' : q.cause ? `died (${q.cause})` : 'died'}${q.until ? ` · ${when(q.until)}` : ''}`).join('\n')));
@@ -672,20 +674,25 @@ drawAdmin();
 
 /* ---------- Items tab: an item's and a recipe's numbers, changed live (server/src/live-items.js) ----------
    The list comes from the server (every number that can be changed, what the game file says, and whether it's been
-   changed), so a new item or recipe shows up here by itself. A changed number wins over the game file until Reset. */
-let itemsData = null;
-// which heading a number sits under, and what it's called
+   changed), so a new item or recipe shows up here by itself. A changed number wins over the game file until Reset.
+   One short line per item, A to Z, with the Craft kinds as chips and a search (Luke, 25 Nov 2026: the list of every
+   number was way too long). Tap a line to open its numbers, one item open at a time. */
+let itemsData = null, itemsKind = 'All', itemsOpen = null, itemsQ = ''; // itemsOpen: the heading that's open
+// which heading a number sits under, its kind, what it's called there, and (an item's own numbers) how its line sums it up
 function itemPlace(at) {
-  const [what, id, field, sub] = at, plural = (k) => (ITEMS[k] ? ITEMS[k].plural.toLowerCase() : k);
+  const [what, id, field, sub] = at, name = (k) => (ITEMS[k] ? ITEMS[k].name.toLowerCase() : k);
   if (what === 'items') {
-    const it = ITEMS[id], head = it ? it.name : id;
-    if (field === 'weight') return { head, label: 'Weight', step: 1 };
-    if (field === 'uses') return { head, label: 'Uses before it wears out', step: 1 };
-    return { head, label: `Fills ${(STAT[sub] ? STAT[sub].name : sub).toLowerCase()} by`, step: 0.1 };
+    const it = ITEMS[id], head = it ? it.name : id, kind = it ? itemGroup(it) : 'Materials';
+    if (field === 'weight') return { head, kind, label: 'Weight', step: 1, sum: (v) => `weighs ${v}` };
+    if (field === 'uses') return { head, kind, label: 'Uses', step: 1, sum: (v) => `${v} uses` };
+    const st = STAT[sub] || { name: sub };
+    return { head, kind, label: `Fills ${st.name.toLowerCase()} by`, step: 0.1, sum: (v) => `+${v} ${st.gainLabel || st.name.toLowerCase()}` }; // "+10 food", as the game says it
   }
-  const r = RECIPES.find((x) => x.id === id), head = r ? recipeName(r) : id;
-  return { head, label: `Recipe ${field === 'needs' ? 'needs' : 'makes'}: ${plural(sub)}`, step: 1 };
+  const r = RECIPES.find((x) => x.id === id), head = r ? recipeName(r) : id, kind = r ? recipeGroup(r) : 'Materials';
+  return { head, kind, recipe: id, step: 1, label: field === 'needs' ? `Needs ${name(sub)}` : r && sub === madeBy(r) ? 'Makes' : `Makes ${name(sub)}` };
 }
+// redraw after a tap on a line or a chip (a box left focused would hold the redraw back)
+function redrawItems() { if ($('adminItems').contains(document.activeElement)) document.activeElement.blur(); drawItems(); }
 function drawItems() {
   const box = $('adminItems');
   if (!itemsData) { box.replaceChildren(emptyNote('Loading…')); return; }
@@ -694,25 +701,59 @@ function drawItems() {
   $('adminItemsCopy').disabled = !changed.length;
   const typing = document.activeElement && document.activeElement.tagName === 'INPUT' && box.contains(document.activeElement);
   if (typing) return; // (not while a number is being typed: the list would lose it)
-  const out = [];
-  let head = null;
   // an item's own numbers and its recipe's sit together under one heading, headings in A to Z order
-  const rows = itemsData.map((e, i) => ({ e, i, pl: itemPlace(e.at) })).sort((a, b) => a.pl.head.localeCompare(b.pl.head) || a.i - b.i);
-  for (const { e, pl } of rows) {
-    if (q && !pl.head.toLowerCase().includes(q) && !pl.label.toLowerCase().includes(q)) continue;
-    if (pl.head !== head) { head = pl.head; out.push(el('div', 'admin-item-head', head)); }
-    const row = el('div', 'admin-entry admin-setting'), input = el('input', 'admin-input');
-    Object.assign(input, { type: 'number', inputMode: 'decimal', min: 0, step: pl.step, value: String(e.value) });
-    input.setAttribute('aria-label', `${pl.head}: ${pl.label}`);
-    const label = el('div');
-    label.append(el('div', 'admin-body', pl.label), el('div', 'admin-tag', e.changed ? `Changed (was ${e.base})` : `Game file: ${e.base}`));
-    const bar = el('div', 'admin-btns');
-    bar.append(button('Save', () => { const v = Number(input.value); if (input.value !== '' && Number.isFinite(v)) adminSend({ t: 'a.liveItem', at: e.at, value: v }); }),
-      ...(e.changed ? [button('Reset', () => adminSend({ t: 'a.liveItem', at: e.at, value: null }))] : []));
-    row.append(label, input, bar);
-    out.push(row);
+  const groups = new Map();
+  for (const r of itemsData.map((e, i) => ({ e, i, pl: itemPlace(e.at) })).sort((a, b) => a.pl.head.localeCompare(b.pl.head) || a.i - b.i)) {
+    if (!groups.has(r.pl.head)) groups.set(r.pl.head, { head: r.pl.head, kind: r.pl.kind, rows: [] });
+    groups.get(r.pl.head).rows.push(r);
+  }
+  const all = [...groups.values()], kinds = ['All', ...ITEM_GROUPS.filter((g) => all.some((x) => x.kind === g))];
+  if (!kinds.includes(itemsKind)) itemsKind = 'All';
+  chips($('adminItemsKinds'), kinds.map((g) => [g, g]), itemsKind, (g) => { itemsKind = g; redrawItems(); });
+  const shown = all.filter((x) => (itemsKind === 'All' || x.kind === itemsKind) && (!q || x.head.toLowerCase().includes(q)))
+    .sort((a, b) => (q ? b.head.toLowerCase().startsWith(q) - a.head.toLowerCase().startsWith(q) : 0)); // (stone: Stone before Sharp stone, as in Add item)
+  if (q && q !== itemsQ && shown.length === 1) itemsOpen = shown[0].head; // a search that finds one item opens it
+  itemsQ = q;
+  const out = [];
+  for (const x of shown) {
+    const open = x.head === itemsOpen, own = x.rows.filter((r) => r.pl.sum);
+    const line = button('', () => {
+      itemsOpen = open ? null : x.head; redrawItems();
+      const now = $('adminItems').querySelector('.admin-fold[aria-expanded="true"]'); // its numbers in view (on a phone the last line's open below the sheet), and its line too
+      if (now && now.nextElementSibling) { now.nextElementSibling.scrollIntoView({ block: 'nearest' }); now.scrollIntoView({ block: 'nearest' }); }
+    }, 'admin-fold');
+    line.setAttribute('aria-expanded', String(open));
+    line.append(el('span', 'admin-fold-name', x.head), ...(x.rows.some((r) => r.e.changed) ? [el('span', 'admin-fold-changed', 'Changed')] : []),
+      el('span', 'admin-fold-sum', own.length ? own.map((r) => r.pl.sum(r.e.value)).join(' · ') : 'recipe'));
+    out.push(line);
+    if (!open) continue;
+    const body = el('div', 'admin-fold-body'), recipes = [...new Set(x.rows.map((r) => r.pl.recipe).filter(Boolean))];
+    let recipe = null;
+    for (const r of x.rows) {
+      if (recipes.length > 1 && r.pl.recipe && r.pl.recipe !== recipe) body.append(el('div', 'admin-num-sub', `Recipe ${recipes.indexOf(r.pl.recipe) + 1}`)); // (an item with two ways to make it)
+      recipe = r.pl.recipe;
+      body.append(itemNumber(x.head, r));
+    }
+    out.push(body);
   }
   box.replaceChildren(...(out.length ? out : [emptyNote(q ? 'Nothing called that' : 'Nothing to change yet')]));
+}
+// one number in an open item: its name, its box, and Save once the box is changed, or Reset once it has been
+function itemNumber(head, { e, pl }) {
+  const row = el('div', 'admin-num'), input = el('input', 'admin-input'), slot = el('span', 'admin-num-btn'), label = el('span', 'admin-num-label', pl.label);
+  Object.assign(input, { type: 'number', inputMode: 'decimal', min: 0, step: pl.step, value: String(e.value) });
+  input.setAttribute('aria-label', `${head}: ${pl.label}`);
+  if (e.changed) label.append(el('small', '', `was ${e.base}`));
+  const save = () => { const v = Number(input.value); if (input.value === '' || !Number.isFinite(v)) return; input.blur(); adminSend({ t: 'a.liveItem', at: e.at, value: v }); };
+  const btn = () => {
+    const edited = input.value !== '' && Number(input.value) !== e.value;
+    slot.replaceChildren(...(edited ? [button('Save', save, 'small-btn go')] : e.changed ? [button('Reset', () => adminSend({ t: 'a.liveItem', at: e.at, value: null }))] : []));
+  };
+  input.addEventListener('input', btn);
+  input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); save(); } });
+  btn();
+  row.append(label, input, slot);
+  return row;
 }
 $('adminItemsFind').addEventListener('input', drawItems);
 // Copy my changes: a plain list of what's been changed, to paste so it can be written into game-data.json

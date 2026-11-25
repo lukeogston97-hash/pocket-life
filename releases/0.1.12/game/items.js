@@ -115,6 +115,8 @@ const knifeBladeGeo = (() => {
 // A campfire: a ring of stones round a bed of ash, a log and a few sticks laid in the middle, and a little teepee of
 // sticks stood up over them (the fuel: more sticks, more teepee). Each building piece knows where it sits when the
 // campfire is built (to) and where it lies in a loose pile before then (from), so building can move them into place.
+// What it gives back is what any placed thing's builder gives (PLACED_SHAPES in placeables.js): its pieces, the sticks
+// that show its fuel, and the wood that goes black once it has burnt.
 // Only Math.random here, never the world's random numbers, so the world's layout never shifts.
 const fireStoneGeo = jitterGeo(new THREE.IcosahedronGeometry(1, 1), 0.2, 91);
 const FUEL_STICKS = 5; // the teepee: how many sticks it shows when the fire is full
@@ -151,7 +153,7 @@ function campfireModel(look = {}) {
     g.add(m);
     fuel.push(m);
   }
-  return { model: g, pieces, fuel, ash, R };
+  return { model: g, pieces, fuel, burns: pieces.slice(-4).map((pc) => pc.obj), ash, R }; // (burns: the log and the three sticks)
 }
 // a branch you pick up (the stick item): one gently arched piece of wood, thicker where it snapped (a pale cut end) and
 // thinner at the tip, with two short side twigs. The campfire's sticks keep the older stickGeo above.

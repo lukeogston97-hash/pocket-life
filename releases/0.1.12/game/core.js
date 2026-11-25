@@ -54,7 +54,8 @@ const mat = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness:
 /* ---------- renderer, camera, light ---------- */
 let renderer;
 try {
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
+  // (no preserveDrawingBuffer: nothing reads the picture back, and keeping every frame costs a phone a full-screen copy each frame)
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 } catch (err) {
   document.getElementById('noGL').hidden = false;
   throw err;

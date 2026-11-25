@@ -56,6 +56,7 @@ function enterCreator() {
   removeLabel(tagLabel);
   tagLabel = null;
   draft = { ...DEFAULT_LOOK };
+  setTheme(HAZE); // (the stage's own pale background, whatever the time of day)
   // while testing, a ready-made name so starting is one tap (settings.autoName; you can still change it)
   if (SETTINGS.autoName) {
     const names = DATA.testNames && DATA.testNames.length ? DATA.testNames : ['Alex', 'Sam', 'Jo'];
@@ -78,7 +79,7 @@ function enterWorld() {
   applyDaylight();
   drawQueue();
   placeCamera();
-  showHint();
+  startTips(); // (tips.js)
 }
 $('sheet').addEventListener('submit', (e) => {
   e.preventDefault();
@@ -152,6 +153,7 @@ function enterMenu() {
   if (previewPerson) { pscene.remove(previewPerson); disposeMaterials(previewPerson); previewPerson = null; }
   removeLabel(tagLabel);
   tagLabel = null;
+  applyDaylight(); // the right time of day from the first frame (it's otherwise only brought up to date once a second)
   drawMenu();
 }
 // what's under Play: who you'll carry on as, or that you'll make a new person
@@ -258,14 +260,167 @@ $('creatorBack').addEventListener('click', toMenu);
 $('exitBtn').addEventListener('click', () => { closePause(); toMenu(); });
 $('menuNewsBtn').addEventListener('click', () => openNews());
 $('menuFeedbackBtn').addEventListener('click', () => openFeedback());
-$('menuSettingsBtn').addEventListener('click', () => { $('settings').hidden = false; $('settingsClose').focus(); });
+function openSettings() {
+  $('settings').hidden = false;
+  $('settingsClose').focus();
+}
+$('menuSettingsBtn').addEventListener('click', openSettings);
 // the same three in the pause menu, so you don't have to leave the world for them
 $('pauseNewsBtn').addEventListener('click', () => { closePause(); openNews(); });
 $('pauseFeedbackBtn').addEventListener('click', () => { closePause(); openFeedback(); });
-$('pauseSettingsBtn').addEventListener('click', () => { closePause(); $('settings').hidden = false; $('settingsClose').focus(); });
+$('pauseSettingsBtn').addEventListener('click', () => { closePause(); openSettings(); });
 function closeSettings() { $('settings').hidden = true; }
+/* ---------- Play on other devices (Settings): link codes ----------
+   No accounts (Luke, 25 Nov 2026: Google sign-in was too much to set up). The device with the person taps Get a code
+   (6 letters, 10 minutes, works once); the other device types it in and plays that person from then on
+   (server/src/accounts.js). If the other device has its own guest person, the game says it will be removed, and asks.
+   Linking or unlinking starts the page again, so the game rejoins as the right person. net.linked comes from the server. */
+const LINK_NOTE_KEY = 'pocket-life:linkNote';
+let linkWanted = '';
+function drawLinkRow() { $('linkLbl').textContent = net.linked ? 'Playing on other devices' : 'Play on other devices'; }
+function hasPerson() { return !!((you.look && !you.dead && ui.mode === 'world') || menuYours); }
+function openLink() {
+  closeSettings();
+  paused = true;
+  $('link').hidden = false;
+  $('linkSure').hidden = true; $('linkSure').disabled = false;
+  $('linkCode').hidden = true;
+  $('linkUseBox').hidden = false;
+  $('linkInput').value = '';
+  $('linkGet').hidden = !hasPerson();
+  $('linkUnlink').hidden = !net.linked;
+  $('linkTitle').textContent = 'Play on other devices';
+  $('linkText').textContent = hasPerson()
+    ? 'Get a code here and type it on your other device, to play the same person on both. Or type a code from your other device below.'
+    : 'Type the code from your other device to play your person here.';
+  $('linkCancel').focus();
+}
+function closeLink() { $('link').hidden = true; paused = false; linkWanted = ''; }
+function linkSay(text) { $('linkText').textContent = text; }
+function linkSend(msg) {
+  if (!online()) { linkSay('You need to be online to do this.'); return false; }
+  net.sock.send(JSON.stringify({ ...msg, pid }));
+  return true;
+}
+// the server's answers (online.js)
+function linkGotCode(m) {
+  if ($('link').hidden) return;
+  $('linkCode').textContent = m.code; $('linkCode').hidden = false;
+  $('linkGet').hidden = true; $('linkUseBox').hidden = true; $('linkUnlink').hidden = true;
+  linkSay(`On your other device, open Settings, tap Play on other devices and type this code. It works once, for ${m.minutes} minutes.`);
+}
+function linkAsk(m) {
+  if ($('link').hidden) return;
+  $('linkTitle').textContent = `Play as ${m.theirs}?`;
+  linkSay(`You'll play as ${m.theirs} on this device. Your guest person here, ${m.mine}, will be removed. This can't be undone.`);
+  $('linkUseBox').hidden = true; $('linkGet').hidden = true; $('linkUnlink').hidden = true;
+  $('linkSure').textContent = 'Play as ' + m.theirs; $('linkSure').hidden = false;
+}
+function linkNo(m) { if (!$('link').hidden) { linkSay(m.text || "That didn't work. Try again."); $('linkSure').hidden = true; $('linkUseBox').hidden = false; } }
+function linked() { location.reload(); }
+function unlinked() { forgotten(); }
+$('linkBtn').addEventListener('click', openLink);
+$('linkCancel').addEventListener('click', closeLink);
+$('link').addEventListener('click', (e) => { if (e.target === $('link')) closeLink(); });
+$('linkGet').addEventListener('click', () => { if (linkSend({ t: 'linkCode' })) linkSay('Getting a code…'); });
+$('linkUseBox').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const code = $('linkInput').value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (code.length !== 6) { linkSay('The code has 6 letters and numbers.'); return; }
+  linkWanted = code;
+  if (linkSend({ t: 'linkUse', code })) linkSay('Checking the code…');
+});
+$('linkUnlink').addEventListener('click', () => {
+  $('linkTitle').textContent = 'Unlink this device?';
+  linkSay('Your person stays on your other devices. This device starts again as a new guest.');
+  $('linkUseBox').hidden = true; $('linkGet').hidden = true; $('linkUnlink').hidden = true;
+  linkWanted = ''; $('linkSure').textContent = 'Unlink'; $('linkSure').hidden = false;
+});
+$('linkSure').addEventListener('click', () => {
+  const ok = linkWanted ? linkSend({ t: 'linkUse', code: linkWanted, sure: true }) : linkSend({ t: 'unlink' });
+  if (ok) $('linkSure').disabled = true;
+});
+// once per device, a minute after making a person: you can play on your other devices too
+function linkNoteLater() {
+  if (net.linked) return;
+  try { if (localStorage.getItem(LINK_NOTE_KEY)) return; localStorage.setItem(LINK_NOTE_KEY, '1'); } catch (err) { return; }
+  setTimeout(() => { if (ui.mode === 'world' && !net.linked) showTag('Play on your other devices too: Settings, Play on other devices', headTop(), 4); }, 60000);
+}
+/* ---------- Leave the world for good (Settings) ----------
+   A warning, then hold the button for 2 seconds. The server drops their things where they stand, takes them out of their
+   camp and removes their person, past people and feedback (server/src/persons.js, forget). Then this phone gets a new id
+   and the page starts again, so it's a fresh start. A guest and (later) a signed-in player leave the same way. */
+const HOLD_MS = 2000;
+let holdStart = 0, holdTimer = 0;
+function openLeave() {
+  closeSettings();
+  paused = true;
+  const name = (you.look && !you.dead && you.look.name) || (menuYours && menuYours.name) || '';
+  $('leaveText').textContent = `${name ? `${name} and everything` : 'Everything'} about you will be removed: your person, past people and feedback. The things you carry drop where you stand. This can't be undone.`;
+  $('leave').hidden = false;
+  $('leaveCancel').focus();
+}
+function closeLeave() { holdStop(); $('leave').hidden = true; paused = false; }
+function holdStop() { cancelAnimationFrame(holdTimer); holdStart = 0; $('leaveHold').style.setProperty('--hold', 0); }
+function holdStep() {
+  if (!holdStart) return;
+  const f = Math.min(1, (performance.now() - holdStart) / HOLD_MS);
+  $('leaveHold').style.setProperty('--hold', f);
+  if (f < 1) { holdTimer = requestAnimationFrame(holdStep); return; }
+  holdStart = 0;
+  if (!online()) { holdStop(); showTag('You need to be online to leave the world', headTop(), 2.5); return; }
+  net.sock.send(JSON.stringify({ t: 'forget', pid }));
+  $('leaveHold').disabled = true;
+  $('leaveHold').firstElementChild.textContent = 'Leaving…';
+}
+$('leaveBtn').addEventListener('click', openLeave);
+$('leaveCancel').addEventListener('click', closeLeave);
+$('leave').addEventListener('click', (e) => { if (e.target === $('leave')) closeLeave(); });
+$('leaveHold').addEventListener('pointerdown', (e) => { e.preventDefault(); holdStart = performance.now(); holdStep(); });
+for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) $('leaveHold').addEventListener(ev, () => { if (holdStart) holdStop(); });
+$('leaveHold').addEventListener('contextmenu', (e) => e.preventDefault());
+// the server says they're gone: a new id for this phone, and the game starts again from the top
+function forgotten() {
+  try { localStorage.setItem(PID_KEY, crypto.randomUUID()); } catch (err) { /* not kept: the page makes one anyway */ }
+  location.reload();
+}
 $('settingsClose').addEventListener('click', closeSettings);
 $('settings').addEventListener('click', (e) => { if (e.target === $('settings')) closeSettings(); });
+/* ---------- Privacy and rules (Settings): what the game keeps, and how to play nicely ----------
+   The words live in one place, privacy.html (a page of its own, for links from outside the game). The panel fetches
+   that page the first time it's opened and shows everything inside its #words. Edit the words there.
+   Like What's new it's for reading, so taps and keys wait until it's closed (paused); the world carries on. */
+let rulesLoaded = false;
+async function openRules() {
+  closeSettings();
+  paused = true;
+  $('rules').hidden = false;
+  $('rulesClose').focus();
+  if (rulesLoaded) return;
+  const body = $('rulesBody');
+  body.replaceChildren(el('p', 'admin-empty', 'Loading…'));
+  try {
+    const res = await fetch(`privacy.html?v=${VERSION}.${DATA.build || 0}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const words = new DOMParser().parseFromString(await res.text(), 'text/html').getElementById('words');
+    if (!words || !words.children.length) throw new Error('no words');
+    for (const bad of words.querySelectorAll('script, style, iframe, img')) bad.remove(); // (words only)
+    body.replaceChildren(...[...words.children].map((n) => document.importNode(n, true)));
+    for (const a of body.querySelectorAll('a[href]')) { a.target = '_blank'; a.rel = 'noopener'; } // a link never takes you out of the game
+    body.scrollTop = 0;
+    rulesLoaded = true;
+  } catch (err) { // offline, or the page didn't arrive: say so, with the way to it
+    const p = el('p', '', "Couldn't load this just now. Check your connection, or ");
+    const a = el('a', '', 'open the page');
+    a.href = 'privacy.html'; a.target = '_blank'; a.rel = 'noopener';
+    p.append(a, '.');
+    body.replaceChildren(p);
+  }
+}
+function closeRules() { if ($('rules').hidden) return; $('rules').hidden = true; paused = false; }
+$('rulesBtn').addEventListener('click', openRules);
+$('rulesClose').addEventListener('click', closeRules);
+$('rules').addEventListener('click', (e) => { if (e.target === $('rules')) closeRules(); });
 // coming back to a person who died or left while you were away
 function showGoneCard(d) {
   const away = d.away ? ' while you were away' : '';
@@ -298,7 +453,9 @@ $('backBtn').addEventListener('click', () => { $('back').hidden = true; });
 // joining the world, or getting back after the internet dropped
 function showJoining(on, inWorld = false) {
   $('joining').hidden = !on;
-  $('joiningText').textContent = inWorld ? 'Reconnecting… Your person carries on while you\'re gone.' : 'Joining the world…';
+  const stuck = net.fails >= 2; // a couple of tries and still no answer: say so, and what to check (the game keeps trying by itself)
+  $('joiningText').textContent = inWorld ? `${stuck ? "Can't reach the world. Check your connection." : 'Reconnecting…'} Your person carries on while you're gone.`
+    : stuck ? "Can't reach the world. Check your connection. Still trying…" : 'Joining the world…';
 }
 $('menuBtn').addEventListener('click', () => openPause());
 $('deathBtn').addEventListener('click', () => { $('death').hidden = true; if (player) endLife(); });
