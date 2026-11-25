@@ -74,8 +74,9 @@ wss.on('connection', (raw) => {
       if (process.env.CAMPKIT) p.carry = { log: 1, stick: 6, twig: 2, stone: 2 };
       if (process.env.FISHKIT) p.carry = { 'fishing-spear': 1, campfire: 1, stick: 6 };
       if (process.env.CRAFTKIT) p.carry = { stick: 3, stone: 4, twine: 2 };
+      if (process.env.KIT) p.carry = JSON.parse(process.env.KIT); // any kit: KIT='{"campfire":1,"stick":3}'
       if (process.env.COLLAPSE) p.stats.rest = 0;
-      if (process.env.TESTKIT || process.env.MINEKIT || process.env.CAMPKIT || process.env.FISHKIT || process.env.CRAFTKIT || process.env.COLLAPSE) s.send(JSON.stringify(w.mine(p)));
+      if (process.env.TESTKIT || process.env.MINEKIT || process.env.CAMPKIT || process.env.FISHKIT || process.env.CRAFTKIT || process.env.KIT || process.env.COLLAPSE) s.send(JSON.stringify(w.mine(p)));
     }
   }));
   raw.on('close', () => { s.closed = true; if (!s.gone) inTurn(() => w.webSocketClose(s)); });

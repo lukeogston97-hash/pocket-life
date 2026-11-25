@@ -1949,6 +1949,56 @@ async def tips():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
+async def placed_kinds():
+    """A second kind of placed thing, made from data alone (a drying rack that isn't in the game): it's drawn as its own item, not as a campfire, and can be placed and built. The campfire is put together as before."""
+    game = json.load(open(os.path.join(HERE, '..', '..', 'server', 'game.json')))
+    data = json.load(open(os.path.join(HERE, '..', '..', 'test', 'game-data.json'), encoding='utf-8'))
+    srv = {'items': {**game['items'], 'rack': {**game['items']['log'], 'weight': 3, 'places': 'rack'}},
+           'placeables': {**game['placeables'], 'rack': {'item': 'rack', 'buildSeconds': 2, 'solid': 0.5, 'fire': None, 'seats': None}}}
+    mine = {'items': {'rack': {**data['items']['log'], 'name': 'Drying rack', 'plural': 'Drying racks', 'weight': 3, 'places': 'rack', 'startInWorld': 0}},
+            'placeables': {'rack': {'name': 'Drying rack', 'buildSeconds': 2, 'buildVerb': 'Building the drying rack', 'solid': 0.5}}}
+    PARTS = """(id) => { const th = __pl.placed.get(id), p = th.view.userData.parts; let meshes = 0; th.view.traverse((m) => { if (m.isMesh) meshes++; });
+      return { kind: th.kind, built: th.built, pieces: p.pieces.length, fuel: p.fuel.length, burns: p.burns.length, flame: !!p.flame, meshes, label: th.view.userData.label }; }"""
+    SPOT = """(kind) => { const p = __pl.player.position;
+      for (let r = 2; r < 8; r += 0.5) for (let k = 0; k < 16; k++) { const x = p.x + Math.cos(k / 16 * 6.28) * r, z = p.z + Math.sin(k / 16 * 6.28) * r;
+        if (!__pl.cantPlaceAt(x, z, kind)) { __pl.movePlacing(x, z); return [x, z]; } } return null; }"""
+    async with world(srv, KIT=json.dumps({'rack': 1, 'campfire': 1})) as W:
+        a = await W.page('rackA', data=mine); await join(a)
+        b = await W.page('rackB', data=mine); await join(b)
+        expect(await a.evaluate("__pl.you.carry.rack === 1 && __pl.you.carry.campfire === 1"), 'the person carries a drying rack and a campfire')
+        # the rack: placed from the inventory like a campfire is
+        await a.click('#bagBtn'); await a.wait_for_timeout(400)
+        await a.click('#bagList .bag-tile[data-kind="rack"]'); await a.wait_for_timeout(200)
+        expect(await a.evaluate("document.getElementById('bagInfo').innerText.includes('Drying rack') && !!document.querySelector('#bagInfo button.go')"), 'its tile has a Place button, from the data alone')
+        await a.click('#bagInfo button.go'); await a.wait_for_timeout(400)
+        ghost = await a.evaluate("(() => { let n = 0; __pl.placing.ghost.traverse((m) => { if (m.isMesh) n++; }); return [__pl.placing.on, __pl.placing.kind, n]; })()")
+        fire_meshes = await a.evaluate("(() => { let n = 0; __pl.buildItem('campfire').model.traverse((m) => { if (m.isMesh) n++; }); return n; })()")
+        expect(ghost[0] and ghost[1] == 'rack' and 0 < ghost[2] < fire_meshes, f'the ghost while placing is the rack\'s own shape, not a campfire ({ghost[2]} meshes, a campfire has {fire_meshes})')
+        spot = await a.evaluate(SPOT, 'rack')
+        await shot(a, 'placed_rack_ghost')
+        await a.evaluate('__pl.finishPlacing()'); await idle(a, 40); await a.wait_for_timeout(1500)
+        rid = await a.evaluate("[...__pl.placed.values()].find((t) => t.kind === 'rack').id")
+        r = await a.evaluate(PARTS, rid)
+        expect(r['built'] and r['pieces'] == 1 and r['fuel'] == 0 and r['burns'] == 0 and not r['flame'] and r['label'] == 'Drying rack', f'put down and built: one piece, no fuel sticks, no flames, named Drying rack ({r})')
+        expect(not await a.evaluate('__pl.you.carry.rack'), 'it left the inventory')
+        rb = await b.evaluate(PARTS, rid)
+        expect(rb['built'] and rb['pieces'] == 1, 'the other phone sees it built, drawn the same way')
+        await shot(a, 'placed_rack')
+        # the campfire next to it is put together as it always was
+        await a.click('#bagBtn'); await a.wait_for_timeout(400)
+        await a.click('#bagList .bag-tile[data-kind="campfire"]'); await a.wait_for_timeout(200)
+        await a.click('#bagInfo button.go'); await a.wait_for_timeout(400)
+        spot = await a.evaluate(SPOT, 'campfire')
+        await a.evaluate('__pl.finishPlacing()'); await idle(a, 60); await a.wait_for_timeout(1500)
+        fid = await a.evaluate("[...__pl.placed.values()].find((t) => t.kind === 'campfire').id")
+        f = await a.evaluate(PARTS, fid)
+        expect(f['built'] and f['pieces'] == 13 and f['fuel'] == 5 and f['burns'] == 4 and f['flame'], f'the campfire: 13 pieces (9 stones, a log, 3 sticks), 5 fuel sticks, 4 that char, and flames ({f})')
+        menu = await a.evaluate(f"__pl.placedActions(__pl.placed.get({rid})).map((x) => x.label)")
+        expect('Light fire' not in menu and 'Sit by the fire' not in menu and 'Pack up' in menu, f'the rack\'s tap menu has no fire or seat lines, and Pack up ({menu})')
+        await shot(a, 'placed_rack_and_fire')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
 async def server_tests():
     """The server's own code, tested with no browser (quick): the admin's fire, claim, Log, rename and message tools, live item numbers, that an old admin flag gives a player nothing, that things which aren't in the world can't be chopped, mined or picked, societies, task lists carried on while away, and old things left on the ground fading."""
     import subprocess
@@ -1961,7 +2011,7 @@ async def server_tests():
         expect(r.returncode == 0, f'{f}: {last[:160]}')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'tasks_away': tasks_away, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'craft_mat': craft_mat, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'loading': loading, 'sideways': sideways, 'menu_rest': menu_rest, 'tips': tips, 'server_tests': server_tests}
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'tasks_away': tasks_away, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'craft_mat': craft_mat, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'loading': loading, 'sideways': sideways, 'menu_rest': menu_rest, 'tips': tips, 'placed_kinds': placed_kinds, 'server_tests': server_tests}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

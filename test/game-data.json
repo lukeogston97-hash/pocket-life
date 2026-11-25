@@ -1,6 +1,6 @@
 {
   "version": "0.1.10",
-  "build": 5,
+  "build": 6,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
