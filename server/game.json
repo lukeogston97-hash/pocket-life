@@ -320,7 +320,7 @@
         "cooked-fish": 1
       },
       "near": "campfire",
-      "seconds": 20
+      "seconds": 10
     }
   },
   "sources": {
@@ -375,7 +375,7 @@
         4
       ],
       "tool": "knife",
-      "seconds": 6,
+      "seconds": 5,
       "toolSeconds": 2,
       "pose": "pick"
     }
@@ -443,7 +443,10 @@
         "stick": 5
       }
     },
-    "regrowDays": 3
+    "regrowDays": [
+      1,
+      2
+    ]
   },
   "mining": {
     "tool": "stone-pickaxe",
@@ -454,7 +457,7 @@
       }
     },
     "boulder": {
-      "seconds": 15,
+      "seconds": 10,
       "gives": {
         "stone": [
           3,
@@ -462,7 +465,7 @@
         ]
       }
     },
-    "regrowDays": 3,
+    "regrowDays": 1,
     "rockBackHours": 4
   },
   "placeables": {
@@ -526,7 +529,16 @@
     },
     {
       "id": "treeRegrowDays",
-      "name": "A stump grows back into a tree in",
+      "name": "A stump grows back into a tree in, soonest",
+      "group": "Respawn times",
+      "unit": "days",
+      "min": 0.01,
+      "max": 60,
+      "step": 0.01
+    },
+    {
+      "id": "treeRegrowDaysMost",
+      "name": "A stump grows back into a tree in, latest",
       "group": "Respawn times",
       "unit": "days",
       "min": 0.01,

@@ -91,7 +91,7 @@ const NO_TREE = new THREE.Matrix4().makeScale(0, 0, 0);
 const stumpMat = mat('#7a5c40'), stumpTopMat = mat('#cfb48a');
 function setTreeState(i, state, since) {
   const t = trees[i];
-  if (t && state === 'stump') t.since = since || t.since || Date.now(); // when it was chopped (it grows back regrowDays after)
+  if (t && state === 'stump') t.since = since || t.since || Date.now(); // when it was chopped (it grows back regrowDays after: stumpGrowsIn)
   if (!t || t.state === state) return;
   const standing = state === 'tree';
   showParts(t, standing || freshLook);
@@ -120,7 +120,7 @@ function setTreeState(i, state, since) {
   t.state = state;
 }
 // how long until a stump grows back into a tree, like "2 d 5 h" or "40 min" (the same as a fire's fuel)
-const stumpGrowsIn = (t) => growsBackIn(t.since, CHOP.regrowDays || 3);
+const stumpGrowsIn = (i) => { const t = trees[i]; return growsBackIn(t.since, stumpBackMs(CHOP.regrowDays, i, t.since) / 86400000); }; // (each stump its own time, rules.js)
 function growsBackIn(since, days) {
   const mins = Math.max(1, Math.ceil(((since || Date.now()) + days * 86400000 - Date.now()) / 60000));
   if (mins < 90) return `${mins} min`;

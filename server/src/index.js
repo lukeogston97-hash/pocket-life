@@ -27,6 +27,7 @@ import { activityMethods, BACK_AFTER, longText } from './activity.js';
 import { taskMethods } from './tasks.js';
 import { accountsMethods, freshAccounts } from './accounts.js';
 import { ACTIONS } from './actions.js';
+import { stumpBackMs } from './rules.js';
 
 const MENU_OK = new Set(['feedback', 'forget', 'linkCode', 'linkUse', 'unlink']); // what the game may send from the main menu, with no person
 
@@ -374,9 +375,9 @@ export class World extends DurableObject {
         if (now >= (w.nextRespawn || 0)) await this.respawn(now);
         if (now >= (this.fadeAt || 0)) { this.fadeAt = now + HOUR; if (this.fadeOld(now)) await this.save(); } // old things left on the ground (nature.js)
         // stumps grow back into trees after a few days (removed stumps are gone for good)
-        const regrow = ((G.chopping || {}).regrowDays || 3) * 24 * HOUR;
+        const regrow = (G.chopping || {}).regrowDays; // days, or [soonest, latest]: each stump its own time (rules.js stumpBackMs)
         let grew = false;
-        for (const [i, st] of Object.entries(w.trees || {})) if (st[0] === 'stump' && now - st[1] > regrow) { delete w.trees[i]; this.send({ t: 'tree', idx: Number(i), state: 'tree' }, null); grew = true; }
+        for (const [i, st] of Object.entries(w.trees || {})) if (st[0] === 'stump' && now - st[1] > stumpBackMs(regrow, Number(i), st[1])) { delete w.trees[i]; this.send({ t: 'tree', idx: Number(i), state: 'tree' }, null); grew = true; }
         // mined boulders can be mined again after the same time; one broken rock comes back every rockBackHours
         const R = G.mining || {}, again = (R.regrowDays || 3) * 24 * HOUR;
         for (const [i, st] of Object.entries(w.rocks || {})) if (st[0] === 'mined' && now - st[1] > again) { delete w.rocks[i]; this.send({ t: 'rock', idx: Number(i), state: 'whole' }, null); grew = true; }

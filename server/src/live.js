@@ -4,6 +4,7 @@
 // taps Reset, so a new build doesn't undo it. Saved in storage as 'live' = { id: value }.
 // These are methods of the World (index.js adds them to it), so `this` is the world.
 import { G, HOUR, BERRY_SRC } from './shared.js';
+import { daysSpan } from './rules.js';
 
 const need = (id) => (G.needs || []).find((s) => s.id === id) || {};
 const inside = (key) => (G[key] = G[key] || {});
@@ -14,7 +15,9 @@ const RULES = {
   societyMax: { get: () => inside('societies').maxMembers || 3, set: (v) => { inside('societies').maxMembers = v; } }, // (societies.js socMax)
   respawnMinutes: { get: () => G.respawnMinutes, set: (v) => { G.respawnMinutes = v; } },
   berryRegrowHours: { get: () => BERRY_SRC.regrowHours || 0, set: (v, world) => { BERRY_SRC.regrowHours = v; if (world.world) world.world.regrowMs = v * HOUR; } },
-  treeRegrowDays: { get: () => inside('chopping').regrowDays || 3, set: (v) => { inside('chopping').regrowDays = v; } },
+  // a stump grows back at its own time between soonest and latest (rules.js stumpBackMs)
+  treeRegrowDays: { get: () => daysSpan(inside('chopping').regrowDays)[0], set: (v) => { const C = inside('chopping'); C.regrowDays = [v, daysSpan(C.regrowDays)[1]]; } },
+  treeRegrowDaysMost: { get: () => daysSpan(inside('chopping').regrowDays)[1], set: (v) => { const C = inside('chopping'); C.regrowDays = [daysSpan(C.regrowDays)[0], v]; } },
   boulderRegrowDays: { get: () => inside('mining').regrowDays || 3, set: (v) => { inside('mining').regrowDays = v; } },
   rockBackHours: { get: () => inside('mining').rockBackHours || 4, set: (v) => { inside('mining').rockBackHours = v; } },
   fadeDays: { get: () => G.fadeDays ?? 7, set: (v) => { G.fadeDays = v; } }, // (nature.js fadeOld; 0: nothing fades)
