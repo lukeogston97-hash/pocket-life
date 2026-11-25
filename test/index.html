@@ -140,26 +140,23 @@ setTimeout(function () { if (!window.__bootStarted) window.__bootFail("This brow
   <section id="bag" class="bag" aria-labelledby="bagTitle">
     <div class="grab" aria-hidden="true"></div>
     <div class="bag-head">
-      <h2 id="bagTitle">Inventory</h2>
-      <div class="bag-head-btns">
-        <button id="bagCraft" class="small-btn craft-toggle" type="button" aria-controls="mat" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.4 10l-7.4 7.4a2.1 2.1 0 0 0 3 3l7.4-7.4"/><path d="M18.1 15.3l2.6-2.6a1 1 0 0 0 0-1.4l-7.6-7.6a1 1 0 0 0-1.4 0l-2.6 2.6a1 1 0 0 0 0 1.4l7.6 7.6a1 1 0 0 0 1.4 0z"/></svg>Craft</button>
-        <button id="bagClose" class="text-btn" type="button">Close</button>
+      <h2 id="bagTitle" class="sr-only">Inventory</h2>
+      <div class="craft-chips bag-tabs" role="group" aria-label="Inventory or Recipes">
+        <button id="bagTabBag" class="craft-chip on" type="button" aria-pressed="true">Inventory</button>
+        <button id="bagTabRecipes" class="craft-chip" type="button" aria-pressed="false">Recipes</button>
       </div>
+      <button id="bagClose" class="text-btn" type="button">Close</button>
     </div>
     <div id="mat" class="mat" hidden>
       <div id="matSpot" class="mat-spot">
         <ul id="matList" class="mat-list" aria-label="On the craft mat"></ul>
-        <p id="matEmpty" class="mat-empty">Tap or drag things from your inventory to put them together</p>
+        <p id="matEmpty" class="mat-empty">Tap a recipe to put its things here</p>
       </div>
       <div id="matOut" class="mat-out" aria-live="polite" hidden>
         <span id="matPic" class="mat-pic" aria-hidden="true"></span>
         <div class="mat-words"><strong id="matName"></strong><small id="matWhy"></small></div>
         <button id="matClear" class="text-btn" type="button" hidden>Clear</button>
         <button id="matMake" class="small-btn go" type="button" disabled>Make</button>
-      </div>
-      <div class="craft-chips mat-tabs" role="group" aria-label="Under the mat">
-        <button id="matTabBag" class="craft-chip on" type="button" aria-pressed="true">Inventory</button>
-        <button id="matTabFound" class="craft-chip" type="button" aria-pressed="false">Recipes</button>
       </div>
     </div>
     <div id="bagPart">

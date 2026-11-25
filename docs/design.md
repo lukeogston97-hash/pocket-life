@@ -12,7 +12,7 @@ Every decision so far, split by area so an update only reads the file it needs. 
 - docs/design/placeables.md: campfires, fuel, sitting
 - docs/design/claims.md: campfire claims (who can do what where, fuel, away people)
 - docs/design/societies.md: societies (your claim is your society: lighting starts it, invites, leader, leaving, the admin's list)
-- docs/design/inventory-and-menus.md: inventory grid, Craft, recipe discovery, tap menus, stations, pack up
+- docs/design/inventory-and-menus.md: inventory grid, Recipes tab and craft mat, tap menus, stations, pack up
 - docs/design/admin.md: admin mode (the way in, the dashboard, tapping things), live settings and item numbers, people, fires and claims, the Log, Restore
 - docs/design/wording.md: the words players see (camp, +10 food, capitals, times, the same words in tap menus and the task list)
 - docs/design/later.md: sign-in, buildings, later ideas, and what's still to decide before sharing the game with the public

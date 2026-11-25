@@ -89,11 +89,6 @@ export function matIs(mat, r) {
   const want = recipeWants(r), on = Object.entries(mat).filter(([, n]) => n > 0);
   return on.length === Object.keys(want).length && on.every(([k, n]) => want[k] === n);
 }
-// is everything on the mat part of the recipe, with something still missing? (the mat says "Something's missing")
-export function matPartOf(mat, r) {
-  const want = recipeWants(r), on = Object.entries(mat).filter(([, n]) => n > 0);
-  return on.length > 0 && on.every(([k, n]) => (want[k] || 0) >= n) && !matIs(mat, r);
-}
 
 /* ---------- kinds of item: the buttons in Craft and the admin's item picker ---------- */
 export const ITEM_GROUPS = ['Tools', 'Food', 'Building', 'Clothes', 'Materials'];
