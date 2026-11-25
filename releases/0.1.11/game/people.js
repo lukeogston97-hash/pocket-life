@@ -182,17 +182,21 @@ function refreshPreview() {
 }
 function renderCreator(w, h) {
   renderer.setClearColor(HAZE, 1);
-  const appTop = app.getBoundingClientRect().top;
-  const top = Math.max(0, $('creatorHead').getBoundingClientRect().bottom - appTop);
-  const bottom = Math.min(h, $('sheet').getBoundingClientRect().top - appTop + 24);
+  const ar = app.getBoundingClientRect(), sheet = $('sheet').getBoundingClientRect();
+  const top = Math.max(0, $('creatorHead').getBoundingClientRect().bottom - ar.top);
+  // The stage fills the space the sheet leaves: above it on a phone held upright, beside it on one held sideways
+  // (style.css puts the sheet down the right when the screen is short and wide), running a little way under its rounded edge.
+  const beside = sheet.top - ar.top <= top && sheet.left - ar.left > 80; // (it starts level with the heading, not below your person)
+  const bottom = beside ? h : Math.min(h, sheet.top - ar.top + 24);
+  const aw = beside ? Math.max(80, Math.min(w, sheet.left - ar.left + 24)) : w;
   const ah = Math.max(80, bottom - top);
   renderer.setScissorTest(false);
   renderer.setViewport(0, 0, w, h);
   renderer.clear();
   renderer.setScissorTest(true);
-  renderer.setScissor(0, h - bottom, w, ah);
-  renderer.setViewport(0, h - bottom, w, ah);
-  pcam.aspect = w / ah;
+  renderer.setScissor(0, h - bottom, aw, ah);
+  renderer.setViewport(0, h - bottom, aw, ah);
+  pcam.aspect = aw / ah;
   pcam.updateProjectionMatrix();
   renderer.render(pscene, pcam);
   renderer.setScissorTest(false);

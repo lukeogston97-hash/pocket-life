@@ -190,6 +190,3 @@ function drawCarry() {
   $('bagBtn').classList.toggle('full', w >= SETTINGS.carryCapacity);
   if (bagOpen()) drawBag();
 }
-let hintTimer = 0;
-function showHint() { $('hint').hidden = false; clearTimeout(hintTimer); hintTimer = setTimeout(hideHint, 15000); }
-function hideHint() { $('hint').hidden = true; }

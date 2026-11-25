@@ -227,6 +227,18 @@ setTimeout(function () { if (!window.__bootStarted) window.__bootFail("This brow
         </div>
       </div>
       <div class="gfx-row"><span class="lbl">Privacy and rules</span><button id="rulesBtn" type="button" class="small-btn">Read</button></div>
+      <div class="gfx-row"><span class="lbl">Leave the world for good</span><button id="leaveBtn" type="button" class="small-btn">Leave</button></div>
+    </div>
+  </div>
+
+  <div id="leave" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="leaveTitle">
+      <h2 id="leaveTitle">Leave the world for good?</h2>
+      <p id="leaveText"></p>
+      <div class="modal-actions">
+        <button id="leaveCancel" type="button" class="text-btn">Cancel</button>
+        <button id="leaveHold" type="button" class="action-btn hold-btn"><span>Hold to leave</span></button>
+      </div>
     </div>
   </div>
 

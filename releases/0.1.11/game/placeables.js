@@ -101,9 +101,33 @@ charMat.userData.shared = true;
 // one warm light that follows the nearest lit fire (a fixed number of lights, so nothing has to be redrawn from scratch)
 const fireLight = new THREE.PointLight('#ff9a4a', 0, 9, 1.6);
 scene.add(fireLight);
+/* How a placed thing looks comes from the data: its item's shape (the item's look.shape in game-data.json), the same
+   name items are drawn by. A shape can have a builder here that knows how the thing is put together. It gives
+     { model, R, pieces: [{ obj, to, from }], fuel: [...], burns: [...] }
+   - pieces: they move from a loose pile (from) into place (to), one after another, as it's built
+   - fuel: for a fire, the pieces that show how much fuel is in it (the more fuel, the more of them show)
+   - burns: what goes black once a fire has been lit in it
+   - R: how far it reaches from its middle (for the tap area and a fire's glow)
+   A shape with no builder of its own is drawn as its item, set down whole: it slides in from beside the spot as it's
+   built. So a new placeable shows up from the data alone, and only gets a builder here when it should be put together
+   piece by piece (0.1.10: before this every placed thing was drawn as a campfire). */
+const PLACED_SHAPES = { campfire: campfireModel };
+function placedModel(item) {
+  const look = ITEMS[item].look;
+  if (PLACED_SHAPES[look.shape]) return PLACED_SHAPES[look.shape](look);
+  const made = buildItem(item), model = new THREE.Group(), q = made.model.quaternion.clone(), y = made.rest || 0;
+  model.add(made.model);
+  const rule = PLACEABLES[ITEMS[item].places];
+  return { model, R: rule ? rule.solid : 0.5, pieces: [{ obj: made.model, to: { p: [0, y, 0], q }, from: { p: [-0.5, y, 0.3], q } }], fuel: [], burns: [] };
+}
+// how many of its fuel pieces show right now (a full fire shows them all)
+const fuelShown = (th) => {
+  const P = PLACEABLES[th.kind], n = th.view.userData.parts.fuel.length;
+  return th.built && P.fire && n ? Math.min(n, Math.ceil((fuelIn(th) / Math.min(P.fire.maxFuel, 10)) * n - 0.001)) : 0;
+};
 function makePlacedView(th) {
-  const P = PLACEABLES[th.kind], look = ITEMS[P.item].look;
-  const parts = campfireModel(look);
+  const P = PLACEABLES[th.kind];
+  const parts = placedModel(P.item);
   const g = shadowsOn(parts.model);
   g.userData.parts = parts;
   if (P.fire) { // flames (shown while lit) and a glow in the ashes
@@ -144,11 +168,10 @@ function drawPlaced(th) {
     if (t > 0 && t < 1) pc.obj.position.y += Math.sin(t * Math.PI) * 0.12; // lifted over
     pc.obj.quaternion.copy(pc.from.q).slerp(pc.to.q, t);
   });
-  const P = PLACEABLES[th.kind];
-  const show = th.built && P.fire ? Math.min(FUEL_STICKS, Math.ceil((fuelIn(th) / Math.min(P.fire.maxFuel, 10)) * FUEL_STICKS - 0.001)) : 0;
+  const show = fuelShown(th);
   parts.fuel.forEach((m, i) => { m.visible = i < show; });
   const lit = th.built && isLit(th);
-  for (const pc of parts.pieces.slice(-4)) pc.obj.traverse((m) => { if (m.isMesh) { if (!m.userData.wood) m.userData.wood = m.material; m.material = th.burnt ? charMat : m.userData.wood; } }); // the log and sticks go black once burnt
+  for (const obj of parts.burns) obj.traverse((m) => { if (m.isMesh) { if (!m.userData.wood) m.userData.wood = m.material; m.material = th.burnt ? charMat : m.userData.wood; } }); // a campfire's log and sticks go black once burnt
   if (parts.flame) { parts.flame.visible = lit; parts.ember.visible = lit; }
   th.shown = { lit, show };
 }
@@ -201,7 +224,7 @@ function animatePlaced(dt) {
   let near = null, nd = Infinity;
   const c = controls.target;
   for (const th of placed.values()) {
-    if (second && th.shown && (th.shown.lit !== isLit(th) || (th.built && PLACEABLES[th.kind].fire && th.shown.show !== Math.min(FUEL_STICKS, Math.ceil((fuelIn(th) / Math.min(PLACEABLES[th.kind].fire.maxFuel, 10)) * FUEL_STICKS - 0.001))))) {
+    if (second && th.shown && (th.shown.lit !== isLit(th) || th.shown.show !== fuelShown(th))) {
       burnNow(th); drawPlaced(th); // burnt down a stick, or out of fuel: the fire goes out by itself
     }
     const parts = th.view.userData.parts;
@@ -237,7 +260,7 @@ function cantPlaceAt(x, z, kind) {
   if (!roomAt(x, z, r + 0.25, 0.4)) return 'Not enough room here';
   if ([...placed.values()].some((th) => Math.hypot(th.x - x, th.z - z) < r + PLACEABLES[th.kind].solid + 1)) return 'Too close to another one';
   const c = notMineAt(x, z);
-  if (c) return `That belongs to ${c.claim.name}`;
+  if (c) return `This belongs to ${c.claim.name}`; // (the server's words for it: claimNo in server/src/claims.js)
   return null;
 }
 function startPlacing(item) {
@@ -245,7 +268,7 @@ function startPlacing(item) {
   if (!kind || !player || you.dead || !you.carry[item]) return;
   closeBag(); closeCraft(); closeMenu();
   stopPlacing();
-  const ghost = campfireModel(ITEMS[item].look).model;
+  const ghost = placedModel(item).model;
   ghost.traverse((m) => { if (m.isMesh) { m.material = m.material.clone(); m.material.userData = {}; m.material.transparent = true; m.material.opacity = 0.55; m.material.depthWrite = false; } });
   scene.add(ghost);
   Object.assign(placing, { on: true, item, kind, ghost, rot: player.rotation.y });

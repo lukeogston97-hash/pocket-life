@@ -46,6 +46,7 @@ function goOnline() {
     else if (m.t === 'update') getUpdate(m.min);
     else if (m.t === 'maintenance') { if (adminMode.asking) adminLoginAnswer(false); showMaintenance(m.text); } // (a password on its way was refused too: never keep sending it)
     else if (m.t === 'thanks') showTag('Thanks for the feedback!', headTop(), 2.5);
+    else if (m.t === 'forgotten') forgotten(); // Leave the world for good went through (screens.js)
     else if (m.t === 'adminNo') adminLoginAnswer(false); // the admin password wasn't accepted (admin-mode.js)
     else if (m.t.startsWith('admin') || ['announce', 'kicked', 'banned', 'reset', 'restoring'].includes(m.t)) {
       // 'admin' is both the answer to the password and what every admin tool answers with. It only lets you in while the
