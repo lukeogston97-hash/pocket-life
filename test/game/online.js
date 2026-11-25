@@ -47,10 +47,11 @@ function goOnline() {
     else if (m.t === 'maintenance') { if (adminMode.asking) adminLoginAnswer(false); showMaintenance(m.text); } // (a password on its way was refused too: never keep sending it)
     else if (m.t === 'thanks') showTag('Thanks for the feedback!', headTop(), 2.5);
     else if (m.t === 'forgotten') forgotten(); // Leave the world for good went through (screens.js)
-    else if (m.t === 'signedIn') signedIn(); // Google sign-in (screens.js)
-    else if (m.t === 'signedOut') signedOut();
-    else if (m.t === 'signInAsk') signAsk(m);
-    else if (m.t === 'signInNo') signNo(m);
+    else if (m.t === 'linkCode') linkGotCode(m); // Play on other devices (screens.js)
+    else if (m.t === 'linkAsk') linkAsk(m);
+    else if (m.t === 'linkNo') linkNo(m);
+    else if (m.t === 'linked') linked();
+    else if (m.t === 'unlinked') unlinked();
     else if (m.t === 'adminNo') adminLoginAnswer(false); // the admin password wasn't accepted (admin-mode.js)
     else if (m.t.startsWith('admin') || ['announce', 'kicked', 'banned', 'reset', 'restoring'].includes(m.t)) {
       // 'admin' is both the answer to the password and what every admin tool answers with. It only lets you in while the
@@ -154,7 +155,7 @@ function drawGraves(list) {
 let creating = false;
 function welcome(m) {
   const restored = net.restored; // the admin just restored the world (admin.js): you're where the server has you
-  net.signedIn = !!m.signedIn; drawSignRow(); // Google sign-in (screens.js)
+  net.linked = !!m.linked; drawLinkRow(); // Play on other devices (screens.js)
   net.restored = false;
   net.fails = 0;
   net.myId = m.id;
@@ -185,7 +186,7 @@ function welcome(m) {
     forgetSit(); // the server says whether you're still sitting (below)
     forgetOldTakes();
     let back = null; // what's left of your task list, which the server carried on with while you were away (0.1.7)
-    if (!player) { applyMe(m.me, true); enterWorld(); back = m.tasks; signNoteLater(); }
+    if (!player) { applyMe(m.me, true); enterWorld(); back = m.tasks; linkNoteLater(); }
     else {
       applyMe(m.me);
       // Gone a while: they may have strolled off, so you're where the server has them, with what's left of the list. A

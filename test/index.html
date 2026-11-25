@@ -227,19 +227,26 @@ setTimeout(function () { if (!window.__bootStarted) window.__bootFail("This brow
         </div>
       </div>
       <div class="gfx-row"><span class="lbl">Privacy and rules</span><button id="rulesBtn" type="button" class="small-btn">Read</button></div>
-      <div id="signRow" class="gfx-row" hidden><span id="signLbl" class="lbl">Play on other devices</span><button id="signBtn" type="button" class="small-btn">Sign in</button></div>
+      <div class="gfx-row"><span id="linkLbl" class="lbl">Play on other devices</span><button id="linkBtn" type="button" class="small-btn">Link</button></div>
       <div class="gfx-row"><span class="lbl">Leave the world for good</span><button id="leaveBtn" type="button" class="small-btn">Leave</button></div>
     </div>
   </div>
 
-  <div id="sign" class="modal" hidden>
-    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="signTitle">
-      <h2 id="signTitle">Sign in</h2>
-      <p id="signText"></p>
-      <div id="signGoogle" class="sign-google"></div>
+  <div id="link" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="linkTitle">
+      <h2 id="linkTitle">Play on other devices</h2>
+      <p id="linkText"></p>
+      <div id="linkCode" class="link-code" hidden></div>
+      <button id="linkGet" type="button" class="small-btn go link-get">Get a code</button>
+      <form id="linkUseBox" class="link-use">
+        <label for="linkInput" class="sr-only">Code from your other device</label>
+        <input id="linkInput" class="admin-input" maxlength="7" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Code from your other device">
+        <button type="submit" class="small-btn">Use</button>
+      </form>
       <div class="modal-actions">
-        <button id="signCancel" type="button" class="text-btn">Cancel</button>
-        <button id="signSure" type="button" class="action-btn" hidden>Sign in</button>
+        <button id="linkUnlink" type="button" class="text-btn admin-danger" hidden>Unlink this device</button>
+        <button id="linkCancel" type="button" class="text-btn">Close</button>
+        <button id="linkSure" type="button" class="action-btn" hidden>Sure</button>
       </div>
     </div>
   </div>

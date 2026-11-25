@@ -602,6 +602,9 @@ select.admin-input { appearance: none; -webkit-appearance: none; }
 .hold-btn::before { content: ''; position: absolute; inset: 0; width: calc(var(--hold, 0) * 100%); background: rgba(0, 0, 0, 0.25); }
 .hold-btn span { position: relative; }
 
-/* Sign in (Settings): Google draws its own button in here */
-.sign-google { display: flex; justify-content: center; min-height: 44px; margin: 6px 0 4px; }
-.sign-google:empty { display: none; }
+/* Play on other devices (Settings): the code, big and spaced out, and the box to type one */
+.link-code { margin: 6px 0 10px; text-align: center; font: 800 30px/1.2 var(--font-ui); letter-spacing: 0.18em; user-select: all; -webkit-user-select: all; }
+.link-get { display: block; margin: 4px auto 10px; }
+.link-get[hidden], .link-use[hidden] { display: none; }
+.link-use { display: flex; gap: 8px; margin: 4px 0 6px; }
+.link-use input { flex: 1; min-width: 0; text-transform: uppercase; letter-spacing: 0.08em; }

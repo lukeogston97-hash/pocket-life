@@ -28,7 +28,7 @@ import { taskMethods } from './tasks.js';
 import { accountsMethods, freshAccounts } from './accounts.js';
 import { ACTIONS } from './actions.js';
 
-const MENU_OK = new Set(['feedback', 'forget', 'signIn', 'signOut']); // what the game may send from the main menu, with no person
+const MENU_OK = new Set(['feedback', 'forget', 'linkCode', 'linkUse', 'unlink']); // what the game may send from the main menu, with no person
 
 export class World extends DurableObject {
   constructor(ctx, env) {
@@ -52,8 +52,7 @@ export class World extends DurableObject {
     this.reportLog = []; // the same for reports about players
     this.socks = null; this.byWho = null; // who's connected, worked out once per message or tick (sockets, socketOf)
     this.restoring = false; // a restore is on its way (restore.js)
-    this.accounts = freshAccounts(); // Google sign-in: phones linked to accounts (accounts.js)
-    this.gKeys = null; // Google's public keys, kept for a few hours (accounts.js)
+    this.accounts = freshAccounts(); // Play on other devices: devices linked to one person (accounts.js)
     ctx.blockConcurrencyWhile(async () => {
       this.world = (await ctx.storage.get('world')) || null;
       Object.assign(this.admin, (await ctx.storage.get('admin')) || {});
@@ -158,10 +157,8 @@ export class World extends DurableObject {
   }
   sendCount() { this.send({ t: 'count', n: this.playing() }, null); }
   playing(except) { return this.sockets().filter(({ p }) => p.who && p.who !== except).length; } // watchers on the main menu aren't counted
-  // Who is this? For now a person belongs to the phone's random id (pid). Sign-in later (Google, say) plugs in here:
-  // check the sign-in with Google, then look up 'acct:<their Google id>' in storage to find their who. The first time
-  // someone signs in, save 'acct:<id>' = the who from their phone, so they keep the person they already have.
-  async whoFor(m) { return (await this.whoIs(m)).who; } // the person a phone plays: its own, or its Google account's (accounts.js)
+  // Who is this? A person belongs to the device's random id (pid), or to the device it was linked to with a code (accounts.js).
+  async whoFor(m) { return (await this.whoIs(m)).who; } // the person a device plays: its own, or the one it's linked to (accounts.js)
 
 
 
@@ -274,7 +271,7 @@ export class World extends DurableObject {
       if (wrong) this.note('guard', locked ? 'Admin password tried from an address that is locked out' : this.adminLocked(me) ? 'Wrong admin password 5 times: that address is locked out for 15 minutes' : 'Wrong admin password');
       reply({ t: 'adminNo' }); // said before anything below can send the game away (maintenance, an update), so it never keeps trying a refused password
     }
-    const { who, acct } = await this.whoIs(m), signedIn = !!acct;
+    const { who, acct } = await this.whoIs(m), grp = this.accountOf(who), linked = !!acct || !!(grp && grp.phones); // (linked: playing on more than one device)
     if (!isAdmin && this.admin.banned.includes(who)) { this.boot(ws, { t: 'banned' }); return; }
     if (!isAdmin && this.admin.maintenance && link !== 'test') { this.boot(ws, { t: 'maintenance', text: this.admin.message }); return; }
     if (min && tooOld(m.v, m.b, min, m.e, (WORLDS.era || {})[link])) { this.boot(ws, { t: 'update', min }); return; }
@@ -286,7 +283,7 @@ export class World extends DurableObject {
       Object.assign(me, { id: me.watch && me.id ? me.id : `w:${crypto.randomUUID().slice(0, 8)}`, who: null, self: who, watch: true, queued, turnAt: 0, admin: isAdmin, v: clean(m.v, 20), b: Math.floor(Number(m.b)) || 0, e: Math.floor(Number(m.e)) || 0, link, alive: false });
       this.attach(ws, me);
       const p = this.persons.get(who);
-      reply({ t: 'welcome', watch: true, signedIn, id: me.id, people: this.people(null), world: this.view(), count: this.playing(), speed: this.speed, live: this.live, liveItems: this.liveItems,
+      reply({ t: 'welcome', watch: true, linked, id: me.id, people: this.people(null), world: this.view(), count: this.playing(), speed: this.speed, live: this.live, liveItems: this.liveItems,
         yours: this.alive(p) ? { name: p.name, age: ageOf(p) } : null, line: full ? this.placeOf(ws) : 0, needLayout: isAdmin && this.needLayout(me), needSeed: isAdmin && !this.world });
       if (isAdmin) { reply(this.adminState(me)); this.note('admin', 'Admin mode opened'); } // admin mode is on: the panels get their numbers
       if (full) this.callLine();
@@ -322,7 +319,7 @@ export class World extends DurableObject {
     this.attach(ws, me);
     if (p) await this.flush(who);
     const w = this.world;
-    reply({ t: 'welcome', id: who, signedIn, people: this.people(who), world: this.view(), needSeed: !w, needLayout: this.needLayout(me),
+    reply({ t: 'welcome', id: who, linked, people: this.people(who), world: this.view(), needSeed: !w, needLayout: this.needLayout(me),
       count: this.playing(), me: me.alive ? this.mine(p) : null, away, tasks, dead, speed: this.speed, live: this.live, liveItems: this.liveItems });
     if (me.alive) this.send({ t: 'join', person: this.pub(p) }, who);
     this.sendCount();

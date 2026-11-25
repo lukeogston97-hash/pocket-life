@@ -22,9 +22,10 @@ export const ACTIONS = {
     await this.forget(await this.whoFor(m), ws, me);
     reply({ t: 'forgotten' });
   } },
-  // Google sign-in and sign-out (accounts.js); both work from the main menu too
-  signIn: { when: 'any', async run({ ws, me, m, reply }) { if (m.pid) await this.signIn(ws, me, m, reply); } },
-  signOut: { when: 'any', async run({ m, reply }) { if (m.pid) await this.signOut(m, reply); } },
+  // Play on other devices (accounts.js): get a link code, use one, unlink this device; all work from the main menu too
+  linkCode: { when: 'any', async run({ m, reply }) { if (m.pid) await this.linkCode(m, reply); } },
+  linkUse: { when: 'any', async run({ ws, me, m, reply }) { if (m.pid) await this.linkUse(ws, me, m, reply); } },
+  unlink: { when: 'any', async run({ m, reply }) { if (m.pid) await this.unlink(m, reply); } },
   // reporting another player (kept with what they said lately)
   report: { when: 'any', async run({ ws, me, m, p, w, reply, save }) {
     const them = this.persons.get(m.id), sock = this.socketOf(m.id);

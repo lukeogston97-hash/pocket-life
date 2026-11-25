@@ -2049,13 +2049,32 @@ async def server_tests():
 
 
 async def leaving():
-    """Settings: Leave the world for good (0.1.11): a warning, hold 2 seconds, a fresh start. The Sign in row stays hidden with no client ID."""
+    """Settings: Play on other devices with a link code (0.1.12), and Leave the world for good (0.1.11): a warning, hold 2 seconds, a fresh start."""
     async with world() as W:
         a = await W.page('leaveA')
         await join(a)
+        name = await a.evaluate("__pl.you.look.name")
         pid = await a.evaluate("localStorage.getItem('pocket-life:pid')")
+        # Play on other devices: a code here, typed on a second device on its main menu
+        await a.keyboard.press('Escape'); await a.click('#pauseSettingsBtn'); await a.click('#linkBtn')
+        expect(await shown(a, '#link') and await shown(a, '#linkGet'), 'Settings > Play on other devices has Get a code')
+        await a.click('#linkGet')
+        await a.wait_for_function("!document.getElementById('linkCode').hidden", timeout=10000)
+        code = await text(a, '#linkCode')
+        expect(len(code) == 6, f'a 6-letter code shows ({code})')
+        await a.click('#linkCancel')
+        b = await W.page('leaveB')
+        await b.click('#menuSettingsBtn'); await b.click('#linkBtn')
+        expect(not await shown(b, '#linkGet'), "a device with no person can't get a code, only type one")
+        await b.fill('#linkInput', code.lower()); await b.click('#linkUseBox button[type=submit]')
+        await b.wait_for_load_state(); await b.wait_for_timeout(4000)
+        await b.wait_for_function("!document.getElementById('boot') && document.getElementById('playSub').textContent", timeout=30000)
+        sub = await text(b, '#playSub')
+        expect(name in sub, f'the second device starts again and Play carries on as {name} ({sub})')
+        await b.click('#menuSettingsBtn')
+        expect('other devices' in await text(b, '#linkLbl'), 'its Settings says it is playing on other devices')
         await a.keyboard.press('Escape'); await a.click('#pauseSettingsBtn')
-        expect(await shown(a, '#settings') and not await shown(a, '#signRow'), 'Settings opens, with no Sign in row while there is no Google client ID')
+        expect(await shown(a, '#settings'), 'Settings opens')
         await a.click('#leaveBtn')
         words = await text(a, '#leaveText')
         expect(await shown(a, '#leave') and "can't be undone" in words and 'Test' not in words[:0], f'the warning shows, with your name ({words[:60]})')

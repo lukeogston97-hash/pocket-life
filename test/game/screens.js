@@ -270,87 +270,82 @@ $('pauseNewsBtn').addEventListener('click', () => { closePause(); openNews(); })
 $('pauseFeedbackBtn').addEventListener('click', () => { closePause(); openFeedback(); });
 $('pauseSettingsBtn').addEventListener('click', () => { closePause(); openSettings(); });
 function closeSettings() { $('settings').hidden = true; }
-/* ---------- Sign in with Google (Settings), optional ----------
-   Hidden until settings.googleClientId is set in game-data.json. Google's script is only loaded when someone opens Sign
-   in, so a guest's game never talks to Google. Google hands the game a signed note (credential) which goes to the server
-   (server/src/accounts.js), which checks it itself. Signed in, this phone plays the account's person. If the account
-   already has a person and this phone has its own, the game says the guest person here will be removed, and asks.
-   Signing in or out starts the page again, so the game rejoins as the right person. net.signedIn comes from the server. */
-const GOOGLE_ID = (DATA.settings || {}).googleClientId || '';
-const IN_APP = /FBAN|FBAV|FB_IAB|Instagram|TikTok|musical_ly|BytedanceWebview|Line\//i.test(navigator.userAgent); // Google refuses sign-in in these apps' own browsers
-const SIGN_NOTE_KEY = 'pocket-life:signNote';
-let signToken = '', googleReady = null;
-function drawSignRow() {
-  $('signRow').hidden = !GOOGLE_ID;
-  $('signLbl').textContent = net.signedIn ? 'Signed in with Google' : 'Play on other devices';
-  $('signBtn').textContent = net.signedIn ? 'Sign out' : 'Sign in';
-}
-function loadGoogle() {
-  if (!googleReady) googleReady = new Promise((ok, no) => {
-    const s = document.createElement('script');
-    s.src = 'https://accounts.google.com/gsi/client'; s.async = true;
-    s.onload = () => { try { window.google.accounts.id.initialize({ client_id: GOOGLE_ID, callback: (r) => sendSignIn(r.credential, false) }); ok(); } catch (err) { no(err); } };
-    s.onerror = no;
-    document.head.appendChild(s);
-  }).catch((err) => { googleReady = null; throw err; });
-  return googleReady;
-}
-function openSign() {
+/* ---------- Play on other devices (Settings): link codes ----------
+   No accounts (Luke, 25 Nov 2026: Google sign-in was too much to set up). The device with the person taps Get a code
+   (6 letters, 10 minutes, works once); the other device types it in and plays that person from then on
+   (server/src/accounts.js). If the other device has its own guest person, the game says it will be removed, and asks.
+   Linking or unlinking starts the page again, so the game rejoins as the right person. net.linked comes from the server. */
+const LINK_NOTE_KEY = 'pocket-life:linkNote';
+let linkWanted = '';
+function drawLinkRow() { $('linkLbl').textContent = net.linked ? 'Playing on other devices' : 'Play on other devices'; }
+function hasPerson() { return !!((you.look && !you.dead && ui.mode === 'world') || menuYours); }
+function openLink() {
   closeSettings();
   paused = true;
-  $('sign').hidden = false;
-  $('signSure').hidden = true; $('signSure').disabled = false;
-  $('signGoogle').replaceChildren();
-  if (net.signedIn) { // signing out
-    $('signTitle').textContent = 'Sign out?';
-    $('signText').textContent = 'Your person stays with your Google account. This device starts again as a new guest.';
-    $('signSure').textContent = 'Sign out'; $('signSure').hidden = false;
-    $('signCancel').focus();
-    return;
-  }
-  $('signTitle').textContent = 'Sign in';
-  if (IN_APP) { $('signText').textContent = "Google sign-in doesn't work in this app's browser. Open the game in Safari or Chrome to sign in."; return; }
-  $('signText').textContent = 'Sign in with Google to play the same person on your phone and computer. The game only keeps a scrambled number for your account, never your email or name.';
-  loadGoogle().then(() => {
-    if ($('sign').hidden) return;
-    window.google.accounts.id.renderButton($('signGoogle'), { theme: 'filled_black', shape: 'pill', size: 'large', text: 'signin_with' });
-  }).catch(() => { $('signText').textContent = "Couldn't reach Google just now. Check your connection and try again."; });
-  $('signCancel').focus();
+  $('link').hidden = false;
+  $('linkSure').hidden = true; $('linkSure').disabled = false;
+  $('linkCode').hidden = true;
+  $('linkUseBox').hidden = false;
+  $('linkInput').value = '';
+  $('linkGet').hidden = !hasPerson();
+  $('linkUnlink').hidden = !net.linked;
+  $('linkTitle').textContent = 'Play on other devices';
+  $('linkText').textContent = hasPerson()
+    ? 'Get a code here and type it on your other device, to play the same person on both. Or type a code from your other device below.'
+    : 'Type the code from your other device to play your person here.';
+  $('linkCancel').focus();
 }
-function closeSign() { $('sign').hidden = true; paused = false; signToken = ''; }
-function sendSignIn(token, sure) {
-  signToken = token;
-  if (!online()) { $('signText').textContent = 'You need to be online to sign in.'; return; }
-  net.sock.send(JSON.stringify({ t: 'signIn', pid, token, sure }));
-  $('signText').textContent = 'Signing in…';
-  $('signGoogle').replaceChildren();
+function closeLink() { $('link').hidden = true; paused = false; linkWanted = ''; }
+function linkSay(text) { $('linkText').textContent = text; }
+function linkSend(msg) {
+  if (!online()) { linkSay('You need to be online to do this.'); return false; }
+  net.sock.send(JSON.stringify({ ...msg, pid }));
+  return true;
 }
-// the server: the account already has a person, and this phone has its own
-function signAsk(m) {
-  if ($('sign').hidden) return;
-  $('signTitle').textContent = m.theirs ? `Play as ${m.theirs}?` : 'Sign in?';
-  $('signText').textContent = `${m.theirs ? `You'll play as ${m.theirs}. ` : ''}Your guest person here, ${m.mine}, will be removed. This can't be undone.`;
-  $('signSure').textContent = 'Sign in'; $('signSure').hidden = false;
+// the server's answers (online.js)
+function linkGotCode(m) {
+  if ($('link').hidden) return;
+  $('linkCode').textContent = m.code; $('linkCode').hidden = false;
+  $('linkGet').hidden = true; $('linkUseBox').hidden = true; $('linkUnlink').hidden = true;
+  linkSay(`On your other device, open Settings, tap Play on other devices and type this code. It works once, for ${m.minutes} minutes.`);
 }
-function signNo(m) { if (!$('sign').hidden) { $('signText').textContent = m.text || "Couldn't sign in just now. Try again."; $('signSure').hidden = true; } }
-$('signBtn').addEventListener('click', openSign);
-$('signCancel').addEventListener('click', closeSign);
-$('sign').addEventListener('click', (e) => { if (e.target === $('sign')) closeSign(); });
-$('signSure').addEventListener('click', () => {
-  if (!online()) { $('signText').textContent = "You need to be online to do this."; return; }
-  if (net.signedIn) { net.sock.send(JSON.stringify({ t: 'signOut', pid })); $('signSure').disabled = true; return; }
-  if (signToken) sendSignIn(signToken, true);
+function linkAsk(m) {
+  if ($('link').hidden) return;
+  $('linkTitle').textContent = `Play as ${m.theirs}?`;
+  linkSay(`You'll play as ${m.theirs} on this device. Your guest person here, ${m.mine}, will be removed. This can't be undone.`);
+  $('linkUseBox').hidden = true; $('linkGet').hidden = true; $('linkUnlink').hidden = true;
+  $('linkSure').textContent = 'Play as ' + m.theirs; $('linkSure').hidden = false;
+}
+function linkNo(m) { if (!$('link').hidden) { linkSay(m.text || "That didn't work. Try again."); $('linkSure').hidden = true; $('linkUseBox').hidden = false; } }
+function linked() { location.reload(); }
+function unlinked() { forgotten(); }
+$('linkBtn').addEventListener('click', openLink);
+$('linkCancel').addEventListener('click', closeLink);
+$('link').addEventListener('click', (e) => { if (e.target === $('link')) closeLink(); });
+$('linkGet').addEventListener('click', () => { if (linkSend({ t: 'linkCode' })) linkSay('Getting a code…'); });
+$('linkUseBox').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const code = $('linkInput').value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (code.length !== 6) { linkSay('The code has 6 letters and numbers.'); return; }
+  linkWanted = code;
+  if (linkSend({ t: 'linkUse', code })) linkSay('Checking the code…');
 });
-// signed in (start again as the account's person) or signed out (a fresh id, so a new guest)
-function signedIn() { location.reload(); }
-function signedOut() { forgotten(); }
-// once per phone, a while after making a person: you can sign in to play on other devices
-function signNoteLater() {
-  if (!GOOGLE_ID || net.signedIn) return;
-  try { if (localStorage.getItem(SIGN_NOTE_KEY)) return; localStorage.setItem(SIGN_NOTE_KEY, '1'); } catch (err) { return; }
-  setTimeout(() => { if (ui.mode === 'world' && !net.signedIn) showTag('Sign in from Settings to play on your other devices', headTop(), 4); }, 60000);
+$('linkUnlink').addEventListener('click', () => {
+  $('linkTitle').textContent = 'Unlink this device?';
+  linkSay('Your person stays on your other devices. This device starts again as a new guest.');
+  $('linkUseBox').hidden = true; $('linkGet').hidden = true; $('linkUnlink').hidden = true;
+  linkWanted = ''; $('linkSure').textContent = 'Unlink'; $('linkSure').hidden = false;
+});
+$('linkSure').addEventListener('click', () => {
+  const ok = linkWanted ? linkSend({ t: 'linkUse', code: linkWanted, sure: true }) : linkSend({ t: 'unlink' });
+  if (ok) $('linkSure').disabled = true;
+});
+// once per device, a minute after making a person: you can play on your other devices too
+function linkNoteLater() {
+  if (net.linked) return;
+  try { if (localStorage.getItem(LINK_NOTE_KEY)) return; localStorage.setItem(LINK_NOTE_KEY, '1'); } catch (err) { return; }
+  setTimeout(() => { if (ui.mode === 'world' && !net.linked) showTag('Play on your other devices too: Settings, Play on other devices', headTop(), 4); }, 60000);
 }
-/* (the Sign in row shows once the server says hello: welcome in online.js) */
 /* ---------- Leave the world for good (Settings) ----------
    A warning, then hold the button for 2 seconds. The server drops their things where they stand, takes them out of their
    camp and removes their person, past people and feedback (server/src/persons.js, forget). Then this phone gets a new id
