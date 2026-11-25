@@ -519,9 +519,28 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 }
 .admin-copy { margin: 0; font-size: 12.5px; line-height: 1.4; }
 .admin-copy[hidden] { display: none; }
-.admin-item-head { padding: 10px 0 2px; font-size: 13.5px; font-weight: 800; color: var(--ink); border-top: 1px solid var(--line); }
-.admin-item-head:first-child { border-top: 0; padding-top: 2px; }
-.admin-item-head + .admin-entry { border-top: 0; }
+/* Items tab (25 Nov 2026): one line per item, tap it to open its numbers, each a thin row */
+.admin-fold { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 40px; padding: 0 2px 0 0; border: 0; border-top: 1px solid var(--line); background: none; color: var(--ink); font: 700 14px/1.2 var(--font-ui); text-align: left; cursor: pointer; }
+.admin-fold:first-child { border-top: 0; }
+.admin-fold::after { content: "›"; flex: none; width: 10px; text-align: center; font-size: 17px; color: var(--ink-faint); transition: transform 0.15s; }
+.admin-fold[aria-expanded="true"]::after { transform: rotate(90deg); }
+.admin-fold-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-fold-changed { flex: none; font-size: 11.5px; font-weight: 800; color: var(--accent); }
+.admin-fold-sum { flex: none; margin-left: auto; font-size: 12px; font-weight: 600; color: var(--ink-faint); white-space: nowrap; }
+.admin-fold-body { padding: 0 0 8px 12px; }
+.admin-num { display: grid; grid-template-columns: 1fr 64px 58px; align-items: center; gap: 8px; min-height: 36px; }
+.admin-num-label { font-size: 13px; font-weight: 700; color: var(--ink-soft); overflow-wrap: anywhere; }
+.admin-num-label small { margin-left: 6px; font-size: 11.5px; color: var(--ink-faint); }
+.admin-num .admin-input { padding: 5px 8px; font-size: 14px; text-align: right; -moz-appearance: textfield; appearance: textfield; }
+.admin-num .admin-input::-webkit-inner-spin-button, .admin-num .admin-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.admin-num-btn { display: flex; justify-content: flex-end; }
+.admin-num-btn .small-btn { min-height: 30px; padding: 0 10px; font-size: 12.5px; }
+.admin-num-sub { padding: 6px 0 2px; font-size: 11.5px; font-weight: 800; color: var(--ink-faint); }
+@media (pointer: coarse) {
+  .admin-fold { min-height: 46px; }
+  .admin-num { min-height: 44px; }
+  .admin-num-btn .small-btn { min-height: 38px; }
+}
 /* following someone: a chip at the bottom of the view, like the game's own autopilot chip; tap it to stop */
 .admin-follow { position: absolute; z-index: 27; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); min-height: 40px; padding: 0 16px; border-radius: 999px; color: var(--ink); font: 700 13px/1 var(--font-ui); white-space: nowrap; cursor: pointer; }
 .admin-follow[hidden] { display: none; }
@@ -544,7 +563,7 @@ select.admin-input { appearance: none; -webkit-appearance: none; }
 /* iPhones zoom the whole page in when a box with text under 16 px is tapped, and stay zoomed. So on touch screens every
    box the admin types in is 16 px, like the game's own Say and name boxes. */
 @media (pointer: coarse) {
-  .admin-input, .admin-entry .admin-inline .admin-input, .admin-edit .admin-input, .admin-setting .admin-input, .admin-copy { font-size: 16px; }
+  .admin-input, .admin-entry .admin-inline .admin-input, .admin-edit .admin-input, .admin-setting .admin-input, .admin-num .admin-input, .admin-copy { font-size: 16px; }
 }
 
 /* ---------- societies (0.1.4): the Society panel and the invite card ---------- */

@@ -32,7 +32,7 @@ The short way to add each kind of thing. Most are one edit to test/game-data.jso
 ## The admin grows with the game
 Luke's rule (24 Nov 2026): when something new is added, the admin's control for it is added in the same update. Admin mode is docs/design/admin.md.
 - **Items, recipes and live settings**: nothing to do. They show up by themselves in Add item, Give items, the Items tab (weight, uses, filling, recipe amounts) and the Settings tab.
-- **A new number on an item or recipe that should be changeable live**: add it to `places()` and `tidy()` in server/src/live-items.js and to `itemPlace()` in game/admin.js.
+- **A new number on an item or recipe that should be changeable live**: add it to `places()` and `tidy()` in server/src/live-items.js and to `itemPlace()` in game/admin.js (its label in the open item, and for an item's own number a `sum`: how the item's line sums it up, like "weighs 2").
 - **A new thing in the world** (a placeable, an animal, an ore vein): a menu for the admin when it's tapped (adminActionsFor in game/admin-mode.js), with at least Move and Remove. If it has state worth seeing in one place (like fires and claims), a list on the World tab.
 - **A new thing a person has or is** (a skill, a pet, a home): show it on their page (drawPlayer in game/admin.js, playerPage in server/src/admin.js) with a way to change it.
 - **Something worth knowing happened** (rare things only, never one line per ordinary action): `this.note('world', text)` puts it in the Log (server/src/activity.js).

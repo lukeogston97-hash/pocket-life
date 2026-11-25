@@ -1460,31 +1460,46 @@ async def live_items_game():
 
 
 async def admin_items():
-    """The Items tab in admin mode: find an item, change a number with the real box and Save, see it marked changed with what it was, a player's game follows, Copy my changes lists it, Reset puts it back."""
-    rows = """(() => [...document.querySelectorAll('#adminItems > *')].map((r) => r.classList.contains('admin-item-head') ? { head: r.textContent }
-      : { label: r.querySelector('.admin-body').textContent, tag: r.querySelector('.admin-tag').textContent, value: r.querySelector('input').value, btns: [...r.querySelectorAll('button')].map((b) => b.textContent) }))()"""
+    """The Items tab in admin mode (25 Nov 2026: one line per item, tap to open): every item is one line, A to Z, summing up its numbers, nothing open to start; the kind chips; a search that finds one item opens it; change a number with the real box (Save shows once it's changed), see it marked changed with what it was, a player's game follows, Copy my changes lists it, Reset puts it back, a tap on the line closes it."""
+    D = json.load(open(os.path.join(HERE, '..', '..', 'test', 'game-data.json')))
+    folds = """[...document.querySelectorAll('#adminItems .admin-fold')].map((b) => ({ name: b.querySelector('.admin-fold-name').textContent,
+      sum: b.querySelector('.admin-fold-sum').textContent, changed: !!b.querySelector('.admin-fold-changed'), open: b.getAttribute('aria-expanded') === 'true' }))"""
+    rows = """(() => [...document.querySelectorAll('#adminItems .admin-num')].map((r) => ({ label: r.querySelector('.admin-num-label').firstChild.textContent,
+      was: (r.querySelector('.admin-num-label small') || {}).textContent || '', value: r.querySelector('input').value, btns: [...r.querySelectorAll('button')].map((b) => b.textContent) })))()"""
+    opened = "document.querySelectorAll('#adminItems .admin-num').length"
     async with world(TESTKIT=1) as W:
         p = await W.page('itemsP'); await join(p)
         a = await W.page('itemsA', 1440, 900); await open_admin(a)
         await a.click('#adminDashBtn'); await a.wait_for_timeout(300)
         await a.click('[data-admin-tab="items"]')
-        await a.wait_for_function("document.querySelectorAll('#adminItems .admin-setting').length > 20", timeout=20000)
-        all_rows = await a.evaluate(rows)
-        heads = [r['head'] for r in all_rows if 'head' in r]
-        expect(len(heads) == len(set(heads)) and heads == sorted(heads, key=str.lower) and 'Stone knife' in heads and 'Berry' in heads, f'every item is listed once, A to Z ({len(heads)} headings, {len(all_rows) - len(heads)} numbers)')
-        expect('All as the game file has them' in await text(a, '#adminItemsState') and await a.evaluate("document.getElementById('adminItemsCopy').disabled"), 'to start nothing is changed, and there is nothing to copy')
-        # find the stone knife: its own numbers and its recipe's, together
+        await a.wait_for_function("document.querySelectorAll('#adminItems .admin-fold').length > 10", timeout=20000)
+        lines = await a.evaluate(folds)
+        names = [l['name'] for l in lines]
+        expect(len(names) == len(set(names)) and names == sorted(names, key=str.lower) and 'Stone knife' in names and 'Berry' in names, f'every item is one line, A to Z ({len(names)} lines)')
+        expect(not any(l['open'] for l in lines) and await a.evaluate(opened) == 0, 'nothing is open to start, so the list stays short')
+        kn, be = [l for l in lines if l['name'] == 'Stone knife'][0], [l for l in lines if l['name'] == 'Berry'][0]
+        want = (f"weighs {D['items']['knife']['weight']} · {KNIFE_USES} uses", f"weighs {D['items']['berry']['weight']} · +{D['items']['berry']['eat']['hunger']} food")
+        expect((kn['sum'], be['sum']) == want, f"each line sums up the item's own numbers ({kn['sum']!r}, {be['sum']!r})")
+        # the kind chips: the same kinds as Craft
+        kinds = await a.evaluate("[...document.querySelectorAll('#adminItemsKinds button')].map((b) => b.textContent)")
+        await a.click('#adminItemsKinds >> text=Tools'); await a.wait_for_timeout(300)
+        tools = [l['name'] for l in await a.evaluate(folds)]
+        expect(kinds[:3] == ['All', 'Tools', 'Food'] and 'Stone knife' in tools and 'Fishing spear' in tools and 'Berry' not in tools and 'Stick' not in tools, f'chips {kinds}: Tools shows only tools ({tools})')
+        await a.click('#adminItemsKinds >> text=All'); await a.wait_for_timeout(300)
+        # find the stone knife: one line, opened, with its own numbers and its recipe's together
         await a.fill('#adminItemsFind', 'stone knife'); await a.wait_for_timeout(500)
-        kn = await a.evaluate(rows)
-        labels = [r['label'] for r in kn if 'label' in r]
-        expect([r.get('head') for r in kn if 'head' in r] == ['Stone knife'] and labels == ['Weight', 'Uses before it wears out', 'Recipe needs: sharp stones', 'Recipe needs: sticks', 'Recipe needs: twine', 'Recipe makes: stone knives'], f'search finds the stone knife with its own numbers and its recipe ({labels})')
+        lines, labels = await a.evaluate(folds), [r['label'] for r in await a.evaluate(rows)]
+        expect([l['name'] for l in lines] == ['Stone knife'] and lines[0]['open'] and labels == ['Weight', 'Uses', 'Needs sharp stone', 'Needs stick', 'Needs twine', 'Makes'], f'a search that finds one item opens it: its own numbers and its recipe ({labels})')
+        expect(all(r['btns'] == [] for r in await a.evaluate(rows)), 'no Save or Reset until a number is changed')
         # change its weight in the real box
         w0 = await p.evaluate("Number(document.getElementById('carryWeight').textContent)")
-        await a.fill('#adminItems .admin-setting >> nth=0 >> input', '4')
-        await a.click('#adminItems .admin-setting >> nth=0 >> text=Save')
-        await a.wait_for_function(f"(({rows}).find((r) => r.label === 'Weight') || {{}}).tag === 'Changed (was 1)'", timeout=20000)
-        row = [r for r in await a.evaluate(rows) if r.get('label') == 'Weight'][0]
-        expect(row['value'] == '4' and row['tag'] == 'Changed (was 1)' and row['btns'] == ['Save', 'Reset'], f'Save marks it changed with what it was, and offers Reset ({row})')
+        await a.fill('#adminItems .admin-num >> nth=0 >> input', '4')
+        row = (await a.evaluate(rows))[0]
+        expect(row['btns'] == ['Save'], f'Save shows once the box is changed ({row})')
+        await a.click('#adminItems .admin-num >> nth=0 >> text=Save')
+        await a.wait_for_function(f"(({rows})[0] || {{}}).was === 'was 1'", timeout=20000)
+        row, line = (await a.evaluate(rows))[0], (await a.evaluate(folds))[0]
+        expect(row['value'] == '4' and row['btns'] == ['Reset'] and line['changed'] and line['open'] and line['sum'].startswith('weighs 4'), f'Save marks it changed with what it was, offers Reset, and its line says Changed ({row}, {line})')
         expect('1 changed' in await text(a, '#adminItemsState'), f"the tab says how many are changed ({await text(a, '#adminItemsState')})")
         # a player carrying nothing that changed is unaffected; give them a knife and it weighs 4
         await a.evaluate(f"window.__sock.send(JSON.stringify({{ t: 'a.give', id: '{await p.evaluate('__pl.net.myId')}', kind: 'knife', n: 1 }}))")
@@ -1498,12 +1513,15 @@ async def admin_items():
         copied = await a.evaluate("document.getElementById('adminItemsText').hidden ? '' : document.getElementById('adminItemsText').value")
         expect('items.knife.weight: 1 -> 4' in copied and copied.count('->') == 1, f'Copy my changes lists exactly that change ({copied!r})')
         # Reset
-        await a.click('#adminItems .admin-setting >> nth=0 >> text=Reset')
-        await a.wait_for_function(f"(({rows}).find((r) => r.label === 'Weight') || {{}}).tag === 'Game file: 1'", timeout=20000)
-        row = [r for r in await a.evaluate(rows) if r.get('label') == 'Weight'][0]
-        expect(row['value'] == '1' and row['btns'] == ['Save'], f'Reset puts the game file\'s number back ({row})')
+        await a.click('#adminItems .admin-num >> nth=0 >> text=Reset')
+        await a.wait_for_function(f"(({rows})[0] || {{}}).value === '1' && !(({rows})[0] || {{}}).was", timeout=20000)
+        row, line = (await a.evaluate(rows))[0], (await a.evaluate(folds))[0]
+        expect(row['btns'] == [] and not line['changed'], f"Reset puts the game file's number back ({row}, {line})")
         await p.wait_for_function(f"Number(document.getElementById('carryWeight').textContent) === {w0 + 1}", timeout=20000)
         expect('All as the game file has them' in await text(a, '#adminItemsState'), "and the player's knife weighs 1 again; nothing is marked changed")
+        # a tap on the line closes it
+        await a.click('#adminItems .admin-fold >> nth=0'); await a.wait_for_timeout(300)
+        expect(await a.evaluate(opened) == 0 and not (await a.evaluate(folds))[0]['open'], 'a tap on its line closes it')
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
@@ -1706,6 +1724,8 @@ async def admin_phone():
         ALL = '#adminPanel input, #adminPanel select, #adminPanel textarea'
         for tab, least in [('server', 2), ('players', 1), ('settings', 3), ('items', 5)]:
             await a.click(f'[data-admin-tab="{tab}"]'); await a.wait_for_timeout(1200)
+            if tab == 'items':  # (an item's number boxes show once its line is tapped)
+                await a.click('#adminItems .admin-fold >> text=Stone knife'); await a.wait_for_selector('#adminItems .admin-num input', timeout=8000)
             rows = await boxes(ALL)
             expect(len(rows) >= least and not small(rows), f'{tab}: all {len(rows)} boxes are 16 px or more' + (f' (too small: {small(rows)[:4]})' if small(rows) else ''))
             if tab == 'settings': await shot(a, 'admin_phone_3_settings')
