@@ -183,7 +183,7 @@ async def grass_and_tools():
         await idle(a, 60); await a.wait_for_timeout(1500)
         expect(await a.evaluate('__pl.you.carry.twine || 0') == before + 1, 'cutting grass by hand gives 1 twine')
         said = await mat_make(a, [('stone', 2)])
-        expect(said == 'Something new' and await a.evaluate('__pl.you.carry["sharp-stone"] === 1 && __pl.you.carry.stone === 1'), f'2 stones on the craft mat make a sharp stone ({said})')
+        expect(said == 'Sharp stone' and await a.evaluate('__pl.you.carry["sharp-stone"] === 1 && __pl.you.carry.stone === 1'), f'2 stones on the craft mat make a sharp stone ({said})')
         await a.click('#bagBtn'); await a.click('#bagCraft'); await a.wait_for_timeout(300); await shot(a, 'craft')
         said = await mat_make(a, [('sharp-stone', 1), ('stick', 1), ('twine', 1)])
         expect(await a.evaluate('!!__pl.you.carry.knife && !__pl.you.carry["sharp-stone"]'), f'made a stone knife from a sharp stone, stick and twine ({said})')
@@ -405,10 +405,12 @@ async def smoke():
         found = await a.evaluate("""(() => { const out = [];
           for (const f of [[], ['sharp-stone'], ['sharp-stone', 'knife', 'campfire']]) {
             __pl.you.carry = {}; __pl.you.found = f; document.getElementById('bagBtn').click(); document.getElementById('bagCraft').click(); document.getElementById('matTabFound').click();
-            out.push([document.querySelectorAll('#foundList .found-row').length, document.querySelectorAll('#foundChips .craft-chip').length, !document.getElementById('foundMore').hidden]);
+            const rows = [...document.querySelectorAll('#foundList .found-row')], grey = (r) => r.classList.contains('not-made');
+            out.push([rows.length, rows.filter(grey).length, rows.findIndex(grey), document.querySelectorAll('#foundChips .craft-chip').length, !document.getElementById('foundMore').hidden]);
             document.getElementById('bagClose').click(); }
           return out; })()""")
-        expect(found == [[0, 0, True], [1, 0, True], [3, 4, True]], f'Found lists the recipes you have made, with Tools, Building and Materials buttons once there are 2 kinds ({found})')
+        n = found[0][0]
+        expect(n > 3 and all(x[0] == n and x[1] == n - m and x[2] == m and x[3] >= 3 and x[4] for x, m in zip(found, [0, 1, 3])), f'Recipes lists every recipe: the ones you have made first, the rest greyed out, with Tools, Building and Materials buttons ({found})')
         await a.evaluate("(() => { const p = __pl.player.position; __pl.queueTask({ type: 'walk', x: p.x + 1.5, z: p.z + 1 }); })()")
         await idle(a, 20)
         await a.click('#menuBtn'); await a.wait_for_timeout(300); await a.click('#exitBtn'); await a.wait_for_timeout(1500)
@@ -1444,7 +1446,7 @@ async def live_items_game():
         await ask("{ t: 'a.liveItem', at: ['recipes', 'knife', 'needs', 'stick'], value: 3 }")
         await p.wait_for_function(f"(() => {{ const c = {card}; return c && !c.canMake; }})()", timeout=20000)
         c1 = await p.evaluate(card)
-        expect(not c1['canMake'] and c1['chips'] == ['Sharp stones 1/1', 'Sticks 2/3', 'Twine 1/1'], f"a knife made to need 3 sticks: the open Found list shows it and they can't make one with 2 ({c1['chips']})")
+        expect(not c1['canMake'] and c1['chips'] == ['Sharp stones 1/1', 'Sticks 2/3', 'Twine 1/1'], f"a knife made to need 3 sticks: the open Recipes list shows it and they can't make one with 2 ({c1['chips']})")
         # back to the game file's numbers
         expect(await ask("{ t: 'a.liveItem', at: ['recipes', 'knife', 'needs', 'stick'], value: null }") == 'Back to what the game file says', 'Reset answers plainly')
         await ask("{ t: 'a.liveItem', at: ['items', 'stick', 'weight'], value: null }")
@@ -1719,7 +1721,7 @@ async def admin_phone():
 
 
 async def craft_mat():
-    """The craft mat (0.1.8): tap or drag things from the bag onto it, it says what they make (or what's missing), Make discovers a recipe once, a kept tool stays, and Found puts a recipe's things back on the mat."""
+    """The craft mat (0.1.8): tap or drag things from the inventory onto it, it says what they make straight away (no mystery, 0.1.10) or what's missing, Make, a kept tool stays, and Recipes lists every recipe (greyed out until made) and puts any one's things on the mat."""
     said = "document.getElementById('matName').textContent"
     tile = lambda k: f'#bagList .bag-tile[data-kind="{k}"]'
     count = lambda k: f"(() => {{ const t = document.querySelector('#bagList .bag-tile[data-kind=\"{k}\"] .count'); return t ? Number(t.textContent) : document.querySelector('#bagList .bag-tile[data-kind=\"{k}\"]') ? 1 : 0; }})()"
@@ -1732,16 +1734,16 @@ async def craft_mat():
         await a.click(tile('stone'))
         expect(await a.evaluate(said) == "Something's missing" and await a.evaluate(count('stone')) == 3, f"one stone on the mat: something's missing, and the bag shows 3 left ({await a.evaluate(said)})")
         await a.click(tile('stone'))
-        expect(await a.evaluate(said) == 'Something new' and await a.evaluate("!document.getElementById('matMake').disabled"), 'two stones: something new, and Make lights up')
+        expect(await a.evaluate(said) == 'Sharp stone' and await a.evaluate("!document.getElementById('matMake').disabled && !!document.querySelector('#matPic .pic')"), 'two stones: it says sharp stone straight away (no mystery), and Make lights up')
         await shot(a, 'mat-new')
         await a.click('#matMake'); await a.wait_for_timeout(1800)
-        expect(await a.evaluate("__pl.you.carry['sharp-stone'] === 1 && __pl.you.carry.stone === 2 && __pl.you.found.includes('sharp-stone')"), 'Make: a sharp stone, 2 stones used, and it is found')
-        expect(await a.evaluate(said) == 'Sharp stone' and 'Found list' in await a.evaluate("document.getElementById('matWhy').textContent"), 'the mat shows the discovery')
+        expect(await a.evaluate("__pl.you.carry['sharp-stone'] === 1 && __pl.you.carry.stone === 2 && __pl.you.found.includes('sharp-stone')"), 'Make: a sharp stone, 2 stones used, and it counts as made')
+        expect(await a.evaluate(said) == 'Sharp stone' and 'first one' in await a.evaluate("document.getElementById('matWhy').textContent"), 'the mat says it was your first one')
         await shot(a, 'mat-discovered')
         await a.click('#matClear')
         # a stick with the sharp stone: a twig, and the sharp stone is kept (it's a tool in this recipe)
         await a.click(tile('stick')); await a.click(tile('sharp-stone'))
-        expect(await a.evaluate(said) == 'Something new', f'a stick and a sharp stone go together ({await a.evaluate(said)})')
+        expect(await a.evaluate(said) == 'Twig', f'a stick and a sharp stone make a twig ({await a.evaluate(said)})')
         await a.click('#matMake'); await a.wait_for_timeout(1800)
         expect(await a.evaluate("__pl.you.carry.twig === 2 && __pl.you.carry['sharp-stone'] === 1 && __pl.you.carry.stick === 2"), 'a stick cut into 2 twigs, and the sharp stone is kept')
         expect('Try two stones' not in await a.evaluate("document.getElementById('matEmpty').textContent"), 'the tip goes once something is found')
@@ -1760,19 +1762,27 @@ async def craft_mat():
             await a.mouse.up(); await a.wait_for_timeout(300)
         on = await a.evaluate("[...document.querySelectorAll('#matList .mat-tile')].map((t) => t.dataset.kind).sort().join(',')")
         expect(on == 'sharp-stone,stick,twine', f'dragged onto the mat ({on})')
-        expect(await a.evaluate(said) == 'Something new', 'a sharp stone, a stick and twine: something new')
+        expect(await a.evaluate(said) == 'Stone knife', 'a sharp stone, a stick and twine: a stone knife')
         await a.click('#matMake'); await a.wait_for_timeout(1800)
         expect(await a.evaluate("__pl.you.carry.knife === 1 && !__pl.you.carry['sharp-stone'] && __pl.you.found.length === 3"), 'a stone knife, its sharp stone used up as the blade')
-        # Found: what you've made, by kind; tap one to put its things on the mat (what's missing shows faded)
+        # Recipes: every recipe by kind, the ones you've made first, the rest greyed out; tap one to put its things on the mat (what's missing shows faded)
         await a.click('#matTabFound'); await a.wait_for_timeout(300)
-        rows = await a.evaluate("[...document.querySelectorAll('#foundList .found-row')].map((r) => r.dataset.recipe)")
+        rows = await a.evaluate("[...document.querySelectorAll('#foundList .found-row')].map((r) => [r.dataset.recipe, r.classList.contains('not-made')])")
         chips = await a.evaluate("[...document.querySelectorAll('#foundChips .craft-chip')].map((c) => c.textContent)")
-        expect(sorted(rows) == ['knife', 'sharp-stone', 'twig'] and chips == ['All 3', 'Tools 1', 'Materials 2'], f'Found lists the 3, with All, Tools and Materials ({rows}, {chips})')
+        made = sorted(r for r, grey in rows[:3] if not grey)
+        expect(made == ['knife', 'sharp-stone', 'twig'] and len(rows) > 3 and all(grey for _, grey in rows[3:]) and chips[0] == f'All {len(rows)}' and len(chips) >= 3, f'Recipes lists the 3 made first, then the rest greyed out, with All, Tools, Building and Materials ({rows}, {chips})')
         await shot(a, 'mat-found')
         await a.click('#foundList .found-row[data-recipe="knife"]'); await a.wait_for_timeout(300)
         need = await a.evaluate("[...document.querySelectorAll('#matList .mat-tile.need')].map((t) => t.dataset.kind)")
         expect(need == ['sharp-stone'] and await a.evaluate(said) == 'Stone knife' and 'Still need 1 sharp stone' in await a.evaluate("document.getElementById('matWhy').textContent"), f'tapping the knife puts its stick and twine on the mat, and the sharp stone shows as still needed ({need})')
         await shot(a, 'mat-goal')
+        # one not made yet (greyed out) puts its things on the mat too: as many as it takes, with what you don't have faded
+        await a.click('#foundList .found-row.not-made[data-recipe="campfire"]'); await a.wait_for_timeout(300)
+        took = await a.evaluate("""(() => { const out = {};
+          for (const t of document.querySelectorAll('#matList .mat-tile')) { const c = t.querySelector('.count'); out[t.dataset.kind] = (out[t.dataset.kind] || 0) + (c ? Number(c.textContent.replace('+', '')) : 1); }
+          return out; })()""")
+        expect(await a.evaluate(said) == 'Campfire' and took == {'log': 1, 'twig': 2, 'stone': 2}, f'tapping the greyed-out campfire puts a log, 2 twigs and 2 stones on the mat, the log faded ({took})')
+        await shot(a, 'mat-greyed')
         await a.click('#bagClose')
         expect(await a.evaluate('__pl.you.carry.stick === 1 && __pl.you.carry.twine === 1'), 'closing it puts nothing anywhere: things only leave the bag on Make')
         expect(not W.errors, f'no errors {W.errors[:3]}')

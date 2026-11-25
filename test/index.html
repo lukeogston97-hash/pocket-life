@@ -149,7 +149,7 @@ setTimeout(function () { if (!window.__bootStarted) window.__bootFail("This brow
     <div id="mat" class="mat" hidden>
       <div id="matSpot" class="mat-spot">
         <ul id="matList" class="mat-list" aria-label="On the craft mat"></ul>
-        <p id="matEmpty" class="mat-empty">Tap or drag things from your bag to put them together</p>
+        <p id="matEmpty" class="mat-empty">Tap or drag things from your inventory to put them together</p>
       </div>
       <div id="matOut" class="mat-out" aria-live="polite" hidden>
         <span id="matPic" class="mat-pic" aria-hidden="true"></span>
@@ -158,8 +158,8 @@ setTimeout(function () { if (!window.__bootStarted) window.__bootFail("This brow
         <button id="matMake" class="small-btn go" type="button" disabled>Make</button>
       </div>
       <div class="craft-chips mat-tabs" role="group" aria-label="Under the mat">
-        <button id="matTabBag" class="craft-chip on" type="button" aria-pressed="true">Bag</button>
-        <button id="matTabFound" class="craft-chip" type="button" aria-pressed="false">Found</button>
+        <button id="matTabBag" class="craft-chip on" type="button" aria-pressed="true">Inventory</button>
+        <button id="matTabFound" class="craft-chip" type="button" aria-pressed="false">Recipes</button>
       </div>
     </div>
     <div id="bagPart">
@@ -169,7 +169,7 @@ setTimeout(function () { if (!window.__bootStarted) window.__bootFail("This brow
       <div id="bagInfo" class="bag-info" hidden></div>
     </div>
     <div id="found" class="found" hidden>
-      <label id="foundSearch" class="craft-search" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/></svg><input id="foundQuery" type="search" autocomplete="off" aria-label="Search your found recipes" placeholder="Search your recipes"></label>
+      <label id="foundSearch" class="craft-search" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/></svg><input id="foundQuery" type="search" autocomplete="off" aria-label="Search recipes" placeholder="Search recipes"></label>
       <div id="foundChips" class="craft-chips" role="group" aria-label="Kinds of things" hidden></div>
       <ul id="foundList" class="found-list"></ul>
       <p id="foundMore" class="craft-more" hidden></p>

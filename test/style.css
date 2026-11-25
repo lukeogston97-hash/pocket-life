@@ -236,7 +236,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .mat-pic.goal { opacity: 0.55; }
 .mat-pic.new { animation: matPop 0.5s ease; }
 @keyframes matPop { 0% { transform: scale(0.6); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
-.mat-q { font: 800 22px/1 var(--font-ui); color: var(--accent); }
 .mat-words { flex: 1; min-width: 0; display: grid; gap: 2px; }
 .mat-words strong { font-size: 14.5px; }
 .mat-words small { font-size: 11.5px; font-weight: 600; line-height: 1.3; color: var(--ink-soft); }
@@ -245,8 +244,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .mat-out .text-btn[hidden] { display: none; }
 #matMake { flex: none; min-width: 72px; }
 #matMake:disabled { opacity: 1; background: var(--hover); color: var(--ink-faint); border-color: var(--line); } /* still a button, just not lit */
-#matMake.glow { animation: matGlow 1.4s ease-in-out infinite; }
-@keyframes matGlow { 50% { box-shadow: 0 0 0 5px rgba(143, 212, 158, 0.25); } }
 .mat-tabs { margin: 0; }
 #bagPart[hidden], .found[hidden] { display: none; }
 .found-list { list-style: none; margin: 0; padding: 0; display: grid; }
@@ -254,6 +251,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .found-row { width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .found-words { display: grid; gap: 5px; min-width: 0; }
 .found-words strong { font-size: 14px; }
+.found-row.not-made .pic, .found-row.not-made .dot { filter: grayscale(1); opacity: 0.5; } /* not made yet: greyed out (Luke, 0.1.10) */
+.found-row.not-made strong { color: var(--ink-faint); }
 .found-none { padding: 10px 0; text-align: center; font-size: 13px; font-weight: 600; color: var(--ink-soft); }
 .need-chip { font-size: 11.5px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: rgba(240, 138, 122, 0.16); color: var(--warn); }
 .need-chip.ok { background: rgba(143, 212, 158, 0.16); color: var(--accent); }
