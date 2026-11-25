@@ -4,7 +4,7 @@
 // regrow everything, clear loose items, restore an earlier time (restore.js), reset the world or everything), Settings (live settings, live.js). Single things in the world
 // (trees, rocks, berry bushes, campfires, loose items) are moved, regrown and removed from their tap menus.
 // These are methods of the World (index.js adds them to it), so `this` is the world.
-import { FILTER, G, starText, MINUTE, HOUR, clean, blank, num, kindOk, addCarry, takeCarry, ageOf, pickRandom } from './shared.js';
+import { FILTER, G, starText, MINUTE, HOUR, clean, blank, num, kindOk, addCarry, takeCarry, ageOf, pickRandom, laidNow } from './shared.js';
 import { fireRule } from './placed.js';
 import { CLAIM_KIND } from './claims.js';
 import { SOC, freshSocieties } from './societies.js';
@@ -355,7 +355,7 @@ export const adminMethods = {
         const n = Math.max(1, Math.min(50, Math.floor(Number(m.n) || 1))), out = [];
         for (let k = 0; k < n; k++) {
           const a = k * 2.39996, r = k ? 0.3 + Math.sqrt(k) * 0.25 : 0;
-          out.push({ id: w.nextId++, kind: m.kind, x: num(num(m.x) + Math.cos(a) * r), z: num(num(m.z) + Math.sin(a) * r), rot: num(Math.random() * Math.PI) });
+          out.push({ id: w.nextId++, kind: m.kind, x: num(num(m.x) + Math.cos(a) * r), z: num(num(m.z) + Math.sin(a) * r), rot: num(Math.random() * Math.PI), laid: laidNow() });
         }
         w.items.push(...out);
         await this.save();

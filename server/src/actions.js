@@ -6,7 +6,7 @@
 import { PLACEABLES, fireRule, seatAt } from './placed.js';
 import { SOC, socMax, INVITE_MS } from './societies.js';
 import { fuelRoom } from './rules.js';
-import { FILTER, G, starText, badName, freshStats, addCarry, takeCarry, wearList, applyGives, eatOne, craft, spend, clean, blank, num, kindOk, START, REST, BERRY_SRC, cleanLook, REPORTS_KEEP } from './shared.js';
+import { FILTER, G, starText, badName, freshStats, addCarry, takeCarry, wearList, applyGives, eatOne, craft, spend, clean, blank, num, kindOk, START, REST, BERRY_SRC, cleanLook, REPORTS_KEEP, laidNow } from './shared.js';
 const SIT_OPEN = 365 * 24 * 3600000; // sitting has no set time: `until` is far off, and ends when they stand up, do something else, or the fire goes out
 
 export const ACTIONS = {
@@ -167,7 +167,7 @@ export const ACTIONS = {
       const uses = full ? wearList(p, it.kind, G)[which ?? p.carry[it.kind] - 1] : null;
       if (!takeCarry(p, it.kind, 1, which)) continue;
       const here = Number.isFinite(it.x) && Number.isFinite(it.z) && (me.admin || this.near(p, [it.x, it.z])); // not near them: it lands by their feet
-      const item = { id: w.nextId++, kind: it.kind, x: num(here ? it.x : p.x + (Math.random() - 0.5) * 0.8), z: num(here ? it.z : p.z + (Math.random() - 0.5) * 0.8), rot: num(it.rot) };
+      const item = { id: w.nextId++, kind: it.kind, x: num(here ? it.x : p.x + (Math.random() - 0.5) * 0.8), z: num(here ? it.z : p.z + (Math.random() - 0.5) * 0.8), rot: num(it.rot), laid: laidNow() };
       if (uses != null && uses < full) item.uses = uses; // a worn tool stays worn on the ground
       w.items.push(item);
       added.push(item);
@@ -219,7 +219,7 @@ export const ACTIONS = {
     let n = 0;
     for (const [kind, count] of Object.entries(rule.gives || {})) for (let k = 0; k < count && n < 20; k++, n++) {
       const a = Math.random() * Math.PI * 2, r = 0.5 + Math.random() * 0.8;
-      out.push({ id: w.nextId++, kind, x: num(at[0] + Math.cos(a) * r), z: num(at[1] + Math.sin(a) * r), rot: num(Math.random() * Math.PI) });
+      out.push({ id: w.nextId++, kind, x: num(at[0] + Math.cos(a) * r), z: num(at[1] + Math.sin(a) * r), rot: num(Math.random() * Math.PI), laid: laidNow() });
     }
     w.items.push(...out);
     if (out.length) this.send({ t: 'added', items: out }, null);
@@ -249,7 +249,7 @@ export const ACTIONS = {
       const count = Array.isArray(c) ? c[0] + Math.floor(Math.random() * (c[1] - c[0] + 1)) : c;
       for (let k = 0; k < count && out.length < 20; k++) {
         const a = Math.random() * Math.PI * 2, r = 0.3 + Math.random() * 0.5;
-        out.push({ id: w.nextId++, kind, x: num(ax + Math.cos(a) * r), z: num(az + Math.sin(a) * r), rot: num(Math.random() * Math.PI) });
+        out.push({ id: w.nextId++, kind, x: num(ax + Math.cos(a) * r), z: num(az + Math.sin(a) * r), rot: num(Math.random() * Math.PI), laid: laidNow() });
       }
     }
     w.items.push(...out);
@@ -341,7 +341,7 @@ export const ACTIONS = {
       if (th.burnt && f && f.fuels[kind]) continue;
       for (let k = 0; k < n && out.length < 40; k++) {
         const a = out.length * 2.39996, rad = (rule.solid || 0.5) + 0.35 + (out.length % 3) * 0.15;
-        out.push({ id: w.nextId++, kind, x: num(th.x + Math.cos(a) * rad), z: num(th.z + Math.sin(a) * rad), rot: num(Math.random() * Math.PI) });
+        out.push({ id: w.nextId++, kind, x: num(th.x + Math.cos(a) * rad), z: num(th.z + Math.sin(a) * rad), rot: num(Math.random() * Math.PI), laid: laidNow() });
       }
     }
     w.items.push(...out);

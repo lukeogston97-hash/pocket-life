@@ -93,5 +93,9 @@ export function cleanLook(look) {
   return out;
 }
 export const pickRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
+// When something was left on the ground, in whole hours since 1970 (kept on the item as `laid`; nature.js fadeOld).
+// Only things people or the admin put there have it: what the world tops up by itself (sticks under trees, stones by
+// boulders) has none and never fades.
+export const laidNow = (now = Date.now()) => Math.floor(now / HOUR);
 
 export { WORLDS, FILTER, G, starText, badName, HOUR, MINUTE, freshStats, advanceStats, addCarry, takeCarry, wearList, applyGives, eatOne, posAt, dist, craft, sleepMs, spend, isNight, morningAfter, ageOf };

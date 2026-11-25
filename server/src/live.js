@@ -17,6 +17,7 @@ const RULES = {
   treeRegrowDays: { get: () => inside('chopping').regrowDays || 3, set: (v) => { inside('chopping').regrowDays = v; } },
   boulderRegrowDays: { get: () => inside('mining').regrowDays || 3, set: (v) => { inside('mining').regrowDays = v; } },
   rockBackHours: { get: () => inside('mining').rockBackHours || 4, set: (v) => { inside('mining').rockBackHours = v; } },
+  fadeDays: { get: () => G.fadeDays ?? 7, set: (v) => { G.fadeDays = v; } }, // (nature.js fadeOld; 0: nothing fades)
   hungerPerHour: drop('hunger'),
   thirstPerHour: drop('thirst'),
   restPerHour: drop('rest'),

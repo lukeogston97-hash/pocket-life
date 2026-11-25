@@ -368,6 +368,7 @@ export class World extends DurableObject {
         const keep = (w.graves || []).filter((g) => g.at > now - AWAY.graveHours * HOUR);
         if (keep.length !== (w.graves || []).length) { w.graves = keep; this.send({ t: 'graves', graves: keep }, null); await this.save(); }
         if (now >= (w.nextRespawn || 0)) await this.respawn(now);
+        if (now >= (this.fadeAt || 0)) { this.fadeAt = now + HOUR; if (this.fadeOld(now)) await this.save(); } // old things left on the ground (nature.js)
         // stumps grow back into trees after a few days (removed stumps are gone for good)
         const regrow = ((G.chopping || {}).regrowDays || 3) * 24 * HOUR;
         let grew = false;

@@ -1,6 +1,6 @@
 // People: what everyone is told about a person, what the player is told about their own, catching their needs up, collapsing, dying.
 // These are methods of the World (index.js adds them to it), so `this` is the world.
-import { G, HOUR, advanceStats, posAt, num, AWAY, REST, ageOf, wearList } from './shared.js';
+import { G, HOUR, advanceStats, posAt, num, AWAY, REST, ageOf, wearList, laidNow } from './shared.js';
 
 export const personsMethods = {
   alive(p) { return p && p.state === 'alive'; },
@@ -89,7 +89,7 @@ export const personsMethods = {
       const full = (G.items[kind] || {}).uses, worn = full ? wearList(p, kind, G) : []; // tools keep their wear on the ground
       for (let k = 0; k < n && i < 200; k++, i++) {
         const a = i * 2.39996, r = 0.3 + Math.sqrt(i) * 0.16;
-        const item = { id: w ? w.nextId++ : 0, kind, x: num(p.x + Math.cos(a) * r), z: num(p.z + Math.sin(a) * r), rot: num(Math.random() * Math.PI) };
+        const item = { id: w ? w.nextId++ : 0, kind, x: num(p.x + Math.cos(a) * r), z: num(p.z + Math.sin(a) * r), rot: num(Math.random() * Math.PI), laid: laidNow() };
         if (worn[k] < full) item.uses = worn[k];
         out.push(item);
       }

@@ -146,6 +146,7 @@ def server_files(d):
         'carryCapacity': d['settings']['carryCapacity'],
         'maxPlaying': d['settings'].get('maxPlaying', 20),
         'respawnMinutes': d['settings'].get('respawnMinutes', 10),
+        'fadeDays': d['settings'].get('fadeDays', 7),
         'worldSize': d['settings'].get('worldSize', 100),
         'walkSpeed': d['settings'].get('walkSpeed', 2.2),
         'age': {'min': d['looks']['age']['min'], 'max': d['looks']['age']['max']},

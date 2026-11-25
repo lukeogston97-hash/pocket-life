@@ -550,6 +550,7 @@ async def admin_tools():
         expect(await b.evaluate('__pl.STAT.hunger.perHour') == -10, 'live need rate reaches players')
         await a.click('[data-admin-tab="settings"]'); await a.wait_for_timeout(300)
         expect('Changed' in await text(a, '#adminSettings'), 'Settings shows it changed')
+        expect('Things left on the ground fade after (0: never)' in await text(a, '#adminSettings') and 'Normal: 7 days' in await text(a, '#adminSettings'), 'Settings has how long things left on the ground last (7 days)')
         await a.evaluate(f"({send})({{ t: 'a.live', id: 'hungerPerHour', value: null }})"); await a.wait_for_timeout(800)
         expect(await b.evaluate('__pl.STAT.hunger.perHour') < 0 and await b.evaluate('__pl.STAT.hunger.perHour') != -10, 'Reset puts it back')
         # move a tree, remove a rock and a berry bush
@@ -1949,11 +1950,11 @@ async def tips():
 
 
 async def server_tests():
-    """The server's own code, tested with no browser (quick): the admin's fire, claim, Log, rename and message tools, live item numbers, that an old admin flag gives a player nothing, that things which aren't in the world can't be chopped, mined or picked, societies, and task lists carried on while away."""
+    """The server's own code, tested with no browser (quick): the admin's fire, claim, Log, rename and message tools, live item numbers, that an old admin flag gives a player nothing, that things which aren't in the world can't be chopped, mined or picked, societies, task lists carried on while away, and old things left on the ground fading."""
     import subprocess
     from lib import bundle
     bundle()
-    for f in ['admin_extras.mjs', 'live_items.mjs', 'stale_admin.mjs', 'cheats.mjs', 'societies.mjs', 'tasks.mjs']:
+    for f in ['admin_extras.mjs', 'live_items.mjs', 'stale_admin.mjs', 'cheats.mjs', 'societies.mjs', 'tasks.mjs', 'fade.mjs']:
         r = subprocess.run(['node', f], cwd=HERE, capture_output=True, text=True, timeout=180)
         last = (r.stdout.strip().splitlines() or ['(nothing printed)'])[-1]
         if r.returncode: print(r.stdout[-4000:], r.stderr[-2000:])

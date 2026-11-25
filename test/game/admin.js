@@ -74,12 +74,13 @@ const LIVE_SET = {
   treeRegrowDays: (v) => { CHOP.regrowDays = v; },
   boulderRegrowDays: (v) => { MINE.regrowDays = v; },
   rockBackHours: (v) => { MINE.rockBackHours = v; },
+  fadeDays: (v) => { SETTINGS.fadeDays = v; }, // (only the server uses it: server/src/nature.js fadeOld)
   hungerPerHour: (v) => { if (STAT.hunger) STAT.hunger.perHour = -v; },
   thirstPerHour: (v) => { if (STAT.thirst) STAT.thirst.perHour = -v; },
   restPerHour: (v) => { if (STAT.rest) STAT.rest.perHour = -v; },
 };
 const LIVE_BASE = { maxPlaying: SETTINGS.maxPlaying, societyMax: (DATA.societies || {}).maxMembers ?? 3, respawnMinutes: SETTINGS.respawnMinutes, berryRegrowHours: (BERRY_SOURCE() || {}).regrowHours,
-  treeRegrowDays: CHOP.regrowDays ?? 3, boulderRegrowDays: MINE.regrowDays ?? 3, rockBackHours: MINE.rockBackHours ?? 4,
+  treeRegrowDays: CHOP.regrowDays ?? 3, boulderRegrowDays: MINE.regrowDays ?? 3, rockBackHours: MINE.rockBackHours ?? 4, fadeDays: SETTINGS.fadeDays ?? 7,
   hungerPerHour: -((STAT.hunger || {}).perHour || 0), thirstPerHour: -((STAT.thirst || {}).perHour || 0), restPerHour: -((STAT.rest || {}).perHour || 0) };
 function applyLive(live) {
   if (you.stats && !you.dead) tickStats(); // needs up to now at the old rate first

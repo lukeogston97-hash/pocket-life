@@ -1,6 +1,7 @@
 // Nature and the shared world: berry bushes, tools wearing out, the world as players see it, laying out a new world, sticks and stones topping up.
 // These are methods of the World (index.js adds them to it), so `this` is the world.
-import { G, MINUTE, takeCarry, wearList, WORLD_FORMAT, num, kindOk, pickRandom } from './shared.js';
+import { G, MINUTE, takeCarry, wearList, WORLD_FORMAT, num, kindOk, pickRandom, laidNow } from './shared.js';
+import { CLAIM_R } from './claims.js';
 import { berriesGrown, berryPicked } from './rules.js';
 
 export const natureMethods = {
@@ -96,5 +97,32 @@ export const natureMethods = {
     if (!added.length) return; // nothing new: nothing to save (the next top-up time is only kept in memory)
     await this.save();
     this.send({ t: 'added', items: added }, null);
+  },
+  // Things left lying about fade (Luke, 25 Nov 2026: after 7 days, never inside a camp), so the ground doesn't fill up for
+  // ever. G.fadeDays is a live setting (0: nothing fades). Looked at once an hour (the tick in index.js).
+  // - Only things with a time on them (laid, shared.js) can fade: what a person dropped, chopped, mined, spilled when
+  //   they died or took apart, and what the admin added. The world's own sticks and stones have none and stay.
+  // - Anything else found without a time (it was there before this, 0.1.10) starts its days now.
+  // - Inside a camp the days don't run: the time is moved up (once a day is enough), so when the camp ends its things
+  //   have their days still to come.
+  // Returns true if the world changed and needs saving. Games hear 'gone' for each thing, or the whole world if it's a lot
+  // (both are messages every build already knows).
+  fadeOld(now = Date.now()) {
+    const w = this.world, days = Number(G.fadeDays) || 0, hour = laidNow(now), wild = this.respawnPlan(), camps = this.claims();
+    const inCamp = (it) => camps.some((th) => Math.hypot(th.x - it.x, th.z - it.z) <= CLAIM_R);
+    const gone = [];
+    let changed = false;
+    w.items = w.items.filter((it) => {
+      if (it.laid == null) { if (!wild[it.kind]) { it.laid = hour; changed = true; } return true; }
+      if (inCamp(it)) { if (hour - it.laid >= 24) { it.laid = hour; changed = true; } return true; }
+      if (days > 0 && hour - it.laid >= days * 24) { gone.push(it.id); return false; }
+      return true;
+    });
+    if (gone.length) {
+      this.note('world', `${gone.length} ${gone.length === 1 ? 'thing' : 'things'} left on the ground for ${days} ${days === 1 ? 'day' : 'days'} faded`);
+      if (gone.length > 30) this.send({ t: 'world', world: this.view() }, null);
+      else for (const id of gone) this.send({ t: 'gone', id }, null);
+    }
+    return changed || gone.length > 0;
   },
 };
