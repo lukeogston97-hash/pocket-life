@@ -207,7 +207,7 @@
       "spawnsNear": null
     },
     "campfire": {
-      "weight": 12,
+      "weight": 9,
       "eat": null,
       "uses": 0,
       "places": "campfire",
@@ -239,7 +239,7 @@
         "stick": 1
       },
       "makes": {
-        "twig": 1
+        "twig": 2
       },
       "keeps": {
         "sharp-stone": 1

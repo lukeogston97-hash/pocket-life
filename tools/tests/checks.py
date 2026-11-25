@@ -1043,6 +1043,10 @@ async def fishing():
         # raw fish can't be eaten; cooking by the lit fire takes a moment and makes cooked fish
         await a.evaluate("__pl.sendAct({ t: 'eat', kind: 'fish' })"); await a.wait_for_timeout(800)
         expect(await a.evaluate('__pl.you.carry.fish') == 2, "raw fish can't be eaten")
+        await a.click('#bagBtn'); await a.click('#bagCraft'); await a.click('#bagList .bag-tile[data-kind="fish"]')
+        mat = await a.evaluate("[document.getElementById('matName').textContent, document.getElementById('matWhy').textContent, document.getElementById('matMake').disabled]")
+        expect(mat == ['Cooked fish', 'Cook this on a lit campfire', True], f'raw fish on the craft mat says to cook it on a lit campfire, and the mat won\'t make it ({mat})')
+        await a.click('#bagClose')
         await a.evaluate(f"__pl.queueTask({{ type: 'make', id: {fid}, recipe: 'cooked-fish' }})"); await idle(a, 40); await a.wait_for_timeout(800)
         made = await a.evaluate("[__pl.you.carry.fish || 0, __pl.you.carry['cooked-fish'] || 0]")
         expect(made == [1, 1], f'cooking uses a fish and makes cooked fish ({made})')
@@ -1681,6 +1685,7 @@ async def craft_mat():
         a = await W.page('matA'); await join(a)
         await a.click('#bagBtn'); await a.click('#bagCraft'); await a.wait_for_timeout(300)
         expect(await a.evaluate("!document.getElementById('mat').hidden && !document.getElementById('matEmpty').hidden && document.getElementById('matMake').disabled"), 'Craft in the inventory shows an empty craft mat, Make not lit')
+        expect('Try two stones' in await a.evaluate("document.getElementById('matEmpty').textContent"), 'someone who has found nothing yet gets a tip: try two stones')
         await shot(a, 'mat-empty')
         await a.click(tile('stone'))
         expect(await a.evaluate(said) == "Something's missing" and await a.evaluate(count('stone')) == 3, f"one stone on the mat: something's missing, and the bag shows 3 left ({await a.evaluate(said)})")
@@ -1696,7 +1701,8 @@ async def craft_mat():
         await a.click(tile('stick')); await a.click(tile('sharp-stone'))
         expect(await a.evaluate(said) == 'Something new', f'a stick and a sharp stone go together ({await a.evaluate(said)})')
         await a.click('#matMake'); await a.wait_for_timeout(1800)
-        expect(await a.evaluate("__pl.you.carry.twig === 1 && __pl.you.carry['sharp-stone'] === 1 && __pl.you.carry.stick === 2"), 'a twig, and the sharp stone is kept')
+        expect(await a.evaluate("__pl.you.carry.twig === 2 && __pl.you.carry['sharp-stone'] === 1 && __pl.you.carry.stick === 2"), 'a stick cut into 2 twigs, and the sharp stone is kept')
+        expect('Try two stones' not in await a.evaluate("document.getElementById('matEmpty').textContent"), 'the tip goes once something is found')
         await a.click('#matClear')
         # things that don't go together
         await a.click(tile('twig')); await a.click(tile('twine'))

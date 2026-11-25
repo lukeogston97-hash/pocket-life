@@ -227,7 +227,7 @@ await S.ask(pat3, { t: 'craft', id: 'twig' });
 expect(!patP().carry.twig && patP().carry.stick === 1, 'a twig needs a sharp stone on the mat too, even though it is kept');
 patP().carry = { stick: 1, 'sharp-stone': 1 };
 await S.ask(pat3, { t: 'craft', id: 'twig' });
-expect(patP().carry.twig === 1 && patP().carry['sharp-stone'] === 1 && !patP().carry.stick && patP().found.includes('twig'), 'with one, the stick becomes a twig and the sharp stone is kept', JSON.stringify(patP().carry));
+expect(patP().carry.twig === 2 && patP().carry['sharp-stone'] === 1 && !patP().carry.stick && patP().found.includes('twig'), 'with one, the stick becomes 2 twigs and the sharp stone is kept', JSON.stringify(patP().carry));
 await S.ask(pat3, { t: 'a.found', id: 'pat', all: true });
 expect(patP().found.length === 2, 'a player sending the admin\'s Found tool gets nothing', JSON.stringify(patP().found));
 text = await S.tool({ t: 'a.found', id: 'pat', all: true });
