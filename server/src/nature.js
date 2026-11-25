@@ -1,6 +1,6 @@
 // Nature and the shared world: berry bushes, tools wearing out, the world as players see it, laying out a new world, sticks and stones topping up.
 // These are methods of the World (index.js adds them to it), so `this` is the world.
-import { G, MINUTE, takeCarry, wearList, WORLD_FORMAT, num, kindOk, pickRandom, laidNow } from './shared.js';
+import { G, MINUTE, HOUR, BERRY_SRC, takeCarry, wearList, WORLD_FORMAT, num, kindOk, pickRandom, laidNow } from './shared.js';
 import { CLAIM_R } from './claims.js';
 import { berriesGrown, berryPicked } from './rules.js';
 
@@ -54,11 +54,13 @@ export const natureMethods = {
     for (const [k, list] of Object.entries(m.spots || {})) if (most(k) > 0 && Array.isArray(list)) spots[k] = list.slice(0, 500).filter((a) => Array.isArray(a) && inside(a[0]) && inside(a[1])).map(([x, z]) => [num(x), num(z)]);
     const caps = {};
     for (const [k, n] of Object.entries(m.caps || {})) if (most(k) > 0 && Number.isFinite(n)) caps[k] = Math.max(0, Math.min(most(k), Math.floor(n)));
-    const respawnMs = Math.max(MINUTE, Number(m.respawnMs) || 10 * MINUTE);
+    // How many berries a bush holds, how fast they grow back and how often things top up are the server's own numbers
+    // (game-data.json), not the first game's: a changed game that got in first could set them for everyone (0.1.10).
+    const respawnMs = (G.respawnMinutes > 0 ? G.respawnMinutes : 10) * MINUTE;
     this.world = {
       format: WORLD_FORMAT, nextId: 1, items: [], bushes: [], graves: [], spots, caps,
-      holds: Math.max(1, Math.min(15, Math.floor(m.holds) || 5)),
-      regrowMs: Math.max(0, Number(m.regrowMs) || 0),
+      holds: Math.max(1, Math.min(15, Math.floor(BERRY_SRC.holds) || 5)),
+      regrowMs: Math.max(0, (Number(BERRY_SRC.regrowHours) || 0) * HOUR),
       respawnMs, nextRespawn: Date.now() + respawnMs,
     };
     this.takeLayout(me, m.layout || {});

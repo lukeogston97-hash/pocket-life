@@ -257,6 +257,7 @@ function layoutData() {
   const at = (x, z) => [+x.toFixed(2), +z.toFixed(2)], laid = (t) => (t.from ? at(t.from[0], t.from[1]) : at(t.x, t.z));
   return { bushes: berryBushes.map((b) => (b.userData.from ? at(b.userData.from[0], b.userData.from[1]) : at(b.position.x, b.position.z))), shore, open,
     trees: trees.map(laid), rocks: rocks.map(laid), oldStumps: oldStumps.map(laid),
+    boulders: rocks.map((r, i) => (r.boulder ? i : -1)).filter((i) => i >= 0), // which rocks are boulders, so the server needn't take a game's word for it
     plants: Object.fromEntries(Object.entries(plants).map(([k, P]) => [k, P.clumps.map((c) => at(c.x, c.z))])) };
 }
 function sendLayout() { if (net.sock) net.sock.send(JSON.stringify({ t: 'layout', ...layoutData() })); }

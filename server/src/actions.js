@@ -107,6 +107,7 @@ export const ACTIONS = {
   // The first time someone makes one, it goes in their found recipes (p.found: the Found list on the craft mat, 0.1.8)
   craft: { when: 'alive', async run({ ws, me, m, p, w, reply, save }) {
     const r = Object.hasOwn(G.recipes || {}, String(m.id)) ? G.recipes[m.id] : null; // (only a real recipe: a name every object has, like 'constructor', isn't one)
+    if (r && r.seconds && (!r.near || this.stationFor(p, r.near)) && !this.worked(ws, me, p, r.seconds)) { reply({ t: 'slow' }); reply(this.mine(p)); return; } // cooking takes time (guard.js)
     if (r && (!r.near || this.stationFor(p, r.near)) && craft(p, r, G)) {
       spend(p, 'craft', G);
       p.found = Array.isArray(p.found) ? p.found : [];
@@ -127,10 +128,11 @@ export const ACTIONS = {
     reply(this.mine(p));
   } },
   // fishing at the pond (0.3.4): the spear wears, the pond holds a shared number of fish, and some tries catch nothing
-  fish: { when: 'alive', async run({ me, p, w, reply, save }) {
+  fish: { when: 'alive', async run({ ws, me, p, w, reply, save }) {
     const F = (Object.values(G.sources).find((s) => s.water && s.fish) || {}).fish;
     if (!F || !p.carry[F.tool]) { reply(this.mine(p)); return; }
     if (!me.admin && !this.nearWater(p)) { reply({ t: 'fished', why: 'Too far away' }); reply(this.mine(p)); return; }
+    if (!this.worked(ws, me, p, F.seconds)) { reply({ t: 'fished', why: 'Slow down a little' }); reply(this.mine(p)); return; } // a try takes time (guard.js)
     spend(p, 'fish', G);
     this.wearTool(p, F.tool, reply);
     if (this.pondFish(F) < 1) reply({ t: 'fished', why: 'No fish left. Try again later' });
@@ -191,6 +193,7 @@ export const ACTIONS = {
     if (!me.admin && !this.near(p, at)) { reply({ t: 'placeNo', why: 'Too far away' }); reply(this.mine(p)); return; }
     const cl = this.notYours(p, at[0], at[1], me.admin);
     if (cl) { reply({ t: 'placeNo', why: this.claimNo(cl) }); reply(this.mine(p)); return; }
+    if (!this.worked(ws, me, p, rule.seconds)) { reply({ t: 'slow' }); reply(this.mine(p)); return; } // chopping takes time (guard.js)
     w.trees = w.trees || {};
     if (m.what === 'oldStump') { // an old stump that was already in the world: dug out for good
       const i = Math.floor(m.idx);
@@ -230,9 +233,11 @@ export const ACTIONS = {
     reply(this.mine(p));
   } },
   // mining (0.2.9): breaking a rock (gone, one comes back now and then) or mining a boulder (it stays, and can be mined again after regrowDays)
-  quarry: { when: 'world', async run({ me, m, p, w, reply, save }) {
-    const R = G.mining || {}, rule = R[m.what], tool = R.tool, i = Math.floor(m.idx);
-    if (!rule || (m.what !== 'rock' && m.what !== 'boulder') || !(i >= 0 && i < 2000)) return;
+  quarry: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
+    const R = G.mining || {}, tool = R.tool, i = Math.floor(m.idx);
+    if ((m.what !== 'rock' && m.what !== 'boulder') || !(i >= 0 && i < 2000)) return;
+    const what = this.rockKind(i, m.what), rule = R[what]; // a rock or a boulder: the layout's word once it has one, not the game's (guard.js)
+    if (!rule) return;
     if (tool && !p.carry[tool]) { reply(this.mine(p)); return; }
     if (!this.isThing('rock', i)) { reply(this.mine(p)); return; } // no such rock (guard.js)
     const rock = this.spotOf('rock', i) || [p.x, p.z]; // where it is (guard.js), else where they're standing, next to it
@@ -241,7 +246,8 @@ export const ACTIONS = {
     if (cl) { reply({ t: 'placeNo', why: this.claimNo(cl) }); reply(this.mine(p)); return; }
     w.rocks = w.rocks || {};
     if (w.rocks[i]) { reply({ t: 'rock', idx: i, state: w.rocks[i][0], at: w.rocks[i][1] }); return; } // someone else got it first
-    w.rocks[i] = [m.what === 'rock' ? 'gone' : 'mined', Date.now()];
+    if (!this.worked(ws, me, p, rule.seconds)) { reply({ t: 'slow' }); reply(this.mine(p)); return; } // mining takes time (guard.js)
+    w.rocks[i] = [what === 'rock' ? 'gone' : 'mined', Date.now()];
     this.send({ t: 'rock', idx: i, state: w.rocks[i][0], at: w.rocks[i][1] }, null);
     // the stones fall round where you're standing
     const by = Number.isFinite(m.x) && Number.isFinite(m.z) && this.near(p, [m.x, m.z]), ax = by ? num(m.x) : p.x, az = by ? num(m.z) : p.z, out = [];
@@ -287,6 +293,8 @@ export const ACTIONS = {
     const cl = this.notYours(p, x, z, me.admin);
     if (cl) return no(this.claimNo(cl));
     if (this.placedList().some((th) => Math.hypot(th.x - x, th.z - z) < (rule.solid || 0.5) + 1)) return no('Too close to something else');
+    const land = me.admin ? null : this.cantPlaceAt(x, z); // not in the water, off the land or inside a tree or rock (guard.js)
+    if (land) return no(land);
     takeCarry(p, m.kind, 1);
     const th = { id: w.nextId++, kind, x, z, rot: num(m.rot), built: false, fuel: 0, lit: false, at: Date.now(), by: p.who }; // by: who built it (only they can pack it up or take it apart)
     this.placedList().push(th);
@@ -300,6 +308,7 @@ export const ACTIONS = {
   build: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
     const th = this.placedById(m.id);
     if (!th || th.built || Math.hypot(th.x - p.x, th.z - p.z) > 3 || this.notYours(p, th.x, th.z, me.admin)) { if (th) this.sendPlaced(th, reply, {}); return; }
+    if (!this.worked(ws, me, p, (PLACEABLES[th.kind] || {}).buildSeconds)) { this.sendPlaced(th, reply, {}); reply({ t: 'slow' }); return; } // building takes time (guard.js)
     th.built = true;
     th.at = Date.now();
     spend(p, 'build', G);
@@ -366,6 +375,7 @@ export const ACTIONS = {
       const n = Math.min(Math.max(1, Math.floor(m.n) || 1), room, p.carry[kind] || 0);
       if (n > 0) { takeCarry(p, kind, n); th.fuel = Math.min(f.max, th.fuel + n * each); }
     } else if (m.do === 'light') {
+      if (!th.lit && th.fuel > 0 && !this.worked(ws, me, p, ((G.placeables[th.kind] || {}).fire || {}).lightSeconds)) { reply({ t: 'slow' }); this.sendPlaced(th, reply, {}); reply(this.mine(p)); return; } // lighting takes a moment (guard.js)
       if (!th.lit && th.fuel > 0) { th.lit = true; th.burnt = true; th.at = Date.now(); note = this.tryClaim(th, p); } // burnt: taking it apart then gives back only what doesn't burn; a first fire claims the land
     } else if (m.do === 'out') {
       const soc = this.socOfClaim(th.claim); // a society's fire: putting it out ends the society, so only its leader can
@@ -410,6 +420,7 @@ export const ACTIONS = {
     if (cl) { reply({ t: 'cutNo', plant: m.plant, i, readyAt: ps[i] || 0, why: this.claimNo(cl) }); return; }
     if (!me.admin && !this.near(p, plant)) { reply({ t: 'cutNo', plant: m.plant, i, readyAt: ps[i] || 0, why: 'Too far away' }); return; }
     if (ps[i] && ps[i] > now) { reply({ t: 'cutNo', plant: m.plant, i, readyAt: ps[i] }); return; } // someone got it first
+    if (!this.worked(ws, me, p, def.tool && p.carry[def.tool] ? def.toolSeconds || def.seconds : def.seconds)) { reply({ t: 'cutNo', plant: m.plant, i, readyAt: ps[i] || 0, why: 'Slow down a little' }); return; } // cutting takes time (guard.js)
     let ok = true;
     for (const [k, c] of Object.entries(def.gives || {})) ok = addCarry(p, k, c, G) && ok;
     if (!ok) { reply(this.mine(p)); return; }

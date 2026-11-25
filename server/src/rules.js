@@ -26,6 +26,19 @@ export function needsStep(st, hours, needs, o = {}) {
   }
 }
 
+/* ---------- the pond ---------- */
+// How far x, z is from the middle of the pond, as a share of the way to its shore in that direction: under 1 is water,
+// 1 is the shoreline. The pond isn't round (its edge wobbles). pond: { x, z, r }.
+// The land itself is shaped by pondShape in game/land.js, which is this same sum with the game's POND. That one is
+// left exactly as it was, because the world's layout must never move; the check `menu` compares the two. The server
+// uses this one to see that nothing is placed in the water (server/src/guard.js cantPlaceAt).
+export function pondShapeAt(pond, x, z) {
+  const dx = x - pond.x, dz = (z - pond.z) * 1.22;
+  const a = Math.atan2(dz, dx);
+  const r = pond.r * (1 + 0.13 * Math.sin(a * 3 + 1.1) + 0.06 * Math.sin(a * 5 - 0.7));
+  return Math.hypot(dx, dz) / r;
+}
+
 /* ---------- berry bushes: picked berries grow back one at a time ---------- */
 // count, from: how many were left and since when (count null: never picked); holds: a full bush; regrowMs: a whole bush
 export function berriesGrown(count, from, holds, regrowMs, t) {

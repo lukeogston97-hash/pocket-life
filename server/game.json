@@ -333,6 +333,7 @@
       "tool": null,
       "toolHarvest": null,
       "regrowHours": 0,
+      "holds": null,
       "fish": {
         "action": "Fish",
         "verb": "Fishing",
@@ -357,6 +358,7 @@
         "berry": 2
       },
       "regrowHours": 4,
+      "holds": 5,
       "fish": null,
       "seconds": 2,
       "pose": "pick"

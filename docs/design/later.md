@@ -24,10 +24,10 @@
 
 ## From the whole-game check before public testing (24 Nov 2026): not done, for Luke to decide
 Fixed and published that morning (see docs/design/code.md): things that aren't in the world, names and chat nobody can read, names every object has. Left as they are, smallest first:
-- A campfire can be put in the pond or inside a tree by a changed game (the server checks distance, claims and other placed things, not the land). Looks only.
-- Building and cooking take time in the game but the server doesn't time them, so a changed game could skip the wait.
-- A rock can be mined "as a boulder" and a boulder "as a rock" (the game says which; the server doesn't know which rocks are boulders). A boulder mined as a rock vanishes for everyone until rocks come back (one every 4 hours). Fix: the layout carries which rocks are boulders.
-- A brand new world takes how many berries a bush holds (1 to 15) and how fast they grow back from the first game in. From admin mode the admin's game is first in after a reset, which covers it in practice. Fix: the server uses its own numbers.
+- Closed in 0.1.10 test 7 (code.md, "The known holes"): a campfire could be put in the pond or inside a tree by a changed game.
+- Closed in 0.1.10 test 7: building and cooking (and chopping, mining, cutting, fishing and lighting) took time in the game but not on the server, so a changed game could skip the wait.
+- Closed in 0.1.10 test 7, from the first 0.1.10 game that sends the layout: a rock could be mined "as a boulder" and a boulder "as a rock".
+- Closed in 0.1.10 test 7: a brand new world took how many berries a bush holds from the first game in.
 - Done in 0.1.10 test 5 (code.md, "Old things fade"): loose items never went away by themselves (sticks top up to their cap, but dropped and chopped things stayed for ever). Now things people leave outside a camp fade after 7 days.
 - A ban is by the phone's id (a random id the browser keeps). Clearing the site's data makes a new one. Known limit of having no sign-in.
 - At the player limit (20 playing all day, 300 away) the server uses about 81,000 of the free 100,000 storage writes a day (tools/tests/load.py 300). Fine for now; see docs/design/code.md for the ideas if it grows.

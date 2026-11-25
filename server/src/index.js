@@ -44,6 +44,7 @@ export class World extends DurableObject {
     this.activity = []; // the admin's activity log (activity.js)
     this.societies = freshSocieties(); // groups of players sharing a claim (societies.js)
     this.adminFails = new Map(); // wrong admin codes, by address (guard.js); kept in memory only
+    this.work = new Map(); // who -> the seconds of work they've earned for things that take time (guard.js worked); kept in memory only
     this.feedbackLog = []; // when feedback came in and from where, to stop floods (guard.js)
     this.reportLog = []; // the same for reports about players
     this.socks = null; this.byWho = null; // who's connected, worked out once per message or tick (sockets, socketOf)

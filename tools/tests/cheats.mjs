@@ -167,6 +167,125 @@ let n60 = 0;
 for (let k = 0; k < 70; k++) if (await reportFrom(`addr-many-${k}`, 0) === 'reported') n60++;
 expect(await kept() === 60 && n60 === 60 - 8, 'and 60 an hour from everyone is the most the Inbox takes', `${await kept()} kept in all`);
 
+console.log('I. placing: not in the water, off the land, or in the middle of a tree or rock (it only changed how things look, but still)');
+S = await start(LAYOUT());
+S.p.carry = { campfire: 12 };
+const placeAt = async (x, z) => { // the person stands a metre away and asks to put a campfire at x, z
+  S.p.x = x + 1; S.p.z = z;
+  const got = await S.ask({ t: 'place', kind: 'campfire', x, z, rot: 0 });
+  const no = got.find((m) => m.t === 'placeNo');
+  return no ? no.why : (S.w.world.placed || []).some((th) => Math.abs(th.x - x) < 0.01 && Math.abs(th.z - z) < 0.01) ? 'placed' : 'nothing';
+};
+const POND = { x: -5.6, z: -0.9 };
+expect(await placeAt(POND.x, POND.z) === 'Too close to the water', 'the middle of the pond: Too close to the water');
+expect(await placeAt(POND.x + 5.5, POND.z) === 'Too close to the water', 'the water\'s edge: the same');
+expect(await placeAt(POND.x + 7.5, POND.z) === 'placed', 'two metres back from the water, where the game lets you: placed');
+expect(await placeAt(10, 10) === 'Not enough room here', 'the middle of tree 0: Not enough room here');
+expect(await placeAt(5.3, 5) === 'Not enough room here', 'on rock 0: the same');
+expect(await placeAt(3, 3.2) === 'Not enough room here', 'in bush 0: the same');
+expect(await placeAt(48.2, 0) === 'Too close to the forest', 'past the edge of the land: Too close to the forest');
+expect(await placeAt(30, 30) === 'placed', 'open ground: placed, as before');
+expect(await placeAt(11, 12.5) === 'placed', 'a couple of metres from two trees: placed');
+S.w.world.rocks = { 0: ['gone', Date.now()] };
+expect(await placeAt(5, 5) === 'placed', 'where rock 0 was, once it has been broken and is gone: placed');
+S.w.world.trees = { 1: ['gone', Date.now()] };
+expect(await placeAt(12, 10) === 'placed', 'where tree 1 was, once its stump has been dug out: placed');
+S.w.world.moved = { 'tree:0': [40, 40] };
+expect(await placeAt(40.2, 40) === 'Not enough room here' && await placeAt(10, 10.3) === 'placed', 'a tree the admin moved: no room where it stands now, room where it was');
+S = await start(null);
+S.p.carry = { campfire: 3 };
+expect(await placeAt(20, 20) === 'placed' && await placeAt(POND.x, POND.z) === 'Too close to the water', 'a world with no layout yet: open ground is fine, the pond is still the pond');
+
+console.log('J. waits: what takes time in the game can\'t be done faster by a changed game');
+const many = { trees: Array.from({ length: 24 }, (_, k) => [60 + k * 0.01, 60]), rocks: [[5, 5]], bushes: [[3, 3]], oldStumps: [], plants: { tallGrass: [[20, 20]] }, shore: [], open: [], v: DATA.version, b: DATA.build, e: DATA.era };
+S = await start(many);
+S.p.carry = { 'stone-axe': 1 }; S.p.wear = {};
+S.p.x = 60; S.p.z = 60.5;
+const secs = DATA.chopping.tree.seconds, fits = Math.floor(90 / (secs * 0.6)); // what a person has saved up to start with, in trees (guard.js WORK)
+let chopped = 0, slowed = 0;
+for (let k = 0; k < fits + 3; k++) { const got = await S.ask({ t: 'chop', what: 'tree', idx: k }); if ((S.w.world.trees || {})[k]) chopped++; else if (got.some((m) => m.t === 'slow')) slowed++; }
+expect(chopped === fits && slowed === 3, `${fits + 3} trees chopped one after another with no waiting: ${fits} come down (what was saved up), the other 3 are told to slow down`, `${chopped} chopped, ${slowed} slowed`);
+S.w.work.get('hax').at -= secs; // the time one tree takes goes by
+await S.ask({ t: 'chop', what: 'tree', idx: fits });
+expect((S.w.world.trees || {})[fits] && !(S.w.world.trees || {})[fits + 1], 'after waiting as long as a tree takes, the next one comes down');
+const drained = () => { S.w.work.set('hax', { left: 0, at: Date.now() / 1000 }); };
+const earned = (s) => { S.w.work.get('hax').at -= s; };
+// each timed thing, with nothing saved up and then with the time gone by
+S = await start(LAYOUT());
+S.p.carry = { campfire: 1, 'stone-pickaxe': 1, knife: 1, 'fishing-spear': 1, fish: 2, stick: 3 }; S.p.wear = {};
+S.p.x = 31; S.p.z = 30;
+await S.ask({ t: 'place', kind: 'campfire', x: 30, z: 30, rot: 0 });
+const site = () => S.w.world.placed[0];
+drained();
+let got = await S.ask({ t: 'build', id: site().id });
+expect(!site().built && got.some((m) => m.t === 'slow'), 'building a campfire the moment it is put down: not built, told to slow down');
+earned(DATA.placeables.campfire.buildSeconds);
+await S.ask({ t: 'build', id: site().id });
+expect(site().built, 'after the 10 seconds building takes: built');
+drained();
+await S.ask({ t: 'fire', id: site().id, do: 'add', n: 3 });
+expect(site().fuel > 0 && S.p.carry.stick === undefined, 'adding fuel takes no time: it goes on straight away, with nothing saved up');
+drained();
+got = await S.ask({ t: 'fire', id: site().id, do: 'light' });
+expect(!site().lit && got.some((m) => m.t === 'slow'), 'lighting it straight away: not lit');
+earned(DATA.placeables.campfire.fire.lightSeconds);
+await S.ask({ t: 'fire', id: site().id, do: 'light' });
+expect(site().lit, 'after the 3 seconds lighting takes: lit');
+drained();
+got = await S.ask({ t: 'craft', id: 'cooked-fish' });
+expect(S.p.carry.fish === 2 && !S.p.carry['cooked-fish'] && got.some((m) => m.t === 'slow'), 'cooking a fish with no wait: still raw');
+earned(20);
+await S.ask({ t: 'craft', id: 'cooked-fish' });
+expect(S.p.carry.fish === 1 && S.p.carry['cooked-fish'] === 1, 'after the 20 seconds cooking takes: cooked');
+drained();
+S.p.x = 5.5; S.p.z = 5.5;
+got = await S.ask({ t: 'quarry', what: 'rock', idx: 0 });
+expect(!(S.w.world.rocks || {})[0] && got.some((m) => m.t === 'slow'), 'breaking a rock with no wait: still whole');
+S.p.x = 20.5; S.p.z = 20.5;
+got = await S.ask({ t: 'cut', plant: 'tallGrass', i: 0 });
+expect(!S.p.carry.twine && got.some((m) => m.t === 'cutNo' && m.why === 'Slow down a little'), 'cutting grass with no wait: no twine');
+earned(2);
+await S.ask({ t: 'cut', plant: 'tallGrass', i: 0 });
+expect(S.p.carry.twine === 1, 'after the 2 seconds it takes with a knife: twine');
+drained();
+S.p.x = POND.x + 6; S.p.z = POND.z;
+got = await S.ask({ t: 'fish' });
+expect(got.some((m) => m.t === 'fished' && m.why === 'Slow down a little') && (S.p.wear['fishing-spear'] || []).length === 0, 'fishing with no wait: no try, and the spear isn\'t worn');
+// what takes no time is never held up
+S.w.world.items.push({ id: 900, kind: 'stick', x: S.p.x, z: S.p.z, rot: 0 });
+await S.ask({ t: 'take', id: 900 }); await S.ask({ t: 'drop', items: [{ kind: 'stick' }] }); await S.ask({ t: 'eat', kind: 'cooked-fish' });
+expect(S.w.world.items.some((it) => it.kind === 'stick') && !S.p.carry['cooked-fish'], 'picking up, dropping and eating take no time: never held up, even with nothing saved up');
+expect(S.w.worked(null, {}, S.p, 500) === true, 'the server carrying on with someone\'s task list while they\'re away keeps its own time: never held up');
+expect(S.w.worked({}, { admin: true, watch: true, who: null }, S.p, 500) === true, 'nor is the admin');
+
+console.log('K. rocks and boulders: the layout says which is which, not the game');
+const withBoulders = { ...LAYOUT(), rocks: [[5, 5], [7, 5]], boulders: [1] };
+S = await start({ ...S.w.cleanLayout(withBoulders), v: DATA.version, b: DATA.build, e: DATA.era });
+expect(JSON.stringify(S.w.world.layout.boulders) === '[1]', 'a layout from this build says rock 1 is a boulder');
+expect(JSON.stringify(S.w.cleanLayout({ rocks: [[1, 1], [2, 2]], boulders: [1, 1, 7, -1, 'x', 0.5, null] }).boulders) === '[1]', 'only whole numbers of rocks that are there are kept');
+S.p.carry = { 'stone-pickaxe': 1 }; S.p.wear = {};
+S.p.x = 7.5; S.p.z = 5.5;
+await S.ask({ t: 'quarry', what: 'rock', idx: 1 }); // a boulder, mined "as a rock"
+let stones = S.ground().stone || 0;
+expect(S.w.world.rocks[1][0] === 'mined' && stones >= 3 && stones <= 5, 'a boulder mined "as a rock" is mined as the boulder it is: it stays, worn down, and gives 3 to 5 stones', `${S.w.world.rocks[1][0]}, ${stones} stones`);
+S.w.world.items = [];
+S.p.x = 5.5; S.p.z = 5.5;
+await S.ask({ t: 'quarry', what: 'boulder', idx: 0 }); // a rock, mined "as a boulder"
+expect(S.w.world.rocks[0][0] === 'gone' && S.ground().stone === 5, 'a rock mined "as a boulder" breaks like the rock it is: gone, 5 stones', `${S.w.world.rocks[0][0]}, ${S.ground().stone} stones`);
+S = await start(LAYOUT()); // a layout from an older build: it doesn't say
+S.p.carry = { 'stone-pickaxe': 1 }; S.p.wear = {};
+S.p.x = 5.5; S.p.z = 5.5;
+await S.ask({ t: 'quarry', what: 'boulder', idx: 0 });
+expect(S.w.world.rocks[0][0] === 'mined', 'a layout from before 0.1.10 doesn\'t say, so it\'s the game\'s word, as it always was');
+
+console.log('L. a brand new world uses the server\'s own numbers for berries and top-ups, whatever the first game says');
+S = await start(null);
+S.w.world = null;
+await S.ask({ t: 'seed', items: [], spots: {}, caps: {}, holds: 15, regrowMs: 1, respawnMs: 1, layout: LAYOUT() });
+const nw = S.w.world, src = DATA.sources.berryBush;
+expect(nw && nw.holds === src.holds && nw.regrowMs === src.regrowHours * 3600000 && nw.respawnMs === DATA.settings.respawnMinutes * 60000,
+  `a first game saying bushes hold 15 berries that grow back at once: the world is made with ${src.holds} berries, ${src.regrowHours} hours and a top-up every ${DATA.settings.respawnMinutes} minutes`, nw ? `${nw.holds}, ${nw.regrowMs / 3600000} h, ${nw.respawnMs / 60000} min` : 'no world');
+
 const failed = results.filter((ok) => !ok).length;
 console.log(`\n${results.length - failed} of ${results.length} as they should be${failed ? `, ${failed} NOT` : ''}`);
 process.exit(failed ? 1 : 0);

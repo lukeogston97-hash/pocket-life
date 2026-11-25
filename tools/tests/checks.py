@@ -28,7 +28,8 @@ FINGERPRINT = """(() => {
     oldStumps: P.oldStumps.length + ':' + h(JSON.stringify(P.oldStumps.map((t) => [r(t.x), r(t.z)]))),
     bushes: P.berryBushes.length + ':' + h(JSON.stringify(P.berryBushes.map((b) => [r(b.position.x), r(b.position.z)]))),
     plants: Object.entries(P.plants).map(([k, p]) => k + ':' + p.clumps.length + ':' + h(JSON.stringify(p.clumps.map((c) => [r(c.x), r(c.z)])))).join(','),
-    serverLayout: h(JSON.stringify(P.layoutData())),
+    serverLayout: h(JSON.stringify((({ boulders, ...rest }) => rest)(P.layoutData()))), // (what the server is told, as it was before it was also told which rocks are boulders, 0.1.10)
+    boulders: (P.layoutData().boulders || []).length + ':' + h(JSON.stringify(P.layoutData().boulders || [])), // which rocks are boulders
   };
 })()"""
 
@@ -44,6 +45,8 @@ async def layout():
         else:
             want = json.load(open(base))
             for k, v in want.items(): expect(fp.get(k) == v, f'layout {k} unchanged ({fp.get(k)})')
+            for k in fp:
+                if k not in want: print(f'  (new, not in the baseline yet: add "{k}": "{fp[k]}" to layout-baseline.json)')
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
@@ -53,6 +56,8 @@ async def menu():
         a = await W.page('menuA')
         expect(await shown(a, '#mainMenu'), 'main menu shows first')
         expect(await text(a, '#playSub') == 'Make your person', 'Play says Make your person')
+        same = await a.evaluate("(() => { let worst = 0; for (let x = -20; x <= 10; x += 0.37) for (let z = -15; z <= 15; z += 0.41) worst = Math.max(worst, Math.abs(__pl.pondShape(x, z) - __pl.pondShapeAt(__pl.POND, x, z))); return worst; })()")
+        expect(same == 0, f"the pond's shape in the shared rules (the server's check of where things are placed) is exactly the game's own ({same})")
         ver = await text(a, '#menuVer')
         expect(ver.startswith('Early access · v0.'), f'the main menu says Early access by the version ({ver})')
         await shot(a, 'menu')
@@ -807,7 +812,9 @@ async def maintenance():
         # (time is sped up 600 times here, so the second or so it takes to ask already costs a little: unpaused, those 9 seconds would have cost about 6)
         expect(-0.1 < h3 - h4 < 2.5, f'ending maintenance costs them nothing ({h3:.1f} to {h4:.1f})')
         await a.wait_for_timeout(8000); h5 = await a.evaluate(hunger)
-        expect(h5 < h4 - 1, f'afterwards it carries on dropping ({h4:.1f} to {h5:.1f})')
+        # (it moves again: down, or up if they were hungry enough to eat in those seconds. It used to say "carries on
+        # dropping", which failed whenever hunger happened to cross 60, where someone away eats: 25 Nov 2026)
+        expect(abs(h5 - h4) > 1, f'afterwards their needs move again ({h4:.1f} to {h5:.1f})')
         # The admin has to be able to get in from the release link while maintenance is on (to turn it off): there the main
         # menu is behind Back soon, so 5 taps on those words open the password box. The new game is opened under an address
         # without /test/ in it, which makes it a release-link game, as it will be once released.
