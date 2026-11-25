@@ -1,6 +1,6 @@
 {
-  "version": "0.1.12",
-  "build": 5,
+  "version": "0.1.13",
+  "build": 1,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -197,7 +197,7 @@
         "size": 0.15,
         "colour": "#9d978b"
       },
-      "startInWorld": 45,
+      "startInWorld": 60,
       "startNear": 6,
       "spawnsNear": "boulders"
     },
@@ -1050,6 +1050,13 @@
   },
   "devlog": [
     {
+      "version": "0.1.13",
+      "date": "2026-11-25",
+      "improved": [
+        "More stones and tall grass around the world"
+      ]
+    },
+    {
       "version": "0.1.12",
       "date": "2026-11-25",
       "added": [
@@ -1244,7 +1251,7 @@
         1,
         4
       ],
-      "count": 40,
+      "count": 60,
       "nearStart": 12,
       "seed": 4127,
       "pose": "pick",
