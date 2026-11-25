@@ -555,6 +555,7 @@ function updatePlayer(dt) {
       if (action.pose === 'kneel') {
         P.body.rotation.x = stoop + 1.05 * env;
         player.position.y = playerGround - 0.12 * env;
+        setLegs(P, 0, (0.12 * env) / player.scale.y);
         setArm(P.armR, (-0.6 + wave * 0.3) * env + (carrying ? holdX * (1 - env) : 0));
         setArm(P.armL, carrying ? -0.3 * env : (-0.6 + wave * 0.3) * env); // with a tool only the right hand works
       } else {
@@ -567,6 +568,7 @@ function updatePlayer(dt) {
       const s = Math.sin(k * Math.PI);
       P.body.rotation.x = stoop + 1.0 * s;
       player.position.y = playerGround - 0.14 * s;
+      setLegs(P, 0, (0.14 * s) / player.scale.y);
       setArm(P.armR, -0.55 * s + (carrying ? holdX * (1 - s) : 0));
       setArm(P.armL, -0.35 * s);
     }
@@ -641,6 +643,7 @@ function updatePlayer(dt) {
     setArm(P.armL, 0);
     setArm(P.armR, carrying ? holdX : 0);
   }
+  if (!you.sit) feetOnGround(player, P);
   ring.position.set(player.position.x, playerGround + 0.04, player.position.z);
   const age = elapsed - (tapMark.userData.born ?? -9);
   tapMark.material.opacity = age < 0.8 ? 0.85 * (1 - age / 0.8) : 0;

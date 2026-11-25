@@ -1,7 +1,28 @@
 /* ---------- moving about ---------- */
 const walk = { target: null, path: null, replanned: false, onArrive: null, onFail: null, phase: 0, side: 0, best: Infinity, bestAt: 0 };
 let action = null; // what your person is doing right now: bending to pick up or put down, drinking, eating
-function setLegs(P, s) { P.legL.rotation.x = s * 0.55; P.legR.rotation.x = -s * 0.55; }
+// legs: s swings them for walking. drop (in the person's own size) is how far the hips come down for a bend or a
+// kneel: the legs step apart to make up for it, so the feet stay on the ground (before 0.1.17 they sank into it).
+// The feet stay flat whatever the legs do.
+const LEG_LEN = 0.8; // hip to ankle
+function setLegs(P, s, drop = 0) {
+  const lunge = drop > 0 ? Math.acos(Math.max(0.3, 1 - drop / LEG_LEN)) : 0;
+  P.legL.rotation.x = s * 0.55 - lunge; P.legR.rotation.x = -s * 0.55 + lunge;
+  P.legL.scale.y = P.legR.scale.y = 1;
+  P.footL.rotation.x = -P.legL.rotation.x; P.footR.rotation.x = -P.legR.rotation.x;
+}
+// on a slope the uphill foot would go into the ground: that leg bends up a little (shorter) so the foot sits on top
+const _foot = new THREE.Vector3();
+function feetOnGround(m, P) {
+  P.legL.scale.y = P.legR.scale.y = 1;
+  m.updateMatrixWorld(true);
+  const sc = m.scale.y;
+  for (const [hip, foot] of [[P.legL, P.footL], [P.legR, P.footR]]) {
+    foot.getWorldPosition(_foot);
+    const into = groundY(_foot.x, _foot.z) - (_foot.y - 0.07 * sc);
+    if (into > 0.003) hip.scale.y = Math.max(0.7, 1 - into / (LEG_LEN * Math.cos(hip.rotation.x) * sc));
+  }
+}
 function shorePointToward(from) {
   const a = Math.atan2((from.z - POND.z) * 1.22, from.x - POND.x);
   for (let k = 0.6; k < 2; k += 0.02) {
@@ -189,6 +210,7 @@ function animateAct(m, P, ground, act, dt) {
     if (act.pose === 'kneel') {
       P.body.rotation.x = stoop + 1.05 * env;
       m.position.y = ground - 0.12 * env;
+      setLegs(P, 0, (0.12 * env) / m.scale.y);
       setArm(P.armR, (-0.6 + wave * 0.3) * env);
       setArm(P.armL, (-0.6 + wave * 0.3) * env);
     } else {
@@ -200,10 +222,11 @@ function animateAct(m, P, ground, act, dt) {
     const s = Math.sin(k * Math.PI);
     P.body.rotation.x = stoop + 1.0 * s;
     m.position.y = ground - 0.14 * s;
+    setLegs(P, 0, (0.14 * s) / m.scale.y);
     setArm(P.armR, -0.55 * s);
     setArm(P.armL, -0.35 * s);
   }
-  if (k >= 1) { P.body.rotation.x = stoop; setArm(P.armR, 0); setArm(P.armL, 0); m.position.y = ground; return false; }
+  if (k >= 1) { P.body.rotation.x = stoop; setArm(P.armR, 0); setArm(P.armL, 0); setLegs(P, 0); m.position.y = ground; return false; }
   return true;
 }
 

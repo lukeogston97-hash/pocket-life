@@ -39,6 +39,7 @@ function makePerson(look) {
     hip.add(new THREE.Mesh(legGeo, skin), f);
     g.add(hip);
     parts[side < 0 ? 'legL' : 'legR'] = hip;
+    parts[side < 0 ? 'footL' : 'footR'] = f;
   }
 
   // everything above the hips hangs off one group, so older people can stoop

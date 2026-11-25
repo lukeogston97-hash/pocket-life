@@ -75,13 +75,13 @@ function freeSeat(th) {
 // sitting on the ground, legs out in front, hands on the knees (anyone: you or someone else)
 function sitPose(m, P, ground) {
   m.rotation.x = 0;
-  P.legL.rotation.x = -1.38; P.legR.rotation.x = -1.5;
+  P.legL.rotation.x = -1.38; P.legR.rotation.x = -1.5; P.legL.scale.y = P.legR.scale.y = 1; P.footL.rotation.x = P.footR.rotation.x = 0;
   P.body.rotation.x = P.body.userData.stoop + 0.14;
   setArm(P.armL, -0.75); setArm(P.armR, -0.7);
   m.position.y = ground - (HIP_Y - 0.1) * m.scale.y;
 }
 function unsitPose(m, P, ground) {
-  P.legL.rotation.x = 0; P.legR.rotation.x = 0;
+  setLegs(P, 0);
   P.body.rotation.x = P.body.userData.stoop;
   setArm(P.armL, 0); setArm(P.armR, 0);
   m.position.y = ground;
