@@ -3,6 +3,25 @@
 import { G, HOUR, advanceStats, posAt, num, AWAY, REST, ageOf, wearList, laidNow } from './shared.js';
 
 export const personsMethods = {
+  // Leave the world for good (Settings): their things drop where they stand, they leave their camp (the usual rules: the
+  // member who joined first leads, the last one out puts the fire out), and their person, past people and feedback are
+  // removed. A ban stays (the ban list isn't touched). The admin's Log says someone left, with no name.
+  async forget(who, ws, me) {
+    const p = this.persons.get(who);
+    if (this.alive(p)) { this.catchUp(p); if (this.alive(p)) this.spill(p); }
+    if (p) this.send({ t: 'leave', id: who }, null);
+    for (const s of this.sockets()) if (s.p.who === who && s.ws !== ws) { s.p.alive = false; s.p.who = null; this.attach(s.ws, s.p); this.boot(s.ws, { t: 'elsewhere' }); }
+    this.persons.delete(who); this.dirty.delete(who); this.later.delete(who); this.savedAt.delete(who);
+    if (me.who === who) { Object.assign(me, { id: `w:${crypto.randomUUID().slice(0, 8)}`, who: null, self: null, watch: true, alive: false }); this.attach(ws, me); }
+    const soc = this.socOf(who);
+    if (soc) { const mem = soc.members.find((x) => x.who === who); if (mem) mem.name = 'Someone'; await this.socOut(soc, who, 'left'); }
+    await this.ctx.storage.delete([`p:${who}`, `past:${who}`]);
+    this.use('writes', 2);
+    const fb = (await this.ctx.storage.get('feedback')) || [], kept = fb.filter((x) => x.who !== who);
+    if (kept.length !== fb.length) await this.put('feedback', kept);
+    this.note('world', 'Someone left the world for good');
+    this.sendCount();
+  },
   alive(p) { return p && p.state === 'alive'; },
   isOnline(who) { const s = this.socketOf(who); return !!(s && s.p.alive); }, // (socketOf prefers the connection still playing them)
   // online, away, asleep (a day away: needs drop slowly to a floor) or sleeping (resting, by choice or when tired)

@@ -270,6 +270,44 @@ $('pauseNewsBtn').addEventListener('click', () => { closePause(); openNews(); })
 $('pauseFeedbackBtn').addEventListener('click', () => { closePause(); openFeedback(); });
 $('pauseSettingsBtn').addEventListener('click', () => { closePause(); openSettings(); });
 function closeSettings() { $('settings').hidden = true; }
+/* ---------- Leave the world for good (Settings) ----------
+   A warning, then hold the button for 2 seconds. The server drops their things where they stand, takes them out of their
+   camp and removes their person, past people and feedback (server/src/persons.js, forget). Then this phone gets a new id
+   and the page starts again, so it's a fresh start. A guest and (later) a signed-in player leave the same way. */
+const HOLD_MS = 2000;
+let holdStart = 0, holdTimer = 0;
+function openLeave() {
+  closeSettings();
+  paused = true;
+  const name = (you.look && !you.dead && you.look.name) || (menuYours && menuYours.name) || '';
+  $('leaveText').textContent = `${name ? `${name} and everything` : 'Everything'} about you will be removed: your person, past people and feedback. The things you carry drop where you stand. This can't be undone.`;
+  $('leave').hidden = false;
+  $('leaveCancel').focus();
+}
+function closeLeave() { holdStop(); $('leave').hidden = true; paused = false; }
+function holdStop() { cancelAnimationFrame(holdTimer); holdStart = 0; $('leaveHold').style.setProperty('--hold', 0); }
+function holdStep() {
+  if (!holdStart) return;
+  const f = Math.min(1, (performance.now() - holdStart) / HOLD_MS);
+  $('leaveHold').style.setProperty('--hold', f);
+  if (f < 1) { holdTimer = requestAnimationFrame(holdStep); return; }
+  holdStart = 0;
+  if (!online()) { holdStop(); showTag('You need to be online to leave the world', headTop(), 2.5); return; }
+  net.sock.send(JSON.stringify({ t: 'forget', pid }));
+  $('leaveHold').disabled = true;
+  $('leaveHold').firstElementChild.textContent = 'Leaving…';
+}
+$('leaveBtn').addEventListener('click', openLeave);
+$('leaveCancel').addEventListener('click', closeLeave);
+$('leave').addEventListener('click', (e) => { if (e.target === $('leave')) closeLeave(); });
+$('leaveHold').addEventListener('pointerdown', (e) => { e.preventDefault(); holdStart = performance.now(); holdStep(); });
+for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) $('leaveHold').addEventListener(ev, () => { if (holdStart) holdStop(); });
+$('leaveHold').addEventListener('contextmenu', (e) => e.preventDefault());
+// the server says they're gone: a new id for this phone, and the game starts again from the top
+function forgotten() {
+  try { localStorage.setItem(PID_KEY, crypto.randomUUID()); } catch (err) { /* not kept: the page makes one anyway */ }
+  location.reload();
+}
 $('settingsClose').addEventListener('click', closeSettings);
 $('settings').addEventListener('click', (e) => { if (e.target === $('settings')) closeSettings(); });
 /* ---------- Privacy and rules (Settings): what the game keeps, and how to play nicely ----------

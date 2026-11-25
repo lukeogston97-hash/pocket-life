@@ -12,8 +12,15 @@ const SIT_OPEN = 365 * 24 * 3600000; // sitting has no set time: `until` is far 
 export const ACTIONS = {
   // feedback from the Send feedback screen
   feedback: { when: 'any', async run({ ws, me, m, p, w, reply, save }) {
-    await this.addFeedback(m, me.from);
+    await this.addFeedback(m, me.from, me.self);
     if (!m.auto) reply({ t: 'thanks' }); // (auto: a note the game sent by itself about an error)
+  } },
+  // leaving the world for good (Settings, 0.1.11): their person, past people and feedback are removed (persons.js, forget).
+  // It works from the main menu too. The phone's own id (pid) is what proves it's theirs, the same as hello.
+  forget: { when: 'any', async run({ ws, me, m, reply }) {
+    if (!m.pid) return;
+    await this.forget(await this.whoFor(m), ws, me);
+    reply({ t: 'forgotten' });
   } },
   // reporting another player (kept with what they said lately)
   report: { when: 'any', async run({ ws, me, m, p, w, reply, save }) {

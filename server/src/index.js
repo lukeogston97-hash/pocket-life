@@ -179,14 +179,14 @@ export class World extends DurableObject {
     this.attach(server, { from });
     return new Response(null, { status: 101, webSocket: client });
   }
-  async addFeedback(note, from = '') {
+  async addFeedback(note, from = '', who = '') { // who: the phone it came from, so Leave the world for good can remove it
     const text = clean(note && note.text, 1000).trim();
     if (!text || !this.feedbackOk(from)) return; // (too many from one address: quietly dropped)
     const list = (await this.ctx.storage.get('feedback')) || [];
     // a note the game or the server sent by itself (an error): the same one again is counted, not added again
     const same = note.auto && list.find((x) => x.auto && !x.done && x.text === text);
     if (same) { same.count = (same.count || 1) + 1; same.lastAt = new Date().toISOString(); await this.put('feedback', list); return; }
-    list.push({ at: new Date().toISOString(), name: clean(note.name, 20), v: clean(note.v, 30), device: clean(note.device, 200), x: num(note.x), z: num(note.z), text, ...(note.auto ? { auto: true } : {}) });
+    list.push({ at: new Date().toISOString(), ...(who ? { who } : {}), name: clean(note.name, 20), v: clean(note.v, 30), device: clean(note.device, 200), x: num(note.x), z: num(note.z), text, ...(note.auto ? { auto: true } : {}) });
     await this.put('feedback', list.slice(-FEEDBACK_KEEP));
     this.tellAdmins({ t: 'adminNew', list: 'feedback' }); // the admin's Inbox count goes up straight away
   }
@@ -230,7 +230,7 @@ export class World extends DurableObject {
     // on the main menu: only watching the world. The admin (who also only watches) can use their tools, and their game can
     // send the layout and lay out a brand new world: after a reset there may be no player about to do it, and the admin
     // would be looking at what's left of the old one.
-    if (me.watch && m.t !== 'feedback' && !(isAdmin && (m.t.startsWith('a.') || m.t === 'layout' || m.t === 'seed'))) return;
+    if (me.watch && m.t !== 'feedback' && m.t !== 'forget' && !(isAdmin && (m.t.startsWith('a.') || m.t === 'layout' || m.t === 'seed'))) return;
     if (!allowed(ws, me, m.t)) {
       if (m.t === 'take') reply({ t: 'took', id: m.id, ok: false });
       else if (m.t === 'pick') reply({ t: 'picked', bush: m.bush, ok: false });
@@ -277,7 +277,7 @@ export class World extends DurableObject {
     const full = !m.watch && !isAdmin && !this.mayPlay(ws, me, who);
     if (m.watch || full) { // the main menu: watch the world go by without a person
       const queued = full ? me.queued || Date.now() : 0;
-      Object.assign(me, { id: me.watch && me.id ? me.id : `w:${crypto.randomUUID().slice(0, 8)}`, who: null, watch: true, queued, turnAt: 0, admin: isAdmin, v: clean(m.v, 20), b: Math.floor(Number(m.b)) || 0, e: Math.floor(Number(m.e)) || 0, link, alive: false });
+      Object.assign(me, { id: me.watch && me.id ? me.id : `w:${crypto.randomUUID().slice(0, 8)}`, who: null, self: who, watch: true, queued, turnAt: 0, admin: isAdmin, v: clean(m.v, 20), b: Math.floor(Number(m.b)) || 0, e: Math.floor(Number(m.e)) || 0, link, alive: false });
       this.attach(ws, me);
       const p = this.persons.get(who);
       reply({ t: 'welcome', watch: true, id: me.id, people: this.people(null), world: this.view(), count: this.playing(), speed: this.speed, live: this.live, liveItems: this.liveItems,
@@ -289,7 +289,7 @@ export class World extends DurableObject {
     me.queued = 0; me.turnAt = 0;
     // the same phone in another tab or link: that one closes
     for (const s of this.sockets()) if (s.p.who === who && s.ws !== ws) { s.p.alive = false; this.attach(s.ws, s.p); this.boot(s.ws, { t: 'elsewhere' }); }
-    Object.assign(me, { id: who, who, watch: false, admin: false, said: me.said || [], v: clean(m.v, 20), b: Math.floor(Number(m.b)) || 0, e: Math.floor(Number(m.e)) || 0, link, alive: false });
+    Object.assign(me, { id: who, who, self: who, watch: false, admin: false, said: me.said || [], v: clean(m.v, 20), b: Math.floor(Number(m.b)) || 0, e: Math.floor(Number(m.e)) || 0, link, alive: false });
     const p = this.persons.get(who);
     let away = null, dead = null, tasks = null;
     if (p && this.alive(p)) {
