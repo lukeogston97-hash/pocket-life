@@ -9,6 +9,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, '..', '..'))
 SHOTS = os.path.join(HERE, 'shots')
 THREE = os.path.join(HERE, 'node_modules', 'three')
+FONTS = os.path.join(HERE, 'node_modules', '@fontsource', 'nunito', 'files')  # the game's font, for pictures (pictures.py)
 CHROME = os.environ.get('CHROME', '/usr/bin/google-chrome')
 HTTP_PORT, WS_PORT = 8794, 8795
 NOISE = ('Failed to load resource', 'GPU stall', 'WebGL', 'Automatic fallback to software')
@@ -61,17 +62,31 @@ class World:
         self.browser = browser
         self.errors = []
 
-    async def page(self, pid, w=390, h=844, data=None, tz='Australia/Darwin', path='test/'):
-        """Open the game as a phone (pid is its random id). data: changes merged into game-data.json."""
-        ctx = await self.browser.new_context(viewport={'width': w, 'height': h}, timezone_id=tz, has_touch=w < 600)
+    async def page(self, pid, w=390, h=844, data=None, tz='Australia/Darwin', path='test/', slow=0, three=True, ready=True, touch=None, fonts=False, sharp=1, still=False):
+        """Open the game as a phone (pid is its random id). data: changes merged into game-data.json.
+        For the loading screen: slow holds the game's code back that many ms, three=False means three.js never arrives,
+        and ready=False returns straight away instead of waiting for the world to be drawn. touch: a touch screen (by default, any narrow one).
+        For pictures (pictures.py): fonts=True draws the words in the game's real font, sharp is the screen's pixel ratio, and
+        still=True asks for less motion (the menu's camera and the person on the stage hold still)."""
+        ctx = await self.browser.new_context(viewport={'width': w, 'height': h}, timezone_id=tz, has_touch=w < 600 if touch is None else touch,
+                                             device_scale_factor=sharp, reduced_motion='reduce' if still else 'no-preference')
         pg = await ctx.new_page()
         pg.on('pageerror', lambda e: self.errors.append(f'{pid}: {e}'))
         pg.on('console', lambda m: self.errors.append(f'{pid}: {m.text}') if m.type == 'error' and not any(n in m.text for n in NOISE) else None)
 
-        async def three(route):
+        async def three_js(route):
+            if not three: await route.abort(); return
             await route.fulfill(path=os.path.join(THREE, route.request.url.split('three@0.170.0/')[1]), content_type='application/javascript', headers={'Access-Control-Allow-Origin': '*'})
-        await pg.route('https://cdn.jsdelivr.net/npm/three@0.170.0/**', three)
-        await pg.route('https://fonts.**', lambda r: r.abort())
+        await pg.route('https://cdn.jsdelivr.net/npm/three@0.170.0/**', three_js)
+        if slow:
+            async def held(route):
+                await asyncio.sleep(slow / 1000); await route.continue_()
+            await pg.route('**/game/*.js*', held)
+        if fonts:  # the real font, from the @fontsource package (npm install), in the four weights the game uses
+            css = '\n'.join(f"@font-face {{ font-family: 'Nunito'; font-weight: {n}; font-display: block; src: url(https://fonts.gstatic.com/x/nunito-latin-{n}-normal.woff2) format('woff2'); }}" for n in (500, 600, 700, 800))
+            await pg.route('https://fonts.googleapis.com/**', lambda r: r.fulfill(body=css, content_type='text/css', headers={'Access-Control-Allow-Origin': '*'}))
+            await pg.route('https://fonts.gstatic.com/**', lambda r: r.fulfill(path=os.path.join(FONTS, r.request.url.rsplit('/', 1)[1]), content_type='font/woff2', headers={'Access-Control-Allow-Origin': '*'}))
+        else: await pg.route('https://fonts.**', lambda r: r.abort())
 
         async def game_data(route):
             resp = await route.fetch(); d = json.loads(await resp.text())
@@ -86,7 +101,9 @@ class World:
         await pg.add_init_script("localStorage.setItem('pocket-life:pid', %s); window.__sent = []; const S = WebSocket.prototype.send;"
                                  "WebSocket.prototype.send = function (d) { window.__sock = this; try { window.__sent.push(JSON.parse(d)); } catch (e) {} return S.call(this, d); };" % json.dumps(pid))
         await pg.goto(f'http://127.0.0.1:{HTTP_PORT}/{path}?debug')
+        if not ready: return pg
         await pg.wait_for_function('window.__frames >= 3', timeout=180000)
+        await pg.wait_for_function("!document.getElementById('boot')", timeout=30000)  # the loading screen has faded away
         await pg.wait_for_timeout(1500)
         return pg
 

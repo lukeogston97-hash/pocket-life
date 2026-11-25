@@ -56,6 +56,7 @@ function enterCreator() {
   removeLabel(tagLabel);
   tagLabel = null;
   draft = { ...DEFAULT_LOOK };
+  setTheme(HAZE); // (the stage's own pale background, whatever the time of day)
   // while testing, a ready-made name so starting is one tap (settings.autoName; you can still change it)
   if (SETTINGS.autoName) {
     const names = DATA.testNames && DATA.testNames.length ? DATA.testNames : ['Alex', 'Sam', 'Jo'];
@@ -152,6 +153,7 @@ function enterMenu() {
   if (previewPerson) { pscene.remove(previewPerson); disposeMaterials(previewPerson); previewPerson = null; }
   removeLabel(tagLabel);
   tagLabel = null;
+  applyDaylight(); // the right time of day from the first frame (it's otherwise only brought up to date once a second)
   drawMenu();
 }
 // what's under Play: who you'll carry on as, or that you'll make a new person
@@ -298,7 +300,9 @@ $('backBtn').addEventListener('click', () => { $('back').hidden = true; });
 // joining the world, or getting back after the internet dropped
 function showJoining(on, inWorld = false) {
   $('joining').hidden = !on;
-  $('joiningText').textContent = inWorld ? 'Reconnecting… Your person carries on while you\'re gone.' : 'Joining the world…';
+  const stuck = net.fails >= 2; // a couple of tries and still no answer: say so, and what to check (the game keeps trying by itself)
+  $('joiningText').textContent = inWorld ? `${stuck ? "Can't reach the world. Check your connection." : 'Reconnecting…'} Your person carries on while you're gone.`
+    : stuck ? "Can't reach the world. Check your connection. Still trying…" : 'Joining the world…';
 }
 $('menuBtn').addEventListener('click', () => openPause());
 $('deathBtn').addEventListener('click', () => { $('death').hidden = true; if (player) endLife(); });

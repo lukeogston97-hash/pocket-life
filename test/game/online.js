@@ -1,10 +1,10 @@
 /* ---------- online: other people in the same world, and speech bubbles ---------- */
 // The server (game-data.json "server") passes everyone's moves and speech to everyone else in the
-// same world. The test link joins the test world, the release joins the live world. If the server
-// can't be reached, the game carries on as normal and keeps trying quietly.
+// same world. The test link and the release both join the one live world. If the server can't be
+// reached, the game keeps trying by itself, and says so after a couple of tries (net.fails).
 const SERVER = typeof DATA.server === 'string' ? DATA.server : '';
 const others = new Map(); // id -> { mesh, tx, tz, tr, phase, name, bubble }
-const net = { sock: null, myId: null, wanted: false, retry: 1000, sentAt: 0, last: null, mode: 'watch', restored: false }; // mode: watch (main menu) or play
+const net = { sock: null, myId: null, wanted: false, retry: 1000, sentAt: 0, last: null, mode: 'watch', restored: false, fails: 0 }; // mode: watch (main menu) or play; fails: tries in a row the world didn't answer
 function cleanLook(look) {
   const l = { ...DEFAULT_LOOK, ...(look || {}) };
   for (const k of ['sex', 'skin', 'build', 'hair', 'hairColour', 'tunic']) l[k] = pickId(LOOKS[k], l[k]);
@@ -31,7 +31,10 @@ function goOnline() {
   try { sock = new WebSocket(`${SERVER}?world=live`); } catch (err) { return; }
   net.sock = sock;
   setNet('connecting');
+  // a connection that just hangs (some networks do that rather than refuse) is given up on, and tried again
+  const slow = setTimeout(() => { if (sock.readyState === 0) { try { sock.close(); } catch (err) { /* gone */ } } }, 10000);
   sock.onopen = () => {
+    clearTimeout(slow);
     net.retry = 1000;
     net.last = null;
     sendHello();
@@ -107,10 +110,15 @@ function goOnline() {
     }
   };
   sock.onclose = () => {
+    clearTimeout(slow);
     if (net.sock === sock) net.sock = null;
+    // Tries in a row that the world never answered. After a couple the game says it can't connect, instead of
+    // "Connecting…" for ever (it still keeps trying by itself). Not counted while the world is closed or this game was stopped.
+    net.fails = net.myId || maint.on || net.stopped ? 0 : net.fails + 1;
     net.myId = null;
+    creating = false; // (a Start my life the world never answered: the button works again once it's back)
     setNet(net.wanted ? 'connecting' : 'offline');
-    if (!maint.on && !net.stopped && ui.mode !== 'menu') showJoining(true, !!player);
+    if (!maint.on && !net.stopped && (ui.mode !== 'menu' || !$('joining').hidden)) showJoining(true, !!player);
     menuJoining = false; menuLine = 0;
     if (ui.mode === 'menu') drawMenu();
     shared.on = false;
@@ -142,6 +150,7 @@ let creating = false;
 function welcome(m) {
   const restored = net.restored; // the admin just restored the world (admin.js): you're where the server has you
   net.restored = false;
+  net.fails = 0;
   net.myId = m.id;
   hideMaintenance();
   showJoining(false);
@@ -386,7 +395,7 @@ function hideMaintenance() {
 // the dot by the time: green online (with how many), orange connecting, grey offline
 function setNet(state, n) {
   $('netLine').dataset.state = state;
-  $('netText').textContent = state === 'online' ? `${n || 1} online` : state === 'connecting' ? 'Connecting…' : 'Offline';
+  $('netText').textContent = state === 'online' ? `${n || 1} online` : state === 'connecting' ? (net.fails >= 2 ? "Can't connect. Trying again…" : 'Connecting…') : 'Offline';
   if (ui.mode === 'menu') drawMenu();
 }
 // feedback from the Menu: goes to the server (and on to the admin page), with the version and device

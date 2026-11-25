@@ -2,7 +2,7 @@
   "help": "minVersion (with era) sends older games on each link to the newest version (a 4th number is the test build, like 0.0.6.8). Maintenance is switched on and off by the admin player in the game. tools/worlds.py and tools/release.sh edit this for you.",
   "minVersion": {
     "release": "0.1.9.2",
-    "test": "0.1.9.2"
+    "test": "0.1.10.1"
   },
   "era": {
     "release": 1,

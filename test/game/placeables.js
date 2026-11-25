@@ -237,7 +237,7 @@ function cantPlaceAt(x, z, kind) {
   if (!roomAt(x, z, r + 0.25, 0.4)) return 'Not enough room here';
   if ([...placed.values()].some((th) => Math.hypot(th.x - x, th.z - z) < r + PLACEABLES[th.kind].solid + 1)) return 'Too close to another one';
   const c = notMineAt(x, z);
-  if (c) return `That belongs to ${c.claim.name}`;
+  if (c) return `This belongs to ${c.claim.name}`; // (the server's words for it: claimNo in server/src/claims.js)
   return null;
 }
 function startPlacing(item) {

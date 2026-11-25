@@ -506,7 +506,7 @@ async def admin_tools():
         expect(name in await text(a, '#adminPlayer'), 'their page opens')
         sticks = await b.evaluate('__pl.you.carry.stick || 0')
         await a.click('#adminPlayer >> text=Give items'); await a.click('#adminPickCount >> text=5'); await a.fill('#adminPickFind', 'stick')
-        await a.click('#adminPickList >> text=Stick'); await a.wait_for_timeout(900)
+        await a.click('#adminPickList >> text="Stick"'); await a.wait_for_timeout(900)  # (exactly Stick: the list is in name order, and Long stick comes first since 0.1.8)
         expect(await b.evaluate('__pl.you.carry.stick || 0') == sticks + 5, 'gave them 5 sticks')
         await a.click('#adminPlayer >> text=Take all'); await a.wait_for_timeout(900)
         expect(not await b.evaluate('__pl.you.carry.stick'), 'took them back')
@@ -620,7 +620,7 @@ async def claims():
         name = await a.evaluate('__pl.you.look.name')
         expect(await b.evaluate(f"(__pl.placed.get({fid}).claim || {{}}).name") == f"{name}'s camp", "the other phone sees whose claim it is (their society, 0.1.5)")
         why = await b.evaluate(f"(() => {{ const th = __pl.placed.get({fid}); for (let dx = -7; dx <= 7; dx++) for (let dz = -7; dz <= 7; dz++) {{ const w = __pl.cantPlaceAt(th.x + dx, th.z + dz, 'campfire'); if (w !== 'Not enough room here' && w !== 'Too close to another one') return w; }} return 'no clear spot'; }})()")
-        expect(why == f"That belongs to {name}'s camp", f"can't place inside someone else's claim ({why})")
+        expect(why == f"This belongs to {name}'s camp", f"can't place inside someone else's claim ({why})")
         acts = await b.evaluate(f"__pl.menuActions({{ kind: 'placed', th: __pl.placed.get({fid}), name: '' }}).map((x) => x.label)")
         expect(acts[0] == f"{name}'s camp" and 'Put out fire' not in acts, f'their fire menu only says whose claim it is ({acts})')
         # the server says no too: B walks over and tries to put it out
@@ -1322,7 +1322,7 @@ async def admin_taps():
         stones = await b.evaluate("__pl.world.items.filter((it) => it.kind === 'stone').length")
         await a.click('#actList >> text=Add item'); await a.wait_for_timeout(400)
         expect(await shown(a, '#adminPick'), 'Add item opens the list of things')
-        await a.click('#adminPickCount >> text=5'); await a.fill('#adminPickFind', 'stone'); await a.click('#adminPickList >> text=Stone'); await a.wait_for_timeout(1500)
+        await a.click('#adminPickCount >> text=5'); await a.fill('#adminPickFind', 'stone'); await a.click('#adminPickList >> text="Stone"'); await a.wait_for_timeout(1500)  # (exactly Stone, not Sharp stone, which comes first in name order since 0.1.8)
         near = await b.evaluate(f"__pl.world.items.filter((it) => it.kind === 'stone' && Math.hypot(it.x - {gx}, it.z - {gz}) < 3).length")
         expect(await b.evaluate("__pl.world.items.filter((it) => it.kind === 'stone').length") == stones + 5 and near >= 5, f"5 stones land where the admin tapped, in the player's game too ({near} within 3 m)")
         # a person: Move them, then tap where they go
@@ -1736,6 +1736,83 @@ async def craft_mat():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
+async def loading():
+    """The loading screen covers the main menu until the world is drawn, says so when the game can't start, and the page carries what a shared link and a home screen need."""
+    async with world() as W:
+        # the game's code arrives late: the loading screen is up, and a tap where Play is lands on it, not on a Play that isn't ready
+        a = await W.page('loadA', slow=2500, ready=False)
+        await a.wait_for_timeout(1200)
+        seen = await a.evaluate("(() => { const b = document.getElementById('boot'), r = b && b.getBoundingClientRect(), at = document.elementFromPoint(innerWidth / 2, innerHeight - 180); return { text: b ? b.textContent.replace(/\\s+/g, ' ').trim() : '', covers: !!r && r.width >= innerWidth && r.height >= innerHeight, tap: !!(at && b && b.contains(at)), frames: window.__frames || 0 }; })()")
+        expect('Pocket Life' in seen['text'] and 'Loading' in seen['text'], f"while loading: the game's name and Loading ({seen['text'][:60]})")
+        expect(seen['covers'] and seen['tap'] and not seen['frames'], f'it covers the whole screen, so nothing under it can be tapped ({seen})')
+        await shot(a, 'loading')
+        await a.wait_for_function('window.__frames >= 3', timeout=180000)
+        await a.wait_for_function("!document.getElementById('boot')", timeout=15000)
+        expect(await shown(a, '#mainMenu'), 'once the world is drawn it fades away to the main menu')
+        await a.click('#playBtn'); await a.wait_for_timeout(1500)
+        expect(await shown(a, '#creator'), 'and Play works')
+        # what a shared link, a search result and a home screen icon need
+        head = await a.evaluate("""(async () => {
+          const q = (s) => document.querySelector(s), meta = (s) => (q(s) || {}).content || '';
+          const ok = async (u) => { try { return (await fetch(u)).ok; } catch (e) { return false; } };
+          const man = q('link[rel=manifest]'), icon = q('link[rel=icon]'), touch = q('link[rel=apple-touch-icon]');
+          let m = null; try { m = await (await fetch(man.href)).json(); } catch (e) { /* none */ }
+          return { desc: meta('meta[name=description]').length, ogTitle: meta('meta[property="og:title"]'), ogImage: meta('meta[property="og:image"]'), theme: meta('meta[name=theme-color]'),
+            icon: !!icon && await ok(icon.href), touch: !!touch && await ok(touch.href), share: await ok('icons/share.jpg'),
+            manifest: !!m && m.name === 'Pocket Life' && m.display === 'browser', icons: !!m && (await Promise.all(m.icons.map((i) => ok(new URL(i.src, man.href).href)))).every(Boolean) };
+        })()""")
+        expect(50 <= head['desc'] <= 160 and 'Pocket Life' in head['ogTitle'] and head['ogImage'].endswith('/icons/share.jpg'), f"the page has a description and what a shared link shows ({head['desc']} letters, {head['ogImage']})")
+        expect(head['icon'] and head['touch'] and head['share'], 'its icons and the picture a shared link shows are there')
+        expect(head['manifest'] and head['icons'], "the home screen details are there, and open the game in the browser (so it's the same person)")
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+        # three.js never arrives: the loading screen says the game couldn't start, with a way to try again (it used to leave a main menu where nothing worked)
+        b = await W.page('loadB', three=False, ready=False)
+        await b.wait_for_function("document.getElementById('boot') && document.getElementById('boot').classList.contains('failed')", timeout=30000)
+        said = await text(b, '#bootText')
+        expect("couldn't start" in said and await shown(b, '#bootAgain'), f'with three.js missing it says so, with Try again ({said[:50]})')
+        await shot(b, 'loading_failed')
+
+
+# how wide the Make your person stage was last drawn (renderCreator in game/people.js sets the renderer's scissor to it)
+STAGE_DRAWN = "(async () => { const f = window.__frames; while (window.__frames < f + 2) await new Promise((r) => setTimeout(r, 100)); return Math.round(__pl.renderer.getScissor(new __pl.THREE.Vector4()).z); })()"
+
+
+async def sideways():
+    """A phone held sideways: Make your person fits (the sheet goes down the right) and the game can be started and played."""
+    async with world() as W:
+        for tag, w, h in [('wide', 844, 390), ('small', 667, 375)]:
+            pg = await W.page(f'side{tag}', w, h, touch=True)
+            await pg.click('#playBtn'); await pg.wait_for_timeout(1500)
+            off = await pg.evaluate("['#creatorTitle', '#creatorBack', '#nameInput', '#sexOpts', '#ageInput', '#buildOpts', '#skinOpts', '#hairOpts', '#hairColourOpts', '#tunicOpts', '.start-btn'].filter((s) => { const r = document.querySelector(s).getBoundingClientRect(); return !(r.width > 0 && r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight); })")
+            expect(not off, f'{w} x {h}: every choice and Start my life are on the screen {off}')
+            stage = await pg.evaluate("(() => { const p = document.getElementById('previewSpace').getBoundingClientRect(), s = document.getElementById('sheet').getBoundingClientRect(); return [Math.round(p.width), Math.round(p.height), Math.round(s.left)]; })()")
+            expect(stage[0] >= 200 and stage[1] >= 200 and stage[2] > w * 0.25, f'your person has room on the left, the sheet is on the right ({stage})')
+            drawn = await pg.evaluate(STAGE_DRAWN)
+            expect(abs(drawn - (stage[2] + 24)) <= 2, f'and is drawn in that space, not across the whole screen ({drawn} px wide)')
+            await shot(pg, f'sideways_{tag}_creator')
+            await pg.click('.start-btn')
+            await pg.wait_for_function("document.getElementById('mainMenu').hidden && !document.getElementById('app').classList.contains('is-creating')", timeout=30000)
+            await pg.wait_for_timeout(1000)
+            hud = await pg.evaluate("['.who', '#menuBtn', '#needs', '#sayBtn', '#bagBtn'].filter((s) => { const r = document.querySelector(s).getBoundingClientRect(); return !(r.width > 0 && r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight); })")
+            expect(not hud, f'{w} x {h}: in the world, the corners are all on the screen {hud}')
+            await shot(pg, f'sideways_{tag}_world')
+            await pg.context.close()
+        # an upright phone and a computer keep the sheet under your person, who is drawn across the whole width above it
+        for tag, w, h in [('upright', 390, 844), ('computer', 1280, 800)]:
+            pg = await W.page(f'side{tag}', w, h)
+            await pg.click('#playBtn'); await pg.wait_for_timeout(1500)
+            under = await pg.evaluate("(() => { const p = document.getElementById('previewSpace').getBoundingClientRect(), s = document.getElementById('sheet').getBoundingClientRect(); return s.top >= p.bottom - 1; })()")
+            drawn = await pg.evaluate(STAGE_DRAWN)
+            expect(under and drawn == w, f'{w} x {h}: the sheet is under your person, who is drawn across the whole width ({drawn} px)')
+            await pg.context.close()
+        # a very narrow phone: the chat's Send button stays on the screen
+        n = await W.page('sidenarrow', 320, 568); await join(n)
+        await n.click('#sayBtn'); await n.wait_for_timeout(300)
+        send = await n.evaluate("(() => { const r = document.querySelector('.send-btn').getBoundingClientRect(); return [Math.round(r.left), Math.round(r.right), innerWidth]; })()")
+        expect(send[1] <= send[2], f'on a 320 px phone the Send button is on the screen ({send})')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
 async def server_tests():
     """The server's own code, tested with no browser (quick): the admin's fire, claim, Log, rename and message tools, live item numbers, that an old admin flag gives a player nothing, that things which aren't in the world can't be chopped, mined or picked, societies, and task lists carried on while away."""
     import subprocess
@@ -1748,7 +1825,7 @@ async def server_tests():
         expect(r.returncode == 0, f'{f}: {last[:160]}')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'tasks_away': tasks_away, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'craft_mat': craft_mat, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'server_tests': server_tests}
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'tasks_away': tasks_away, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'craft_mat': craft_mat, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'loading': loading, 'sideways': sideways, 'server_tests': server_tests}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

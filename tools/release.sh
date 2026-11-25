@@ -5,13 +5,15 @@
 set -e
 cd "$(dirname "$0")/.."
 VERSION=$(python3 -c "import json; print(json.load(open('test/game-data.json'))['version'])")
-FILES="index.html style.css game-data.json"
+FILES="index.html style.css game-data.json manifest.webmanifest"
 mkdir -p "releases/$VERSION"
 for f in $FILES; do cp "test/$f" "$f"; cp "test/$f" "releases/$VERSION/$f"; done
-# the game's code, one file per topic (index.html lists them)
-rm -rf game "releases/$VERSION/game"
-cp -r test/game game
-cp -r test/game "releases/$VERSION/game"
+# the game's code, one file per topic (index.html lists them), and its icons and the picture a shared link shows
+for d in game icons; do
+  rm -rf "$d" "releases/$VERSION/$d"
+  cp -r "test/$d" "$d"
+  cp -r "test/$d" "releases/$VERSION/$d"
+done
 rm -f game.js "releases/$VERSION/game.js" # from before the code was split up (0.1.7)
 python3 tools/worlds.py release
 # keep only the newest few release copies (enough to roll back), so the project stays light. Newest by era, then

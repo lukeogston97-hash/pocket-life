@@ -13,3 +13,4 @@ Runs the real server code on this computer and plays the test build (`test/`) in
 - How the server copes as the world grows: `python3 tools/tests/load.py 300` runs the real server code in memory with 300 people away and 20 playing for an hour, and prints the tick time, storage writes (against the free 100,000 a day) and message sizes. `ACT=0` in front: nobody playing. Run it after changing what gets saved or sent. `bots.mjs` makes people who then go away, for checks that need a busy world (`crowd`).
 
 - Lint: `python3 tools/tests/lint.py` (the server, and the game with its parts joined).
+- Pictures: `python3 tools/tests/pictures.py` redraws the app icon and the picture a shared link shows (test/icons/) from the game itself. Not a check: run it when the look of the world, the people or the name changes, then look at the files. It also needs Pillow and numpy.

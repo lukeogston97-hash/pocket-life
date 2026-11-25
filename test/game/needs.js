@@ -94,6 +94,10 @@ const sky = new THREE.Color(HAZE);
 const colA = new THREE.Color(), colB = new THREE.Color(), srgb = {};
 const lerpNum = (a, b, t) => (Number.isFinite(a) && Number.isFinite(b) ? a + (b - a) * t : null);
 let hourOverride = null; // lets a test pick the time of day
+// the colour the phone's browser draws its own bars in (theme-color in index.html) follows the sky, so the game runs
+// right up into them: the pale haze by day, deep blue at night, and the plain haze while making your person
+const themeMeta = document.querySelector('meta[name="theme-color"]');
+function setTheme(hex) { if (themeMeta && themeMeta.getAttribute('content') !== hex) themeMeta.setAttribute('content', hex); }
 // night in the world's clock (night in game-data.json: from and to, in hours): Rest fills faster asleep, and autopilot goes to bed
 const NIGHT = DATA.night || null;
 function nightNow() {
@@ -134,4 +138,5 @@ function applyDaylight() {
   const lum = 0.2126 * srgb.r + 0.7152 * srgb.g + 0.0722 * srgb.b;
   app.style.setProperty('--mist', [srgb.r, srgb.g, srgb.b].map((c) => Math.round((c + (1 - c) * 0.25 * lum) * 255)).join(', '));
   app.classList.toggle('night', lum < 0.5);
+  if (ui.mode !== 'creator') setTheme(`#${sky.getHexString()}`);
 }

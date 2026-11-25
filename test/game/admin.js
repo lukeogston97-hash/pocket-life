@@ -183,7 +183,7 @@ function drawPicker() {
   chips($('adminPickCount'), [[1, '1'], [5, '5'], [10, '10']], picker.n, (n) => { picker.n = n; drawPicker(); });
   const q = $('adminPickFind').value.trim().toLowerCase();
   const list = Object.values(ITEMS).filter((it) => (picker.group === 'All' || itemGroup(it) === picker.group) && (!q || it.name.toLowerCase().includes(q)))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => (q ? b.name.toLowerCase().startsWith(q) - a.name.toLowerCase().startsWith(q) : 0) || a.name.localeCompare(b.name)); // names that start with what was typed first (stone: Stone before Sharp stone)
   $('adminPickList').replaceChildren(...(list.length ? list.map((it) => button(it.name, () => { const f = picker.onPick, n = picker.n; closePicker(); if (f) f(it.id, n); }))
     : [emptyNote('Nothing called that')]));
 }

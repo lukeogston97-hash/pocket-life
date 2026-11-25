@@ -3,6 +3,7 @@
   "private": true,
   "description": "Checks for Pocket Life: a local copy of the server and browser tests. See README.md.",
   "devDependencies": {
+    "@fontsource/nunito": "^5.3.0",
     "esbuild": "^0.25.0",
     "eslint": "^9.0.0",
     "globals": "^15.0.0",
