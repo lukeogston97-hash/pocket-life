@@ -71,7 +71,8 @@ const LIVE_SET = {
   societyMax: (v) => { SOCIETY.maxMembers = v; }, // (society.js; members are told the number with their society too)
   respawnMinutes: (v) => { SETTINGS.respawnMinutes = v; },
   berryRegrowHours: (v) => { const s = BERRY_SOURCE(); if (s && s.regrowHours !== v) { s.regrowHours = v; for (const b of berryBushes) { b.userData.shown = -1; drawBerries(b); } } },
-  treeRegrowDays: (v) => { CHOP.regrowDays = v; },
+  treeRegrowDays: (v) => { CHOP.regrowDays = [v, daysSpan(CHOP.regrowDays)[1]]; }, // soonest and latest (rules.js stumpBackMs)
+  treeRegrowDaysMost: (v) => { CHOP.regrowDays = [daysSpan(CHOP.regrowDays)[0], v]; },
   boulderRegrowDays: (v) => { MINE.regrowDays = v; },
   rockBackHours: (v) => { MINE.rockBackHours = v; },
   fadeDays: (v) => { SETTINGS.fadeDays = v; }, // (only the server uses it: server/src/nature.js fadeOld)
@@ -80,7 +81,7 @@ const LIVE_SET = {
   restPerHour: (v) => { if (STAT.rest) STAT.rest.perHour = -v; },
 };
 const LIVE_BASE = { maxPlaying: SETTINGS.maxPlaying, societyMax: (DATA.societies || {}).maxMembers ?? 3, respawnMinutes: SETTINGS.respawnMinutes, berryRegrowHours: (BERRY_SOURCE() || {}).regrowHours,
-  treeRegrowDays: CHOP.regrowDays ?? 3, boulderRegrowDays: MINE.regrowDays ?? 3, rockBackHours: MINE.rockBackHours ?? 4, fadeDays: SETTINGS.fadeDays ?? 7,
+  treeRegrowDays: daysSpan(CHOP.regrowDays)[0], treeRegrowDaysMost: daysSpan(CHOP.regrowDays)[1], boulderRegrowDays: MINE.regrowDays ?? 3, rockBackHours: MINE.rockBackHours ?? 4, fadeDays: SETTINGS.fadeDays ?? 7,
   hungerPerHour: -((STAT.hunger || {}).perHour || 0), thirstPerHour: -((STAT.thirst || {}).perHour || 0), restPerHour: -((STAT.rest || {}).perHour || 0) };
 function applyLive(live) {
   if (you.stats && !you.dead) tickStats(); // needs up to now at the old rate first

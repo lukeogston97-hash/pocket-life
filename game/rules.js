@@ -55,6 +55,23 @@ export function berryPicked(count, from, holds, regrowMs, t) {
   return [n - 1, f];
 }
 
+/* ---------- stumps growing back into trees ---------- */
+// chopping.regrowDays: a number of days, or [soonest, latest] (Luke, 0.1.16: 1 to 2 days). As [first, second], unsorted.
+export function daysSpan(v, dflt = 3) {
+  const [a, b] = Array.isArray(v) ? v : [v, v];
+  const lo = Number.isFinite(a) ? a : dflt;
+  return [lo, Number.isFinite(b) ? b : lo];
+}
+// How long after it was chopped (since, in ms) stump i grows back, in ms: each stump gets its own time in the span,
+// worked out from the stump and when it was chopped, so the game and the server agree without saying so.
+export function stumpBackMs(days, i, since) {
+  const [a, b] = daysSpan(days), lo = Math.min(a, b), hi = Math.max(a, b);
+  let h = Math.imul((i | 0) + 1, 2654435761) ^ Math.floor((since || 0) / 1000);
+  h = Math.imul(h ^ (h >>> 16), 2246822507);
+  h = Math.imul(h ^ (h >>> 13), 3266489909);
+  return (lo + (hi - lo) * (((h ^ (h >>> 16)) >>> 0) / 4294967296)) * 86400000;
+}
+
 /* ---------- fires and fuel (placeables with "fire" in game-data.json) ---------- */
 // the fire's rules in ms: each fuel it takes and how long one burns, and the most it holds (maxHours of burning,
 // or maxFuel of its main fuel). isItem(kind): is that an item in the game?

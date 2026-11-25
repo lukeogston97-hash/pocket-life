@@ -295,7 +295,7 @@ function thingActions(t) {
     const has = !tool || you.carry[CHOP.tool];
     return [{ label: what === 'tree' ? 'Chop tree' : 'Remove stump', note: has ? `${rule.seconds || 15} s` : `Needs a ${tool.name.toLowerCase()}`, disabled: !has,
       run: () => queueTask({ type: 'chop', what, idx: t.idx, x: t.x, z: t.z }) },
-      ...(what === 'stump' && trees[t.idx] ? [{ label: `Grows back in ${stumpGrowsIn(trees[t.idx])}`, disabled: true }] : []),
+      ...(what === 'stump' && trees[t.idx] ? [{ label: `Grows back in ${stumpGrowsIn(t.idx)}`, disabled: true }] : []),
       { label: 'Walk here', foot: true, run: () => walkFirst(V(t.x + 1.2, 0, t.z)) }];
   }
   if (t.kind === 'rock') {
