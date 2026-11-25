@@ -392,6 +392,17 @@ function drawPlayer() {
     bag.appendChild(give);
     out.push(bag);
   }
+  if (alive) { // their task list (0.1.7): what their person carries on with while they're away (server/src/tasks.js)
+    const list = p.tasks || [], sec = entry('Task list', list.length ? '' : 'Empty');
+    list.slice(0, 10).forEach((t, i) => sec.appendChild(el('div', 'admin-row', `${i + 1}. ${taskName(t, false) || t.type}`)));
+    if (list.length > 10) sec.appendChild(el('div', 'admin-row', `+${list.length - 10} more`));
+    if (list.length) {
+      const bar = el('div', 'admin-btns'), clear = button('Clear task list', () => {});
+      twoTaps(clear, () => toPlayer({ t: 'a.clearTasks', id: p.id }), 'Tap again', 500);
+      bar.appendChild(clear); sec.appendChild(bar);
+    }
+    out.push(sec);
+  }
   if (p.soc) { // their society (0.1.4): taking them out is the same as them leaving it
     const sec = entry(el('div', 'admin-name', 'Society'), `${p.soc.name}${p.soc.lead ? ' · leads it' : ''} · ${p.soc.n} in it`), bar = el('div', 'admin-btns');
     const out1 = button('Take out of society', () => {});

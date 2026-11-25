@@ -235,6 +235,7 @@ function play() {
 }
 // back to the main menu: from making a person, or Exit in the pause menu (your person goes away and looks after themselves)
 function toMenu() {
+  sendTasks(); // what's left of your task list: your person carries on with it while you're away (moving.js)
   net.mode = 'watch';
   menuLine = 0;
   dropPlayer();
@@ -282,6 +283,7 @@ function showWelcomeBack(a) {
   const bits = [];
   const fruit = ITEMS[Object.keys((BERRY_SOURCE() || {}).harvest || {})[0]] || { name: 'berry', plural: 'berries' }; // what people away pick
   const times = (n) => (n === 1 ? 'once' : n === 2 ? 'twice' : `${n} times`); // (they eat whatever they carry, so no food is named)
+  if (a.tasks) bits.push(`did ${a.tasks} ${a.tasks === 1 ? 'thing' : 'things'} on your task list`); // (server/src/tasks.js)
   if (a.picked) bits.push(`picked ${a.picked} ${(a.picked === 1 ? fruit.name : fruit.plural).toLowerCase()}`);
   if (a.ate) bits.push(`ate ${times(a.ate)}`);
   if (a.drank) bits.push(`drank ${times(a.drank)}`);

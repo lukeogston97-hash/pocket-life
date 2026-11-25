@@ -14,14 +14,16 @@ cp -r test/game game
 cp -r test/game "releases/$VERSION/game"
 rm -f game.js "releases/$VERSION/game.js" # from before the code was split up (0.1.7)
 python3 tools/worlds.py release
-# keep only the newest few release copies (enough to roll back), so the project stays light
+# keep only the newest few release copies (enough to roll back), so the project stays light. Newest by era, then
+# version number, from each copy's own game-data.json (era goes up when numbers are reset lower). Commit times were
+# used before, but a shallow clone hasn't got the old commits, so it once kept 0.1.6 and dropped 0.1.7 (25 Nov 2026).
 python3 -c "
-import os, shutil
-import subprocess
-def when(v):  # when that copy was first committed (the new one isn't yet, so it's newest)
-    t = subprocess.run(['git', 'log', '--diff-filter=A', '--format=%ct', '--', 'releases/' + v + '/game-data.json'], capture_output=True, text=True).stdout.split()
-    return int(t[-1]) if t else 1 << 40
-vs = sorted((d for d in os.listdir('releases') if os.path.isdir('releases/' + d)), key=when)
+import json, os, shutil
+def key(v):
+    try: d = json.load(open('releases/' + v + '/game-data.json', encoding='utf-8'))
+    except Exception: return (-1, ())
+    return (d.get('era') or 0, tuple(int(x) for x in str(d.get('version', '0')).split('.') if x.isdigit()))
+vs = sorted((d for d in os.listdir('releases') if os.path.isdir('releases/' + d)), key=key)
 for v in vs[:-3]: shutil.rmtree('releases/' + v)
 "
 echo "Released $VERSION (copy kept in releases/$VERSION): https://pocketlife.pages.dev/"

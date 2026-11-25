@@ -330,7 +330,7 @@ for (const ev of ['pointerdown', 'keydown', 'wheel']) document.addEventListener(
 function busy() { return !!(tasks.current || tasks.list.length || action || walk.target); }
 function autopilot() {
   const now = performance.now();
-  if (ui.mode !== 'world' || !player || you.dead || paused || !online() || !you.stats) return;
+  if (ui.mode !== 'world' || !player || you.dead || maint.on || !online() || !you.stats) return; // (the Menu being open doesn't stop it)
   if (!auto.on) {
     if (busy() || now - lastInput < AWAY.idleMinutes * 60000) return;
     auto.on = true;
@@ -670,6 +670,7 @@ function taskName(t, now) {
 // the list above the bottom bar: what your person is doing now, then what's next
 let queueOpen = false; // the full list is showing
 function drawQueue() {
+  syncTasksSoon(); // (the server keeps a copy, for while you're away)
   drawDropGhosts();
   for (const b of badges) removeLabel(b);
   badges = [];
@@ -726,3 +727,41 @@ function drawQueue() {
   });
 }
 $('queueStop').addEventListener('click', stopQueue);
+
+/* ---------- your task list on the server (0.1.7): your person carries on with it while you're away (server/src/tasks.js) ----------
+   The list is sent a few seconds after it changes (only if it did), and straight away when you leave (Exit, or the game
+   being hidden). Autopilot's little jobs aren't sent: the server's away routine does those anyway. */
+let tasksSent = '', tasksTimer = 0;
+function taskListForServer() {
+  if (auto.on || !player || you.dead) return [];
+  const pending = new Set(allTasks().filter((q) => q.type === 'pickup').map((q) => q.id));
+  const out = [];
+  for (const t of allTasks()) {
+    if (t.type === 'drop' && t.landed) continue; // already put down
+    if (t === tasks.current && t.type === 'sit' && you.sit) continue; // already sitting: the server knows
+    const c = { ...t };
+    delete c.landed;
+    if (c.from != null) { // the second half of moving a loose item: only if its pick-up happens
+      if (took.has(c.from)) delete c.from; // it did
+      else if (!pending.has(c.from)) continue; // it never will
+    }
+    if (c.type === 'mine' && rocks[c.idx]) c.what = rocks[c.idx].boulder ? 'boulder' : 'rock'; // (the server's layout doesn't say which)
+    out.push(c);
+  }
+  return out.slice(0, MAX_QUEUE);
+}
+function sendTasks() {
+  clearTimeout(tasksTimer); tasksTimer = 0;
+  if (!online() || !player || you.dead) return;
+  const text = JSON.stringify(taskListForServer());
+  if (text === tasksSent) return;
+  tasksSent = text;
+  net.sock.send(`{"t":"tasks","list":${text}}`);
+}
+function syncTasksSoon() { if (!tasksTimer) tasksTimer = setTimeout(sendTasks, 3000); }
+// back after a while away: what's left of the list the server was working through (the same shapes as here)
+function takeTasksBack(list) {
+  tasks.list = (Array.isArray(list) ? list : []).filter((t) => t && typeof t.type === 'string').slice(0, MAX_QUEUE);
+  tasksSent = '';
+  if (!tasks.current && tasks.list.length && !action && !you.sit) nextTask(); else drawQueue();
+}

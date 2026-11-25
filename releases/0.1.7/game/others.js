@@ -5,6 +5,7 @@
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     net.hidden = true;
+    try { sendTasks(); } catch (err) { /* closing */ } // what's left of your task list: your person carries on with it (moving.js)
     if (net.sock && net.sock.readyState === 1) { try { net.sock.send(JSON.stringify({ t: 'bye' })); } catch (err) { /* closing */ } }
     if (net.sock) { try { net.sock.close(); } catch (err) { /* closed */ } }
   } else {
