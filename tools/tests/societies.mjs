@@ -126,7 +126,7 @@ expect(!S.w.socOf('kim') && kim.got.some((m) => m.t === 'socNote' && /no longer 
 got = await S.ask(sam, { t: 'socLeave' });
 expect(!S.w.socById(1) && !placed(1).lit && !placed(1).claim && /ended/.test(said(got)), 'Sam was the last one: Rivers ended and its fire went out', `${placed(1).lit} ${said(got)}`);
 
-console.log('E. a fire that burns out ends its society; no person in the world for 3 days and you leave');
+console.log('E. a fire that burns out ends its society; no person in the world for 7 days and you leave');
 await S.ask(pat, { t: 'fire', id: 1, do: 'light' });
 soc = S.w.socOf('pat');
 expect(soc && soc.name === "Pat's camp", 'Pat lit fire 1 again: a new society, Pat\'s camp');
@@ -135,9 +135,9 @@ const kimP = S.w.persons.get('kim');
 kimP.state = 'dead'; kimP.diedAt = Date.now() - HOUR;
 await S.w.socGone(kimP);
 expect(S.w.socOf('kim') === soc, 'dead for an hour: still in it (they can start again)');
-kimP.diedAt = Date.now() - 4 * 24 * HOUR;
+kimP.diedAt = Date.now() - (DATA.away.sleepAfterHours + DATA.away.goneAfterDays * 24 + 24) * HOUR; // a day past the away timer
 await S.w.socGone(kimP);
-expect(!S.w.socOf('kim') && soc.members.length === 1, 'not back for 3 days: out of it');
+expect(!S.w.socOf('kim') && soc.members.length === 1, 'not back for 7 days: out of it');
 Object.assign(kimP, { state: 'alive', diedAt: 0 });
 await wait(3500); // (the spam limits: a few invites and answers in a row, then one every few seconds)
 await S.ask(pat, { t: 'socInvite', id: 'kim' }); await S.ask(kim, { t: 'socAnswer', yes: true });

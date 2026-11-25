@@ -161,7 +161,7 @@ expect(JSON.stringify(S.p.carry) === had && S.w.world.items.length === 0, 'and t
 // feeding a fire with a fuel called constructor: taken as the fire's usual fuel (sticks), as any unknown fuel is
 await quietly({ t: 'fire', id: 1, do: 'add', fuel: 'constructor', n: 2 });
 const fed = S.w.world.placed[0].fuel - fuelWas;
-expect(threw === 0 && S.p.carry.stick === 3 && Math.abs(fed - 2 * 300000) < 30000, 'a fuel called constructor feeds the fire with 2 of its usual fuel, sticks, and nothing odd', `${S.p.carry.stick} sticks left, fuel up ${Math.round(fed / 60000)} min`);
+expect(threw === 0 && S.p.carry.stick === 3 && Math.abs(fed - 2 * DATA.placeables.campfire.fire.secondsEach * 1000) < 30000, 'a fuel called constructor feeds the fire with 2 of its usual fuel, sticks, and nothing odd', `${S.p.carry.stick} sticks left, fuel up ${Math.round(fed / 60000)} min`);
 
 console.log('H. reports about players: limited per address, however many times it reconnects');
 S = await start(LAYOUT());

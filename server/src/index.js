@@ -352,7 +352,7 @@ export class World extends DurableObject {
           } else {
             if (!p.leftAt) { p.leftAt = now; p.simAt = now; p.home = [p.x, p.z]; p.log = { ate: 0, drank: 0, picked: 0 }; this.touch(p); }
             if (p.asleep) { // asleep: needs are caught up when they come back (nothing to save until they wake or go)
-              if (now - p.sleepAt > AWAY.goneAfterDays * 24 * HOUR) { // asleep too long (3 days away in all): gone, their things left where they slept
+              if (now - p.sleepAt > AWAY.goneAfterDays * 24 * HOUR) { // asleep too long (7 days away in all): gone, their things left where they slept
                 p.state = 'gone'; p.diedAt = now;
                 this.note('world', `${p.name} was away too long and is gone`);
                 this.spill(p);

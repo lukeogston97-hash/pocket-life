@@ -3,6 +3,7 @@ import json, os
 from lib import world, join, idle, text, shown, shot, expect, HERE, HTTP_PORT, TIPS
 
 KNIFE_USES = json.load(open(os.path.join(HERE, '..', '..', 'test', 'game-data.json')))['items']['knife']['tool']['uses']
+STICK_MS = json.load(open(os.path.join(HERE, '..', '..', 'test', 'game-data.json')))['placeables']['campfire']['fire']['secondsEach'] * 1000
 
 # Make something on the craft mat (0.1.8) the way a player does: open the inventory and its Craft, tap each thing in the bag to
 # put it on the mat, then Make. things: [(kind, how many)]. Returns what the mat said before Make (its name line).
@@ -465,7 +466,7 @@ async def campfire():
         expect(not await a.evaluate(f'__pl.isLit(__pl.placed.get({fid}))'), "it won't light with no fuel")
         await a.evaluate(f"__pl.queueTask({{ type: 'tend', id: {fid}, do: 'add', n: 5 }})"); await idle(a, 15); await a.wait_for_timeout(800)
         fuel = await a.evaluate(f'__pl.fuelLeft(__pl.placed.get({fid}))')
-        expect(abs(fuel - 5 * 300000) < 2000 and await a.evaluate('__pl.you.carry.stick') == 1, f'5 sticks give 25 minutes of fuel ({fuel})')
+        expect(abs(fuel - 5 * STICK_MS) < 2000 and await a.evaluate('__pl.you.carry.stick') == 1, f'5 sticks give {5 * STICK_MS // 60000} minutes of fuel ({fuel})')
         acts = await a.evaluate(f"__pl.placedActions(__pl.placed.get({fid})).map((x) => (x.foot ? '_' : '') + x.label + (x.sub ? ':' + x.sub.map((y) => y.label).join('|') : ''))")
         expect(acts[0] == 'Light fire' and 'Add fuel:Add 1 stick' in acts and acts[-2:] == ['_Inspect', '_Walk here'], f'campfire menu: Light fire first, a fuel list, Inspect and Walk here along the bottom ({acts})')
         fuel_b = await b.evaluate(f'__pl.fuelLeft(__pl.placed.get({fid}))')

@@ -36,7 +36,7 @@ function timeLeft(ms) {
   if (ms <= 0) return 'none';
   if (m < 60) return `${m} min`;
   const h = Math.floor(m / 60);
-  if (h >= 24) return `${Math.floor(h / 24)} d${h % 24 ? ` ${h % 24} h` : ''}`; // days for a claim's fire (holds 3 days)
+  if (h >= 24) return `${Math.floor(h / 24)} d${h % 24 ? ` ${h % 24} h` : ''}`; // days for a claim's fire (holds 7 days)
   return `${h} h${m % 60 ? ` ${m % 60} min` : ''}`;
 }
 function fireState(th) {

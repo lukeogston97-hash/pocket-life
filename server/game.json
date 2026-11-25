@@ -398,7 +398,7 @@
     "eatBelow": 60,
     "drinkBelow": 55,
     "sleepAfterHours": 24,
-    "goneAfterDays": 2,
+    "goneAfterDays": 6,
     "graveHours": 24,
     "idleMinutes": 3,
     "near": "pond",
@@ -472,12 +472,12 @@
       "solid": 0.55,
       "fire": {
         "fuel": "stick",
-        "secondsEach": 300,
+        "secondsEach": 900,
         "maxFuel": 24,
-        "maxHours": 72,
+        "maxHours": 168,
         "otherFuels": {
-          "log": 28800,
-          "twig": 120
+          "log": 43200,
+          "twig": 300
         },
         "lightSeconds": 3
       },

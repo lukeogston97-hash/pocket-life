@@ -6,7 +6,7 @@
 // - every person: needs, inventory and where they are, kept here so they stay in the world 24/7
 // - while a player is away their person looks after themselves (wanders, eats, picks berries, drinks),
 //   after a day away they lie down asleep (hunger and thirst drop slowly to away.asleepFloor, they can't die),
-//   and after away.goneAfterDays asleep they're gone (3 days away in all)
+//   and after away.goneAfterDays asleep they're gone (7 days away in all)
 // - at most G.maxPlaying people play at once; anyone else waits in line on the main menu
 // - chat, reports, feedback and the admin player's tools
 import WORLDS from '../worlds.json'; // minimum version for each link

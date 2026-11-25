@@ -8,7 +8,7 @@
 // leave; the leader can take people out and rename it. If the leader leaves or is gone, the member who joined first leads
 // and the fire burns on; when the last one leaves, its fire goes out. Up to societies.maxMembers (game-data.json, also a
 // live setting). Membership is by player (who), so it stays when your person dies and you start again; a player with no
-// person in the world for 3 days (the away timer) leaves. Away members stay in the claim and feed its fire from their bags
+// person in the world for 7 days (the away timer, SOC_GONE_MS) leaves. Away members stay in the claim and feed its fire from their bags
 // (away.js, via claimOf), so a society lasts only while someone keeps playing. Its name shows under members' name tags
 // once there are 2 or more. A claim is th.claim 's:<id>'. Kept in storage under 'societies' { next, list }, saved only
 // when something changes. These are methods of the World (index.js adds them to it), so `this` is the world.
@@ -90,7 +90,7 @@ export const societiesMethods = {
     const m = s.members.find((x) => x.who === who);
     if (!m) return;
     const name = this.memberName(m);
-    this.note('world', how === 'gone' ? `${name} left ${s.name} (not in the world for 3 days)` : how === 'removed' ? `${name} was taken out of ${s.name}` : `${name} left ${s.name}`);
+    this.note('world', how === 'gone' ? `${name} left ${s.name} (not in the world for ${Math.round(SOC_GONE_MS / (24 * HOUR))} days)` : how === 'removed' ? `${name} was taken out of ${s.name}` : `${name} left ${s.name}`);
     if (s.members.length === 1) { this.socEnd(s, `${s.name} has ended and its fire is out`); await this.saveSocs(); return; }
     s.members = s.members.filter((x) => x.who !== who);
     const newLeader = s.leader === who;
