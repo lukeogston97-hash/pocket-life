@@ -151,6 +151,10 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 // The world has one clock for everyone: settings.worldTimeZone (Darwin time for the Oceania world). worldNow() gives
 // a Date whose UTC fields read as the time there, so the date, the time and day and night are the same on every phone.
 const WORLD_TZ = SETTINGS.worldTimeZone || 'Australia/Darwin';
+// The world's clock is its own, not your phone's (someone in Sydney would think the game's clock was wrong), so the Menu
+// says where it's from: "Australia/Darwin" reads as Darwin.
+const WORLD_PLACE = WORLD_TZ.split('/').pop().replace(/_/g, ' ');
+$('pauseNote').textContent = `The world keeps going while this is open. It runs on ${WORLD_PLACE} time.`;
 const tzFormats = new Map();
 // the time now in a time zone (the world's own unless another is asked for), as a Date whose UTC fields read as that time
 function worldNow(tz = WORLD_TZ) {

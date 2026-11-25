@@ -212,7 +212,7 @@ setTimeout(function () { if (!window.__bootStarted) window.__bootFail("This brow
         <button id="menuSettingsBtn" type="button" class="menu-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Settings</button>
         <button id="menuFeedbackBtn" type="button" class="menu-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/></svg>Feedback</button>
       </div>
-      <div class="menu-foot"><span class="net-line" id="menuNet" data-state="connecting"><i class="net-dot" aria-hidden="true"></i><span id="menuNetText">Connecting…</span></span><span id="menuVer" class="menu-ver">v<span class="ver"></span></span></div>
+      <div class="menu-foot"><span class="net-line" id="menuNet" data-state="connecting"><i class="net-dot" aria-hidden="true"></i><span id="menuNetText">Connecting…</span></span><span id="menuVer" class="menu-ver">Early access · v<span class="ver"></span></span></div>
     </div>
   </section>
 
@@ -240,7 +240,7 @@ setTimeout(function () { if (!window.__bootStarted) window.__bootFail("This brow
   <div id="pause" class="modal" hidden>
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="pauseTitle">
       <h2 id="pauseTitle">Menu</h2>
-      <p>The world keeps going while this is open.</p>
+      <p id="pauseNote">The world keeps going while this is open.</p>
       <div class="pause-list">
         <button id="resumeBtn" type="button" class="action-btn">Resume</button>
         <div class="menu-row">

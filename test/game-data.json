@@ -1,6 +1,6 @@
 {
   "version": "0.1.10",
-  "build": 2,
+  "build": 3,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -1046,7 +1046,9 @@
       "improved": [
         "Making your person now fits a phone held sideways",
         "The game says when it can't reach the world, and what to check",
-        "The first load is a little quicker"
+        "The first load is a little quicker",
+        "The Menu says the world runs on Darwin time",
+        "The main menu is easier on your battery"
       ],
       "fixed": [
         "Tapping something another player had just picked up could cause an error",
@@ -1098,7 +1100,7 @@
       "version": "0.1.6",
       "date": "2026-11-24",
       "improved": [
-        "Claims and societies are now just called camps",
+        "Your campfire's land and your group are now one thing, called your camp",
         "Clearer wording all over, and tap menus now match the task list"
       ],
       "fixed": [
@@ -1111,22 +1113,22 @@
       "version": "0.1.5",
       "date": "2026-11-24",
       "improved": [
-        "Lighting your first campfire starts your society, and it ends when that fire goes out",
-        "The leader can rename the society in Menu > Society",
-        "Only the leader can put the society's fire out",
-        "A society's name shows under name tags once it has 2 or more people"
+        "Lighting your first campfire starts your camp, and it ends when that fire goes out",
+        "The leader can rename the camp in Menu > Camp",
+        "Only the leader can put the camp's fire out",
+        "A camp's name shows under name tags once it has 2 or more people"
       ]
     },
     {
       "version": "0.1.4",
       "date": "2026-11-24",
       "added": [
-        "Societies: groups of players who share one claim, and the leader invites people nearby",
-        "A society shares one claim: its leader's lit campfire. Members can use everything in it",
-        "Your society shows under your name"
+        "Camps: groups of players who share one campfire's land. The leader invites people nearby",
+        "A camp shares the land round its leader's lit campfire. Members can use everything there",
+        "Your camp shows under your name"
       ],
       "improved": [
-        "Away members stay in their society's claim and keep its fire going"
+        "Away members stay in their camp and keep its fire going"
       ]
     },
     {
@@ -1178,7 +1180,7 @@
         "Rest and Stamina, sleeping, and one Darwin clock for everyone",
         "Crafting and stone tools: chop trees, break rocks and cut tall grass for twine",
         "Campfires, recipes you find as you go, and a grid inventory",
-        "Claims: your lit campfire makes the land round it yours",
+        "Camps: your lit campfire makes the land round it yours",
         "Fishing with a spear at the pond, and cooking fish on a campfire",
         "Drag items out of the Inventory, and on a computer loose items glow under the mouse"
       ],

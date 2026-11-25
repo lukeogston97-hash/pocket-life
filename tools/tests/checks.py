@@ -53,6 +53,8 @@ async def menu():
         a = await W.page('menuA')
         expect(await shown(a, '#mainMenu'), 'main menu shows first')
         expect(await text(a, '#playSub') == 'Make your person', 'Play says Make your person')
+        ver = await text(a, '#menuVer')
+        expect(ver.startswith('Early access · v0.'), f'the main menu says Early access by the version ({ver})')
         await shot(a, 'menu')
         await a.click('#menuSettingsBtn'); expect(await shown(a, '#settings'), 'Settings opens'); await a.click('#settingsClose')
         # Settings > Privacy and rules (0.1.10): the words of privacy.html, shown in the game
@@ -85,6 +87,8 @@ async def menu():
         seen = await b.evaluate("document.getElementById('regions').textContent")
         expect('1 person' in seen, f'another phone on the menu sees 1 person in the world picker ({seen})')
         await a.click('#menuBtn'); await a.wait_for_timeout(300); await shot(a, 'pause')
+        note = await text(a, '#pauseNote')
+        expect(note == 'The world keeps going while this is open. It runs on Darwin time.', f'the Menu says whose clock the world runs on ({note})')
         # the pause menu has What's new, Settings and Feedback too, each closed with the same Close link
         await a.click('#pauseNewsBtn'); expect(await shown(a, '#news') and not await shown(a, '#pause'), "What's new opens from the pause menu"); await a.click('#newsClose')
         await a.click('#menuBtn'); await a.click('#pauseSettingsBtn'); expect(await shown(a, '#settings'), 'Settings opens from the pause menu'); await a.click('#settingsClose')
@@ -1843,6 +1847,29 @@ async def sideways():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
+async def menu_rest():
+    """The main menu draws about 30 times a second once the sharpness has settled; making a person and the world draw every frame."""
+    measure = """(ms) => new Promise((done) => { let n = 0; const f0 = __pl.renderer.info.render.frame, t0 = performance.now();
+      (function tick() { n++; if (performance.now() - t0 < ms) requestAnimationFrame(tick); else done({ frames: n / (ms / 1000), drawn: (__pl.renderer.info.render.frame - f0) / (ms / 1000), rest: __pl.speed.rest, step: __pl.speed.step }); })(); })"""
+    async with world() as W:
+        # a tiny screen on Low, so this computer's software 3D can keep up with the screen (60 frames a second)
+        pg = await W.page('rest', 96, 96, touch=False)
+        await pg.evaluate("document.querySelector('[data-gfx=low]').click()"); await pg.wait_for_timeout(1500)
+        m = await pg.evaluate(measure, 4000)
+        fast = m['frames'] >= 45
+        if not fast: print(f"  (this computer only manages {m['frames']:.0f} frames a second here, too slow to see the main menu resting: only the rest is checked)")
+        expect(m['rest'] and (not fast or 20 <= m['drawn'] <= m['frames'] * 0.75), f"the main menu's world is drawn about 30 times a second ({m['drawn']:.0f} of {m['frames']:.0f} frames)")
+        await pg.evaluate("document.getElementById('playBtn').click()"); await pg.wait_for_timeout(1500)  # (the menu doesn't fit a screen this small: clicked from inside)
+        c = await pg.evaluate(measure, 2000)
+        expect(not c['rest'] and c['drawn'] >= c['frames'] * 0.9, f"making a person is drawn every frame ({c['drawn']:.0f} of {c['frames']:.0f})")
+        await pg.evaluate("document.querySelector('.start-btn').click()")
+        await pg.wait_for_function("document.getElementById('mainMenu').hidden && !document.getElementById('app').classList.contains('is-creating')", timeout=30000)
+        w = await pg.evaluate(measure, 3000)
+        expect(not w['rest'] and w['drawn'] >= w['frames'] * 0.9, f"and so is the world ({w['drawn']:.0f} of {w['frames']:.0f})")
+        expect(w['step'] == 0, 'resting never made the picture less sharp')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
 async def server_tests():
     """The server's own code, tested with no browser (quick): the admin's fire, claim, Log, rename and message tools, live item numbers, that an old admin flag gives a player nothing, that things which aren't in the world can't be chopped, mined or picked, societies, and task lists carried on while away."""
     import subprocess
@@ -1855,7 +1882,7 @@ async def server_tests():
         expect(r.returncode == 0, f'{f}: {last[:160]}')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'tasks_away': tasks_away, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'craft_mat': craft_mat, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'loading': loading, 'sideways': sideways, 'server_tests': server_tests}
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'tasks_away': tasks_away, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'craft_mat': craft_mat, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'loading': loading, 'sideways': sideways, 'menu_rest': menu_rest, 'server_tests': server_tests}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}
