@@ -5,7 +5,8 @@
 // (trees, rocks, berry bushes, campfires, loose items) are moved, regrown and removed from their tap menus.
 // These are methods of the World (index.js adds them to it), so `this` is the world.
 import { FILTER, G, starText, MINUTE, HOUR, clean, blank, num, kindOk, addCarry, takeCarry, ageOf, pickRandom, laidNow } from './shared.js';
-import { fireRule } from './placed.js';
+import { fireRule, PLACEABLES } from './placed.js';
+import { placeSnap } from './rules.js';
 import { CLAIM_KIND } from './claims.js';
 import { SOC, freshSocieties } from './societies.js';
 
@@ -381,7 +382,7 @@ export const adminMethods = {
           if (!th) return done("It's gone");
           const now = Date.now();
           if ([...this.persons.values()].some((o) => this.alive(o) && o.sit && o.sit.fire === th.id && o.sit.until > now)) return done('Someone is sitting by it');
-          Object.assign(th, { x, z });
+          Object.assign(th, placeSnap(x, z, th.rot, PLACEABLES[th.kind])); // onto the placing grid (rules.js)
           await this.save();
           this.send({ t: 'unplaced', id: th.id }, null);
           this.sendPlaced(th);

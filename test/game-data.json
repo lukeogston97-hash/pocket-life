@@ -1,6 +1,6 @@
 {
   "version": "0.1.17",
-  "build": 2,
+  "build": 3,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -8,6 +8,7 @@
     "craftSearchFrom": 15,
     "walkSpeed": 2.2,
     "worldSize": 100,
+    "placeMaxRise": 0.5,
     "needsSpeed": 1,
     "autoName": false,
     "respawnMinutes": 5,
@@ -567,6 +568,11 @@
       "buildVerb": "Building the campfire",
       "craftLabel": "Cook",
       "solid": 0.55,
+      "size": [
+        2,
+        2
+      ],
+      "keepClear": 1.5,
       "fire": {
         "fuel": "stick",
         "secondsEach": 900,
@@ -946,7 +952,7 @@
     "plants": "Plants you cut, like tall grass. Each kind is laid out by itself: count clumps (nearStart of them near the start), on its own random numbers (seed) so nothing else moves. action is the tap menu button, verb what shows while doing it. gives goes into your inventory each cut. seconds is how long by hand, toolSeconds with the tool (each use wears the tool). regrowHours [lo, hi]: a cut clump grows back at a random time in between. look: blades per clump, height, colour and tips (the seed heads). Run tools/worlds.py test-build after changing plants.",
     "regions": "The worlds (regions) on the main menu, under Play. Each is its own world on its own clock (timeZone). open: false shows it as Coming soon; tapping it shows this world's view at that region's time of day. For now only one world exists, so only one region can be open, and its timeZone should match settings.worldTimeZone.",
     "night": "Night in the world's clock (settings.worldTimeZone), from the hour 'from' to the hour 'to'. Sleeping at night fills Rest at whileAsleepAtNight instead of whileAsleep. People away or on autopilot go to sleep when night starts and get up in the morning. The server uses the same numbers.",
-    "placeables": "Things you place in the world and build, like the campfire. An item with places (the id of an entry here) gets a Place button in the Inventory: you pick a spot, your person puts it down as an unbuilt site, then builds it (buildSeconds; buildVerb shows while building). solid is how big it is for walking round (metres). fire makes it a fire you can light and put out: fuel is the item you add (sticks), secondsEach is how long one burns (900 = 15 minutes), otherFuels are more items it burns with their seconds each (log: 43200, 12 hours; twig: 300, 5 minutes), maxHours is the most it holds in hours of burning (168 = 7 days, so a claim's fire can last the 7-day away timer; without maxHours, maxFuel counts it in fuel items), lightSeconds how long lighting takes. It only burns while lit, keeps burning while players are away, and goes out by itself when the fuel runs out. seats: people can sit round it (count places, distance metres from the middle). Sitting is a task with no set time: your person sits until you stand up, do something else or the fire goes out, and keeps sitting while you're away. Run tools/worlds.py test-build after changing placeables. craftLabel names the tap menu list of recipes made there (recipes with near), like Cook.",
+    "placeables": "Things you place in the world and build, like the campfire. An item with places (the id of an entry here) gets a Place button in the Inventory: you pick a spot, your person puts it down as an unbuilt site, then builds it (buildSeconds; buildVerb shows while building). solid is how big it is for walking round (metres). size is the squares it takes on the placing grid ([across, deep]; each square is half a metre, 2 x 2 if left out), and it can be turned 4 ways. keepClear: other placed things stay at least this many metres from its square (the campfire keeps room for its seats); without it things can go side by side. The ground under a placed thing is levelled (game/land.js); settings.placeMaxRise is the most the ground may rise and fall (metres) under a spot for something to go there. fire makes it a fire you can light and put out: fuel is the item you add (sticks), secondsEach is how long one burns (900 = 15 minutes), otherFuels are more items it burns with their seconds each (log: 43200, 12 hours; twig: 300, 5 minutes), maxHours is the most it holds in hours of burning (168 = 7 days, so a claim's fire can last the 7-day away timer; without maxHours, maxFuel counts it in fuel items), lightSeconds how long lighting takes. It only burns while lit, keeps burning while players are away, and goes out by itself when the fuel runs out. seats: people can sit round it (count places, distance metres from the middle). Sitting is a task with no set time: your person sits until you stand up, do something else or the fire goes out, and keeps sitting while you're away. Run tools/worlds.py test-build after changing placeables. craftLabel names the tap menu list of recipes made there (recipes with near), like Cook.",
     "mining": "Mining with a tool (tool: the item you need, the stone pickaxe). rock: breaking a small rock (seconds, and what falls: gives); the rock is then gone, but one broken rock comes back by a boulder every rockBackHours. boulder: mining a boulder; gives can be a range like [3, 5]. A mined boulder stays (it can't be removed) and can be mined again after regrowDays real days (the same as trees). Each hit wears the tool by one use and takes energyCosts.chop energy. The server uses the same rules.",
     "liveSettings": "Numbers the admin can change live from the Admin panel (Settings tab) without a new build. Each one's id is wired up in code (server/src/live.js and test/game/admin.js); name, group, unit, min, max and step are just how it shows. The normal value still comes from the rest of this file (settings, chopping, mining, sources, stats); a live change wins until the admin taps Reset.",
     "testNames": "Only for testing: with settings.autoName on, Make your person fills in a random name from this list. autoName is off in the real game, so players type their own name (the checks in tools/tests switch it on for themselves).",
@@ -1058,6 +1064,10 @@
       "fixed": [
         "Tools are held in the right hand, and only that hand swings when you use them",
         "Feet no longer sink into the ground when bending, kneeling or standing on a slope"
+      ],
+      "improved": [
+        "Campfires snap to a half-metre grid and turn 4 ways with the Turn button",
+        "The ground under placed things is levelled so nothing sits half in a hill"
       ]
     },
     {

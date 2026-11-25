@@ -2013,6 +2013,46 @@ async def tips():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
+async def placing_grid():
+    """The placing grid (0.1.17): spots snap to half-metre squares, Turn turns a quarter, the ground under it is levelled
+    (the same on every phone), a second campfire keeps its room, and nothing nearby floats."""
+    async with world(CAMPKIT=1) as W:
+        a = await W.page('gridA'); await join(a)
+        b = await W.page('gridB'); await join(b)
+        send = "(m) => window.__sock.send(JSON.stringify(m))"
+        await a.evaluate(f"({send})({{ t: 'craft', id: 'campfire' }})"); await a.wait_for_timeout(800)
+        expect(await a.evaluate('__pl.you.carry.campfire') == 1, 'made a campfire')
+        spot = await a.evaluate("""(() => { const p = __pl.player.position;
+          for (let r = 2.5; r < 9; r += 0.5) for (let k = 0; k < 16; k++) { const x = Math.round((p.x + Math.cos(k / 16 * 6.28) * r) * 2) / 2, z = Math.round((p.z + Math.sin(k / 16 * 6.28) * r) * 2) / 2;
+            if (!__pl.cantPlaceAt(x, z, 'campfire') && !__pl.cantPlaceAt(x + 2.5, z, 'campfire')) return [x, z]; } return null; })()""")
+        expect(spot is not None, f'an open spot with room for two ({spot})')
+        await a.evaluate("__pl.startPlacing('campfire')")
+        await a.evaluate(f"__pl.movePlacing({spot[0]} + 0.13, {spot[1]} - 0.11)")
+        got = await a.evaluate("[__pl.placing.x, __pl.placing.z, __pl.placing.rot]")
+        expect(abs(got[0] - spot[0]) < 1e-6 and abs(got[1] - spot[1]) < 1e-6, f'a tap just off a grid point snaps onto it ({got} for {spot})')
+        expect(abs(round(got[2] / 1.5708) * 1.5708 - got[2]) < 0.01, f'it faces one of 4 ways ({got[2]})')
+        await a.evaluate("__pl.turnPlacing()")
+        turned = await a.evaluate("__pl.placing.rot")
+        expect(abs(((turned - got[2]) % 6.2832) - 1.5708) < 0.01, f'Turn turns it a quarter ({got[2]} to {turned})')
+        expect(await shown(a, '#placeTurn'), 'the place bar has a Turn button')
+        await a.evaluate("__pl.finishPlacing()"); await idle(a, 40); await a.wait_for_timeout(1500)
+        th = await a.evaluate("[...__pl.placed.values()].map((t) => [t.x, t.z, t.rot, t.built])")
+        expect(len(th) == 1 and abs(th[0][0] - spot[0]) < 1e-6 and abs(th[0][1] - spot[1]) < 1e-6 and th[0][3], f'put down and built on the grid ({th})')
+        flat = """(() => { const t = [...__pl.placed.values()][0], y = t.view.position.y; let most = 0;
+          for (let i = -0.5; i <= 0.5; i += 0.25) for (let j = -0.5; j <= 0.5; j += 0.25) most = Math.max(most, Math.abs(__pl.groundY(t.x + i, t.z + j) - y));
+          return [y, most]; })()"""
+        fa, fb = await a.evaluate(flat), await b.evaluate(flat)
+        expect(fa[1] < 0.06, f'the ground under it is level (off by {fa[1]:.3f} m at most)')
+        expect(abs(fa[0] - fb[0]) < 1e-4 and fb[1] < 0.06, f'and the same on the other phone ({fa[0]:.3f}, {fb[0]:.3f})')
+        why = await a.evaluate(f"[__pl.cantPlaceAt({spot[0]} + 1, {spot[1]}, 'campfire'), __pl.cantPlaceAt({spot[0]} + 2.5, {spot[1]}, 'campfire')]")
+        expect(why[0] == 'Too close to another one' and why[1] is None, f'a second campfire keeps room for the seats: 1 m away no, 2.5 m away yes ({why})')
+        floats = await a.evaluate("""(() => { let worst = 0; const t = [...__pl.placed.values()][0];
+          for (const tr of __pl.trees) if (Math.hypot(tr.x - t.x, tr.z - t.z) < 6) worst = Math.max(worst, Math.abs(__pl.groundY(tr.x, tr.z) - __pl.groundY(tr.x, tr.z, __pl.landAsMade)));
+          return worst; })()""")
+        expect(floats < 0.02, f'trees nearby keep their ground ({floats:.3f} m)')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
 async def placed_kinds():
     """A second kind of placed thing, made from data alone (a drying rack that isn't in the game): it's drawn as its own item, not as a campfire, and can be placed and built. The campfire is put together as before."""
     game = json.load(open(os.path.join(HERE, '..', '..', 'server', 'game.json')))
@@ -2124,7 +2164,7 @@ async def leaving():
         expect(await text(a, '#playSub') == 'Make your person', 'and the old person is gone: Play says Make your person')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'tasks_away': tasks_away, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'craft_mat': craft_mat, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'loading': loading, 'sideways': sideways, 'menu_rest': menu_rest, 'tips': tips, 'placed_kinds': placed_kinds, 'leaving': leaving, 'server_tests': server_tests}
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'tasks_away': tasks_away, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'craft_mat': craft_mat, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'loading': loading, 'sideways': sideways, 'menu_rest': menu_rest, 'tips': tips, 'placed_kinds': placed_kinds, 'placing_grid': placing_grid, 'leaving': leaving, 'server_tests': server_tests}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

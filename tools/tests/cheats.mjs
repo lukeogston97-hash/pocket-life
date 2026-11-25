@@ -190,7 +190,7 @@ expect(await kept() === 60 && n60 === 60 - 8, 'and 60 an hour from everyone is t
 console.log('I. placing: not in the water, off the land, or in the middle of a tree or rock (it only changed how things look, but still)');
 S = await start(LAYOUT());
 S.p.carry = { campfire: 12 };
-const placeAt = async (x, z) => { // the person stands a metre away and asks to put a campfire at x, z
+const placeAt = async (x, z) => { // the person stands a metre away and asks to put a campfire at x, z (spots on the placing grid, 0.1.17)
   S.p.x = x + 1; S.p.z = z;
   const got = await S.ask({ t: 'place', kind: 'campfire', x, z, rot: 0 });
   const no = got.find((m) => m.t === 'placeNo');
@@ -199,9 +199,9 @@ const placeAt = async (x, z) => { // the person stands a metre away and asks to 
 const POND = { x: -5.6, z: -0.9 };
 expect(await placeAt(POND.x, POND.z) === 'Too close to the water', 'the middle of the pond: Too close to the water');
 expect(await placeAt(POND.x + 5.5, POND.z) === 'Too close to the water', 'the water\'s edge: the same');
-expect(await placeAt(POND.x + 7.5, POND.z) === 'placed', 'two metres back from the water, where the game lets you: placed');
+expect(await placeAt(2, -1) === 'placed', 'two metres back from the water, where the game lets you: placed');
 expect(await placeAt(10, 10) === 'Not enough room here', 'the middle of tree 0: Not enough room here');
-expect(await placeAt(5.3, 5) === 'Not enough room here', 'on rock 0: the same');
+expect(await placeAt(5, 5) === 'Not enough room here', 'on rock 0: the same');
 expect(await placeAt(3, 3.2) === 'Not enough room here', 'in bush 0: the same');
 expect(await placeAt(48.2, 0) === 'Too close to the forest', 'past the edge of the land: Too close to the forest');
 expect(await placeAt(30, 30) === 'placed', 'open ground: placed, as before');
@@ -211,7 +211,7 @@ expect(await placeAt(5, 5) === 'placed', 'where rock 0 was, once it has been bro
 S.w.world.trees = { 1: ['gone', Date.now()] };
 expect(await placeAt(12, 10) === 'placed', 'where tree 1 was, once its stump has been dug out: placed');
 S.w.world.moved = { 'tree:0': [40, 40] };
-expect(await placeAt(40.2, 40) === 'Not enough room here' && await placeAt(10, 10.3) === 'placed', 'a tree the admin moved: no room where it stands now, room where it was');
+expect(await placeAt(40, 40) === 'Not enough room here' && await placeAt(9, 10) === 'placed', 'a tree the admin moved: no room where it stands now, room where it was');
 S = await start(null);
 S.p.carry = { campfire: 3 };
 expect(await placeAt(20, 20) === 'placed' && await placeAt(POND.x, POND.z) === 'Too close to the water', 'a world with no layout yet: open ground is fine, the pond is still the pond');

@@ -93,6 +93,43 @@ export function seatSpotOf(th, seats, k) {
   return [th.x + Math.sin(a) * d, th.z + Math.cos(a) * d];
 }
 
+/* ---------- the placing grid (0.1.17) ----------
+   Placed things go on an invisible grid of PLACE_GRID metre squares and face one of 4 ways. Each placeable's size is
+   in squares ([across, deep], from game-data.json; 2 x 2 if it doesn't say). Things can sit side by side, but nothing
+   comes within keepClear metres of one that has it (a campfire keeps room round it for its seats). */
+export const PLACE_GRID = 0.5;
+const placeSizeOf = (rule) => (Array.isArray(rule && rule.size) && rule.size.length === 2 ? rule.size.map((n) => Math.max(1, Math.round(Number(n) || 1))) : [2, 2]);
+// the nearest spot on the grid, and the nearest of the 4 ways to face
+export function placeSnap(x, z, rot, rule) {
+  const q = ((Math.round((Number(rot) || 0) / (Math.PI / 2)) % 4) + 4) % 4;
+  const [w, d] = placeSizeOf(rule), [across, deep] = q % 2 ? [d, w] : [w, d];
+  const snap = (v, n) => Math.round((Math.round((Number(v) || 0) / PLACE_GRID - n / 2) + n / 2) * PLACE_GRID * 100) / 100;
+  return { x: snap(x, across), z: snap(z, deep), rot: Math.round(q * (Math.PI / 2) * 100) / 100 };
+}
+// a placed thing's square: { x, z, rot, hw, hd } (half its size across and deep, before turning)
+export function placeRect(th, rule) {
+  const [w, d] = placeSizeOf(rule);
+  return { id: th.id, x: Number(th.x) || 0, z: Number(th.z) || 0, rot: Number(th.rot) || 0, hw: (w * PLACE_GRID) / 2, hd: (d * PLACE_GRID) / 2 };
+}
+// the gap between two squares in metres (below 0 when they overlap). Turned ones count as the box round them.
+export function placeGap(a, b) {
+  const box = (f) => { const c = Math.abs(Math.cos(f.rot)), s = Math.abs(Math.sin(f.rot)); return [c * f.hw + s * f.hd, s * f.hw + c * f.hd]; };
+  const [ax, az] = box(a), [bx, bz] = box(b);
+  const gx = Math.abs(a.x - b.x) - ax - bx, gz = Math.abs(a.z - b.z) - az - bz;
+  if (gx < 0 && gz < 0) return Math.max(gx, gz);
+  return Math.hypot(Math.max(0, gx), Math.max(0, gz));
+}
+// the first placed thing in the way of putting `kind` at th (null if none): rules is the placeables from game-data.json
+export function placeClash(list, th, kind, rules) {
+  const me = placeRect(th, rules[kind]), myClear = Number((rules[kind] || {}).keepClear) || 0;
+  for (const o of list) {
+    if (o.id != null && o.id === th.id) continue;
+    const need = Math.max(myClear, Number((rules[o.kind] || {}).keepClear) || 0);
+    if (placeGap(me, placeRect(o, rules[o.kind])) < need - 0.001) return o;
+  }
+  return null;
+}
+
 /* ---------- crafting on the craft mat (0.1.8): put things together and see what they make ---------- */
 // everything a recipe wants on the mat: what it uses up (needs) and the tools it keeps (keeps, like a sharp stone)
 export function recipeWants(r) {

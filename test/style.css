@@ -116,9 +116,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .auto-chip[hidden] { display: none; }
 /* choosing where to put a campfire: a bar along the bottom with Cancel and Place */
 /* (width: max-content: a bar centred with left: 50% otherwise only gets half the screen, and the note squeezes to a word a line) */
-.place-bar { position: absolute; z-index: 4; left: 50%; bottom: calc(68px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: flex; align-items: center; gap: 8px;
+.place-bar { position: absolute; z-index: 4; left: 50%; bottom: calc(68px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: flex; align-items: center; gap: 6px;
   width: max-content; max-width: calc(100% - 24px); padding: 6px 6px 6px 15px; border-radius: 999px; font: 700 13px var(--font-ui); white-space: nowrap; }
 .place-bar span { overflow: hidden; text-overflow: ellipsis; margin-right: 4px; white-space: normal; line-height: 1.25; } /* a longer line (about claims) wraps onto two */
+.place-bar .small-btn { padding: 0 11px; } .place-bar .turn-btn { padding: 0 9px; } .place-bar .turn-btn svg { width: 18px; height: 18px; display: block; } /* Turn: a quarter turn (0.1.17) */
 .place-bar[hidden], .placing .queue, .is-menu .place-bar, .is-creating .place-bar { display: none; }
 
 /* things over the world: name tags, speech bubbles, little notes, "+1 Stick" */

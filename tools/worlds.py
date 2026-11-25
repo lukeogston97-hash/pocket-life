@@ -158,7 +158,7 @@ def server_files(d):
         'mining': d.get('mining', {}),
         # things you place and build (the campfire): which item places them, how they burn, where people sit
         'placeables': {k: {'item': next((i for i, it in d['items'].items() if it.get('places') == k), k), 'buildSeconds': v.get('buildSeconds', 10),
-                           'solid': v.get('solid', 0.5), 'fire': v.get('fire'), 'seats': v.get('seats')} for k, v in d.get('placeables', {}).items()},
+                           'solid': v.get('solid', 0.5), 'size': v.get('size'), 'keepClear': v.get('keepClear'), 'fire': v.get('fire'), 'seats': v.get('seats')} for k, v in d.get('placeables', {}).items()},
         # numbers the admin can change live (Admin > Settings); wired up in server/src/live.js
         'liveSettings': d.get('liveSettings', []),
         'claims': d.get('claims', {}),

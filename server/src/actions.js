@@ -5,7 +5,7 @@
 // world (index.js), so this.send() tells everyone. Remember a spam limit in LIMITS (shared.js) for anything new.
 import { PLACEABLES, fireRule, seatAt } from './placed.js';
 import { SOC, socMax, INVITE_MS } from './societies.js';
-import { fuelRoom } from './rules.js';
+import { fuelRoom, placeSnap, placeClash } from './rules.js';
 import { FILTER, G, starText, badName, freshStats, addCarry, takeCarry, wearList, applyGives, eatOne, craft, spend, clean, blank, num, kindOk, START, REST, BERRY_SRC, cleanLook, REPORTS_KEEP, laidNow } from './shared.js';
 const SIT_OPEN = 365 * 24 * 3600000; // sitting has no set time: `until` is far off, and ends when they stand up, do something else, or the fire goes out
 
@@ -298,17 +298,17 @@ export const ACTIONS = {
   // putting a placeable down (a campfire): it starts as an unbuilt site
   place: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
     const item = G.items[m.kind], kind = item && item.places, rule = PLACEABLES[kind];
-    const x = num(m.x), z = num(m.z);
+    const { x, z, rot } = placeSnap(num(m.x), num(m.z), num(m.rot), rule); // on the placing grid (rules.js)
     const no = (why) => { reply({ t: 'placeNo', why }); reply(this.mine(p)); };
     if (!rule || !p.carry[m.kind]) return no('You need to carry it');
     if (Math.hypot(x - p.x, z - p.z) > 4) return no('Too far away');
     const cl = this.notYours(p, x, z, me.admin);
     if (cl) return no(this.claimNo(cl));
-    if (this.placedList().some((th) => Math.hypot(th.x - x, th.z - z) < (rule.solid || 0.5) + 1)) return no('Too close to something else');
+    if (placeClash(this.placedList(), { x, z, rot }, kind, PLACEABLES)) return no('Too close to something else');
     const land = me.admin ? null : this.cantPlaceAt(x, z); // not in the water, off the land or inside a tree or rock (guard.js)
     if (land) return no(land);
     takeCarry(p, m.kind, 1);
-    const th = { id: w.nextId++, kind, x, z, rot: num(m.rot), built: false, fuel: 0, lit: false, at: Date.now(), by: p.who }; // by: who built it (only they can pack it up or take it apart)
+    const th = { id: w.nextId++, kind, x, z, rot, built: false, fuel: 0, lit: false, at: Date.now(), by: p.who }; // by: who built it (only they can pack it up or take it apart)
     this.placedList().push(th);
     spend(p, 'craft', G);
     await this.save();

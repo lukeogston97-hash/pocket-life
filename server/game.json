@@ -473,6 +473,11 @@
       "item": "campfire",
       "buildSeconds": 10,
       "solid": 0.55,
+      "size": [
+        2,
+        2
+      ],
+      "keepClear": 1.5,
       "fire": {
         "fuel": "stick",
         "secondsEach": 900,
