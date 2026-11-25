@@ -12,6 +12,7 @@ THREE = os.path.join(HERE, 'node_modules', 'three')
 FONTS = os.path.join(HERE, 'node_modules', '@fontsource', 'nunito', 'files')  # the game's font, for pictures (pictures.py)
 CHROME = os.environ.get('CHROME', '/usr/bin/google-chrome')
 HTTP_PORT, WS_PORT = 8794, 8795
+TIPS = list(json.load(open(os.path.join(ROOT, 'test', 'game-data.json'), encoding='utf-8'))['tips']['words'])  # the first-steps tips (game/tips.js)
 NOISE = ('Failed to load resource', 'GPU stall', 'WebGL', 'Automatic fallback to software')
 
 
@@ -62,8 +63,9 @@ class World:
         self.browser = browser
         self.errors = []
 
-    async def page(self, pid, w=390, h=844, data=None, tz='Australia/Darwin', path='test/', slow=0, three=True, ready=True, touch=None, fonts=False, sharp=1, still=False):
+    async def page(self, pid, w=390, h=844, data=None, tz='Australia/Darwin', path='test/', slow=0, three=True, ready=True, touch=None, fonts=False, sharp=1, still=False, tips=False):
         """Open the game as a phone (pid is its random id). data: changes merged into game-data.json.
+        tips: the first-steps tips show as they do for someone new (by default this phone has seen them all, so no pill gets in a check's way).
         For the loading screen: slow holds the game's code back that many ms, three=False means three.js never arrives,
         and ready=False returns straight away instead of waiting for the world to be drawn. touch: a touch screen (by default, any narrow one).
         For pictures (pictures.py): fonts=True draws the words in the game's real font, sharp is the screen's pixel ratio, and
@@ -98,6 +100,7 @@ class World:
             await route.fulfill(response=resp, body=json.dumps(d))
         await pg.route('**/game-data.json', game_data)
         # keep the phone's id, and remember the socket and what's sent so checks can look
+        if not tips: await pg.add_init_script("localStorage.setItem('pocket-life:tips', %s);" % json.dumps(json.dumps(TIPS)))
         await pg.add_init_script("localStorage.setItem('pocket-life:pid', %s); window.__sent = []; const S = WebSocket.prototype.send;"
                                  "WebSocket.prototype.send = function (d) { window.__sock = this; try { window.__sent.push(JSON.parse(d)); } catch (e) {} return S.call(this, d); };" % json.dumps(pid))
         await pg.goto(f'http://127.0.0.1:{HTTP_PORT}/{path}?debug')

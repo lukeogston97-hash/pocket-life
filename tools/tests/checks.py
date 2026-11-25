@@ -1,6 +1,6 @@
 """The checks. Each is an async function taking nothing; run.py runs them. Add new ones at the bottom and to CHECKS."""
 import json, os
-from lib import world, join, idle, text, shown, shot, expect, HERE, HTTP_PORT
+from lib import world, join, idle, text, shown, shot, expect, HERE, HTTP_PORT, TIPS
 
 KNIFE_USES = json.load(open(os.path.join(HERE, '..', '..', 'test', 'game-data.json')))['items']['knife']['tool']['uses']
 
@@ -87,8 +87,8 @@ async def menu():
         seen = await b.evaluate("document.getElementById('regions').textContent")
         expect('1 person' in seen, f'another phone on the menu sees 1 person in the world picker ({seen})')
         await a.click('#menuBtn'); await a.wait_for_timeout(300); await shot(a, 'pause')
-        note = await text(a, '#pauseNote')
-        expect(note == 'The world keeps going while this is open. It runs on Darwin time.', f'the Menu says whose clock the world runs on ({note})')
+        note = await text(a, '#pause p')
+        expect(note == 'The world keeps going while this is open.', f'the Menu says only that the world keeps going ({note})')  # (Luke, 25 Nov 2026: nothing about Darwin time)
         # the pause menu has What's new, Settings and Feedback too, each closed with the same Close link
         await a.click('#pauseNewsBtn'); expect(await shown(a, '#news') and not await shown(a, '#pause'), "What's new opens from the pause menu"); await a.click('#newsClose')
         await a.click('#menuBtn'); await a.click('#pauseSettingsBtn'); expect(await shown(a, '#settings'), 'Settings opens from the pause menu'); await a.click('#settingsClose')
@@ -1870,6 +1870,84 @@ async def menu_rest():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
+async def tips():
+    """First-steps tips, the five Luke picked: one at a time in the pill, each once. A tip goes when you do what it says, or by itself."""
+    fast = {'show': 8, 'gap': 1, 'pace': 3}
+    HINT = "(() => { const h = document.getElementById('hint'); return h.hidden ? '' : h.textContent; })()"
+    SEEN = "JSON.parse(localStorage.getItem('pocket-life:tips') || 'null')"
+
+    async def tip(pg, starts, s=40):  # wait for the pill to say this
+        for _ in range(s * 2):
+            t = await pg.evaluate(HINT)
+            if t.startswith(starts): return t
+            await pg.wait_for_timeout(500)
+        return await pg.evaluate(HINT)
+
+    async def gone(pg, s=30):
+        for _ in range(s * 2):
+            if not await pg.evaluate(HINT): return True
+            await pg.wait_for_timeout(500)
+        return False
+
+    async def start(pg):  # Play and into the world, like join(), but the pill is left alone
+        await pg.click('#playBtn'); await pg.wait_for_timeout(1500)
+        if await pg.evaluate("!document.getElementById('creator').hidden"): await pg.click('.start-btn')
+        await pg.wait_for_function("document.getElementById('mainMenu').hidden && !document.getElementById('app').classList.contains('is-creating')", timeout=30000)
+
+    async with world() as W:
+        a = await W.page('tipsA', data={'tips': fast}, tips=True)
+        await start(a)
+        t = await tip(a, 'Double-tap')
+        expect(t == 'Double-tap the ground to walk. Tap anything to see what you can do.', f'someone new is told how to walk first ({t})')
+        box = await a.evaluate("(() => { const r = document.getElementById('hint').getBoundingClientRect(); return [r.left >= 0, r.right <= innerWidth, r.height < 60]; })()")
+        expect(all(box), f'the pill fits the phone, in two lines at most ({box})')
+        await shot(a, 'tips_walk')
+        # walking: that tip goes and the next one comes
+        for x, y in [(250, 560), (140, 600), (300, 660), (200, 720), (120, 500)]:  # some open ground
+            await a.evaluate("document.getElementById('actMenu').hidden = true"); await a.wait_for_timeout(300)
+            await a.mouse.dblclick(x, y); await a.wait_for_timeout(400)
+            if await a.evaluate('!!__pl.walk.target'): break
+        t = await tip(a, 'Tap a stick')
+        expect(t == 'Tap a stick or a stone on the ground, then Pick up.' and 'walk' in (await a.evaluate(SEEN) or []), f'after walking, how to pick things up ({t})')
+        # picking something up
+        await idle(a)
+        await a.evaluate("(() => { const p = __pl.player.position; const it = [...__pl.world.items].sort((x, y) => Math.hypot(x.x - p.x, x.z - p.z) - Math.hypot(y.x - p.x, y.z - p.z))[0]; __pl.queueTask({ type: 'pickup', id: it.id }); })()")
+        t = await tip(a, 'The rings', 90)
+        expect(t == 'The rings are your needs. Tap them to see what each one is.', f'after the first pick-up, what the rings are ({t})')
+        # tapping the rings puts the pill away at once, and nothing shows over the open rings
+        await a.click('#needs')
+        expect(not await a.evaluate(HINT), 'tapping the rings puts it away')
+        await a.wait_for_timeout(4000)
+        expect(not await a.evaluate(HINT), 'and no tip shows over the open rings')
+        await a.click('#needs')
+        t = await tip(a, 'Pick berries')
+        expect(t == 'Pick berries from a bush and eat them from your inventory. Drink at the pond.', f'then food and water ({t})')
+        await shot(a, 'tips_food')
+        # left alone, a tip goes by itself, and the next one still comes
+        expect(await gone(a), 'a tip that is not acted on goes by itself')
+        t = await tip(a, 'Open your inventory')
+        expect(t == 'Open your inventory and tap Craft to make things. Try two stones first.', f'then crafting, the last one ({t})')
+        await a.click('#bagBtn'); await a.wait_for_timeout(300)
+        expect(not await a.evaluate(HINT), 'opening the inventory puts it away')
+        await a.click('#bagClose'); await a.wait_for_timeout(6000)
+        seen = await a.evaluate(SEEN)
+        expect(seen == TIPS and len(TIPS) == 5 and not await a.evaluate(HINT), f'all five seen, and nothing more is said ({seen})')
+        # they're kept on the phone: Exit and Play again shows nothing
+        await a.click('#menuBtn'); await a.wait_for_timeout(300); await a.click('#exitBtn'); await a.wait_for_timeout(2500)
+        await start(a); await a.wait_for_timeout(6000)
+        expect(not await a.evaluate(HINT), 'each tip shows once: nothing the next time you play')
+        await a.context.close()
+        # a tip for something you've already done is never shown (this person starts with sticks and stones in their bag)
+    async with world(TESTKIT=1) as W:
+        b = await W.page('tipsB', data={'tips': {**fast, 'show': 3}}, tips=True)
+        await start(b)
+        t = await tip(b, 'Double-tap'); expect(t.startswith('Double-tap'), 'someone who already carries things still starts with walking')
+        expect(await gone(b), 'it goes')
+        t = await tip(b, 'The rings')
+        expect(t.startswith('The rings') and 'pickup' in (await b.evaluate(SEEN) or []), f'and is never told how to pick things up ({t})')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
 async def server_tests():
     """The server's own code, tested with no browser (quick): the admin's fire, claim, Log, rename and message tools, live item numbers, that an old admin flag gives a player nothing, that things which aren't in the world can't be chopped, mined or picked, societies, and task lists carried on while away."""
     import subprocess
@@ -1882,7 +1960,7 @@ async def server_tests():
         expect(r.returncode == 0, f'{f}: {last[:160]}')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'tasks_away': tasks_away, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'craft_mat': craft_mat, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'loading': loading, 'sideways': sideways, 'menu_rest': menu_rest, 'server_tests': server_tests}
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'tasks_away': tasks_away, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'craft_mat': craft_mat, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'loading': loading, 'sideways': sideways, 'menu_rest': menu_rest, 'tips': tips, 'server_tests': server_tests}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

@@ -504,7 +504,7 @@ function openBag(crafting) {
   onTheMat = {}; matGoal = null; matNew = null; matTab = 'bag';
   bagPick = null; bagDrawn = ''; craftDrawn = ''; foundDrawn = '';
   drawBag();
-  $('bag').classList.add('open'); $('bagBtn').setAttribute('aria-expanded', 'true'); hideHint();
+  $('bag').classList.add('open'); $('bagBtn').setAttribute('aria-expanded', 'true'); tipDid('bag'); hideHint();
 }
 function closeBag() {
   $('bag').classList.remove('open'); $('bagBtn').setAttribute('aria-expanded', 'false');

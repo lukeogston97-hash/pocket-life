@@ -79,7 +79,7 @@ function enterWorld() {
   applyDaylight();
   drawQueue();
   placeCamera();
-  showHint();
+  startTips(); // (tips.js)
 }
 $('sheet').addEventListener('submit', (e) => {
   e.preventDefault();
@@ -260,11 +260,15 @@ $('creatorBack').addEventListener('click', toMenu);
 $('exitBtn').addEventListener('click', () => { closePause(); toMenu(); });
 $('menuNewsBtn').addEventListener('click', () => openNews());
 $('menuFeedbackBtn').addEventListener('click', () => openFeedback());
-$('menuSettingsBtn').addEventListener('click', () => { $('settings').hidden = false; $('settingsClose').focus(); });
+function openSettings() {
+  $('settings').hidden = false;
+  $('settingsClose').focus();
+}
+$('menuSettingsBtn').addEventListener('click', openSettings);
 // the same three in the pause menu, so you don't have to leave the world for them
 $('pauseNewsBtn').addEventListener('click', () => { closePause(); openNews(); });
 $('pauseFeedbackBtn').addEventListener('click', () => { closePause(); openFeedback(); });
-$('pauseSettingsBtn').addEventListener('click', () => { closePause(); $('settings').hidden = false; $('settingsClose').focus(); });
+$('pauseSettingsBtn').addEventListener('click', () => { closePause(); openSettings(); });
 function closeSettings() { $('settings').hidden = true; }
 $('settingsClose').addEventListener('click', closeSettings);
 $('settings').addEventListener('click', (e) => { if (e.target === $('settings')) closeSettings(); });

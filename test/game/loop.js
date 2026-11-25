@@ -50,7 +50,7 @@ function frameStep() {
     controls.update();
     renderWorld(w, h, raw);
     hudTimer += raw;
-    if (hudTimer > 1) { hudTimer = 0; drawHud(); tickStats(); applyDaylight(); for (const b of berryBushes) drawBerries(b); drawPlants(); }
+    if (hudTimer > 1) { hudTimer = 0; drawHud(); tickStats(); tickTips(); applyDaylight(); for (const b of berryBushes) drawBerries(b); drawPlants(); }
   }
 }
 

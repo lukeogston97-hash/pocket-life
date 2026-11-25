@@ -240,7 +240,7 @@ setTimeout(function () { if (!window.__bootStarted) window.__bootFail("This brow
   <div id="pause" class="modal" hidden>
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="pauseTitle">
       <h2 id="pauseTitle">Menu</h2>
-      <p id="pauseNote">The world keeps going while this is open.</p>
+      <p>The world keeps going while this is open.</p>
       <div class="pause-list">
         <button id="resumeBtn" type="button" class="action-btn">Resume</button>
         <div class="menu-row">
@@ -522,7 +522,7 @@ try {
 document.documentElement.classList.remove('booting'); // the game's page is laid out now, under the loading screen
 // The game's code is kept in small files by topic (game/*.js, in this order). They share one scope, so they're
 // joined into one module here and run together, exactly as if they were one file.
-const PARTS = ['rules', 'core', 'land', 'nature', 'plants', 'world-build', 'items', 'people', 'world-items', 'you', 'needs',
+const PARTS = ['rules', 'core', 'land', 'nature', 'plants', 'world-build', 'items', 'people', 'world-items', 'you', 'needs', 'tips',
   'inventory', 'camera', 'moving', 'placeables', 'input', 'screens', 'loop', 'online', 'admin', 'others', 'society', 'admin-mode', 'start'];
 let code;
 try {

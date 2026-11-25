@@ -37,7 +37,7 @@ function buildNeeds() {
     return row;
   }));
 }
-$('needs').addEventListener('click', () => { $('needs').classList.toggle('open'); hideHint(); drawNeeds(); setTimeout(measureHud, 50); });
+$('needs').addEventListener('click', () => { $('needs').classList.toggle('open'); tipDid('rings'); hideHint(); drawNeeds(); setTimeout(measureHud, 50); });
 buildNeeds();
 function drawNeeds() {
   if (!you.stats) return;

@@ -1,6 +1,6 @@
 {
   "version": "0.1.10",
-  "build": 3,
+  "build": 4,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -935,6 +935,7 @@
     "chatFilter": "Words kept out of speech bubbles (shown as stars) and names (pick another). anywhere: caught even inside a longer word. words: only caught as a whole word (so 'class' is fine), plus endings like s, ed, ing. phrases: caught as a run of words. Numbers and symbols standing in for letters (sh1t, @ss) are caught too. The server gets a copy: tools/worlds.py test-build copies it to server/words.json. names: extra words only kept out of names, so nobody can pretend to be the admin.",
     "away": "How a person looks after themselves while their player is away (the server does this). near: 'pond' keeps them strolling round the main pond (anything else: round where you left them). wanderMin and wanderMax: how far in metres from there they stroll. strollSpeed in metres per second. While away they first carry on with what's left of their task list (the game sends it to the server, which does each task the same way: server/src/tasks.js), stopping to eat and drink as above and to sleep when tired (not just because it's night); things that have gone are skipped. Coming back, what's left of the list is back on your screen. They eat what they carry when hunger is under eatBelow, go for berries if they have none, and drink at the pond when thirst is under drinkBelow. After sleepAfterHours away they lie down asleep: hunger and thirst keep dropping slowly (the asleep rates) but stop at asleepFloor, so they can't die; after goneAfterDays asleep (3 days away in all) they leave the world and their things stay where they slept. A grave marks where someone died for graveHours. idleMinutes: if you're in the game but don't touch anything for this long, your person goes on autopilot and does the same, until you tap. sleepBelow: someone on autopilot or away lies down to sleep when Rest is under this, and gets up when it's full. At night (see night) they go to sleep until morning. comeBackSeconds: for this long after a player's connection goes, their person stays right where they are, so a short break in the connection changes nothing (the game carries on from where it was). With a claim (see claims) they stay within it instead of by the pond, keep its fire fed from their bag, and still walk to the pond to drink.",
     "berryBushes": "extra: how many more berry bushes grow out in the wider world, besides the ones by the start. seed: their own random numbers, so they're in the same places on every phone (change it to move them all).",
+    "tips": "First-steps tips for someone new, shown one at a time in the pill above the needs, each once per phone. words: what each says, in the order they come (walk, pickup, rings, food, craft). Each goes once the player has done what it says, or after show seconds. The next waits gap seconds, or pace seconds if the last one wasn't tried. A tip for something already done is never shown. A new tip needs its rule in game/tips.js (TIP_RULES) too. Friendly full sentences, short enough for two lines on a phone. Luke picked these five (25 Nov 2026): ask him before adding another.",
     "devlog": "What's new, shown in the Menu. Newest first, one entry per version: version, date (the release day, with from for a range), an optional title, and short lines for players in added (+ new features), improved (~ changes to what's there) and fixed (− bug fixes and removed issues). No full stop at the end.",
     "energyCosts": "Stamina (the yellow ring, id energy) is short-term: every task takes these amounts and walking takes walkPerMetre for each metre. It comes back by itself quickly (perHour in its need: 600 an hour, so empty to full in about 10 minutes; whileAsleep 1500 when sleeping, whileSitting 2400 when sitting by a fire). Below slowBelow (20) your person is out of breath: walking and tasks take slowBy (1.5) times as long. It never stops you and it's not deadly. The server uses the same numbers.",
     "chopping": "Chopping with a tool (tool: the item you need). tree: chopping a standing tree (seconds, and what falls: gives); it leaves a stump that grows back into a tree after regrowDays real days. stump: digging out a stump (then the tree is gone for good). log: chopping a log (an item) into sticks. Each chop wears the tool by one use, and takes energyCosts.chop energy. The server uses the same rules.",
@@ -1034,6 +1035,18 @@
       ]
     }
   },
+  "tips": {
+    "show": 15,
+    "gap": 5,
+    "pace": 30,
+    "words": {
+      "walk": "Double-tap the ground to walk. Tap anything to see what you can do.",
+      "pickup": "Tap a stick or a stone on the ground, then Pick up.",
+      "rings": "The rings are your needs. Tap them to see what each one is.",
+      "food": "Pick berries from a bush and eat them from your inventory. Drink at the pond.",
+      "craft": "Open your inventory and tap Craft to make things. Try two stones first."
+    }
+  },
   "devlog": [
     {
       "version": "0.1.10",
@@ -1041,13 +1054,13 @@
       "added": [
         "A loading screen while the world gets ready, so Play always works when you see it",
         "An app icon, and a picture and a few words when you share the game's link",
-        "Privacy and rules in Settings: what the game keeps, and the rules for playing"
+        "Privacy and rules in Settings: what the game keeps, and the rules for playing",
+        "Tips for your first steps: walking, picking up, your needs, food and water, crafting"
       ],
       "improved": [
         "Making your person now fits a phone held sideways",
         "The game says when it can't reach the world, and what to check",
         "The first load is a little quicker",
-        "The Menu says the world runs on Darwin time",
         "The main menu is easier on your battery"
       ],
       "fixed": [
