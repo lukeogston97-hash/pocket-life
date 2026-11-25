@@ -266,19 +266,17 @@
     },
     "axe-head": {
       "needs": {
-        "stone": 1
+        "sharp-stone": 1,
+        "twine": 1
       },
       "makes": {
         "axe-head": 1
-      },
-      "keeps": {
-        "sharp-stone": 1
       }
     },
     "stone-axe": {
       "needs": {
         "axe-head": 1,
-        "stick": 1,
+        "long-stick": 1,
         "twine": 1
       },
       "makes": {
@@ -287,7 +285,8 @@
     },
     "pick-head": {
       "needs": {
-        "sharp-stone": 2
+        "sharp-stone": 2,
+        "twine": 1
       },
       "makes": {
         "pick-head": 1
@@ -296,7 +295,7 @@
     "stone-pickaxe": {
       "needs": {
         "pick-head": 1,
-        "stick": 1,
+        "long-stick": 1,
         "twine": 1
       },
       "makes": {

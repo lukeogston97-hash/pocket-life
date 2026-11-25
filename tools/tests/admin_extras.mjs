@@ -228,6 +228,11 @@ expect(!patP().carry.twig && patP().carry.stick === 1, 'a twig needs a sharp sto
 patP().carry = { stick: 1, 'sharp-stone': 1 };
 await S.ask(pat3, { t: 'craft', id: 'twig' });
 expect(patP().carry.twig === 2 && patP().carry['sharp-stone'] === 1 && !patP().carry.stick && patP().found.includes('twig'), 'with one, the stick becomes 2 twigs and the sharp stone is kept', JSON.stringify(patP().carry));
+// Luke's tool recipes (0.1.9 test 2): every tool is a blade, a handle and twine, made the player's way from scratch
+patP().carry = { stone: 6, stick: 4, twine: 6 }; patP().wear = {};
+for (const id of ['sharp-stone', 'sharp-stone', 'sharp-stone', 'axe-head', 'long-stick', 'long-stick', 'stone-axe', 'pick-head', 'stone-pickaxe']) await S.ask(S.playing('pat'), { t: 'craft', id }); // (a fresh connection each: crafting is limited to a few in a row)
+expect(JSON.stringify(patP().carry) === JSON.stringify({ 'stone-axe': 1, 'stone-pickaxe': 1 }), 'from 6 stones, 4 sticks and 6 twine: sharp stones, a stone axe head, 2 long sticks, a stone pick head, then a stone axe and a stone pickaxe, with nothing left over', JSON.stringify(patP().carry));
+patP().found = ['sharp-stone', 'twig']; patP().carry = {}; patP().wear = {};
 await S.ask(pat3, { t: 'a.found', id: 'pat', all: true });
 expect(patP().found.length === 2, 'a player sending the admin\'s Found tool gets nothing', JSON.stringify(patP().found));
 text = await S.tool({ t: 'a.found', id: 'pat', all: true });
