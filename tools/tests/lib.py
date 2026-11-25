@@ -13,6 +13,7 @@ FONTS = os.path.join(HERE, 'node_modules', '@fontsource', 'nunito', 'files')  # 
 CHROME = os.environ.get('CHROME', '/usr/bin/google-chrome')
 HTTP_PORT, WS_PORT = 8794, 8795
 TIPS = list(json.load(open(os.path.join(ROOT, 'test', 'game-data.json'), encoding='utf-8'))['tips']['words'])  # the first-steps tips (game/tips.js)
+TEST_NAMES = json.load(open(os.path.join(ROOT, 'test', 'game-data.json'), encoding='utf-8'))['testNames']  # each page's ready-made name (names are one of a kind: World.page)
 NOISE = ('Failed to load resource', 'GPU stall', 'WebGL', 'Automatic fallback to software')
 
 
@@ -62,6 +63,7 @@ class World:
     def __init__(self, browser):
         self.browser = browser
         self.errors = []
+        self.named = 0  # pages opened so far: each gets its own ready-made name
 
     async def page(self, pid, w=390, h=844, data=None, tz='Australia/Darwin', path='test/', slow=0, three=True, ready=True, touch=None, fonts=False, sharp=1, still=False, tips=False):
         """Open the game as a phone (pid is its random id). data: changes merged into game-data.json.
@@ -90,10 +92,16 @@ class World:
             await pg.route('https://fonts.gstatic.com/**', lambda r: r.fulfill(path=os.path.join(FONTS, r.request.url.rsplit('/', 1)[1]), content_type='font/woff2', headers={'Access-Control-Allow-Origin': '*'}))
         else: await pg.route('https://fonts.**', lambda r: r.abort())
 
+        # names are one of a kind (25 Nov 2026), so each page's ready-made name differs from every other page's in this world:
+        # Alex, Sam ... Robin, then Alex B, Sam B ...
+        k, self.named = self.named, self.named + 1
+        own_name = TEST_NAMES[k % len(TEST_NAMES)] + ('' if k < len(TEST_NAMES) else ' ' + 'BCDEFGHIJKLMNOPQRSTUVWXYZ'[k // len(TEST_NAMES) - 1])
+
         async def game_data(route):
             resp = await route.fetch(); d = json.loads(await resp.text())
             d['server'] = f'ws://127.0.0.1:{WS_PORT}/world'
             d['settings']['autoName'] = True  # the checks make a person with one tap (off in the real game)
+            d['testNames'] = [own_name]
             for k, v in (data or {}).items():
                 if isinstance(v, dict) and isinstance(d.get(k), dict): d[k].update(v)
                 else: d[k] = v

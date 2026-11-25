@@ -199,6 +199,7 @@ expect(store.get('p:pat').name === 'Patricia', 'and it is saved');
 expect(S.admin.got.some((m) => m.t === 'adminPlayer' && m.name === 'Patricia'), 'the admin\'s page for them shows it');
 expect(await S.tool({ t: 'a.rename', id: 'pat', name: '   ' }) === 'Type a name', 'an empty name is refused');
 expect(await S.tool({ t: 'a.rename', id: 'pat', name: 'Patricia' }) === "That's already their name", 'so is the same name');
+expect(await S.tool({ t: 'a.rename', id: 'pat', name: ' sam ' }) === 'Someone in the world already has that name' && S.w.persons.get('pat').name === 'Patricia', 'and a name someone else in the world has, whatever its capitals (names are one of a kind)');
 await S.tool({ t: 'a.rename', id: 'pat', name: 'A very long name that goes on and on' });
 expect(S.w.persons.get('pat').name.length === 20, 'a long name is cut to 20 letters', S.w.persons.get('pat').name);
 expect(await S.tool({ t: 'a.rename', id: 'nobody', name: 'X' }) === "They've gone", 'someone who isn\'t there can\'t be renamed');

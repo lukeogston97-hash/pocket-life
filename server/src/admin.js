@@ -461,6 +461,7 @@ export const adminMethods = {
         const name = clean(m.name, 20).trim(), was = them.name;
         if (!name || blank(name)) return done('Type a name');
         if (name === was) return done("That's already their name");
+        if (this.nameTaken(name, them.who)) return done('Someone in the world already has that name'); // (one of a kind: persons.js)
         them.name = name;
         if (them.look && them.look.name != null) them.look = { ...them.look, name };
         this.touch(them);

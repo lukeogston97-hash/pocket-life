@@ -110,6 +110,26 @@ for (const name of ['Zoë', 'Łukasz', '李雷', 'Bo 🙂', "D'Arcy", 'Mary-Jane
   n = await newcomer(`ok-${name}`, name);
   expect(n.name === name, `an ordinary name is kept as typed: ${name}`, JSON.stringify(n.name));
 }
+// names are one of a kind (Luke, 25 Nov 2026): not one a person in the world already has (playing, away or asleep), with
+// capitals and extra spaces not counting. The names of the dead, people who left and banned players are free again.
+const whoNamed = (name) => [...S.w.persons.values()].find((p) => p.name === name && S.w.alive(p)).who;
+const twin = async (pid, name) => { const t = await newcomer(pid, name); if (!t.name) S.socks.splice(S.socks.indexOf(t.c), 1); return { ...t, taken: t.c.got.some((m) => m.t === 'badName' && m.taken) }; };
+for (const [pid, name] of [['twin-a', 'zoË'], ['twin-b', '  Mary-Jane '], ['twin-c', 'evil  kim']]) {
+  n = await twin(pid, name);
+  expect(n.name === null && n.taken, `a name someone in the world has is refused, and the game is told why: "${name}"`, JSON.stringify(n.name));
+}
+const strolling = await newcomer('stroller', 'Wanderer'), strollerWho = strolling.c.att.who;
+S.socks.splice(S.socks.indexOf(strolling.c), 1); // (their game has gone: they're away, their person still in the world)
+n = await twin('twin-d', 'wanderer');
+expect(S.w.stateOf(S.w.persons.get(strollerWho)) === 'away' && n.name === null && n.taken, 'someone away keeps their name', JSON.stringify(n.name));
+S.w.persons.get(whoNamed('Mary-Jane')).state = 'dead';
+S.w.persons.get(whoNamed('Bo 🙂')).state = 'gone'; // (gone after too long away)
+S.w.persons.delete(whoNamed("D'Arcy")); // (left the world for good)
+S.w.admin.banned.push(whoNamed('Łukasz'));
+for (const [pid, name, whose] of [['twin-e', 'mary-jane', 'someone who died'], ['twin-f', 'Bo 🙂', 'someone gone after too long away'], ['twin-g', "d'arcy", 'someone who left the world'], ['twin-h', 'łukasz', 'a banned player']]) {
+  n = await twin(pid, name);
+  expect(n.name === name, `the name of ${whose} is free again: "${name}"`, JSON.stringify(n.name));
+}
 const speaker = await newcomer('talker', 'Talker'), heard = await newcomer('listener', 'Listener');
 const says = async (text) => { const from = heard.c.got.length; const c = { ...speaker.c, att: structuredClone(speaker.c.att), got: [] }; S.socks.push(c); await S.w.webSocketMessage(c, JSON.stringify({ t: 'say', text })); await wait(5); S.socks.splice(S.socks.indexOf(c), 1); return heard.c.got.slice(from).filter((m) => m.t === 'say').map((m) => m.text); };
 expect(JSON.stringify(await says('hello \u202ethere')) === '["hello there"]', 'the same mark is taken out of chat', JSON.stringify(await says('hi \u202eyou')));

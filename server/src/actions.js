@@ -53,6 +53,7 @@ export const ACTIONS = {
     if (this.alive(p)) { reply(this.mine(p)); return; }
     const name = clean(m.name, 20).trim();
     if (!name || blank(name) || (!me.admin && badName(name, FILTER))) { reply({ t: 'badName' }); return; } // (blank: a name nobody could see)
+    if (this.nameTaken(name, me.who)) { reply({ t: 'badName', taken: true }); return; } // (names are one of a kind: persons.js)
     const a = Math.random() * Math.PI * 2, r = Math.random() * 1.5;
     const np = { who: me.who, state: 'alive', name, look: cleanLook({ ...m.look, name }), age: Math.max(G.age.min, Math.min(G.age.max, Math.round(Number(m.age) || G.age.min))),
       born: Date.now(), x: num(START.x + Math.cos(a) * r), z: num(START.z + Math.sin(a) * r), ry: 0.62,

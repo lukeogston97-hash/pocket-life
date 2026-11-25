@@ -51,7 +51,7 @@ async def layout():
 
 
 async def menu():
-    """Main menu, making a person, Back, Play, Exit to the menu, coming back."""
+    """Main menu, making a person, Back, Play, Exit to the menu, coming back, and a name someone in the world already has being refused."""
     async with world() as W:
         a = await W.page('menuA')
         expect(await shown(a, '#mainMenu'), 'main menu shows first')
@@ -116,6 +116,11 @@ async def menu():
         expect(await c.evaluate("document.getElementById('nameInput').value") == '' and await c.evaluate("document.getElementById('ageInput').min") == '13', 'no name filled in, and age starts at 13')
         await c.click('.start-btn'); await c.wait_for_timeout(300)
         expect(await shown(c, '#nameErr'), 'starting without a name asks for one')
+        # names are one of a kind (25 Nov 2026): the name of someone already in the world is refused, whatever its capitals
+        await c.fill('#nameInput', f' {name.upper()} '); await c.click('.start-btn')
+        await c.wait_for_function("!document.getElementById('nameErr').hidden && document.getElementById('nameErr').textContent.includes('already')", timeout=15000)
+        err = await text(c, '#nameErr')
+        expect(err == 'Someone in the world already has that name. Try another one.' and await shown(c, '#creator'), f'a name someone in the world already has ({name.upper()}) is refused, and it says why ({err!r})')
         await c.fill('#nameInput', 'Tester'); await c.click('.start-btn')
         await c.wait_for_function("document.getElementById('mainMenu').hidden && !document.getElementById('app').classList.contains('is-creating')", timeout=30000)
         expect(await text(c, '#hudName') == 'Tester', 'in the world with the name they typed')

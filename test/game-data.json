@@ -1,6 +1,6 @@
 {
   "version": "0.1.12",
-  "build": 4,
+  "build": 5,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -1056,7 +1056,8 @@
         "Play on other devices, in Settings: link your phone and computer with a code"
       ],
       "improved": [
-        "Greyed out in Recipes now means you don't have everything for it yet"
+        "Greyed out in Recipes now means you don't have everything for it yet",
+      "Names are one of a kind: you can't pick a name someone in the world already has"
       ],
       "fixed": [
         "Tapping a recipe could show something else on the mat, like a sharp stone for a campfire"

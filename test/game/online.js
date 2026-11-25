@@ -67,7 +67,10 @@ function goOnline() {
     else if (m.t === 'me') { const fresh = !player; applyMe(m); if (fresh) enterWorld(); }
     else if (m.t === 'died') die(m);
     else if (m.t === 'stopTasks') { if (player) stopQueue(); } // the admin cleared your task list
-    else if (m.t === 'badName') { $('nameErr').textContent = 'Pick a different name.'; $('nameErr').hidden = false; creating = false; }
+    else if (m.t === 'badName') { // (taken: someone in the world already has it, server/src/persons.js nameTaken)
+      $('nameErr').textContent = m.taken ? 'Someone in the world already has that name. Try another one.' : 'Pick a different name.';
+      $('nameErr').hidden = false; creating = false;
+    }
     else if (m.t === 'elsewhere') { net.stopped = true; showMaintenance('Your person is being played in another tab or window. Reload this page to play here instead.', 'Playing somewhere else', ''); }
     else if (m.t === 'state') setOtherState(m);
     else if (m.t === 'stroll') { const o = others.get(m.id); if (o) Object.assign(o, { tx: m.x, tz: m.z, speed: m.speed || null, due: m.ms ? elapsed + m.ms / 1000 : null, then: m.then || null, act: null }); }

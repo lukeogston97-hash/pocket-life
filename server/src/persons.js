@@ -2,6 +2,9 @@
 // These are methods of the World (index.js adds them to it), so `this` is the world.
 import { G, HOUR, advanceStats, posAt, num, AWAY, REST, ageOf, wearList, laidNow } from './shared.js';
 
+// a name as it's compared with others: capitals, extra spaces and look-alike forms of the same letters don't count
+const nameKey = (s) => String(s ?? '').normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
+
 export const personsMethods = {
   // Leave the world for good (Settings): their things drop where they stand, they leave their camp (the usual rules: the
   // member who joined first leads, the last one out puts the fire out), and their person, past people, feedback and links
@@ -25,6 +28,14 @@ export const personsMethods = {
     this.sendCount();
   },
   alive(p) { return p && p.state === 'alive'; },
+  // Names are one of a kind (Luke, 25 Nov 2026): nobody can take a name a person in the world already has, whether
+  // they're playing, away or asleep. "Luke" and "luke " are the same name. The dead, people who left the world and
+  // banned players don't hold theirs. except: the person being named (renaming someone to their own name in capitals).
+  nameTaken(name, except = null) {
+    const key = nameKey(name);
+    for (const p of this.persons.values()) if (p.who !== except && this.alive(p) && !this.admin.banned.includes(p.who) && nameKey(p.name) === key) return true;
+    return false;
+  },
   isOnline(who) { const s = this.socketOf(who); return !!(s && s.p.alive); }, // (socketOf prefers the connection still playing them)
   // online, away, asleep (a day away: needs drop slowly to a floor) or sleeping (resting, by choice or when tired)
   stateOf(p) { return p.asleep && !this.isOnline(p.who) ? 'asleep' : p.sleeping ? 'sleeping' : this.isOnline(p.who) ? 'online' : 'away'; },
