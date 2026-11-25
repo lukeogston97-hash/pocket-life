@@ -2021,14 +2021,44 @@ async def server_tests():
     import subprocess
     from lib import bundle
     bundle()
-    for f in ['admin_extras.mjs', 'live_items.mjs', 'stale_admin.mjs', 'cheats.mjs', 'societies.mjs', 'tasks.mjs', 'fade.mjs', 'forget.mjs']:
+    for f in ['admin_extras.mjs', 'live_items.mjs', 'stale_admin.mjs', 'cheats.mjs', 'societies.mjs', 'tasks.mjs', 'fade.mjs', 'forget.mjs', 'accounts.mjs']:
         r = subprocess.run(['node', f], cwd=HERE, capture_output=True, text=True, timeout=180)
         last = (r.stdout.strip().splitlines() or ['(nothing printed)'])[-1]
         if r.returncode: print(r.stdout[-4000:], r.stderr[-2000:])
         expect(r.returncode == 0, f'{f}: {last[:160]}')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'tasks_away': tasks_away, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'craft_mat': craft_mat, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'loading': loading, 'sideways': sideways, 'menu_rest': menu_rest, 'tips': tips, 'placed_kinds': placed_kinds, 'server_tests': server_tests}
+async def leaving():
+    """Settings: Leave the world for good (0.1.11): a warning, hold 2 seconds, a fresh start. The Sign in row stays hidden with no client ID."""
+    async with world() as W:
+        a = await W.page('leaveA')
+        await join(a)
+        pid = await a.evaluate("localStorage.getItem('pocket-life:pid')")
+        await a.keyboard.press('Escape'); await a.click('#pauseSettingsBtn')
+        expect(await shown(a, '#settings') and not await shown(a, '#signRow'), 'Settings opens, with no Sign in row while there is no Google client ID')
+        await a.click('#leaveBtn')
+        words = await text(a, '#leaveText')
+        expect(await shown(a, '#leave') and "can't be undone" in words and 'Test' not in words[:0], f'the warning shows, with your name ({words[:60]})')
+        box = await a.locator('#leaveHold').bounding_box()
+        await a.mouse.move(box['x'] + box['width'] / 2, box['y'] + box['height'] / 2)
+        await a.mouse.down(); await a.wait_for_timeout(800); await a.mouse.up(); await a.wait_for_timeout(400)
+        expect(await shown(a, '#leave') and await a.evaluate("localStorage.getItem('pocket-life:pid')") == pid, 'letting go early does nothing')
+        await a.click('#leaveCancel')
+        expect(not await shown(a, '#leave'), 'Cancel puts it away')
+        await a.keyboard.press('Escape'); await a.click('#pauseSettingsBtn'); await a.click('#leaveBtn')
+        await a.mouse.move(box['x'] + box['width'] / 2, box['y'] + box['height'] / 2)
+        await a.mouse.down()
+        await a.wait_for_function(f"localStorage.getItem('pocket-life:pid') !== '{pid}'", timeout=15000)
+        await a.mouse.up()
+        await a.wait_for_load_state()
+        await a.wait_for_function("!document.getElementById('boot') && document.getElementById('playSub') && document.getElementById('playSub').textContent", timeout=30000)
+        await a.wait_for_timeout(1500)
+        expect(True, 'holding 2 seconds: the phone gets a new id and the game starts again')
+        # (the check's page puts the old id back on every load, so this also shows the server removed that person)
+        expect(await text(a, '#playSub') == 'Make your person', 'and the old person is gone: Play says Make your person')
+
+
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'tasks_away': tasks_away, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'craft_mat': craft_mat, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'loading': loading, 'sideways': sideways, 'menu_rest': menu_rest, 'tips': tips, 'placed_kinds': placed_kinds, 'leaving': leaving, 'server_tests': server_tests}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

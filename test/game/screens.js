@@ -270,6 +270,87 @@ $('pauseNewsBtn').addEventListener('click', () => { closePause(); openNews(); })
 $('pauseFeedbackBtn').addEventListener('click', () => { closePause(); openFeedback(); });
 $('pauseSettingsBtn').addEventListener('click', () => { closePause(); openSettings(); });
 function closeSettings() { $('settings').hidden = true; }
+/* ---------- Sign in with Google (Settings), optional ----------
+   Hidden until settings.googleClientId is set in game-data.json. Google's script is only loaded when someone opens Sign
+   in, so a guest's game never talks to Google. Google hands the game a signed note (credential) which goes to the server
+   (server/src/accounts.js), which checks it itself. Signed in, this phone plays the account's person. If the account
+   already has a person and this phone has its own, the game says the guest person here will be removed, and asks.
+   Signing in or out starts the page again, so the game rejoins as the right person. net.signedIn comes from the server. */
+const GOOGLE_ID = (DATA.settings || {}).googleClientId || '';
+const IN_APP = /FBAN|FBAV|FB_IAB|Instagram|TikTok|musical_ly|BytedanceWebview|Line\//i.test(navigator.userAgent); // Google refuses sign-in in these apps' own browsers
+const SIGN_NOTE_KEY = 'pocket-life:signNote';
+let signToken = '', googleReady = null;
+function drawSignRow() {
+  $('signRow').hidden = !GOOGLE_ID;
+  $('signLbl').textContent = net.signedIn ? 'Signed in with Google' : 'Play on other devices';
+  $('signBtn').textContent = net.signedIn ? 'Sign out' : 'Sign in';
+}
+function loadGoogle() {
+  if (!googleReady) googleReady = new Promise((ok, no) => {
+    const s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client'; s.async = true;
+    s.onload = () => { try { window.google.accounts.id.initialize({ client_id: GOOGLE_ID, callback: (r) => sendSignIn(r.credential, false) }); ok(); } catch (err) { no(err); } };
+    s.onerror = no;
+    document.head.appendChild(s);
+  }).catch((err) => { googleReady = null; throw err; });
+  return googleReady;
+}
+function openSign() {
+  closeSettings();
+  paused = true;
+  $('sign').hidden = false;
+  $('signSure').hidden = true; $('signSure').disabled = false;
+  $('signGoogle').replaceChildren();
+  if (net.signedIn) { // signing out
+    $('signTitle').textContent = 'Sign out?';
+    $('signText').textContent = 'Your person stays with your Google account. This device starts again as a new guest.';
+    $('signSure').textContent = 'Sign out'; $('signSure').hidden = false;
+    $('signCancel').focus();
+    return;
+  }
+  $('signTitle').textContent = 'Sign in';
+  if (IN_APP) { $('signText').textContent = "Google sign-in doesn't work in this app's browser. Open the game in Safari or Chrome to sign in."; return; }
+  $('signText').textContent = 'Sign in with Google to play the same person on your phone and computer. The game only keeps a scrambled number for your account, never your email or name.';
+  loadGoogle().then(() => {
+    if ($('sign').hidden) return;
+    window.google.accounts.id.renderButton($('signGoogle'), { theme: 'filled_black', shape: 'pill', size: 'large', text: 'signin_with' });
+  }).catch(() => { $('signText').textContent = "Couldn't reach Google just now. Check your connection and try again."; });
+  $('signCancel').focus();
+}
+function closeSign() { $('sign').hidden = true; paused = false; signToken = ''; }
+function sendSignIn(token, sure) {
+  signToken = token;
+  if (!online()) { $('signText').textContent = 'You need to be online to sign in.'; return; }
+  net.sock.send(JSON.stringify({ t: 'signIn', pid, token, sure }));
+  $('signText').textContent = 'Signing in…';
+  $('signGoogle').replaceChildren();
+}
+// the server: the account already has a person, and this phone has its own
+function signAsk(m) {
+  if ($('sign').hidden) return;
+  $('signTitle').textContent = m.theirs ? `Play as ${m.theirs}?` : 'Sign in?';
+  $('signText').textContent = `${m.theirs ? `You'll play as ${m.theirs}. ` : ''}Your guest person here, ${m.mine}, will be removed. This can't be undone.`;
+  $('signSure').textContent = 'Sign in'; $('signSure').hidden = false;
+}
+function signNo(m) { if (!$('sign').hidden) { $('signText').textContent = m.text || "Couldn't sign in just now. Try again."; $('signSure').hidden = true; } }
+$('signBtn').addEventListener('click', openSign);
+$('signCancel').addEventListener('click', closeSign);
+$('sign').addEventListener('click', (e) => { if (e.target === $('sign')) closeSign(); });
+$('signSure').addEventListener('click', () => {
+  if (!online()) { $('signText').textContent = "You need to be online to do this."; return; }
+  if (net.signedIn) { net.sock.send(JSON.stringify({ t: 'signOut', pid })); $('signSure').disabled = true; return; }
+  if (signToken) sendSignIn(signToken, true);
+});
+// signed in (start again as the account's person) or signed out (a fresh id, so a new guest)
+function signedIn() { location.reload(); }
+function signedOut() { forgotten(); }
+// once per phone, a while after making a person: you can sign in to play on other devices
+function signNoteLater() {
+  if (!GOOGLE_ID || net.signedIn) return;
+  try { if (localStorage.getItem(SIGN_NOTE_KEY)) return; localStorage.setItem(SIGN_NOTE_KEY, '1'); } catch (err) { return; }
+  setTimeout(() => { if (ui.mode === 'world' && !net.signedIn) showTag('Sign in from Settings to play on your other devices', headTop(), 4); }, 60000);
+}
+/* (the Sign in row shows once the server says hello: welcome in online.js) */
 /* ---------- Leave the world for good (Settings) ----------
    A warning, then hold the button for 2 seconds. The server drops their things where they stand, takes them out of their
    camp and removes their person, past people and feedback (server/src/persons.js, forget). Then this phone gets a new id

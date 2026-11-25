@@ -4,9 +4,9 @@ import { G, HOUR, advanceStats, posAt, num, AWAY, REST, ageOf, wearList, laidNow
 
 export const personsMethods = {
   // Leave the world for good (Settings): their things drop where they stand, they leave their camp (the usual rules: the
-  // member who joined first leads, the last one out puts the fire out), and their person, past people and feedback are
-  // removed. A ban stays (the ban list isn't touched). The admin's Log says someone left, with no name.
-  async forget(who, ws, me) {
+  // member who joined first leads, the last one out puts the fire out), and their person, past people, feedback and Google
+  // account link are removed. A ban stays (the ban list isn't touched). The admin's Log says someone left, with no name.
+  async forget(who, ws, me, why = 'left') { // why 'signIn': their guest person, removed as they signed in to an account that has one
     const p = this.persons.get(who);
     if (this.alive(p)) { this.catchUp(p); if (this.alive(p)) this.spill(p); }
     if (p) this.send({ t: 'leave', id: who }, null);
@@ -17,9 +17,11 @@ export const personsMethods = {
     if (soc) { const mem = soc.members.find((x) => x.who === who); if (mem) mem.name = 'Someone'; await this.socOut(soc, who, 'left'); }
     await this.ctx.storage.delete([`p:${who}`, `past:${who}`]);
     this.use('writes', 2);
+    const acc = this.accountOf(who); // signed in: the Google account goes too, and every phone signed in to it is a guest again
+    if (acc) { this.dropAccount(acc.acct); await this.saveAccounts(); }
     const fb = (await this.ctx.storage.get('feedback')) || [], kept = fb.filter((x) => x.who !== who);
     if (kept.length !== fb.length) await this.put('feedback', kept);
-    this.note('world', 'Someone left the world for good');
+    this.note('world', why === 'signIn' ? "Someone's guest person was removed as they signed in with Google" : 'Someone left the world for good');
     this.sendCount();
   },
   alive(p) { return p && p.state === 'alive'; },

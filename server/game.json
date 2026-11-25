@@ -385,6 +385,7 @@
   "maxPlaying": 20,
   "respawnMinutes": 5,
   "fadeDays": 7,
+  "googleClientId": "",
   "worldSize": 100,
   "walkSpeed": 2.2,
   "age": {

@@ -227,7 +227,20 @@ setTimeout(function () { if (!window.__bootStarted) window.__bootFail("This brow
         </div>
       </div>
       <div class="gfx-row"><span class="lbl">Privacy and rules</span><button id="rulesBtn" type="button" class="small-btn">Read</button></div>
+      <div id="signRow" class="gfx-row" hidden><span id="signLbl" class="lbl">Play on other devices</span><button id="signBtn" type="button" class="small-btn">Sign in</button></div>
       <div class="gfx-row"><span class="lbl">Leave the world for good</span><button id="leaveBtn" type="button" class="small-btn">Leave</button></div>
+    </div>
+  </div>
+
+  <div id="sign" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="signTitle">
+      <h2 id="signTitle">Sign in</h2>
+      <p id="signText"></p>
+      <div id="signGoogle" class="sign-google"></div>
+      <div class="modal-actions">
+        <button id="signCancel" type="button" class="text-btn">Cancel</button>
+        <button id="signSure" type="button" class="action-btn" hidden>Sign in</button>
+      </div>
     </div>
   </div>
 

@@ -20,7 +20,7 @@ const MOVABLE = { tree: 5000, rock: 2000, bush: 200 }; // things laid out with t
 // A new tool that changes something gets a line here.
 const TOOLS = { 'a.maintenance': 'Maintenance', 'a.announce': 'Message to everyone', 'a.speed': 'Speed up time', 'a.kick': 'Kick', 'a.ban': 'Ban', 'a.unban': 'Unban',
   'a.mute': 'Mute', 'a.fill': 'Fill needs', 'a.give': 'Give', 'a.take': 'Take', 'a.wake': 'Wake', 'a.sleep': 'Send to sleep', 'a.movePerson': 'Move person',
-  'a.setStats': 'Edit person', 'a.removePerson': 'Remove person', 'a.regrowAll': 'Regrow everything', 'a.clear': 'Clear loose items', 'a.move': 'Move', 'a.regrow': 'Regrow',
+  'a.setStats': 'Edit person', 'a.removePerson': 'Remove person', 'a.signOutAll': 'Sign out everywhere', 'a.regrowAll': 'Regrow everything', 'a.clear': 'Clear loose items', 'a.move': 'Move', 'a.regrow': 'Regrow',
   'a.remove': 'Remove', 'a.live': 'Setting', 'a.liveItem': 'Item number', 'a.fire': 'Fire', 'a.claim': 'Claim', 'a.rename': 'Rename', 'a.tell': 'Message',
   'a.socRename': 'Rename society', 'a.socRemove': 'Take out of society', 'a.socEnd': 'End society', 'a.clearTasks': 'Clear task list', 'a.found': 'Found recipes' };
 // which thing a tool was used on, when its answer doesn't say (server: the World)
@@ -64,7 +64,8 @@ export const adminMethods = {
     const past = [...((await this.ctx.storage.get(`past:${who}`)) || [])];
     if (p && !this.alive(p)) past.unshift({ name: p.name, age: ageOf(p, p.diedAt || Date.now()), born: p.born || 0, until: p.diedAt || 0, cause: p.state === 'gone' ? 'left' : p.cause || '' });
     const reports = ((await this.ctx.storage.get('reports')) || []).filter((r) => r.about && r.about.who === who).length;
-    const out = { t: 'adminPlayer', id: who, muted: this.admin.muted.includes(who), banned: this.admin.banned.includes(who), reports, past, v: s ? s.p.v : '', link: s ? s.p.link : '' };
+    const acc = this.accountOf(who);
+    const out = { t: 'adminPlayer', id: who, google: acc ? acc.phones : 0, muted: this.admin.muted.includes(who), banned: this.admin.banned.includes(who), reports, past, v: s ? s.p.v : '', link: s ? s.p.link : '' };
     if (this.alive(p)) Object.assign(out, this.playerRow(p), { born: p.born || 0, stats: p.stats, carry: p.carry || {}, x: num(p.x), z: num(p.z), tasks: p.tasks || [], // tasks: their task list as the server has it (tasks.js)
       found: (p.found || []).filter((id) => Object.hasOwn(G.recipes || {}, id)) }); // found: the recipes they've made at least once (the craft mat's Found list)
     else Object.assign(out, { name: past[0] ? past[0].name : `Phone ${who}`, state: 'gone' });
@@ -298,6 +299,14 @@ export const adminMethods = {
         reply(await this.playerPage(them.who));
         return done(`${them.name} changed`);
       }
+      case 'a.signOutAll': { // Google sign-in: every phone signed in to their account is a guest again (the person stays with the phone it started on)
+        const acc = this.accountOf(m.id);
+        if (!acc) return done("They're not signed in");
+        this.dropAccount(acc.acct); await this.saveAccounts();
+        for (const s of this.sockets()) if (s.p.who === m.id && !s.p.admin) this.boot(s.ws, { t: 'kicked' });
+        reply(await this.playerPage(m.id));
+        return done('Signed out everywhere');
+      }
       case 'a.removePerson': // take someone out of the world; their things drop where they are
         if (!this.alive(them)) return done("They've gone");
         if (sock) return done("They're playing right now");
@@ -334,7 +343,8 @@ export const adminMethods = {
           this.persons.clear(); this.dirty.clear(); this.savedAt.clear();
           this.admin.banned = []; this.admin.muted = []; await this.saveAdmin(); // (maintenance and its message stay)
           this.societies = freshSocieties(); // (societies.js)
-          const gone = ['feedback', 'reports', 'societies'];
+          this.accounts = { links: {}, accts: {} }; // (accounts.js: Google sign-ins go too)
+          const gone = ['feedback', 'reports', 'societies', 'accounts'];
           for (const prefix of ['p:', 'past:']) gone.push(...(await this.ctx.storage.list({ prefix })).keys());
           this.use('writes', gone.length);
           for (let i = 0; i < gone.length; i += 100) await this.ctx.storage.delete(gone.slice(i, i + 100));

@@ -333,7 +333,7 @@ function drawPlayer() {
   const head = el('div');
   head.append(el('div', 'admin-name', p.name),
     el('div', 'admin-tag', [STATE_WORDS[p.state] || p.state, p.age != null ? `${p.age} yrs` : '', p.v ? `v${p.v} ${p.link} link` : '', p.muted ? 'muted' : '', p.banned ? 'banned' : '',
-      p.reports ? `${p.reports} ${p.reports === 1 ? 'report' : 'reports'}` : ''].filter(Boolean).join(' · ')));
+      p.reports ? `${p.reports} ${p.reports === 1 ? 'report' : 'reports'}` : '', p.google ? `signed in with Google (${p.google} ${p.google === 1 ? 'device' : 'devices'})` : ''].filter(Boolean).join(' · ')));
   out.push(entry(head));
   if (alive && p.stats) { // needs, as bars
     const sec = el('div', 'admin-entry');
@@ -434,6 +434,7 @@ function drawPlayer() {
   if (p.banned) ban.addEventListener('click', () => toPlayer({ t: 'a.unban', who: p.id }));
   else twoTaps(ban, () => toPlayer({ t: 'a.ban', id: p.id }), 'Tap again to ban');
   bar.appendChild(ban);
+  if (p.google) { const so = button('Sign out everywhere', () => {}); twoTaps(so, () => toPlayer({ t: 'a.signOutAll', id: p.id }), 'Tap again: every device is a guest'); bar.appendChild(so); }
   if (alive && p.state !== 'online') { const rm = button('Remove from world', () => {}); twoTaps(rm, () => toPlayer({ t: 'a.removePerson', id: p.id }), 'Tap again: drops their things'); bar.appendChild(rm); }
   if (bar.children.length) { careful.appendChild(bar); out.push(careful); }
   if ((p.past || []).length) out.push(entry('Past people', p.past.map((q) => `${q.name}, ${q.age} · ${q.cause === 'left' ? 'left' : q.cause ? `died (${q.cause})` : 'died'}${q.until ? ` · ${when(q.until)}` : ''}`).join('\n')));

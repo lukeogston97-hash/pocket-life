@@ -25,7 +25,10 @@ import { restoreMethods } from './restore.js';
 import { guardMethods } from './guard.js';
 import { activityMethods, BACK_AFTER, longText } from './activity.js';
 import { taskMethods } from './tasks.js';
+import { accountsMethods, freshAccounts } from './accounts.js';
 import { ACTIONS } from './actions.js';
+
+const MENU_OK = new Set(['feedback', 'forget', 'signIn', 'signOut']); // what the game may send from the main menu, with no person
 
 export class World extends DurableObject {
   constructor(ctx, env) {
@@ -49,6 +52,8 @@ export class World extends DurableObject {
     this.reportLog = []; // the same for reports about players
     this.socks = null; this.byWho = null; // who's connected, worked out once per message or tick (sockets, socketOf)
     this.restoring = false; // a restore is on its way (restore.js)
+    this.accounts = freshAccounts(); // Google sign-in: phones linked to accounts (accounts.js)
+    this.gKeys = null; // Google's public keys, kept for a few hours (accounts.js)
     ctx.blockConcurrencyWhile(async () => {
       this.world = (await ctx.storage.get('world')) || null;
       Object.assign(this.admin, (await ctx.storage.get('admin')) || {});
@@ -59,6 +64,7 @@ export class World extends DurableObject {
       this.applyLiveItems();
       this.activity = (await ctx.storage.get('activity')) || [];
       this.societies = (await ctx.storage.get('societies')) || freshSocieties();
+      this.accounts = (await ctx.storage.get('accounts')) || freshAccounts();
       Object.assign(this.usage, (await ctx.storage.get('usage')) || {});
       for (const [k, p] of await ctx.storage.list({ prefix: 'p:' })) this.persons.set(k.slice(2), p);
       if (this.world && this.socTidy()) { await this.put('world', this.world); await this.saveSocs(); } // (claims from before 0.1.5 become societies: societies.js)
@@ -155,7 +161,7 @@ export class World extends DurableObject {
   // Who is this? For now a person belongs to the phone's random id (pid). Sign-in later (Google, say) plugs in here:
   // check the sign-in with Google, then look up 'acct:<their Google id>' in storage to find their who. The first time
   // someone signs in, save 'acct:<id>' = the who from their phone, so they keep the person they already have.
-  async whoFor(m) { return tagOf(m.pid || crypto.randomUUID()); }
+  async whoFor(m) { return (await this.whoIs(m)).who; } // the person a phone plays: its own, or its Google account's (accounts.js)
 
 
 
@@ -230,7 +236,7 @@ export class World extends DurableObject {
     // on the main menu: only watching the world. The admin (who also only watches) can use their tools, and their game can
     // send the layout and lay out a brand new world: after a reset there may be no player about to do it, and the admin
     // would be looking at what's left of the old one.
-    if (me.watch && m.t !== 'feedback' && m.t !== 'forget' && !(isAdmin && (m.t.startsWith('a.') || m.t === 'layout' || m.t === 'seed'))) return;
+    if (me.watch && !MENU_OK.has(m.t) && !(isAdmin && (m.t.startsWith('a.') || m.t === 'layout' || m.t === 'seed'))) return;
     if (!allowed(ws, me, m.t)) {
       if (m.t === 'take') reply({ t: 'took', id: m.id, ok: false });
       else if (m.t === 'pick') reply({ t: 'picked', bush: m.bush, ok: false });
@@ -268,7 +274,7 @@ export class World extends DurableObject {
       if (wrong) this.note('guard', locked ? 'Admin password tried from an address that is locked out' : this.adminLocked(me) ? 'Wrong admin password 5 times: that address is locked out for 15 minutes' : 'Wrong admin password');
       reply({ t: 'adminNo' }); // said before anything below can send the game away (maintenance, an update), so it never keeps trying a refused password
     }
-    const who = await this.whoFor(m);
+    const { who, acct } = await this.whoIs(m), signedIn = !!acct;
     if (!isAdmin && this.admin.banned.includes(who)) { this.boot(ws, { t: 'banned' }); return; }
     if (!isAdmin && this.admin.maintenance && link !== 'test') { this.boot(ws, { t: 'maintenance', text: this.admin.message }); return; }
     if (min && tooOld(m.v, m.b, min, m.e, (WORLDS.era || {})[link])) { this.boot(ws, { t: 'update', min }); return; }
@@ -280,7 +286,7 @@ export class World extends DurableObject {
       Object.assign(me, { id: me.watch && me.id ? me.id : `w:${crypto.randomUUID().slice(0, 8)}`, who: null, self: who, watch: true, queued, turnAt: 0, admin: isAdmin, v: clean(m.v, 20), b: Math.floor(Number(m.b)) || 0, e: Math.floor(Number(m.e)) || 0, link, alive: false });
       this.attach(ws, me);
       const p = this.persons.get(who);
-      reply({ t: 'welcome', watch: true, id: me.id, people: this.people(null), world: this.view(), count: this.playing(), speed: this.speed, live: this.live, liveItems: this.liveItems,
+      reply({ t: 'welcome', watch: true, signedIn, id: me.id, people: this.people(null), world: this.view(), count: this.playing(), speed: this.speed, live: this.live, liveItems: this.liveItems,
         yours: this.alive(p) ? { name: p.name, age: ageOf(p) } : null, line: full ? this.placeOf(ws) : 0, needLayout: isAdmin && this.needLayout(me), needSeed: isAdmin && !this.world });
       if (isAdmin) { reply(this.adminState(me)); this.note('admin', 'Admin mode opened'); } // admin mode is on: the panels get their numbers
       if (full) this.callLine();
@@ -316,7 +322,7 @@ export class World extends DurableObject {
     this.attach(ws, me);
     if (p) await this.flush(who);
     const w = this.world;
-    reply({ t: 'welcome', id: who, people: this.people(who), world: this.view(), needSeed: !w, needLayout: this.needLayout(me),
+    reply({ t: 'welcome', id: who, signedIn, people: this.people(who), world: this.view(), needSeed: !w, needLayout: this.needLayout(me),
       count: this.playing(), me: me.alive ? this.mine(p) : null, away, tasks, dead, speed: this.speed, live: this.live, liveItems: this.liveItems });
     if (me.alive) this.send({ t: 'join', person: this.pub(p) }, who);
     this.sendCount();
@@ -425,7 +431,7 @@ export class World extends DurableObject {
 
 }
 // the rest of the world's methods, kept in their own files by topic
-Object.assign(World.prototype, lineMethods, personsMethods, awayMethods, natureMethods, adminMethods, placedMethods, liveMethods, liveItemsMethods, claimsMethods, societiesMethods, guardMethods, restoreMethods, activityMethods, taskMethods);
+Object.assign(World.prototype, lineMethods, personsMethods, awayMethods, natureMethods, adminMethods, placedMethods, liveMethods, liveItemsMethods, claimsMethods, societiesMethods, accountsMethods, guardMethods, restoreMethods, activityMethods, taskMethods);
 
 export default {
   async fetch(request, env) {
