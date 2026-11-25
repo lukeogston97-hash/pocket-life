@@ -1,6 +1,6 @@
 {
-  "version": "0.1.7",
-  "build": 1,
+  "version": "0.1.9",
+  "build": 2,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -188,7 +188,7 @@
     },
     "stone": {
       "name": "Stone",
-      "about": "For stone tools and building campfires.",
+      "about": "For tools and campfires. Try knocking two together.",
       "plural": "Stones",
       "weight": 1,
       "look": {
@@ -209,6 +209,72 @@
         "shape": "coil",
         "size": 0.05,
         "colour": "#c9b77a"
+      },
+      "startInWorld": 0
+    },
+    "sharp-stone": {
+      "name": "Sharp stone",
+      "about": "Knocked off a stone. Cuts and shapes things, and you keep it when you do.",
+      "plural": "Sharp stones",
+      "weight": 1,
+      "look": {
+        "shape": "flake",
+        "size": 0.11,
+        "colour": "#8f8a80"
+      },
+      "startInWorld": 0
+    },
+    "twig": {
+      "name": "Twig",
+      "about": "Cut from a stick. Kindling for a campfire, and it burns fast.",
+      "plural": "Twigs",
+      "weight": 1,
+      "look": {
+        "shape": "rod",
+        "length": 0.3,
+        "thickness": 0.012,
+        "colour": "#a8875f",
+        "twig": true
+      },
+      "startInWorld": 0
+    },
+    "long-stick": {
+      "name": "Long stick",
+      "about": "Two sticks tied together. Long enough for a spear.",
+      "plural": "Long sticks",
+      "weight": 2,
+      "look": {
+        "shape": "rod",
+        "length": 1.1,
+        "thickness": 0.032,
+        "colour": "#8a6847",
+        "lashing": "#c9b77a"
+      },
+      "startInWorld": 0
+    },
+    "axe-head": {
+      "name": "Stone axe head",
+      "about": "A sharp stone wrapped in twine. Tie it to a long stick to make an axe.",
+      "plural": "Stone axe heads",
+      "weight": 1,
+      "look": {
+        "shape": "head",
+        "head": "axe",
+        "colour": "#8f8a80",
+        "lashing": "#c9b77a"
+      },
+      "startInWorld": 0
+    },
+    "pick-head": {
+      "name": "Stone pick head",
+      "about": "Two sharp stones tied back to back. Tie it to a long stick to make a pickaxe.",
+      "plural": "Stone pick heads",
+      "weight": 1,
+      "look": {
+        "shape": "head",
+        "head": "pick",
+        "colour": "#8f8a80",
+        "lashing": "#c9b77a"
       },
       "startInWorld": 0
     },
@@ -342,7 +408,7 @@
     "campfire": {
       "name": "Campfire",
       "plural": "Campfires",
-      "weight": 12,
+      "weight": 9,
       "look": {
         "shape": "campfire",
         "size": 0.36,
@@ -356,11 +422,21 @@
   },
   "recipes": [
     {
+      "id": "sharp-stone",
+      "needs": {
+        "stone": 2
+      },
+      "makes": {
+        "sharp-stone": 1
+      },
+      "about": "Knock two stones together"
+    },
+    {
       "id": "knife",
       "name": "Stone knife",
       "needs": {
+        "sharp-stone": 1,
         "stick": 1,
-        "stone": 1,
         "twine": 1
       },
       "makes": {
@@ -369,37 +445,35 @@
       "about": "Cuts tall grass fast and picks 2 berries at a time"
     },
     {
-      "id": "stone-axe",
-      "name": "Stone axe",
+      "id": "twig",
       "needs": {
-        "stick": 2,
-        "stone": 3,
-        "twine": 1
+        "stick": 1
+      },
+      "keeps": {
+        "sharp-stone": 1
       },
       "makes": {
-        "stone-axe": 1
+        "twig": 2
       },
-      "about": "Chops trees, stumps and logs"
+      "about": "Cut a stick into 2 twigs with a sharp stone (you keep the stone)"
     },
     {
-      "id": "stone-pickaxe",
-      "name": "Stone pickaxe",
+      "id": "long-stick",
       "needs": {
         "stick": 2,
-        "stone": 3,
         "twine": 1
       },
       "makes": {
-        "stone-pickaxe": 1
+        "long-stick": 1
       },
-      "about": "Breaks rocks and mines boulders for stones"
+      "about": "Tie two sticks together"
     },
     {
       "id": "fishing-spear",
       "name": "Fishing spear",
       "needs": {
-        "stick": 2,
-        "stone": 1,
+        "long-stick": 1,
+        "sharp-stone": 1,
         "twine": 1
       },
       "makes": {
@@ -408,12 +482,60 @@
       "about": "Catches fish at the pond"
     },
     {
+      "id": "axe-head",
+      "needs": {
+        "sharp-stone": 1,
+        "twine": 1
+      },
+      "makes": {
+        "axe-head": 1
+      },
+      "about": "Wrap a sharp stone in twine"
+    },
+    {
+      "id": "stone-axe",
+      "name": "Stone axe",
+      "needs": {
+        "axe-head": 1,
+        "long-stick": 1,
+        "twine": 1
+      },
+      "makes": {
+        "stone-axe": 1
+      },
+      "about": "Chops trees, stumps and logs"
+    },
+    {
+      "id": "pick-head",
+      "needs": {
+        "sharp-stone": 2,
+        "twine": 1
+      },
+      "makes": {
+        "pick-head": 1
+      },
+      "about": "Tie two sharp stones back to back with twine"
+    },
+    {
+      "id": "stone-pickaxe",
+      "name": "Stone pickaxe",
+      "needs": {
+        "pick-head": 1,
+        "long-stick": 1,
+        "twine": 1
+      },
+      "makes": {
+        "stone-pickaxe": 1
+      },
+      "about": "Breaks rocks and mines boulders for stones"
+    },
+    {
       "id": "campfire",
       "name": "Campfire",
       "needs": {
         "log": 1,
-        "stick": 3,
-        "stone": 4
+        "twig": 2,
+        "stone": 2
       },
       "makes": {
         "campfire": 1
@@ -447,7 +569,8 @@
         "maxFuel": 24,
         "maxHours": 72,
         "otherFuels": {
-          "log": 28800
+          "log": 28800,
+          "twig": 120
         },
         "lightSeconds": 3
       },
@@ -799,8 +922,8 @@
   },
   "help": {
     "settings": "carryCapacity is the most weight a person can carry. walkSpeed is in metres per second. worldSize is how wide the square world is in metres (100 makes it 100 m x 100 m, with the clearing in the middle); it can be 40 to 300, and the bigger it is the more your phone has to draw. needsSpeed is 1 for real time; set it higher to test, for example 60 makes an hour of hunger and thirst pass in a minute. autoName fills in a name from testNames on the Make your person screen (handy while testing; set it to false for the real game). respawnMinutes is how often (online) the world adds one stick and one stone, if there are fewer on the ground than startInWorld: sticks under trees, stones by boulders. maxPlaying is how many people can play at once (20 for now, to stay inside Cloudflare's free plan); anyone else waits in line on the main menu and joins by themselves when a spot opens. Run tools/worlds.py test-build after changing it. worldTimeZone is the one clock the whole world runs on (date, time, day and night), the same for every player: Australia/Darwin for the Oceania world. craftSearchFrom: Craft shows a search box once you know this many recipes.",
-    "items": "To add an item, copy one of the items above, give it a new id (lower case, no spaces) and set its name, plural, weight and look. It then shows up by itself in the Inventory, in Craft (if a recipe makes it) and in the admin's Add list, with a picture drawn from its look. Shapes and their looks: rod (length, thickness, colour, twig), rock (size, colour), ball (size, colour, leaf: a colour or false), axe (length, thickness, colour, head, lashing), log (length, radius, colour, end), knife (length, thickness, colour, blade, lashing), coil (size, colour), campfire (size, colour, stone, ash), spear (length, thickness, colour, head, lashing), fish (length, colour, belly), box (width, height, depth, colour). An unknown shape is drawn as a rock. eat is what eating one gives (a berry gives hunger 10), which adds an Eat button in the inventory. tool: {\"uses\": 20} makes it a tool that wears out after that many uses (a wear bar in the inventory); a tool shows in your hand only while you use it (chopping, cutting). startInWorld is how many lie around when the world starts (0 for things you can only make), and startNear is how many of those start close to where you appear. After changing items, run python3 tools/worlds.py test-build so the server knows about them. about (optional) is a short line shown when you tap it in the Inventory; without it, the about of the recipe that makes it is used. startInWorld: how many lie about the world; while there are fewer, one more turns up every settings.respawnMinutes, at a spot by spawnsNear (trees or boulders). A new item with startInWorld and spawnsNear starts turning up by itself, no reset needed (run tools/worlds.py test-build).",
-    "recipes": "To add a recipe, put it in the recipes list like this: {\"id\": \"stone-axe\", \"name\": \"Stone axe\", \"needs\": {\"stick\": 2, \"stone\": 3}, \"makes\": {\"stone-axe\": 1}, \"about\": \"Chops trees\"}. Every item in needs and makes must exist in items. Recipes show up in the Craft sheet (the hammer button) automatically. about is a short line on the recipe card (optional). The server checks crafting too, so run python3 tools/worlds.py test-build after changing recipes. near (optional) is a placeable id, like campfire: the recipe can then only be made close to a built one (a fire has to be lit), Craft shows a 'By a lit campfire' chip, and it's listed in that thing's tap menu under its craftLabel (Cook). Use it for cooking. seconds (optional) is how long making it takes, like cooking at a fire (20): the things are used up when it finishes. A recipe shows in Craft once you've had all but one of the things it needs (at least one), so players discover recipes as they find new things. group (optional) puts it under a button in Craft (Tools, Food, Building, Clothes, Materials); without it tools go under Tools, food under Food, things you place under Building and the rest under Materials.",
+    "items": "To add an item, copy one of the items above, give it a new id (lower case, no spaces) and set its name, plural, weight and look. It then shows up by itself in the Inventory, on the craft mat and in its Found list (if a recipe makes it) and in the admin's Add list, with a picture drawn from its look. Shapes and their looks: rod (length, thickness, colour, twig, lashing: a twine colour tied round the middle, like a long stick), flake (size, colour: a sharp stone), head (head: axe or pick, colour, lashing: a stone tool head on its own, with twine round its middle), rock (size, colour), ball (size, colour, leaf: a colour or false), axe (length, thickness, colour, head, lashing), log (length, radius, colour, end), knife (length, thickness, colour, blade, lashing), coil (size, colour), campfire (size, colour, stone, ash), spear (length, thickness, colour, head, lashing), fish (length, colour, belly), box (width, height, depth, colour). An unknown shape is drawn as a rock. eat is what eating one gives (a berry gives hunger 10), which adds an Eat button in the inventory. tool: {\"uses\": 20} makes it a tool that wears out after that many uses (a wear bar in the inventory); a tool shows in your hand only while you use it (chopping, cutting). startInWorld is how many lie around when the world starts (0 for things you can only make), and startNear is how many of those start close to where you appear. After changing items, run python3 tools/worlds.py test-build so the server knows about them. about (optional) is a short line shown when you tap it in the Inventory; without it, the about of the recipe that makes it is used. startInWorld: how many lie about the world; while there are fewer, one more turns up every settings.respawnMinutes, at a spot by spawnsNear (trees or boulders). A new item with startInWorld and spawnsNear starts turning up by itself, no reset needed (run tools/worlds.py test-build).",
+    "recipes": "To add a recipe, put it in the recipes list like this: {\"id\": \"stone-axe\", \"name\": \"Stone axe\", \"needs\": {\"axe-head\": 1, \"long-stick\": 1, \"twine\": 1}, \"makes\": {\"stone-axe\": 1}, \"about\": \"Chops trees\"}. Every item in needs, keeps and makes must exist in items. Players make things on the craft mat (0.1.8): they put things from their bag on it, and when what is on the mat is exactly a recipe's needs plus its keeps (the same things, the same number of each), Make lights up. A recipe they have never made shows as \"Something new\" until they make it once; then it is in their Found list (the server keeps it, and their next person keeps it too). So keep recipes guessable: 2 or 3 things, at most 2 of each, and make big things from smaller steps (an axe head first, then the axe). No two recipes can want the same things on the mat (lint checks). keeps (optional) are tools the recipe needs on the mat but does not use up, like {\"sharp-stone\": 1} to cut a stick into a twig. about is a short line shown on the mat and in Found (optional). The server checks crafting too, so run python3 tools/worlds.py test-build after changing recipes. near (optional) is a placeable id, like campfire: the recipe can then only be made close to a built one (a fire has to be lit), and it is listed in that thing's tap menu under its craftLabel (Cook) without having to be found first. Use it for cooking. Food is only made at stations (Luke, 0.1.9): the craft mat never makes a recipe with near, it says where to make it instead (Cook this on a lit campfire), and Found only lists craft mat recipes. seconds (optional) is how long making it takes, like cooking at a fire (20): the things are used up when it finishes. group (optional) puts it under a button in Found (Tools, Food, Building, Clothes, Materials); without it tools go under Tools, food under Food, things you place under Building and the rest under Materials.",
     "looks": "Each list here is a set of choices on the Make your person screen. Add an entry to add a choice.",
     "stats": "Stats run in real time. Every stat goes from 0 to 100. perHour is how much it changes each real hour, and whileAsleep is used instead while sleeping. lowAt shows the warning (the ring pulses red, and under 10 it flashes). atZero is what happens to other stats each hour while this one is empty. Health heals (4 an hour, 8 asleep, so about a day to full) when nothing is empty, and the person dies when health reaches 0. fullLabel is shown when you try to eat or drink but don't need to. gainLabel is the word in the pop-up when eating or drinking fills it (+10 food, +15 water), since '+10 Hunger' would read like getting hungrier; without it the need's name is used. Hunger lasts about a day (a berry fills 10), thirst about 16 hours awake (a drink fills 15), Rest about 16 hours awake and 8 asleep (whileAsleepAtNight: faster at night, about 6 hours). With no water you die in about 3 days, with no food in about a week. collapseAtZero (Rest): when it runs out your person collapses asleep where they stand and can't be woken until it's back to wakeAt (25). Stamina (id energy) is not deadly. icon: heart, food, drop, moon or bolt. The server uses the same numbers (copied by tools/worlds.py).",
     "sources": "Things in the world you can use, matched by name (\"Pond\", \"Berry bush\"). action is the button in the tap menu, like \"Drink\". gives adds to stats each time (one drink at the pond gives 15 thirst). harvest is what one pick puts in your inventory (1 berry), holds is how many a full bush has (up to 15), and regrowHours is how long a picked-bare bush takes to grow them all back; picked berries grow back one at a time. seconds is how long it takes. pose is kneel, pick or bend. fish (the pond has it): action and verb are the tap menu button and the busy word, seconds how long a try takes, tool what you need to carry (it wears each try), catch what a catch gives, chance the share of tries that catch one (0.5), holds how many fish the pond has for everyone and regrowMinutes how often one comes back; the server keeps the count (run tools/worlds.py test-build after changing it). tool and toolHarvest: with that tool you get toolHarvest per pick instead (a knife picks 2 berries), and the tool wears.",
@@ -912,6 +1035,35 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.1.9",
+      "date": "2026-11-25",
+      "added": [
+        "New to crafting? The craft mat suggests trying two stones to start"
+      ],
+      "improved": [
+        "New recipes for the stone axe and pickaxe: a stone head, a long stick and twine",
+        "Cutting a stick with a sharp stone gives 2 twigs",
+        "A campfire weighs 9 now, the same as the things it takes",
+        "Food is only cooked at a lit campfire now, not on the craft mat"
+      ]
+    },
+    {
+      "version": "0.1.8",
+      "date": "2026-11-25",
+      "title": "The craft mat",
+      "added": [
+        "Craft mat: put things from your bag together and discover what they make",
+        "Found list: tap a recipe you've made to put its things back on the mat",
+        "New things to make: sharp stone, twig, long stick, axe head and pick head"
+      ],
+      "improved": [
+        "Craft is in your inventory now, so the hammer button at the bottom is gone",
+        "Tools are made in steps now, like a sharp stone first, then a stone knife",
+        "A campfire takes a log, 2 twigs and 2 stones, and twigs burn as quick fuel",
+        "Recipes you find stay with you when you start again as a new person"
+      ]
+    },
     {
       "version": "0.1.7",
       "date": "2026-11-24",

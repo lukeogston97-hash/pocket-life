@@ -397,6 +397,11 @@ const SHAPES = {
     const m = new THREE.Mesh(pick ? pickHeadGeo : axeHeadGeo, tinted(look.colour || '#8f8a80', 0.06));
     m.position.z = pick ? 0 : -0.075; // (the axe head sticks out along +z from where the handle goes)
     g.add(m);
+    if (look.lashing) { // twine wrapped round where it will meet the handle (0.1.9: the heads are made with twine)
+      const band = new THREE.Mesh(new THREE.BoxGeometry(pick ? 0.11 : 0.078, pick ? 0.066 : 0.058, 0.018), matFor(look.lashing));
+      band.position.set(pick ? 0.005 : 0, 0, pick ? 0 : -0.065);
+      g.add(band);
+    }
     return { model: g, rest: 0.028, hold: 'palm', hitR: 0.26 };
   },
   rock(look) {
