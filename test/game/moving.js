@@ -183,7 +183,7 @@ function animateAct(m, P, ground, act, dt) {
     const sw = (Math.sin(t * 5.5) + 1) / 2, env = clamp01(Math.min(t, dur - t) / 0.3);
     P.body.rotation.x = stoop + (0.08 + 0.22 * sw) * env;
     setArm(P.armR, (-2.5 + sw * 2.0) * env);
-    setArm(P.armL, (-2.3 + sw * 1.9) * env);
+    setArm(P.armL, -0.15 * env); // chopping and mining swing the tool in the right hand only
   } else if (act.pose === 'kneel' || act.pose === 'pick') {
     const env = clamp01(Math.min(t, dur - t) / 0.3), wave = Math.sin(t * 7);
     if (act.pose === 'kneel') {

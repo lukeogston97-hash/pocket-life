@@ -104,8 +104,9 @@ function makePerson(look) {
     hand.position.y = -0.6;
     sh.add(new THREE.Mesh(armGeo, skin), new THREE.Mesh(sleeveGeo, cloth), hand);
     body.add(sh);
-    parts[side < 0 ? 'armL' : 'armR'] = sh;
-    parts[side < 0 ? 'handL' : 'handR'] = hand;
+    // the person faces +z, so their right side is -x (it was the wrong way round before 0.1.17, which put tools in the left hand)
+    parts[side < 0 ? 'armR' : 'armL'] = sh;
+    parts[side < 0 ? 'handR' : 'handL'] = hand;
   }
 
   body.userData.stoop = clamp01((look.age - 62) / 25) * 0.12;

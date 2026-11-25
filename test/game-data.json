@@ -1,5 +1,5 @@
 {
-  "version": "0.1.16",
+  "version": "0.1.17",
   "build": 1,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
@@ -1052,6 +1052,13 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.1.17",
+      "date": "2026-11-26",
+      "fixed": [
+        "Tools are held in the right hand, and only that hand swings when you use them"
+      ]
+    },
     {
       "version": "0.1.16",
       "date": "2026-11-25",

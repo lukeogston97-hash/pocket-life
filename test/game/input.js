@@ -548,7 +548,7 @@ function updatePlayer(dt) {
       const sw = (Math.sin(t * 5.5) + 1) / 2, env = clamp01(Math.min(t, dur - t) / 0.3);
       P.body.rotation.x = stoop + (0.08 + 0.22 * sw) * env;
       setArm(P.armR, (-2.5 + sw * 2.0) * env);
-      setArm(P.armL, (-2.3 + sw * 1.9) * env);
+      setArm(P.armL, carrying ? -0.15 * env : (-2.3 + sw * 1.9) * env); // a tool is swung with the right hand only
     } else if (action.pose === 'kneel' || action.pose === 'pick') {
       // ease in, keep going, ease out
       const env = clamp01(Math.min(t, dur - t) / 0.3), wave = Math.sin(t * 7);
@@ -556,11 +556,11 @@ function updatePlayer(dt) {
         P.body.rotation.x = stoop + 1.05 * env;
         player.position.y = playerGround - 0.12 * env;
         setArm(P.armR, (-0.6 + wave * 0.3) * env + (carrying ? holdX * (1 - env) : 0));
-        setArm(P.armL, (-0.6 + wave * 0.3) * env);
+        setArm(P.armL, carrying ? -0.3 * env : (-0.6 + wave * 0.3) * env); // with a tool only the right hand works
       } else {
         P.body.rotation.x = stoop + 0.15 * env;
         setArm(P.armR, (-1.25 + wave * 0.25) * env + (carrying ? holdX * (1 - env) : 0));
-        setArm(P.armL, (-1.0 - wave * 0.25) * env);
+        setArm(P.armL, carrying ? -0.15 * env : (-1.0 - wave * 0.25) * env);
       }
     } else {
       // a quick bend from the hips to pick up or put down
