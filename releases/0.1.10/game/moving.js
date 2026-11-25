@@ -247,7 +247,9 @@ function queueTask(t) {
   if (!wakeUp()) return;
   if (t.type === 'pickup') {
     if (allTasks().some((q) => q.type === 'pickup' && q.id === t.id)) return;
-    const w = ITEMS[getItem(t.id).kind].weight;
+    const item = getItem(t.id);
+    if (!item) { showTag('Someone got there first', headTop(), 2); return; } // (it went while the menu was open: someone else picked it up)
+    const w = ITEMS[item.kind].weight;
     if (w > SETTINGS.carryCapacity) { showTag('Too heavy', headTop(), 2); return; }
     if (plannedWeight() + w > SETTINGS.carryCapacity) { showTag('Too heavy', headTop(), 2); return; }
   }

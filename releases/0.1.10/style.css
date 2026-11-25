@@ -26,7 +26,7 @@ html, body { height: 100%; margin: 0; }
 body { background: var(--haze); color: var(--ink); font-family: var(--font-ui); overflow: hidden; -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent; }
 button, input, textarea { font-family: var(--font-ui); }
 button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-#app { position: relative; height: 100%; overflow: hidden; background: var(--haze); }
+#app { position: relative; height: 100%; overflow: hidden; overflow: clip; background: var(--haze); } /* clip: it can't be scrolled at all, even by a focus on something past its edge (that used to leave the whole game shifted up) */
 #world { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 .vignette { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(125% 95% at 50% 46%, transparent 60%, rgba(20, 24, 16, 0.22) 100%); }
 .mist-top { position: absolute; left: 0; right: 0; top: 0; height: 140px; pointer-events: none; background: linear-gradient(rgba(var(--mist), 0.55), rgba(var(--mist), 0)); }
@@ -145,7 +145,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .act-foot .act-btn { flex: 1 1 0; justify-content: center; min-height: 36px; padding: 0 8px; font-size: 12.5px; color: var(--ink-soft); }
 
 /* chat: a bar along the bottom (just above the keyboard) with the last few lines above it */
-.chat { position: absolute; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); z-index: 30; max-width: 520px; margin: 0 auto; display: grid; gap: 6px; }
+.chat { position: absolute; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); z-index: 30; max-width: 520px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; } /* (minmax(0, 1fr): on a 320 px phone the column otherwise grew to the text box's own width and pushed Send off the edge) */
 .chat[hidden] { display: none; }
 .chat-log { list-style: none; margin: 0; padding: 0 4px; display: grid; gap: 3px; justify-items: start; }
 .chat-log li { max-width: 100%; padding: 4px 10px; border-radius: 12px; background: var(--glass); color: var(--ink); font-size: 13px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere;
@@ -160,7 +160,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .send-btn svg { width: 18px; height: 18px; }
 .chatting .hud-bottom, .chatting .queue, .chatting .hint { display: none; }
 
-/* sheets that slide up: inventory and craft */
+/* the sheet that slides up: the inventory, with the craft mat in it (0.1.8) */
 .bag { position: absolute; left: 0; right: 0; bottom: 0; z-index: 26; max-width: 520px; margin: 0 auto; max-height: 62%; overflow-y: auto;
   padding: 6px 14px calc(14px + env(safe-area-inset-bottom)); border-bottom: 0; border-radius: 18px 18px 0 0;
   transform: translateY(105%); visibility: hidden; transition: transform 0.26s ease, visibility 0s linear 0.26s; }
@@ -196,9 +196,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .bag-empty[hidden] { display: none; }
 .wear { display: block; height: 3px; width: 64px; margin-top: 4px; border-radius: 3px; background: rgba(255, 255, 255, 0.14); overflow: hidden; }
 .wear::after { content: ""; display: block; height: 100%; width: calc(var(--w, 1) * 100%); background: var(--accent); }
-.craft-note { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 2px; font-size: 12.5px; color: var(--ink-soft); font-weight: 600; }
-.craft-note[hidden] { display: none; }
-.craft-note .text-btn { min-height: 36px; padding: 0 4px; font-size: 13px; }
 .craft-search { display: flex; align-items: center; gap: 8px; height: 40px; margin: 2px 0 8px; padding: 0 12px; border-radius: 12px; background: var(--hover); border: 1px solid var(--line); color: var(--ink-soft); }
 .craft-search[hidden] { display: none; }
 .craft-search svg { width: 16px; height: 16px; flex: none; }
@@ -210,19 +207,53 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .craft-chip.on { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
 .craft-more { margin: 10px 0 2px; text-align: center; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
 .craft-more[hidden] { display: none; }
-button.craft-head { padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
-.craft-group { padding: 8px 0 2px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-faint); }
-.craft-list { list-style: none; margin: 0; padding: 0; display: grid; }
-.craft-card { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px 10px; padding: 10px 0; border-top: 1px solid var(--line); }
-.craft-card:first-child, .craft-group + .craft-card { border-top: 0; }
-.craft-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.craft-head .dot { flex: none; }
-.craft-words { display: grid; min-width: 0; }
-.craft-words strong { font-size: 14px; }
-.craft-words small { font-size: 11.5px; color: var(--ink-soft); font-weight: 600; }
-.craft-needs { grid-column: 1; display: flex; flex-wrap: wrap; gap: 6px; padding-left: 24px; }
-.craft-card > .small-btn { grid-column: 2; grid-row: 1 / span 2; }
-.craft-card > .small-btn:disabled { opacity: 1; color: var(--ink-faint); } /* still looks like a button, just not one you can press yet */
+.craft-needs { display: flex; flex-wrap: wrap; gap: 6px; }
+/* the craft mat (0.1.8): in the inventory, above your bag. Put things on it; Make lights up when they go together */
+.bag.crafting { max-height: 80%; }
+.bag-head-btns { display: flex; align-items: center; gap: 2px; }
+.craft-toggle { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; }
+.craft-toggle svg { width: 15px; height: 15px; }
+.craft-toggle.on { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.mat { display: grid; gap: 8px; margin: 6px 0 10px; }
+.mat[hidden] { display: none; }
+.mat-spot { min-height: 84px; padding: 10px; border: 1.5px dashed var(--line-strong); border-radius: 14px; background: rgba(255, 255, 255, 0.04); display: grid; place-items: center;
+  transition: border-color 0.15s ease, background 0.15s ease; }
+.mat.drop-here .mat-spot { border-color: var(--ink-soft); }
+.mat-spot.over { border-color: var(--accent); background: rgba(143, 212, 158, 0.1); }
+.mat-spot.match { border-style: solid; border-color: var(--accent); }
+.mat-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.mat-list:empty { display: none; }
+.mat-list li { display: flex; width: 56px; }
+.mat-tile.need { opacity: 0.45; border-style: dashed; cursor: default; }
+.mat-empty { margin: 0; max-width: 240px; text-align: center; font-size: 12.5px; font-weight: 600; line-height: 1.35; color: var(--ink-faint); }
+.mat-empty[hidden] { display: none; }
+.mat-out { display: flex; align-items: center; gap: 10px; min-height: 48px; }
+.mat-out[hidden] { display: none; }
+.mat-pic { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; border: 1.5px dashed var(--line); }
+.mat-pic:empty { visibility: hidden; }
+.mat-pic .pic { width: 100%; height: 100%; border: 0; background: none; }
+.mat-pic.match, .mat-pic.new { border: 1.5px solid var(--accent); background: rgba(143, 212, 158, 0.12); }
+.mat-pic.goal { opacity: 0.55; }
+.mat-pic.new { animation: matPop 0.5s ease; }
+@keyframes matPop { 0% { transform: scale(0.6); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
+.mat-words { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.mat-words strong { font-size: 14.5px; }
+.mat-words small { font-size: 11.5px; font-weight: 600; line-height: 1.3; color: var(--ink-soft); }
+.mat-words small[hidden] { display: none; }
+.mat-out .text-btn { min-height: 40px; padding: 0 6px; font-size: 13px; }
+.mat-out .text-btn[hidden] { display: none; }
+#matMake { flex: none; min-width: 72px; }
+#matMake:disabled { opacity: 1; background: var(--hover); color: var(--ink-faint); border-color: var(--line); } /* still a button, just not lit */
+.mat-tabs { margin: 0; }
+#bagPart[hidden], .found[hidden] { display: none; }
+.found-list { list-style: none; margin: 0; padding: 0; display: grid; }
+.found-list li + li { border-top: 1px solid var(--line); }
+.found-row { width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.found-words { display: grid; gap: 5px; min-width: 0; }
+.found-words strong { font-size: 14px; }
+.found-row.not-made .pic, .found-row.not-made .dot { filter: grayscale(1); opacity: 0.5; } /* not made yet: greyed out (Luke, 0.1.10) */
+.found-row.not-made strong { color: var(--ink-faint); }
+.found-none { padding: 10px 0; text-align: center; font-size: 13px; font-weight: 600; color: var(--ink-soft); }
 .need-chip { font-size: 11.5px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: rgba(240, 138, 122, 0.16); color: var(--warn); }
 .need-chip.ok { background: rgba(143, 212, 158, 0.16); color: var(--accent); }
 
@@ -244,7 +275,7 @@ button.craft-head { padding: 0; border: 0; background: none; color: inherit; fon
 .feedback-text { margin: 0 0 12px; resize: vertical; }
 /* an iPhone zooms the whole page in when a box with text under 16 px is tapped, and stays zoomed: on touch screens the
    feedback box and the report note are 16 px, like the Say and name boxes */
-@media (pointer: coarse) { .feedback-text { font-size: 16px; } }
+@media (pointer: coarse) { .feedback-text, .craft-search input { font-size: 16px; } }
 .feedback-text::placeholder, .admin-input::placeholder { color: var(--ink-faint); }
 .maint-note { color: var(--ink-faint); font-size: 12.5px; margin-top: 4px; }
 .reason-list { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 4px 0 12px; }
@@ -334,6 +365,19 @@ button.craft-head { padding: 0; border: 0; background: none; color: inherit; fon
 .chip-btn { min-height: var(--row); padding: 0 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--hover); color: var(--ink-soft); font: 700 13px/1 var(--font-ui); white-space: nowrap; cursor: pointer; }
 .chip-btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
 .start-btn { margin-top: 3px; min-height: calc(var(--row) + 6px); width: 100%; font-size: 16px; }
+/* A phone held sideways (short and wide): the sheet no longer fits under your person, and Start my life ended up off the
+   bottom of the screen. So the sheet goes down the right, scrolling if it has to, and your person stands on the left
+   (renderCreator in game/people.js draws the stage beside the sheet). The inventory gets more of the height too.
+   (min-width: an upright phone whose keyboard shrinks the screen is short too, but narrow: it keeps the upright layout.) */
+@media (orientation: landscape) and (max-height: 560px) and (min-width: 560px) {
+  .creator { display: grid; grid-template-columns: minmax(0, 1fr) min(54%, 460px); grid-template-rows: auto minmax(0, 1fr); }
+  .creator-head { grid-column: 1; grid-row: 1; padding-left: calc(16px + env(safe-area-inset-left, 0px)); }
+  .preview-space { grid-column: 1; grid-row: 2; min-height: 0; }
+  .sheet { grid-column: 2; grid-row: 1 / span 2; align-self: stretch; align-content: center; max-width: none; margin: 0; max-height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    padding: calc(10px + env(safe-area-inset-top, 0px)) calc(14px + env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) 14px; border-radius: 18px 0 0 18px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .bag { max-height: 88%; }
+  .bag.crafting { max-height: 96%; }
+}
 
 .nogl { position: absolute; inset: 0; z-index: 70; display: grid; place-items: center; padding: 32px; text-align: center; font-weight: 700; color: #2c2b21; background: var(--haze); }
 .nogl[hidden] { display: none; }
@@ -373,7 +417,6 @@ button.craft-head { padding: 0; border: 0; background: none; color: inherit; fon
 .is-creating .hud-top, .is-creating .hud-bottom, .is-creating #labels, .is-creating .mist-top, .is-creating .hint, .is-creating .bag,
 .is-creating .queue, .is-creating .act-menu, .is-creating .chat, .is-creating .auto-chip { display: none; }
 .pic { width: 40px; height: 40px; border-radius: 10px; background: rgba(255, 255, 255, 0.07); border: 1px solid var(--line); object-fit: contain; flex: none; }
-.craft-needs { padding-left: 50px; }
 
 /* the Admin panel's tabs (Server, Players, Inbox, World, Settings) */
 .admin-page { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
@@ -524,3 +567,13 @@ select.admin-input { appearance: none; -webkit-appearance: none; }
 .soc-invite small[hidden] { display: none; }
 .soc-invite-btns { display: flex; justify-content: flex-end; align-items: center; gap: 6px; }
 .soc-invite-btns .action-btn { min-height: 36px; padding: 0 16px; }
+
+/* ---------- Privacy and rules (Settings > Privacy and rules): the words of privacy.html, shown in the game ---------- */
+.admin-list.words { display: block; }
+.modal-card .words h2 { margin: 16px 0 5px; font: 700 10.5px/1.2 var(--font-ui); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-faint); }
+.modal-card .words p { margin: 0 0 9px; font-size: 13.5px; font-weight: 600; line-height: 1.45; color: var(--ink-soft); }
+.modal-card .words p.updated { margin: 0 0 8px; font-size: 12px; color: var(--ink-faint); }
+.words ul { margin: 0 0 9px; padding-left: 18px; font-size: 13.5px; font-weight: 600; line-height: 1.45; color: var(--ink-soft); }
+.words li { margin: 0 0 4px; }
+.words strong { color: var(--ink); font-weight: 800; }
+.words a { color: var(--accent); }

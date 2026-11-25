@@ -115,6 +115,8 @@ const knifeBladeGeo = (() => {
 // A campfire: a ring of stones round a bed of ash, a log and a few sticks laid in the middle, and a little teepee of
 // sticks stood up over them (the fuel: more sticks, more teepee). Each building piece knows where it sits when the
 // campfire is built (to) and where it lies in a loose pile before then (from), so building can move them into place.
+// What it gives back is what any placed thing's builder gives (PLACED_SHAPES in placeables.js): its pieces, the sticks
+// that show its fuel, and the wood that goes black once it has burnt.
 // Only Math.random here, never the world's random numbers, so the world's layout never shifts.
 const fireStoneGeo = jitterGeo(new THREE.IcosahedronGeometry(1, 1), 0.2, 91);
 const FUEL_STICKS = 5; // the teepee: how many sticks it shows when the fire is full
@@ -151,7 +153,7 @@ function campfireModel(look = {}) {
     g.add(m);
     fuel.push(m);
   }
-  return { model: g, pieces, fuel, ash, R };
+  return { model: g, pieces, fuel, burns: pieces.slice(-4).map((pc) => pc.obj), ash, R }; // (burns: the log and the three sticks)
 }
 // a branch you pick up (the stick item): one gently arched piece of wood, thicker where it snapped (a pale cut end) and
 // thinner at the tip, with two short side twigs. The campfire's sticks keep the older stickGeo above.
@@ -372,8 +374,37 @@ const SHAPES = {
     const { wood, cut } = branchGeos(len, t, look.twig), lean = new THREE.Group();
     lean.rotation.x = (Math.random() - 0.5) * 0.6;
     lean.add(new THREE.Mesh(wood, tinted(look.colour, 0.07)), new THREE.Mesh(cut, matFor(look.cut || '#d6bf92')));
+    if (look.lashing) { // a long stick: two sticks tied together in the middle with twine
+      for (const dx of [-0.035, 0.035]) {
+        const band = new THREE.Mesh(new THREE.CylinderGeometry(t * 1.3, t * 1.3, 0.026, 7).rotateZ(Math.PI / 2), matFor(look.lashing));
+        band.position.x = dx;
+        lean.add(band);
+      }
+    }
     g.add(lean);
     return { model: g, rest: t, hold: 'rod', hit: [len + 0.3, 0.3, 0.36] };
+  },
+  // a sharp stone: a flake knocked off a stone, shaped like a leaf with a sharp edge all round (the knife's blade, chunkier)
+  flake(look) {
+    const s = look.size ?? 0.11, g = new THREE.Group();
+    const m = new THREE.Mesh(knifeBladeGeo, tinted(look.colour || '#8f8a80', 0.09));
+    m.scale.set(s / 0.13, 2.4, 1.7);
+    m.position.x = -s / 2;
+    g.add(m);
+    return { model: g, rest: 0.02, hold: 'palm', hitR: Math.max(0.2, s * 1.7) };
+  },
+  // a stone tool head on its own, before it's tied to a handle: look.head 'axe' or 'pick' (the same stone as on the tool)
+  head(look) {
+    const pick = look.head === 'pick', g = new THREE.Group();
+    const m = new THREE.Mesh(pick ? pickHeadGeo : axeHeadGeo, tinted(look.colour || '#8f8a80', 0.06));
+    m.position.z = pick ? 0 : -0.075; // (the axe head sticks out along +z from where the handle goes)
+    g.add(m);
+    if (look.lashing) { // twine wrapped round where it will meet the handle (0.1.9: the heads are made with twine)
+      const band = new THREE.Mesh(new THREE.BoxGeometry(pick ? 0.11 : 0.078, pick ? 0.066 : 0.058, 0.018), matFor(look.lashing));
+      band.position.set(pick ? 0.005 : 0, 0, pick ? 0 : -0.065);
+      g.add(band);
+    }
+    return { model: g, rest: 0.028, hold: 'palm', hitR: 0.26 };
   },
   rock(look) {
     const s = look.size ?? 0.12;

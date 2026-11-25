@@ -74,12 +74,13 @@ const LIVE_SET = {
   treeRegrowDays: (v) => { CHOP.regrowDays = v; },
   boulderRegrowDays: (v) => { MINE.regrowDays = v; },
   rockBackHours: (v) => { MINE.rockBackHours = v; },
+  fadeDays: (v) => { SETTINGS.fadeDays = v; }, // (only the server uses it: server/src/nature.js fadeOld)
   hungerPerHour: (v) => { if (STAT.hunger) STAT.hunger.perHour = -v; },
   thirstPerHour: (v) => { if (STAT.thirst) STAT.thirst.perHour = -v; },
   restPerHour: (v) => { if (STAT.rest) STAT.rest.perHour = -v; },
 };
 const LIVE_BASE = { maxPlaying: SETTINGS.maxPlaying, societyMax: (DATA.societies || {}).maxMembers ?? 3, respawnMinutes: SETTINGS.respawnMinutes, berryRegrowHours: (BERRY_SOURCE() || {}).regrowHours,
-  treeRegrowDays: CHOP.regrowDays ?? 3, boulderRegrowDays: MINE.regrowDays ?? 3, rockBackHours: MINE.rockBackHours ?? 4,
+  treeRegrowDays: CHOP.regrowDays ?? 3, boulderRegrowDays: MINE.regrowDays ?? 3, rockBackHours: MINE.rockBackHours ?? 4, fadeDays: SETTINGS.fadeDays ?? 7,
   hungerPerHour: -((STAT.hunger || {}).perHour || 0), thirstPerHour: -((STAT.thirst || {}).perHour || 0), restPerHour: -((STAT.rest || {}).perHour || 0) };
 function applyLive(live) {
   if (you.stats && !you.dead) tickStats(); // needs up to now at the old rate first
@@ -109,7 +110,7 @@ function applyLiveItems(live) {
     for (const f of ['needs', 'makes']) for (const kind of Object.keys(base[f])) r[f][kind] = num((mine[f] || {})[kind], base[f][kind]);
   }
   // what's on screen that shows these numbers: the weight you carry, the inventory, the craft list
-  bagDrawn = ''; craftDrawn = '';
+  bagDrawn = ''; craftDrawn = ''; foundDrawn = '';
   if (player) { drawCarry(); if (bagOpen()) drawBag(); if (craftOpen()) drawCraft(); }
 }
 
@@ -183,7 +184,7 @@ function drawPicker() {
   chips($('adminPickCount'), [[1, '1'], [5, '5'], [10, '10']], picker.n, (n) => { picker.n = n; drawPicker(); });
   const q = $('adminPickFind').value.trim().toLowerCase();
   const list = Object.values(ITEMS).filter((it) => (picker.group === 'All' || itemGroup(it) === picker.group) && (!q || it.name.toLowerCase().includes(q)))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => (q ? b.name.toLowerCase().startsWith(q) - a.name.toLowerCase().startsWith(q) : 0) || a.name.localeCompare(b.name)); // names that start with what was typed first (stone: Stone before Sharp stone)
   $('adminPickList').replaceChildren(...(list.length ? list.map((it) => button(it.name, () => { const f = picker.onPick, n = picker.n; closePicker(); if (f) f(it.id, n); }))
     : [emptyNote('Nothing called that')]));
 }
@@ -401,6 +402,15 @@ function drawPlayer() {
       twoTaps(clear, () => toPlayer({ t: 'a.clearTasks', id: p.id }), 'Tap again', 500);
       bar.appendChild(clear); sec.appendChild(bar);
     }
+    out.push(sec);
+  }
+  if (alive) { // the recipes they've found on the craft mat (0.1.8): give them every one, or clear them to find again
+    const found = (p.found || []).filter((id) => RECIPES.some((r) => r.id === id));
+    const sec = entry('Recipes found', `${found.length} of ${RECIPES.length}${found.length ? `: ${found.map((id) => recipeName(RECIPES.find((r) => r.id === id)).toLowerCase()).join(', ')}` : ''}`);
+    const bar = el('div', 'admin-btns'), none = button('Clear found', () => {});
+    if (found.length < RECIPES.length) bar.appendChild(button('Find all', () => toPlayer({ t: 'a.found', id: p.id, all: true })));
+    if (found.length) { twoTaps(none, () => toPlayer({ t: 'a.found', id: p.id, all: false }), 'Tap again', 500); bar.appendChild(none); }
+    sec.appendChild(bar);
     out.push(sec);
   }
   if (p.soc) { // their society (0.1.4): taking them out is the same as them leaving it

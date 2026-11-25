@@ -25,6 +25,19 @@ export function needsStep(st, hours, needs, o = {}) {
   }
 }
 
+/* ---------- the pond ---------- */
+// How far x, z is from the middle of the pond, as a share of the way to its shore in that direction: under 1 is water,
+// 1 is the shoreline. The pond isn't round (its edge wobbles). pond: { x, z, r }.
+// The land itself is shaped by pondShape in game/land.js, which is this same sum with the game's POND. That one is
+// left exactly as it was, because the world's layout must never move; the check `menu` compares the two. The server
+// uses this one to see that nothing is placed in the water (server/src/guard.js cantPlaceAt).
+export function pondShapeAt(pond, x, z) {
+  const dx = x - pond.x, dz = (z - pond.z) * 1.22;
+  const a = Math.atan2(dz, dx);
+  const r = pond.r * (1 + 0.13 * Math.sin(a * 3 + 1.1) + 0.06 * Math.sin(a * 5 - 0.7));
+  return Math.hypot(dx, dz) / r;
+}
+
 /* ---------- berry bushes: picked berries grow back one at a time ---------- */
 // count, from: how many were left and since when (count null: never picked); holds: a full bush; regrowMs: a whole bush
 export function berriesGrown(count, from, holds, regrowMs, t) {
@@ -61,6 +74,24 @@ export function fuelRoom(rule, left, kind) { return Math.max(0, Math.ceil((rule.
 export function seatSpotOf(th, seats, k) {
   const n = Math.max(1, Math.floor((seats || {}).count) || 6), d = Number((seats || {}).distance) || 1.2, a = (th.rot || 0) + (k * Math.PI * 2) / n;
   return [th.x + Math.sin(a) * d, th.z + Math.cos(a) * d];
+}
+
+/* ---------- crafting on the craft mat (0.1.8): put things together and see what they make ---------- */
+// everything a recipe wants on the mat: what it uses up (needs) and the tools it keeps (keeps, like a sharp stone)
+export function recipeWants(r) {
+  const out = { ...(r.needs || {}) };
+  for (const [k, n] of Object.entries(r.keeps || {})) out[k] = (out[k] || 0) + n;
+  return out;
+}
+// mat: what's on the mat { kind: how many }. Is it exactly what the recipe wants (the same things, the same number of each)?
+export function matIs(mat, r) {
+  const want = recipeWants(r), on = Object.entries(mat).filter(([, n]) => n > 0);
+  return on.length === Object.keys(want).length && on.every(([k, n]) => want[k] === n);
+}
+// is everything on the mat part of the recipe, with something still missing? (the mat says "Something's missing")
+export function matPartOf(mat, r) {
+  const want = recipeWants(r), on = Object.entries(mat).filter(([, n]) => n > 0);
+  return on.length > 0 && on.every(([k, n]) => (want[k] || 0) >= n) && !matIs(mat, r);
 }
 
 /* ---------- kinds of item: the buttons in Craft and the admin's item picker ---------- */

@@ -48,6 +48,7 @@ function applyGraphics(level) {
   const g = GRAPHICS[level];
   PIXEL_STEPS = [Math.min(window.devicePixelRatio || 1, g.pixels), 1.5, 1.25, 1].filter((v, i, a) => i === 0 || v < a[0]);
   speed.step = 0;
+  speed.calm = 0; // (measure again at the new setting)
   renderer.setPixelRatio(PIXEL_STEPS[0]);
   sun.castShadow = g.shadows > 0;
   if (g.shadows && sun.shadow.mapSize.x !== g.shadows) {
@@ -61,9 +62,9 @@ function applyGraphics(level) {
 }
 // If the phone is still struggling, draw a little less sharp (a step at a time, never back up in one visit)
 let PIXEL_STEPS = [Math.min(window.devicePixelRatio || 1, 2), 1.5, 1.25, 1].filter((v, i, a) => i === 0 || v < a[0]);
-const speed = { step: 0, time: 0, frames: 0, warm: 0 };
+const speed = { step: 0, time: 0, frames: 0, warm: 0, calm: 0, rest: false }; // calm: checks in a row that found nothing to change. rest: see below
 function watchSpeed(raw) {
-  if (document.hidden || raw > 0.5) return;
+  if (document.hidden || raw > 0.5 || speed.rest) return;
   if (speed.warm < 3) { speed.warm += raw; return; } // let it settle after starting
   speed.time += raw;
   speed.frames++;
@@ -72,10 +73,14 @@ function watchSpeed(raw) {
   speed.time = speed.frames = 0;
   if (fps < 45 && speed.step < PIXEL_STEPS.length - 1) {
     speed.step++;
+    speed.calm = 0;
     renderer.setPixelRatio(PIXEL_STEPS[speed.step]);
     resize();
-  }
+  } else speed.calm++;
 }
+// The sharpness has settled: two checks in a row changed nothing, or it's already as low as it goes. Until then every
+// frame is drawn, so the check above measures the phone's real speed. After that the main menu takes it easy (loop.js).
+const speedSettled = () => speed.calm >= 2 || speed.step >= PIXEL_STEPS.length - 1;
 function resize() {
   const w = app.clientWidth, h = app.clientHeight;
   renderer.setSize(w, h, false);

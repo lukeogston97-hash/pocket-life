@@ -431,7 +431,7 @@ function closePause() { paused = false; $('pause').hidden = true; }
 $('resumeBtn').addEventListener('click', closePause);
 $('pause').addEventListener('click', (e) => { if (e.target === $('pause')) closePause(); });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && ui.mode === 'menu') { closeNews(); closeFeedback(); closeSettings(); if (!$('adminLogin').hidden) $('adminLoginCancel').click(); return; }
+  if (e.key === 'Escape' && ui.mode === 'menu') { closeNews(); closeFeedback(); closeSettings(); closeRules(); if (!$('adminLogin').hidden) $('adminLoginCancel').click(); return; }
   if (e.key === 'Escape' && ui.mode === 'admin') { if (!$('actMenu').hidden) closeMenu(); return; } // (never the pause menu: there's no person to pause)
   if (e.key !== 'Escape' || ui.mode !== 'world') return;
   e.preventDefault();
@@ -440,6 +440,7 @@ document.addEventListener('keydown', (e) => {
   else if (!$('news').hidden) closeNews();
   else if (!$('society').hidden) closeSociety();
   else if (!$('settings').hidden) closeSettings();
+  else if (!$('rules').hidden) closeRules();
   else if (!$('back').hidden) $('back').hidden = true;
   else if (!$('adminPick').hidden) closePicker();
   else if (!$('adminPanel').hidden) adminEscape(); // the player page goes back to Players, else the panel closes
