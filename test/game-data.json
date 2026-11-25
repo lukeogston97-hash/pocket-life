@@ -1,6 +1,6 @@
 {
   "version": "0.1.10",
-  "build": 7,
+  "build": 8,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -1063,7 +1063,8 @@
         "The game says when it can't reach the world, and what to check",
         "The first load is a little quicker",
         "The main menu is easier on your battery",
-        "Things left on the ground for 7 days fade away. Things in a camp stay"
+        "Things left on the ground for 7 days fade away. Things in a camp stay",
+        "Privacy and rules says more: why things are kept, your choices, help if you're under 18"
       ],
       "fixed": [
         "Tapping something another player had just picked up could cause an error",
