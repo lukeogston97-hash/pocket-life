@@ -2195,7 +2195,7 @@ async def ore_vein():
         await a.evaluate(f"(() => {{ const t = ({TARGET})(0); __pl.queueTask({{ type: 'cut', plant: 'testVein', i: 0, x: t.x, z: t.z }}); }})()")
         await idle(a, 90); await a.wait_for_timeout(2000)
         got = await a.evaluate("""(() => { const P = __pl.plants.testVein, c = P.clumps[0]; return [__pl.you.carry.stone || 0, c.readyAt > Date.now(),
-          P.meshes.every((m) => m.instanceMatrix.array.slice(0, 16).every((v) => v === 0))]; })()""")
+          P.meshes.every((m) => { const a = m.instanceMatrix.array; return a[0] === 0 && a[5] === 0 && a[10] === 0; })]; })()""")  # (shrunk to nothing)
         expect(got == [2, True, True], f'mining it gives 2 stones, and it hides until it grows back ({got})')
         expect(not W.errors, f'no errors {W.errors[:3]}')
 

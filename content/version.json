@@ -14,7 +14,9 @@
       "version": "0.2.0",
       "date": "2026-11-27",
       "improved": [
-        "A big rebuild behind the scenes, to get the game ready for everything coming next"
+        "A big rebuild behind the scenes, to get the game ready for everything coming next",
+        "A smaller, quicker first load",
+        "Problems in the game are reported in more detail, so they're quicker to fix"
       ]
     },
     {
