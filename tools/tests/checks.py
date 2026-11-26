@@ -89,7 +89,13 @@ async def menu():
         expect('Privacy and rules' in alone[0] and alone[1] >= 5 and alone[2] == './', 'privacy.html opens as a page of its own, with a link back to the game')
         expect(''.join(alone[3].split()) == ''.join(words.split()), 'the game shows exactly the words of that page')  # (spaces between the page's lines aside)
         await shot(pv, 'menu_rules_page'); await pv.close()
-        await a.click('#menuNewsBtn'); expect(await shown(a, '#news'), "What's new opens"); await a.click('#newsClose')
+        await a.click('#menuNewsBtn'); expect(await shown(a, '#news'), "What's new opens")
+        heads = await a.evaluate("""[...document.querySelectorAll('#newsBody .news-entry')].slice(0, 3).map((e) => { const h = e.querySelector('.news-head');
+          return [h.querySelector('.news-ver').textContent, h.querySelector('.news-date').textContent, e.open, h.scrollWidth <= h.clientWidth + 1, h.getBoundingClientRect().height < 26]; })""")
+        expect(heads[0][0] == f"v{GAME_DATA['version']}" and heads[0][2] and heads[1][0] == 'v0.1.0 to v0.1.21' and heads[1][1] == '23 to 26 Nov 2026' and not heads[1][2],
+               f"the newest version is open, then v0.1.0 to v0.1.21 folded into one (0.2.0) ({heads[:2]})")
+        expect(all(h[3] and h[4] for h in heads), f'each heading fits on one line on a phone ({heads})')
+        await shot(a, 'menu_news'); await a.click('#newsClose')
         await a.click('#playBtn'); await a.wait_for_timeout(1500)
         expect(await shown(a, '#creator'), 'Play opens Make your person')
         await a.click('#creatorBack'); await a.wait_for_timeout(1200)
