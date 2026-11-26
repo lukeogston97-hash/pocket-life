@@ -22,6 +22,7 @@ import { liveItemsMethods } from './live-items.js';
 import { claimsMethods } from './claims.js';
 import { societiesMethods, freshSocieties } from './societies.js';
 import { restoreMethods } from './restore.js';
+import { upgradeMethods } from './upgrades.js';
 import { guardMethods } from './guard.js';
 import { activityMethods, BACK_AFTER, longText } from './activity.js';
 import { taskMethods } from './tasks.js';
@@ -67,6 +68,8 @@ export class World extends DurableObject {
       this.accounts = (await ctx.storage.get('accounts')) || freshAccounts();
       Object.assign(this.usage, (await ctx.storage.get('usage')) || {});
       for (const [k, p] of await ctx.storage.list({ prefix: 'p:' })) this.persons.set(k.slice(2), p);
+      await this.tidySaved(); // broken records made safe, never lost (upgrades.js)
+      await this.upgradeSaved(); // saved data from an older save format brought up to date, once (upgrades.js)
       const old = this.retireOld(); // items taken out of the game (twigs, 0.1.21) become what game-data.json's "retired" says (persons.js)
       for (const p of old.people) this.touch(p);
       if (old.world) await this.put('world', this.world);
@@ -432,7 +435,7 @@ export class World extends DurableObject {
 
 }
 // the rest of the world's methods, kept in their own files by topic
-Object.assign(World.prototype, lineMethods, personsMethods, awayMethods, natureMethods, adminMethods, placedMethods, liveMethods, liveItemsMethods, claimsMethods, societiesMethods, accountsMethods, guardMethods, restoreMethods, activityMethods, taskMethods);
+Object.assign(World.prototype, lineMethods, personsMethods, awayMethods, natureMethods, adminMethods, placedMethods, liveMethods, liveItemsMethods, claimsMethods, societiesMethods, accountsMethods, guardMethods, restoreMethods, activityMethods, taskMethods, upgradeMethods);
 
 export default {
   async fetch(request, env) {
