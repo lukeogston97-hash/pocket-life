@@ -172,7 +172,7 @@ function adminMoveTap() {
 }
 
 /* ---------- the item picker: Add item (on the ground) and Give (into someone's bag) ---------- */
-const itemGroup = itemGroupOf; // rules.js: the same kinds as Craft
+const itemGroup = groupOf; // items.js: the same headings as Recipes
 const picker = { group: 'All', n: 1, onPick: null };
 function openPicker(title, onPick) {
   picker.onPick = onPick;
@@ -183,7 +183,7 @@ function openPicker(title, onPick) {
 }
 function closePicker() { $('adminPick').hidden = true; picker.onPick = null; }
 function drawPicker() {
-  const groups = ['All', ...ITEM_GROUPS.filter((g) => Object.values(ITEMS).some((it) => itemGroup(it) === g))];
+  const groups = ['All', ...GROUPS.filter((g) => Object.values(ITEMS).some((it) => itemGroup(it) === g))];
   if (!groups.includes(picker.group)) picker.group = 'All';
   chips($('adminPickKinds'), groups.map((g) => [g, g]), picker.group, (g) => { picker.group = g; drawPicker(); });
   chips($('adminPickCount'), [[1, '1'], [5, '5'], [10, '10']], picker.n, (n) => { picker.n = n; drawPicker(); });
@@ -712,7 +712,7 @@ function drawItems() {
     if (!groups.has(r.pl.head)) groups.set(r.pl.head, { head: r.pl.head, kind: r.pl.kind, rows: [] });
     groups.get(r.pl.head).rows.push(r);
   }
-  const all = [...groups.values()], kinds = ['All', ...ITEM_GROUPS.filter((g) => all.some((x) => x.kind === g))];
+  const all = [...groups.values()], kinds = ['All', ...GROUPS.filter((g) => all.some((x) => x.kind === g))];
   if (!kinds.includes(itemsKind)) itemsKind = 'All';
   chips($('adminItemsKinds'), kinds.map((g) => [g, g]), itemsKind, (g) => { itemsKind = g; redrawItems(); });
   const shown = all.filter((x) => (itemsKind === 'All' || x.kind === itemsKind) && (!q || x.head.toLowerCase().includes(q)))

@@ -94,6 +94,28 @@ const pickHeadGeo = (() => {
   g.computeVertexNormals();
   return g;
 })();
+// A stone hoe head (0.1.18): a flat stone like the axe head but wider and blunter, turned so its flat faces along the
+// handle (a hoe scrapes and turns the soil; an axe cuts). Built like the axe head, then turned a quarter round the
+// handle's line: out along +z (the blade), wide in y and thin along x (the handle).
+const hoeHeadGeo = (() => {
+  const sh = new THREE.Shape();
+  sh.moveTo(-0.03, -0.03); sh.lineTo(0.03, -0.03); // behind the handle
+  sh.lineTo(0.034, 0.04);
+  sh.quadraticCurveTo(0.06, 0.1, 0.075, 0.17); // flaring out to a wide edge
+  sh.quadraticCurveTo(0, 0.185, -0.075, 0.17);
+  sh.quadraticCurveTo(-0.06, 0.1, -0.034, 0.04);
+  sh.closePath();
+  const depth = 0.032;
+  const g = new THREE.ExtrudeGeometry(sh, { depth, bevelEnabled: false, curveSegments: 4 }).translate(0, 0, -depth / 2).rotateX(Math.PI / 2);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) { // a little thinner towards the edge (blunter than the axe)
+    const k = Math.min(1, Math.max(0, (p.getZ(i) - 0.03) / 0.15));
+    p.setY(i, p.getY(i) * (1 - 0.6 * k));
+  }
+  g.rotateZ(Math.PI / 2);
+  g.computeVertexNormals();
+  return g;
+})();
 // A stone knife blade, a flake of stone shaped like a leaf: wide near the handle, narrowing to a point, with a
 // sharp edge all round. Built along x (out from the handle), wide along z and thin in y.
 const knifeBladeGeo = (() => {
@@ -272,6 +294,30 @@ const SHAPES = {
     }
     return { model: g, rest: 0.04, hold: 'axe', grip: len / 2 - 0.06, hit: [len + 0.3, 0.3, 0.42] };
   },
+  // a stone hoe (0.1.18): the axe's handle, a little longer, with a wide flat stone across its end, lashed on the same way
+  hoe(look) {
+    const len = look.length ?? 0.75, t = look.thickness ?? 0.025;
+    const g = new THREE.Group();
+    const wood = tinted(look.colour || '#8a6847', 0.04);
+    g.add(new THREE.Mesh(new THREE.CylinderGeometry(t * 0.9, t * 1.1, len, 6).rotateZ(Math.PI / 2), wood)); // the handle
+    const knob = new THREE.Mesh(new THREE.CylinderGeometry(t * 1.35, t * 1.1, 0.03, 6).rotateZ(Math.PI / 2), wood); // a little flare at the end you hold
+    knob.position.x = -len / 2 + 0.015;
+    g.add(knob);
+    const hx = len / 2 - 0.04;
+    const head = new THREE.Mesh(hoeHeadGeo, tinted(look.head || '#8f8a80', 0.06));
+    head.position.set(hx, 0, 0);
+    g.add(head);
+    const twine = matFor(look.lashing || '#c9b77a');
+    for (const dx of [-0.04, 0.032]) { // twine wrapped round the handle either side of the head
+      const lash = new THREE.Mesh(new THREE.CylinderGeometry(t * 1.5, t * 1.5, 0.024, 7).rotateZ(Math.PI / 2), twine);
+      lash.position.set(hx + dx, 0, 0);
+      g.add(lash);
+    }
+    const cross = new THREE.Mesh(new THREE.BoxGeometry(0.012, t * 2.6, 0.09), twine); // and over the neck
+    cross.position.set(hx, 0, 0.02);
+    g.add(cross);
+    return { model: g, rest: 0.04, hold: 'axe', grip: len / 2 - 0.06, hit: [len + 0.3, 0.3, 0.42] };
+  },
   // a fishing spear: a long thin shaft with a flat pointed stone tip, lashed on with twine
   spear(look) {
     const len = look.length ?? 1.0, t = look.thickness ?? 0.024;
@@ -393,18 +439,33 @@ const SHAPES = {
     g.add(m);
     return { model: g, rest: 0.02, hold: 'palm', hitR: Math.max(0.2, s * 1.7) };
   },
-  // a stone tool head on its own, before it's tied to a handle: look.head 'axe' or 'pick' (the same stone as on the tool)
+  // a stone tool head on its own, before it's tied to a handle: look.head 'axe', 'pick' or 'hoe' (the same stone as on the tool)
   head(look) {
-    const pick = look.head === 'pick', g = new THREE.Group();
-    const m = new THREE.Mesh(pick ? pickHeadGeo : axeHeadGeo, tinted(look.colour || '#8f8a80', 0.06));
-    m.position.z = pick ? 0 : -0.075; // (the axe head sticks out along +z from where the handle goes)
+    const pick = look.head === 'pick', hoe = look.head === 'hoe', g = new THREE.Group();
+    const m = new THREE.Mesh(pick ? pickHeadGeo : hoe ? hoeHeadGeo : axeHeadGeo, tinted(look.colour || '#8f8a80', 0.06));
+    m.position.z = pick ? 0 : -0.075; // (the axe and hoe heads stick out along +z from where the handle goes)
+    if (hoe) { m.rotation.z = Math.PI / 2; m.position.y = 0.01; } // lying flat, like the axe head
     g.add(m);
     if (look.lashing) { // twine wrapped round where it will meet the handle (0.1.9: the heads are made with twine)
-      const band = new THREE.Mesh(new THREE.BoxGeometry(pick ? 0.11 : 0.078, pick ? 0.066 : 0.058, 0.018), matFor(look.lashing));
-      band.position.set(pick ? 0.005 : 0, 0, pick ? 0 : -0.065);
+      const band = new THREE.Mesh(new THREE.BoxGeometry(pick ? 0.11 : hoe ? 0.084 : 0.078, pick ? 0.066 : hoe ? 0.05 : 0.058, 0.018), matFor(look.lashing));
+      band.position.set(pick ? 0.005 : 0, hoe ? 0.01 : 0, pick ? 0 : -0.065);
       g.add(band);
     }
     return { model: g, rest: 0.028, hold: 'palm', hitR: 0.26 };
+  },
+  // seeds (0.1.18): a little heap of small seeds
+  seeds(look) {
+    const s = look.size ?? 0.05, g = new THREE.Group(), col = look.colour || '#b08a58';
+    const geo = sharedGeo(`seed|${s}`, () => new THREE.IcosahedronGeometry(s * 0.17, 0));
+    const spots = [[0, 0, 0], [0.32, 0, 0.14], [-0.3, 0, 0.1], [0.08, 0, -0.32], [-0.12, 0, 0.34], [0.36, 0, -0.2], [-0.34, 0, -0.22], [0.05, 0.2, 0.02], [-0.12, 0.17, -0.09], [0.17, 0.16, 0.13]];
+    for (const [x, y, z] of spots) {
+      const m = new THREE.Mesh(geo, tinted(col, 0.06));
+      m.position.set(x * s, (y + 0.1) * s, z * s);
+      m.scale.set(1, 0.62, 1.45);
+      m.rotation.y = Math.random() * 6;
+      g.add(m);
+    }
+    return { model: g, rest: 0, hold: 'palm', hitR: Math.max(0.2, s * 3) };
   },
   rock(look) {
     const s = look.size ?? 0.12;
@@ -453,6 +514,9 @@ const SHAPES = {
 };
 
 /* ---------- items and recipes from the data, checked so a typo can't break the game ---------- */
+// the headings in Recipes and the admin's item lists, in order (itemGroups in game-data.json), and which one a thing is under
+const GROUPS = Array.isArray(DATA.itemGroups) && DATA.itemGroups.length ? DATA.itemGroups.map(String) : ITEM_GROUPS;
+const groupOf = (it) => itemGroupOf(it, GROUPS); // rules.js
 const ITEMS = {};
 for (const [id, raw] of Object.entries(DATA.items || {})) {
   const look = { ...(raw.look || {}) };
@@ -463,6 +527,7 @@ for (const [id, raw] of Object.entries(DATA.items || {})) {
     name,
     plural: raw.plural || name + 's',
     weight: Number.isFinite(raw.weight) ? raw.weight : 1,
+    group: typeof raw.group === 'string' ? raw.group : '', // its heading in Recipes and the admin's lists, where the usual one is wrong (rules.js itemGroupOf)
     look,
     startInWorld: Math.max(0, Math.floor(raw.startInWorld || 0)),
     startNear: Math.max(0, Math.floor(raw.startNear ?? 4)),
@@ -492,8 +557,12 @@ for (const [id, raw] of Object.entries(DATA.sources || {})) {
   const gives = Object.fromEntries(Object.entries(raw.gives || {}).filter(([k, v]) => STAT[k] && Number.isFinite(v)));
   // harvest: what picking it puts in your inventory; regrowHours: how long until it can be picked again
   const harvest = Object.fromEntries(Object.entries(raw.harvest || {}).filter(([k, v]) => ITEMS[k] && v >= 1).map(([k, v]) => [k, Math.floor(v)]));
+  // tool: picking with it (a knife on the tool bar) gives toolHarvest instead (2 berries at once), the same as the server
+  const tool = raw.tool && ITEMS[raw.tool] ? raw.tool : null;
+  const toolHarvest = tool ? Object.fromEntries(Object.entries(raw.toolHarvest || {}).filter(([k, v]) => ITEMS[k] && v >= 1).map(([k, v]) => [k, Math.floor(v)])) : {};
   SOURCES[id] = { id, name: raw.name || id, action: raw.action || '', verb: raw.verb || 'Using', seconds: Math.max(0.3, Number(raw.seconds) || 1), pose: raw.pose || 'pick',
     gives, harvest, holds: Math.floor(Number(raw.holds) || 0), regrowHours: Math.max(0, Number(raw.regrowHours) || 0),
+    tool: Object.keys(toolHarvest).length ? tool : null, toolHarvest: Object.keys(toolHarvest).length ? toolHarvest : null,
     // fish: fishing here with a tool (the pond): how long a try takes and what it catches; the server holds the fish
     fish: raw.fish && ITEMS[raw.fish.tool] && ITEMS[raw.fish.catch] ? { action: raw.fish.action || 'Fish', verb: raw.fish.verb || 'Fishing', seconds: Math.max(1, Number(raw.fish.seconds) || 8), tool: raw.fish.tool, catch: raw.fish.catch } : null };
 }

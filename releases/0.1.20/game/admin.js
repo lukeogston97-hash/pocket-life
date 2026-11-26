@@ -80,10 +80,12 @@ const LIVE_SET = {
   hungerPerHour: (v) => { if (STAT.hunger) STAT.hunger.perHour = -v; },
   thirstPerHour: (v) => { if (STAT.thirst) STAT.thirst.perHour = -v; },
   restPerHour: (v) => { if (STAT.rest) STAT.rest.perHour = -v; },
+  cropGrowHours: (v) => { for (const c of Object.values(CROPS)) c.growMs = v * 3600000; }, // (placeables.js: the crops show it within a second)
 };
 const LIVE_BASE = { maxPlaying: SETTINGS.maxPlaying, toolSlots: SETTINGS.toolSlots ?? 7, societyMax: (DATA.societies || {}).maxMembers ?? 3, respawnMinutes: SETTINGS.respawnMinutes, berryRegrowHours: (BERRY_SOURCE() || {}).regrowHours,
   treeRegrowDays: daysSpan(CHOP.regrowDays)[0], treeRegrowDaysMost: daysSpan(CHOP.regrowDays)[1], boulderRegrowDays: MINE.regrowDays ?? 3, rockBackHours: MINE.rockBackHours ?? 4, fadeDays: SETTINGS.fadeDays ?? 7,
-  hungerPerHour: -((STAT.hunger || {}).perHour || 0), thirstPerHour: -((STAT.thirst || {}).perHour || 0), restPerHour: -((STAT.rest || {}).perHour || 0) };
+  hungerPerHour: -((STAT.hunger || {}).perHour || 0), thirstPerHour: -((STAT.thirst || {}).perHour || 0), restPerHour: -((STAT.rest || {}).perHour || 0),
+  cropGrowHours: (Object.values(DATA.crops || {})[0] || {}).growHours ?? 24 };
 function applyLive(live) {
   if (you.stats && !you.dead) tickStats(); // needs up to now at the old rate first
   for (const [id, set] of Object.entries(LIVE_SET)) { const v = live && live[id] != null ? live[id] : LIVE_BASE[id]; if (v != null) set(v); }
@@ -147,6 +149,7 @@ function adminPlacedActions(th) {
   const fire = (what) => () => adminSend({ t: 'a.fire', id: th.id, do: what });
   const whose = th.claim ? `Ends ${th.claim.name}` : ''; // (a claim is a society: 0.1.5)
   return [{ label: 'Move', note: 'Then tap where it goes', run: () => startMove({ what: 'placed', id: th.id }) },
+    ...(th.crop ? [{ label: 'Grow now', note: 'Grown and full of berries', run: () => adminSend({ t: 'a.regrow', what: 'placed', id: th.id }) }] : []), // a farm field's crop (0.1.18)
     ...(F && th.built ? [{ label: 'Fill with fuel', run: () => adminSend({ t: 'a.regrow', what: 'placed', id: th.id }) },
       th.lit ? (th.claim ? sure('Put out', fire('out'), whose) : { label: 'Put out', run: fire('out') }) : { label: 'Light', run: fire('light') }] : []),
     ...(th.claim ? [sure('End claim', () => adminSend({ t: 'a.claim', id: th.id, do: 'end' }), 'The fire burns on')] : []),
@@ -169,7 +172,7 @@ function adminMoveTap() {
 }
 
 /* ---------- the item picker: Add item (on the ground) and Give (into someone's bag) ---------- */
-const itemGroup = itemGroupOf; // rules.js: the same kinds as Craft
+const itemGroup = groupOf; // items.js: the same headings as Recipes
 const picker = { group: 'All', n: 1, onPick: null };
 function openPicker(title, onPick) {
   picker.onPick = onPick;
@@ -180,7 +183,7 @@ function openPicker(title, onPick) {
 }
 function closePicker() { $('adminPick').hidden = true; picker.onPick = null; }
 function drawPicker() {
-  const groups = ['All', ...ITEM_GROUPS.filter((g) => Object.values(ITEMS).some((it) => itemGroup(it) === g))];
+  const groups = ['All', ...GROUPS.filter((g) => Object.values(ITEMS).some((it) => itemGroup(it) === g))];
   if (!groups.includes(picker.group)) picker.group = 'All';
   chips($('adminPickKinds'), groups.map((g) => [g, g]), picker.group, (g) => { picker.group = g; drawPicker(); });
   chips($('adminPickCount'), [[1, '1'], [5, '5'], [10, '10']], picker.n, (n) => { picker.n = n; drawPicker(); });
@@ -473,14 +476,14 @@ function drawCounts() {
   const kinds = {};
   for (const it of world.items) kinds[it.kind] = (kinds[it.kind] || 0) + 1;
   const loose = Object.entries(kinds).sort((a, b) => b[1] - a[1]).map(([k, c]) => `${c} ${c === 1 ? ITEMS[k].name.toLowerCase() : ITEMS[k].plural.toLowerCase()}`);
-  const fires = {};
-  for (const th of placed.values()) fires[th.kind] = (fires[th.kind] || 0) + 1;
+  const fires = {}, planted = {}; // (every kind of placed thing: campfires, farm fields and how many have something growing)
+  for (const th of placed.values()) { fires[th.kind] = (fires[th.kind] || 0) + 1; if (th.crop) planted[th.kind] = (planted[th.kind] || 0) + 1; }
   const lines = [
     ['Trees', `${n(trees, (t) => t.state === 'tree')}`], ['Tree stumps', `${n(trees, (t) => t.state === 'stump')}`],
     ['Boulders', `${n(rocks, (r) => r.boulder && r.state !== 'gone')} (${n(rocks, (r) => r.boulder && r.state === 'mined')} mined)`],
     ['Rocks', `${n(rocks, (r) => !r.boulder && r.state !== 'gone')} (${n(rocks, (r) => !r.boulder && r.state === 'gone')} broken)`],
     ['Berry bushes', `${bushes.length} (${n(bushes, (b) => berriesOn(b) < bushHolds(SOURCES[b.userData.source] || {}))} picked)`],
-    ...Object.entries(fires).map(([k, c]) => [PLACEABLES[k] ? `${PLACEABLES[k].name}s` : k, String(c)]),
+    ...Object.entries(fires).map(([k, c]) => [PLACEABLES[k] ? `${PLACEABLES[k].name}s` : k, PLACEABLES[k] && PLACEABLES[k].madeWith ? `${c} (${planted[k] || 0} planted)` : String(c)]),
     ['Loose items', `${world.items.length}`]];
   const box = $('adminCounts');
   box.replaceChildren(...lines.flatMap(([a, b]) => [el('span', '', a), el('b', '', b)]));
@@ -709,7 +712,7 @@ function drawItems() {
     if (!groups.has(r.pl.head)) groups.set(r.pl.head, { head: r.pl.head, kind: r.pl.kind, rows: [] });
     groups.get(r.pl.head).rows.push(r);
   }
-  const all = [...groups.values()], kinds = ['All', ...ITEM_GROUPS.filter((g) => all.some((x) => x.kind === g))];
+  const all = [...groups.values()], kinds = ['All', ...GROUPS.filter((g) => all.some((x) => x.kind === g))];
   if (!kinds.includes(itemsKind)) itemsKind = 'All';
   chips($('adminItemsKinds'), kinds.map((g) => [g, g]), itemsKind, (g) => { itemsKind = g; redrawItems(); });
   const shown = all.filter((x) => (itemsKind === 'All' || x.kind === itemsKind) && (!q || x.head.toLowerCase().includes(q)))

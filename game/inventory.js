@@ -353,8 +353,9 @@ function fitMat() {
   onTheMat = {};
   if (goal) for (const [k, n] of Object.entries(recipeWants(goal))) { const have = Math.min(n, (you.carry && you.carry[k]) || 0); if (have > 0) onTheMat[k] = have; }
 }
-// what Make would make: the tapped recipe, once all of it is there
-const matMakes = () => { const goal = matGoalRecipe(); return goal && matIs(onTheMat, goal) ? goal : null; };
+// what Make would make: the tapped recipe, once all of it is there (not one made at a station, like cooked fish: the mat
+// says where to make it, and Make stays off)
+const matMakes = () => { const goal = matGoalRecipe(); return goal && !goal.near && matIs(onTheMat, goal) ? goal : null; };
 function clearMat() { matGoal = null; matNew = null; drawBag(); }
 // a recipe tapped in Recipes (greyed out or not): the mat shows it
 function fillMat(r) {
@@ -382,9 +383,9 @@ function cantMake(r) {
   return '';
 }
 const canMake = (r) => !cantMake(r);
-// the recipes made on the mat (and listed in Recipes): not ones made at a station, like cooking at a campfire (Luke, 0.1.9)
-const onMatRecipe = (r) => !r.near;
-const MAT_RECIPES = RECIPES.filter(onMatRecipe);
+// the mat makes everything but the ones made at a station, like cooking at a campfire (Luke, 0.1.9). Recipes lists those
+// too since 0.1.20 (Luke: Food "not hidden"), marked "At a campfire", and the mat says where to make it.
+const stationWords = (r) => { const P = PLACEABLES[r.near]; return P ? `${P.craftLabel || 'Make'} it at a${P.fire ? ' lit' : ''} ${P.name.toLowerCase()}` : ''; }; // "Cook it at a lit campfire"
 // a recipe with "seconds" (cooking) takes that long, and uses its things up when it finishes (if it still can be made).
 // What it keeps (a sharp stone) stays. The first time you make one it's found: the mat says "Your first one!".
 function make(r) {
@@ -433,7 +434,11 @@ function drawMat() {
     pic = madeBy(r); name = recipeName(r);
     why = cant === 'Too heavy' ? 'Too heavy to carry' : r.about || '';
     go = !cant; state = 'match';
-  } else if (goal) { pic = madeBy(goal); name = recipeName(goal); why = missing.length ? `Still need ${listWords(missing)}` : ''; state = 'goal'; }
+  } else if (goal) { // the things it takes, and what's still missing; made at a station: where (the mat can't make it)
+    pic = madeBy(goal); name = recipeName(goal); state = 'goal';
+    const at = goal.near ? stationWords(goal) : ''; // "Still need 1 fish, then cook it at a lit campfire"
+    why = missing.length ? `Still need ${listWords(missing)}${at ? `, then ${at.charAt(0).toLowerCase()}${at.slice(1)}` : ''}` : at;
+  }
   const shows = JSON.stringify([onTheMat, missing, pic, name, why, go, state, (you.found || []).length]);
   if (shows === craftDrawn) return;
   craftDrawn = shows;
@@ -454,12 +459,24 @@ function drawMat() {
   $('matClear').hidden = !tiles.length;
   $('matMake').disabled = !go;
 }
-// the Recipes list: every mat recipe by kind (Tools, Food, Building...). The ones you have everything for come first, with
-// what they use; the rest are greyed out, just a picture and a name (Luke, 0.1.10; greyed by what you carry, not by what
-// you've made, since 0.1.12). Tap any one to put its things on the mat, as many as it takes (what you don't have shows faded).
-const CRAFT_GROUPS = ITEM_GROUPS; // rules.js
-const recipeGroup = (r) => r.group || itemGroupOf(ITEMS[madeBy(r)]);
+// the Recipes list: every recipe under its heading (Materials, Parts, Tools, Food...: itemGroups in game-data.json, 0.1.20).
+// The ones you have everything for come first, with what they use; the rest are greyed out, just a picture and a name
+// (Luke, 0.1.10; greyed by what you carry, not by what you've made, since 0.1.12). Each part goes simple to advanced (Luke,
+// 0.1.20: by how many steps it is from things found lying about). Tap any one to put its things on the mat, as many as it
+// takes (what you don't have shows faded).
+const CRAFT_GROUPS = GROUPS; // items.js
+const recipeGroup = (r) => (r.group && CRAFT_GROUPS.includes(r.group) ? r.group : groupOf(ITEMS[madeBy(r)]));
 const groupOrder = (g) => (CRAFT_GROUPS.includes(g) ? CRAFT_GROUPS.indexOf(g) : CRAFT_GROUPS.length);
+// how many steps a thing is from what's found lying about (0: no recipe makes it): a sharp stone 1, a stone axe 3
+const STEPS = {};
+function stepsOf(kind, seen = new Set()) {
+  if (kind in STEPS) return STEPS[kind];
+  if (seen.has(kind)) return 0;
+  seen.add(kind);
+  const r = RECIPES.find((x) => madeBy(x) === kind);
+  STEPS[kind] = r ? 1 + Math.max(0, ...Object.keys(recipeWants(r)).map((k) => stepsOf(k, seen))) : 0;
+  return STEPS[kind];
+}
 let foundDrawn = '';
 function foundRow(r) {
   const has = hasAll(r);
@@ -480,6 +497,7 @@ function foundRow(r) {
     const chip = (text, ok) => { const c = document.createElement('span'); c.className = 'need-chip' + (ok ? ' ok' : ''); c.textContent = text; needs.appendChild(c); };
     for (const [k, n] of Object.entries(r.needs)) { const have = you.carry[k] || 0; chip(`${ITEMS[k].plural} ${Math.min(have, n)}/${n}`, have >= n); }
     for (const k of Object.keys(r.keeps || {})) chip(`Keeps ${ITEMS[k].name.toLowerCase()}`, (you.carry[k] || 0) >= r.keeps[k]);
+    if (r.near && PLACEABLES[r.near]) chip(`At a ${PLACEABLES[r.near].name.toLowerCase()}`, !!stationNear(r.near)); // (made there, not on the mat)
     words.appendChild(needs);
   }
   b.append(itemPic(madeBy(r)), words);
@@ -488,7 +506,7 @@ function foundRow(r) {
   return li;
 }
 function drawFound() {
-  const all = MAT_RECIPES;
+  const all = RECIPES; // (the ones made at a station too, like cooked fish at a campfire)
   const groups = [...new Set(all.map(recipeGroup))].sort((a, b) => groupOrder(a) - groupOrder(b));
   const chips = groups.length > 1, search = all.length >= (SETTINGS.craftSearchFrom || 15);
   if (!chips || !groups.includes(foundGroup)) foundGroup = null;
@@ -496,9 +514,9 @@ function drawFound() {
   const q = foundQuery.trim().toLowerCase();
   const list = all.filter((r) => (!foundGroup || recipeGroup(r) === foundGroup)
     && (!q || [recipeName(r), ...Object.keys(recipeWants(r)).map((k) => ITEMS[k].plural)].some((t) => t.toLowerCase().includes(q))));
-  list.sort((a, b) => (hasAll(a) ? 0 : 1) - (hasAll(b) ? 0 : 1)); // the ones you have everything for first, then the greyed out ones (each in game-data.json order)
+  list.sort((a, b) => (hasAll(a) ? 0 : 1) - (hasAll(b) ? 0 : 1) || stepsOf(madeBy(a)) - stepsOf(madeBy(b)) || RECIPES.indexOf(a) - RECIPES.indexOf(b)); // the ones you have everything for first, then the greyed out ones, each simple to advanced
   const grey = list.filter((r) => !hasAll(r)).length;
-  const shows = JSON.stringify([foundGroup, q, chips, search, list.map((r) => [r.id, hasAll(r), recipeWants(r), Object.keys(recipeWants(r)).map((k) => you.carry[k] || 0)])]);
+  const shows = JSON.stringify([foundGroup, q, chips, search, list.map((r) => [r.id, hasAll(r), recipeWants(r), Object.keys(recipeWants(r)).map((k) => you.carry[k] || 0), r.near ? !!stationNear(r.near) : 0])]); // (the "At a campfire" chip lights up by a lit one)
   if (shows === foundDrawn) return;
   foundDrawn = shows;
   $('foundSearch').hidden = !search;
@@ -515,6 +533,10 @@ function drawFound() {
       return b;
     };
     $('foundChips').replaceChildren(chip('All', null, all.length), ...groups.map((g) => chip(g, g, all.filter((r) => recipeGroup(r) === g).length)));
+    // the picked one stays in sight in the sliding row (say Misc, picked last time, when the Recipes tab opens again)
+    const row = $('foundChips').getBoundingClientRect(), on = $('foundChips').querySelector('.on').getBoundingClientRect();
+    if (on.left < row.left) $('foundChips').scrollLeft -= row.left - on.left + 12;
+    else if (on.right > row.right) $('foundChips').scrollLeft += on.right - row.right + 12;
   } else $('foundChips').replaceChildren();
   $('foundMore').hidden = !grey; // (nothing greyed out: nothing to explain)
   $('foundMore').textContent = "Greyed out means you don't have everything for it yet. Tap one to see what it needs";
@@ -530,7 +552,7 @@ function showBagTab(tab) {
 $('bagTabBag').addEventListener('click', () => showBagTab('bag'));
 $('bagTabRecipes').addEventListener('click', () => showBagTab('recipes'));
 $('matClear').addEventListener('click', clearMat);
-$('matMake').addEventListener('click', () => { const r = matMakes(); if (r && onMatRecipe(r) && canMake(r)) make(r); });
+$('matMake').addEventListener('click', () => { const r = matMakes(); if (r && canMake(r)) make(r); });
 $('foundQuery').addEventListener('input', (e) => { foundQuery = e.target.value; drawFound(); });
 function closeCraft() { if (craftOpen()) closeBag(); }
 // the inventory opens on its Inventory tab, with nothing on the mat
