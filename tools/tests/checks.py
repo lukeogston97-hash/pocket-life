@@ -2198,6 +2198,51 @@ async def ore_vein():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
+async def stress():
+    """Lots at once (0.2.0 bug hunt): drops and pick-ups queued as fast as possible (more than you have, the same thing twice), grass cut twice, the inventory and menu opened mid-task, leaving mid-task and coming back, then a reload. Nothing is lost or made twice, what your person carries is the same after the reload as before it, the task list empties and nothing goes wrong."""
+    CARRY = "JSON.stringify(Object.fromEntries(Object.entries(__pl.you.carry).filter(([, n]) => n > 0).sort()))"
+    NEAR = """(() => { const p = __pl.player.position; return __pl.world.items.filter((it) => Math.hypot(it.x - p.x, it.z - p.z) < 6).map((it) => it.id + ':' + it.kind).sort().join(','); })()"""
+    async with world(TESTKIT=1) as W:
+        a = await W.page('stressA'); await join(a)
+        # 1. drop more than you have, quickly: what you don't have is refused, the rest lands by your feet
+        await a.evaluate("for (let r = 0; r < 3; r++) for (const k of ['stick', 'stone', 'stick']) __pl.queueTask({ type: 'drop', kind: k, n: 1 });")
+        await idle(a, 90); await a.wait_for_timeout(1500)
+        left = await a.evaluate("[__pl.you.carry.stick || 0, __pl.you.carry.stone || 0]")
+        expect(left == [0, 0], f'asked to drop 6 sticks and 3 stones while carrying 2 and 3: all of them dropped, nothing more ({left})')
+        # 2. pick each one up twice in a row: the second is refused (or skipped), never counted twice
+        ids = await a.evaluate("""(() => { const p = __pl.player.position; return __pl.world.items.filter((it) => Math.hypot(it.x - p.x, it.z - p.z) < 2 && (it.kind === 'stick' || it.kind === 'stone')).map((it) => it.id); })()""")
+        await a.evaluate(f"for (const id of {json.dumps(ids)}) {{ __pl.queueTask({{ type: 'pickup', id }}); __pl.queueTask({{ type: 'pickup', id }}); }}")
+        queued = await a.evaluate("__pl.tasks.list.length + (__pl.tasks.current ? 1 : 0)")
+        expect(queued == len(ids), f'each thing queued once, however many times it was tapped ({queued} of {len(ids)})')
+        await a.click('#bagBtn'); await a.wait_for_timeout(600); await a.click('#bagClose')  # the inventory open and shut mid-task
+        await idle(a, 120); await a.wait_for_timeout(1500)
+        got = await a.evaluate("(__pl.you.carry.stick || 0) + (__pl.you.carry.stone || 0)")
+        expect(got == len(ids), f'every one picked up once ({got} of {len(ids)})')
+        # 3. the same clump of grass twice: cut once, the second waits for it to grow back
+        await a.evaluate("""(() => { const P = __pl.plants.tallGrass, p = __pl.player.position;
+          const c = P.clumps.filter((c) => !c.readyAt).sort((x, y) => Math.hypot(x.x - p.x, x.z - p.z) - Math.hypot(y.x - p.x, y.z - p.z))[0];
+          for (let k = 0; k < 2; k++) __pl.queueTask({ type: 'cut', plant: 'tallGrass', i: c.i, x: c.x, z: c.z }); })()""")
+        await idle(a, 90); await a.wait_for_timeout(1500)
+        expect(await a.evaluate('__pl.you.carry.twine || 0') == 2, 'the same clump cut twice gives 1 twine, not 2 (1 from the kit)')
+        # 4. leave mid-task: a walk and a drop queued, then Exit straight away; back in, the person carried on
+        await a.evaluate("(() => { const p = __pl.player.position; __pl.queueTask({ type: 'walk', x: p.x + 3, z: p.z + 1 }); __pl.queueTask({ type: 'drop', kind: 'stone', n: 1 }); })()")
+        await a.wait_for_timeout(300)
+        await a.click('#menuBtn'); await a.wait_for_timeout(300); await a.click('#exitBtn'); await a.wait_for_timeout(4000)
+        await join(a); await idle(a, 60); await a.wait_for_timeout(2500)
+        before, near_before = await a.evaluate(CARRY), await a.evaluate(NEAR)
+        # 5. a reload: what the server has is what the game showed
+        await a.reload(); await a.wait_for_function('window.__frames >= 3', timeout=180000)
+        await a.wait_for_function("!document.getElementById('boot')", timeout=30000); await a.wait_for_timeout(1500)
+        await join(a); await a.wait_for_timeout(2500)
+        after, near_after = await a.evaluate(CARRY), await a.evaluate(NEAR)
+        expect(after == before, f'after a reload your person carries exactly what the game showed ({before} then {after})')
+        expect(near_after == near_before, 'and the things on the ground nearby are the same ones, none twice')
+        ids = await a.evaluate("__pl.world.items.map((it) => it.id)")
+        expect(len(ids) == len(set(ids)), 'no thing in the world twice')
+        expect(await a.evaluate("!__pl.tasks.current && !__pl.tasks.list.length"), 'the task list is empty')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
 async def placed_kinds():
     """A second kind of placed thing, made from data alone (a drying rack that isn't in the game): it's drawn as its own item, not as a campfire, and can be placed and built. The campfire is put together as before."""
     game = json.load(open(os.path.join(HERE, '..', '..', 'server', 'game.json')))
@@ -2411,7 +2456,7 @@ async def leaving():
         expect(await text(a, '#playSub') == 'Make your person', 'and the old person is gone: Play says Make your person')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'tasks_away': tasks_away, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'tool_bar': tool_bar, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'craft_mat': craft_mat, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'loading': loading, 'sideways': sideways, 'menu_rest': menu_rest, 'tips': tips, 'placed_kinds': placed_kinds, 'parts_look': parts_look, 'ore_vein': ore_vein, 'placing_grid': placing_grid, 'farming': farming, 'leaving': leaving, 'server_tests': server_tests}
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'tasks_away': tasks_away, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'tool_bar': tool_bar, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'craft_mat': craft_mat, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'loading': loading, 'sideways': sideways, 'menu_rest': menu_rest, 'tips': tips, 'placed_kinds': placed_kinds, 'parts_look': parts_look, 'ore_vein': ore_vein, 'stress': stress, 'placing_grid': placing_grid, 'farming': farming, 'leaving': leaving, 'server_tests': server_tests}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

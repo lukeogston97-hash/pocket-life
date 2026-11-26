@@ -35,7 +35,7 @@ function aboutOf(m, server) {
   if (['a.fire', 'a.claim', 'a.move', 'a.regrow', 'a.remove'].includes(m.t)) {
     const th = m.id != null ? server.placedById(m.id) : null; // a campfire: by where it is
     if (th) return `${th.kind} at ${Math.round(th.x)}, ${Math.round(th.z)}`;
-    return m.what && m.what !== 'placed' ? `${short(m.what)} ${short(m.idx != null ? m.idx : m.id)}` : '';
+    return m.what && m.what !== 'placed' ? `${short(m.what === 'plant' ? m.plant : m.what)} ${short(m.idx != null ? m.idx : m.id)}` : '';
   }
   return '';
 }
@@ -398,7 +398,7 @@ export const adminMethods = {
         this.send({ t: 'moved', what: m.what, idx: i, x, z }, null);
         return done('Moved');
       }
-      case 'a.regrow': { // one thing back to how it started: a stump to a tree, a boulder or rock back, a bush full, a campfire full of fuel
+      case 'a.regrow': { // one thing back to how it started: a stump to a tree, a boulder or rock back, a bush full, a plant grown, a campfire full of fuel
         if (!w) return;
         if (m.what === 'placed') {
           const th = this.placedById(m.id), rule = th && fireRule(th.kind);
@@ -426,6 +426,9 @@ export const adminMethods = {
         } else if (m.what === 'bush' && idxOk(i, MOVABLE.bush)) {
           w.bushes[i] = [null, null];
           this.send({ t: 'bush', bush: i, count: null, growFrom: null }, null);
+        } else if (m.what === 'plant' && Object.hasOwn(G.plants || {}, String(m.plant)) && idxOk(i, G.plants[m.plant].count || 0) && ((w.plants || {})[m.plant] || {})[i] > Date.now()) {
+          delete w.plants[m.plant][i]; // a clump of grass, an ore vein or anything else in plants (0.2.0): grown back now
+          this.send({ t: 'plant', plant: m.plant, i, readyAt: 0 }, null);
         } else return done('Already grown');
         await this.save();
         return done('Grown back');

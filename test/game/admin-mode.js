@@ -10,7 +10,7 @@ import { game, share } from './links.js';
 import { app, camera, V } from './core.js';
 import { groundY, POND, WORLD_HALF } from './land.js';
 import { berryBushes, rocks } from './nature.js';
-import { drawPlants } from './plants.js';
+import { drawPlants, plantReady, plants } from './plants.js';
 import { berriesOn, bushHolds, drawBerries } from './world-build.js';
 import { $, deg, ITEMS, SOURCES } from './items.js';
 import { formatTime, hudZone, REGIONS, ring, ui, worldNow } from './you.js';
@@ -286,6 +286,10 @@ export function adminActionsFor(t) {
   if (t.kind === 'tree') return adminThingActions('tree', t.idx, false);
   if (t.kind === 'stump') return adminThingActions('tree', t.idx, true);
   if (t.kind === 'rock') return adminThingActions('rock', t.idx, rocks[t.idx].state === 'mined');
+  if (t.kind === 'plant') { // grass, an ore vein, anything in plants (0.2.0): grown back now, if it isn't
+    const c = plants[t.plant] && plants[t.plant].clumps[t.i];
+    return [...(c && !plantReady(c) ? [{ label: 'Grow back', run: () => adminSend({ t: 'a.regrow', what: 'plant', plant: t.plant, idx: t.i }) }] : []), ...adminGroundActions({ x: t.x, z: t.z })];
+  }
   if (t.kind === 'use' && t.task.bush != null) { const b = berryBushes[t.task.bush], src = SOURCES[t.task.source]; return adminThingActions('bush', t.task.bush, !!b && berriesOn(b) < bushHolds(src)); }
   const p = t.point || (t.hit && t.hit.point) || (Number.isFinite(t.x) ? { x: t.x, z: t.z } : null);
   return p ? adminGroundActions(p) : []; // the ground, the shore, a grave, an old stump, tall grass: what can be done at that spot

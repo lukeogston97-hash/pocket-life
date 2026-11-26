@@ -276,6 +276,16 @@ const heard = S.sock({ id: 'w:7', who: null, watch: true, admin: false, from: 'a
 await S.ask(boss, { t: 'a.announce', text: 'still here?' });
 expect(!heard.got.some((m) => m.t === 'announce'), 'nor does anyone hear a message from it');
 
+console.log('P. Grow back for one plant (0.2.0): a clump of grass, an ore vein or anything else in plants');
+S = await start(new Map());
+S.w.world = { format: 1, nextId: 1, items: [], bushes: [], graves: [], spots: {}, caps: {}, holds: 5, regrowMs: 0, placed: [], plants: { tallGrass: { 2: Date.now() + 3600000 } } };
+let grew = await S.tool({ t: 'a.regrow', what: 'plant', plant: 'tallGrass', idx: 2 });
+expect(grew === 'Grown back' && !S.w.world.plants.tallGrass[2], 'a cut clump of tall grass is grown back', grew);
+grew = await S.tool({ t: 'a.regrow', what: 'plant', plant: 'tallGrass', idx: 2 });
+expect(grew === 'Already grown', 'asked again, it already is', grew);
+grew = await S.tool({ t: 'a.regrow', what: 'plant', plant: 'constructor', idx: 0 });
+expect(grew === 'Already grown', "a kind of plant that isn't one does nothing", grew);
+
 const failed = results.filter((ok) => !ok).length;
 console.log(`\n${results.length - failed} of ${results.length} as they should be${failed ? `, ${failed} NOT` : ''}`);
 process.exit(failed ? 1 : 0);
