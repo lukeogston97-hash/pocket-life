@@ -5,7 +5,7 @@
 // (trees, rocks, berry bushes, campfires, loose items) are moved, regrown and removed from their tap menus.
 // These are methods of the World (index.js adds them to it), so `this` is the world.
 import { FILTER, G, starText, MINUTE, HOUR, clean, blank, num, kindOk, addCarry, takeCarry, ageOf, pickRandom, laidNow, barOf } from './shared.js';
-import { fireRule, PLACEABLES } from './placed.js';
+import { fireRule, PLACEABLES, cropGrowMs } from './placed.js';
 import { placeSnap } from './rules.js';
 import { CLAIM_KIND } from './claims.js';
 import { SOC, freshSocieties } from './societies.js';
@@ -327,6 +327,7 @@ export const adminMethods = {
         w.bushes = [];
         w.plants = {};
         delete w.pond; // the pond is full of fish again
+        for (const th of this.placedList()) if (th.crop) { th.crop.at = Math.min(th.crop.at, Date.now() - cropGrowMs(th.crop)); th.crop.berries = null; } // crops on farm fields grown (0.1.18)
         this.topUp();
         await everyoneSees();
         return done('Everything grown back');
@@ -401,6 +402,13 @@ export const adminMethods = {
         if (!w) return;
         if (m.what === 'placed') {
           const th = this.placedById(m.id), rule = th && fireRule(th.kind);
+          if (th && th.crop) { // a farm field (0.1.18): what's planted is grown, full of berries
+            th.crop.at = Math.min(th.crop.at, Date.now() - cropGrowMs(th.crop));
+            th.crop.berries = null;
+            await this.save();
+            this.sendPlaced(th);
+            return done('Grown');
+          }
           if (!rule) return done('Nothing to refill');
           this.burn(th);
           th.fuel = rule.max; th.at = Date.now();

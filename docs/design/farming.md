@@ -1,0 +1,33 @@
+# Farming: the stone hoe, farm fields, seeds and crops
+
+Decided with Luke 26 Nov 2026 (0.1.18, built in one test build: "Build it all in one thanks").
+
+## What players do
+- Stone hoe: a stone hoe head (1 stone and 1 twine), then the hoe (the head, a long stick and twine). A plain stone, not a sharp one (Luke asked; a hoe scrapes and turns soil, it doesn't cut). 30 uses. A tool like the others: it goes on the tool bar and only works from there.
+- Dig farm field: on the ground's tap menu while you carry a hoe, only in your own camp (a lit claim that's yours or your camp's). Outside it, or with the hoe only in your inventory, the entry is there but greyed out ("Only in your camp", "Equip your stone hoe"), so players learn where it works. Choosing the spot is the same as placing a campfire (the ghost, the green or red square, Turn, Cancel) with a Dig button. Your person walks over and digs for 8 seconds (the chop swing with the hoe), and the field takes shape as they dig. It takes a use of the hoe and some stamina (energyCosts dig 8).
+- A field is 1.5 m square (3 x 3 squares on the placing grid), and fields can sit side by side. It's a low bed of dug soil with lumpy rows of earth; no grass grows through it. People walk round it.
+- Flatten field (tap menu, needs the hoe on the tool bar, 4 seconds): it's gone, back to grass, and whatever grew on it is lost (the tap menu says so: "The berry bush is lost"). A field can't be packed up or taken apart (the server says "Flatten it with a hoe").
+- Berry seeds: 1 berry on the craft mat with a sharp stone (kept). Berries have small seeds in real life (Luke asked).
+- Plant berry seeds (tap the field, 3 seconds kneeling): one packet of seeds, one crop per field. It grows by itself in about a day (growHours 24): a sprout for the first third, then a young bush that gets bigger, then a grown berry bush with 5 berries. No watering for now (Luke: maybe later).
+- Pick berries: a grown planted bush is picked exactly like a wild one (one at a time, 2 with the knife on the tool bar, berries grow back one by one in 4 hours). The tap menu says "5 left" or "Next in 40 min"; while it grows, "Grown in 5 h".
+- Inspect says what it is: "Dug and ready for seeds", "Berry bush sprout · grown in 18 h", "Young berry bush · grown in 6 h", "Berry bush · 3 berries".
+- Camps: other people can't dig, plant, pick or flatten inside your camp (the tap menu only says whose camp it is, and the server says no). If the camp's fire goes out, its fields stay and anyone can use them, the same as a campfire.
+- Away: dig, flatten, plant and harvest carry on from the task list while you're away (server/src/tasks.js).
+
+## How it's built
+- Data (game-data.json): items hoe-head, stone-hoe (tool, 30 uses) and berry-seeds; their recipes; placeables.field with madeWith (the tool that digs it, instead of an item that places it), makeSeconds, makeVerb, flattenSeconds, inCamp, size and look (shape field, soil and row colours); crops (berry-bush: seed, on, growHours, plantSeconds, like: the source whose picking rules it follows); energyCosts dig and plant.
+- Server: a field is a placed thing (world.placed) that is built from the start; its crop is th.crop = { kind, at, berries } (berries as a wild bush's [count, from] once some are picked). How grown it is comes from `at` (rules.js cropGrowth and cropStage, shared with the game), so nothing ticks and nothing is saved while it grows. Actions dig, flatten, plant and harvest (server/src/actions.js), each with a LIMITS entry, the time guard (worked) and the camp check. The view sends ages, not times (crop.age, berries' age), so phone clocks don't matter.
+- Game: game/placeables.js. Fields come from PLACEABLES like campfires (a placeable with madeWith has no item); CROPS from the data. fieldModel draws the bed and rows (shared shapes for every field); drawCrop shows the sprout, the young bush (scaled as it grows) or the grown bush and its berries, checked once a second. The game shows each step straight away and the server puts it right if it said no. Grass under a field is hidden (levelPlaced marks it, refillDetail skips it).
+- Fixed on the way: the game's berry sources didn't know about the knife (tool and toolHarvest), so picking with a knife showed one berry until the server's answer came back. Now it shows both straight away, for wild bushes too.
+
+## Admin
+- A field's tap menu in admin mode: Move, Grow now (when something is planted: grown and full of berries), Remove. Regrow everything grows every crop too.
+- Settings tab, Farming: Planted crops grow in (h), one number for every crop (cropGrowHours; live.js and LIVE_SET). Handy for trying the stages in a few minutes.
+- World tab counts: "Farm fields 3 (2 planted)".
+
+## Checks
+- tools/tests/farming.mjs (quick, server only): digging in your camp only, on the grid, the hoe on the bar and its wear, no packing up, flattening, planting, growing from the planting time, picking (2 with the knife), someone else's camp, away tasks, the admin's Grow now, Regrow everything and the live grow time.
+- farming (browser): the ground's Dig farm field in and out of the camp, digging, no grass through the field, planting, the sprout and young bush, Grow now, picking with the knife, the other phone seeing each step, Flatten field.
+
+## Later (not decided)
+- Watering, more crops (each a crops entry with its own seed and like), scarecrows or fences, crops that die if left, autopilot picking your own bushes.

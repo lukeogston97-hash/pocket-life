@@ -120,7 +120,7 @@ function refillDetail(d, px, pz) {
   let n = 0;
   for (let i = 0; i < xs.length && n < cap; i++) {
     const dx = xs[i] - px, dz = zs[i] - pz, r = (near + (far - near) * us[i]) * detailScale;
-    if (dx * dx + dz * dz > r * r) continue;
+    if (dx * dx + dz * dz > r * r || (d.hide && d.hide[i])) continue; // (hide: under a farm field, levelPlaced in placeables.js)
     for (let k = 0; k < 16; k++) M[n * 16 + k] = ms[i * 16 + k];
     C[n * 3] = cs[i * 3]; C[n * 3 + 1] = cs[i * 3 + 1]; C[n * 3 + 2] = cs[i * 3 + 2];
     n++;
@@ -155,12 +155,13 @@ function addSpot(x, z, r, tree = false) {
   spots.get(k).push(x, z, r, tree ? 1 : 0);
 }
 // is there room at x, z? gap is the space needed; a tree counts as treeScale times its crown
-function roomAt(x, z, gap, treeScale = 1) {
+function roomAt(x, z, gap, treeScale = 1, skip = null) { // skip(x, z): spots that don't count (placed things, when placing)
   for (let i = -1; i <= 1; i++) {
     for (let j = -1; j <= 1; j++) {
       const a = spots.get(spotKey(x + i * 4, z + j * 4));
       if (!a) continue;
       for (let k = 0; k < a.length; k += 4) {
+        if (skip && skip(a[k], a[k + 1])) continue;
         const r = a[k + 3] ? a[k + 2] * treeScale : a[k + 2];
         if (Math.hypot(a[k] - x, a[k + 1] - z) < r + gap) return false;
       }

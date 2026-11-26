@@ -286,8 +286,8 @@ function thingActions(t) {
       { label: 'Report', run: () => openReport(o) },
       { label: 'Walk here', foot: true, run: () => walkFirst(V(o.mesh.position.x, 0, o.mesh.position.z)) }];
   }
-  if (t.kind === 'ground' || t.kind === 'thing' || t.kind === 'shore') {
-    return [{ label: 'Walk here', run: () => walkToTarget(t) }];
+  if (t.kind === 'ground' || t.kind === 'thing' || t.kind === 'shore') { // (Dig farm field: carrying a hoe, placeables.js)
+    return [...(t.kind === 'ground' && t.point ? digActions(t.point) : []), { label: 'Walk here', foot: true, run: () => walkToTarget(t) }];
   }
   if (t.kind === 'tree' || t.kind === 'stump' || t.kind === 'oldStump') {
     const what = t.kind;

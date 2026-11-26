@@ -10,6 +10,7 @@ Every decision so far, split by area so an update only reads the file it needs. 
 - docs/design/away.md: what your person does while you're away; timing, sleep and death
 - docs/design/needs-and-crafting.md: crafting, chopping, rest, stamina, tall grass, held tools
 - docs/design/placeables.md: campfires, fuel, sitting
+- docs/design/farming.md: the stone hoe, farm fields (dig in your camp, flatten), berry seeds, crops growing, the admin's Grow now
 - docs/design/claims.md: campfire claims (who can do what where, fuel, away people)
 - docs/design/societies.md: societies (your claim is your society: lighting starts it, invites, leader, leaving, the admin's list)
 - docs/design/inventory-and-menus.md: inventory grid, Recipes tab and craft mat, tap menus, stations, pack up

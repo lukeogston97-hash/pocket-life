@@ -3,10 +3,25 @@
 // game-data.json "placeables"). A fire burns its fuel only while lit: fuel is how many ms of burning are left as of
 // `at`, so nothing has to tick. It goes out by itself when that runs out, whether or not anyone is watching.
 // These are methods of the World (index.js adds them to it), so `this` is the world.
-import { G, num } from './shared.js';
-import { fireRuleOf, seatSpotOf } from './rules.js';
+import { G, num, HOUR } from './shared.js';
+import { fireRuleOf, seatSpotOf, cropGrowth, berriesGrown } from './rules.js';
 
 export const PLACEABLES = G.placeables || {};
+// Farming (0.1.18): a farm field is a placed thing dug with a tool (PLACEABLES.field.madeWith, the stone hoe) instead
+// of put down from an item. What grows on it is th.crop = { kind, at, berries } (kind: an id in G.crops, at: when it
+// was planted, berries: [count, from] once some have been picked, like a wild bush's). It grows by itself: how grown
+// is worked out from `at` (rules.js cropGrowth), so nothing has to tick. Once grown it's picked like its "like" source.
+export const CROPS = G.crops || {};
+export const cropSource = (crop) => { const def = crop && CROPS[crop.kind]; return def && def.like ? (G.sources || {})[def.like] || null : null; };
+export const cropGrowMs = (crop) => ((CROPS[crop.kind] || {}).growHours || 24) * HOUR;
+export const cropGrown = (crop, now = Date.now()) => cropGrowth(crop.at, cropGrowMs(crop), now) >= 1;
+// berries on a grown crop right now (0 while it's still growing)
+export function cropBerries(crop, now = Date.now()) {
+  const src = cropSource(crop);
+  if (!src || !cropGrown(crop, now)) return 0;
+  const b = crop.berries || [null, null];
+  return berriesGrown(b[0], b[1], src.holds || 5, (src.regrowHours || 0) * HOUR, now);
+}
 // the fire's rules in ms: each fuel it takes, and the most it holds (rules.js, the same as in the game)
 export const fireRule = (kind) => fireRuleOf((PLACEABLES[kind] || {}).fire, (k) => !!G.items[k]);
 // where seat k round a placed thing is (rules.js, the same as in the game)
@@ -56,6 +71,10 @@ export const placedMethods = {
     this.burn(th, now);
     const v = { id: th.id, kind: th.kind, x: th.x, z: th.z, rot: th.rot, built: !!th.built, fuel: Math.round(th.fuel || 0), lit: !!th.lit, burnt: !!th.burnt };
     if (th.claim) v.claim = { who: th.claim, name: this.ownerName(th) }; // whose claim it is (while it burns)
+    if (th.crop) { // what grows on a farm field: ages in ms, so phone clocks don't matter (the game works the rest out)
+      const b = th.crop.berries || [null, null];
+      v.crop = { kind: th.crop.kind, age: Math.max(0, now - th.crop.at), berries: b[0] == null ? null : [b[0], Math.max(0, now - b[1])] };
+    }
     return v;
   },
   sendPlaced(th, reply, extra) {

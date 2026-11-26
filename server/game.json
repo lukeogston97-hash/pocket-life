@@ -75,6 +75,7 @@
   ],
   "items": {
     "stick": {
+      "name": "Stick",
       "weight": 1,
       "eat": null,
       "uses": 0,
@@ -83,6 +84,7 @@
       "spawnsNear": "trees"
     },
     "stone": {
+      "name": "Stone",
       "weight": 1,
       "eat": null,
       "uses": 0,
@@ -91,6 +93,7 @@
       "spawnsNear": "boulders"
     },
     "twine": {
+      "name": "Twine",
       "weight": 1,
       "eat": null,
       "uses": 0,
@@ -99,6 +102,7 @@
       "spawnsNear": null
     },
     "sharp-stone": {
+      "name": "Sharp stone",
       "weight": 1,
       "eat": null,
       "uses": 0,
@@ -107,6 +111,7 @@
       "spawnsNear": null
     },
     "twig": {
+      "name": "Twig",
       "weight": 1,
       "eat": null,
       "uses": 0,
@@ -115,6 +120,7 @@
       "spawnsNear": null
     },
     "long-stick": {
+      "name": "Long stick",
       "weight": 2,
       "eat": null,
       "uses": 0,
@@ -123,6 +129,7 @@
       "spawnsNear": null
     },
     "axe-head": {
+      "name": "Stone axe head",
       "weight": 1,
       "eat": null,
       "uses": 0,
@@ -131,6 +138,16 @@
       "spawnsNear": null
     },
     "pick-head": {
+      "name": "Stone pick head",
+      "weight": 1,
+      "eat": null,
+      "uses": 0,
+      "places": null,
+      "startInWorld": 0,
+      "spawnsNear": null
+    },
+    "hoe-head": {
+      "name": "Stone hoe head",
       "weight": 1,
       "eat": null,
       "uses": 0,
@@ -139,6 +156,7 @@
       "spawnsNear": null
     },
     "berry": {
+      "name": "Berry",
       "weight": 1,
       "eat": {
         "hunger": 10
@@ -148,7 +166,17 @@
       "startInWorld": 0,
       "spawnsNear": null
     },
+    "berry-seeds": {
+      "name": "Berry seeds",
+      "weight": 1,
+      "eat": null,
+      "uses": 0,
+      "places": null,
+      "startInWorld": 0,
+      "spawnsNear": null
+    },
     "fish": {
+      "name": "Raw fish",
       "weight": 1,
       "eat": null,
       "uses": 0,
@@ -157,6 +185,7 @@
       "spawnsNear": null
     },
     "cooked-fish": {
+      "name": "Cooked fish",
       "weight": 1,
       "eat": {
         "hunger": 35
@@ -167,6 +196,7 @@
       "spawnsNear": null
     },
     "knife": {
+      "name": "Stone knife",
       "weight": 1,
       "eat": null,
       "uses": 20,
@@ -175,6 +205,7 @@
       "spawnsNear": null
     },
     "stone-axe": {
+      "name": "Stone axe",
       "weight": 2,
       "eat": null,
       "uses": 30,
@@ -183,6 +214,16 @@
       "spawnsNear": null
     },
     "stone-pickaxe": {
+      "name": "Stone pickaxe",
+      "weight": 2,
+      "eat": null,
+      "uses": 30,
+      "places": null,
+      "startInWorld": 0,
+      "spawnsNear": null
+    },
+    "stone-hoe": {
+      "name": "Stone hoe",
       "weight": 2,
       "eat": null,
       "uses": 30,
@@ -191,6 +232,7 @@
       "spawnsNear": null
     },
     "fishing-spear": {
+      "name": "Fishing spear",
       "weight": 2,
       "eat": null,
       "uses": 20,
@@ -199,6 +241,7 @@
       "spawnsNear": null
     },
     "log": {
+      "name": "Log",
       "weight": 5,
       "eat": null,
       "uses": 0,
@@ -207,6 +250,7 @@
       "spawnsNear": null
     },
     "campfire": {
+      "name": "Campfire",
       "weight": 9,
       "eat": null,
       "uses": 0,
@@ -240,6 +284,17 @@
       },
       "makes": {
         "twig": 2
+      },
+      "keeps": {
+        "sharp-stone": 1
+      }
+    },
+    "berry-seeds": {
+      "needs": {
+        "berry": 1
+      },
+      "makes": {
+        "berry-seeds": 1
       },
       "keeps": {
         "sharp-stone": 1
@@ -300,6 +355,25 @@
       },
       "makes": {
         "stone-pickaxe": 1
+      }
+    },
+    "hoe-head": {
+      "needs": {
+        "stone": 1,
+        "twine": 1
+      },
+      "makes": {
+        "hoe-head": 1
+      }
+    },
+    "stone-hoe": {
+      "needs": {
+        "hoe-head": 1,
+        "long-stick": 1,
+        "twine": 1
+      },
+      "makes": {
+        "stone-hoe": 1
       }
     },
     "campfire": {
@@ -421,7 +495,9 @@
     "walkPerMetre": 0.15,
     "build": 8,
     "tend": 1,
-    "fish": 3
+    "fish": 3,
+    "dig": 8,
+    "plant": 2
   },
   "chopping": {
     "tool": "stone-axe",
@@ -494,6 +570,31 @@
         "count": 6,
         "distance": 1.7
       }
+    },
+    "field": {
+      "item": "field",
+      "buildSeconds": 10,
+      "solid": 0.75,
+      "size": [
+        3,
+        3
+      ],
+      "keepClear": null,
+      "fire": null,
+      "seats": null,
+      "madeWith": "stone-hoe",
+      "makeSeconds": 8,
+      "flattenSeconds": 4,
+      "inCamp": true
+    }
+  },
+  "crops": {
+    "berry-bush": {
+      "seed": "berry-seeds",
+      "on": "field",
+      "growHours": 24,
+      "plantSeconds": 3,
+      "like": "berryBush"
     }
   },
   "liveSettings": [
@@ -586,6 +687,15 @@
       "min": 0,
       "max": 365,
       "step": 1
+    },
+    {
+      "id": "cropGrowHours",
+      "name": "Planted crops grow in",
+      "group": "Farming",
+      "unit": "h",
+      "min": 0.1,
+      "max": 240,
+      "step": 0.1
     },
     {
       "id": "hungerPerHour",

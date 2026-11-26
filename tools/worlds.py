@@ -68,7 +68,10 @@ def problems(d):
         else: wants[key] = r.get('id')
     for k, p in placeables.items():
         w = f'placeables.{k}'
-        if not any(it.get('places') == k for it in items.values()): out.append(f'{w}: no item has "places": "{k}", so nobody could place it')
+        if p.get('madeWith') is not None:  # dug with a tool (0.1.18, the farm field), so no item places it
+            known(p['madeWith'], f'{w}.madeWith')
+            if not (items.get(p['madeWith']) or {}).get('tool'): out.append(f'{w}.madeWith: "{p["madeWith"]}" should be a tool (it goes on the tool bar)')
+        elif not any(it.get('places') == k for it in items.values()): out.append(f'{w}: no item has "places": "{k}", so nobody could place it')
         f = p.get('fire')
         if f:
             known(f.get('fuel'), f'{w}.fire.fuel')
@@ -81,6 +84,12 @@ def problems(d):
         if s.get('fish'):
             known(s['fish'].get('tool'), f'{w}.fish.tool'); known(s['fish'].get('catch'), f'{w}.fish.catch')
             if not 0 < s['fish'].get('chance', 0) <= 1: out.append(f'{w}.fish.chance: needs a number above 0 and up to 1')
+    for k, c in d.get('crops', {}).items():
+        w = f'crops.{k}'
+        known(c.get('seed'), f'{w}.seed')
+        known(c.get('on', 'field'), f'{w}.on', placeables, 'placeable')
+        if c.get('like') is not None: known(c['like'], f'{w}.like', d.get('sources', {}), 'source')
+        if not (isinstance(c.get('growHours'), (int, float)) and c['growHours'] > 0): out.append(f'{w}.growHours should be a number above 0')
     seeds = [p.get('seed') for p in d.get('plants', {}).values()]
     if len(set(seeds)) != len(seeds) or None in seeds: out.append('plants: each plant needs its own "seed" number (so the rest of the world never moves)')
     for k, p in d.get('plants', {}).items():
@@ -135,7 +144,7 @@ def server_files(d):
     berry = next((k for s in srcs.values() for k in (s.get('harvest') or {})), 'berry')
     game = {
         'needs': d['stats'],
-        'items': {k: {'weight': v.get('weight', 1), 'eat': v.get('eat'), 'uses': (v.get('tool') or {}).get('uses', 0), 'places': v.get('places'),
+        'items': {k: {'name': v.get('name', k), 'weight': v.get('weight', 1), 'eat': v.get('eat'), 'uses': (v.get('tool') or {}).get('uses', 0), 'places': v.get('places'),
                        'startInWorld': v.get('startInWorld', 0), 'spawnsNear': v.get('spawnsNear')} for k, v in d['items'].items()},
         # (seconds and pose: how long a task takes and how it looks, for people carrying on with their task list while away, tasks.js)
         'recipes': {r['id']: {'needs': r['needs'], 'makes': r['makes'], **({'keeps': r['keeps']} if r.get('keeps') else {}), **({'near': r['near']} if r.get('near') else {}), **({'seconds': r['seconds']} if r.get('seconds') else {})} for r in d.get('recipes', [])},
@@ -159,7 +168,12 @@ def server_files(d):
         'mining': d.get('mining', {}),
         # things you place and build (the campfire): which item places them, how they burn, where people sit
         'placeables': {k: {'item': next((i for i, it in d['items'].items() if it.get('places') == k), k), 'buildSeconds': v.get('buildSeconds', 10),
-                           'solid': v.get('solid', 0.5), 'size': v.get('size'), 'keepClear': v.get('keepClear'), 'fire': v.get('fire'), 'seats': v.get('seats')} for k, v in d.get('placeables', {}).items()},
+                           'solid': v.get('solid', 0.5), 'size': v.get('size'), 'keepClear': v.get('keepClear'), 'fire': v.get('fire'), 'seats': v.get('seats'),
+                           # dug with a tool instead of placed from an item (0.1.18, the farm field)
+                           **({'madeWith': v['madeWith'], 'makeSeconds': v.get('makeSeconds', 8), 'flattenSeconds': v.get('flattenSeconds', 4), 'inCamp': bool(v.get('inCamp'))} if v.get('madeWith') else {})}
+                       for k, v in d.get('placeables', {}).items()},
+        # what grows on a farm field (0.1.18)
+        'crops': {k: {'seed': c['seed'], 'on': c.get('on', 'field'), 'growHours': c.get('growHours', 24), 'plantSeconds': c.get('plantSeconds', 3), 'like': c.get('like')} for k, c in d.get('crops', {}).items()},
         # numbers the admin can change live (Admin > Settings); wired up in server/src/live.js
         'liveSettings': d.get('liveSettings', []),
         'claims': d.get('claims', {}),

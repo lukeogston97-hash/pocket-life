@@ -55,6 +55,12 @@ export function berryPicked(count, from, holds, regrowMs, t) {
   return [n - 1, f];
 }
 
+/* ---------- farming (0.1.18): a crop planted on a farm field grows by itself ---------- */
+// how grown it is at t: 0 just planted, 1 grown (at: when it was planted, growMs: how long it takes)
+export const cropGrowth = (at, growMs, t) => (growMs > 0 ? Math.max(0, Math.min(1, (t - at) / growMs)) : 1);
+// how it looks at that point: a sprout for the first third, then a small bush getting bigger, then grown
+export const cropStage = (k) => (k >= 1 ? 'grown' : k < 1 / 3 ? 'sprout' : 'young');
+
 /* ---------- stumps growing back into trees ---------- */
 // chopping.regrowDays: a number of days, or [soonest, latest] (Luke, 0.1.16: 1 to 2 days). As [first, second], unsorted.
 export function daysSpan(v, dflt = 3) {

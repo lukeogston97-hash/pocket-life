@@ -1856,8 +1856,9 @@ async def craft_mat():
         # tap one and the mat shows its things (what's missing shows faded)
         rows = await a.evaluate("[...document.querySelectorAll('#foundList .found-row')].map((r) => [r.dataset.recipe, r.classList.contains('missing')])")
         chips = await a.evaluate("[...document.querySelectorAll('#foundChips .craft-chip')].map((c) => c.textContent)")
-        expect(rows[0] == ['sharp-stone', False] and len(rows) > 3 and all(grey for _, grey in rows[1:]) and ['knife', True] in rows and chips[0] == f'All {len(rows)}' and len(chips) >= 3,
-               f'Recipes lists the sharp stone first (they have 2 stones), then the rest greyed out, the knife they made too, with All, Tools, Building and Materials ({rows}, {chips})')
+        can = sum(1 for _, grey in rows if not grey)  # (2 stones and a twine left: the sharp stone, and since 0.1.18 the hoe head)
+        expect(rows[0] == ['sharp-stone', False] and len(rows) > 3 and not any(grey for _, grey in rows[:can]) and all(grey for _, grey in rows[can:]) and ['knife', True] in rows and chips[0] == f'All {len(rows)}' and len(chips) >= 3,
+               f'Recipes lists what they have everything for first (the sharp stone), then the rest greyed out, the knife they made too, with All, Tools, Building and Materials ({rows}, {chips})')
         await shot(a, 'mat-found')
         await a.click(row('knife')); await a.wait_for_timeout(300)
         need = await a.evaluate("[...document.querySelectorAll('#matList .mat-tile.need')].map((t) => t.dataset.kind)")
@@ -2155,12 +2156,90 @@ async def placed_kinds():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
+async def farming():
+    """Farming (0.1.18): Dig farm field on the ground's tap menu (with the stone hoe, only in your own camp), the field
+    with no grass through it, planting berry seeds, the crop growing (a sprout, a young bush, then grown with berries),
+    picking it with the knife (2 at once), the other phone seeing each step, the admin's Grow now, and Flatten field."""
+    kit = {'campfire': 1, 'stick': 6, 'stone-hoe': 1, 'berry-seeds': 2, 'knife': 1}
+    send = "(m) => window.__sock.send(JSON.stringify(m))"
+    FIELD = "[...__pl.placed.values()].find((t) => t.kind === 'field')"
+    async with world(KIT=json.dumps(kit)) as W:
+        a = await W.page('farmA'); await join(a)
+        expect(await a.evaluate("__pl.you.bar['stone-hoe'] === 1 && __pl.you.bar.knife === 1"), 'the stone hoe and knife are on the tool bar')
+        # a camp: the campfire put down away from the pond, built, fed and lit
+        await a.evaluate("__pl.queueTask({ type: 'walk', x: 28, z: 6 })"); await idle(a, 50); await a.wait_for_timeout(1500)
+        spot = await a.evaluate("(() => { const p = __pl.player.position; for (let k = 0; k < 16; k++) { const ang = k / 16 * Math.PI * 2, x = p.x + Math.cos(ang) * 1.8, z = p.z + Math.sin(ang) * 1.8; if (!__pl.cantPlaceAt(x, z, 'campfire')) return [x, z]; } return null; })()")
+        await a.evaluate(f"({send})({{ t: 'place', kind: 'campfire', x: {spot[0]:.2f}, z: {spot[1]:.2f}, rot: 0 }})"); await a.wait_for_timeout(800)
+        fid = await a.evaluate("[...__pl.placed.keys()][0]")
+        for m in [f"{{ t: 'build', id: {fid} }}", f"{{ t: 'fire', id: {fid}, do: 'add', n: 5, fuel: 'stick' }}", f"{{ t: 'fire', id: {fid}, do: 'light' }}"]:
+            await a.evaluate(f"({send})({m})"); await a.wait_for_timeout(700)
+        await idle(a, 40)
+        expect(await a.evaluate(f"__pl.claimMine(__pl.placed.get({fid})) && __pl.isLit(__pl.placed.get({fid}))"), 'a lit campfire: their camp')
+        # Dig farm field: on the ground's tap menu in their camp, and not outside it
+        inside = await a.evaluate(f"(() => {{ const f = __pl.placed.get({fid}); return __pl.menuActions({{ kind: 'ground', point: new __pl.THREE.Vector3(f.x + 3, 0, f.z), name: '' }}).map((x) => [x.label, x.note || '', !!x.disabled]); }})()")
+        expect(inside[0] == ['Dig farm field', '8 s', False] and inside[-1][0] == 'Walk here', f'the ground in their camp: Dig farm field, then Walk here ({inside})')
+        far = await a.evaluate(f"(() => {{ const f = __pl.placed.get({fid}), x = f.x - 16, z = f.z; return [!!__pl.claimAt(x, z), __pl.digActions({{ x, z }}).map((x) => [x.label, x.note, !!x.disabled])]; }})()")
+        expect(not far[0] and far[1] == [['Dig farm field', 'Only in your camp', True]], f'outside it: Dig farm field greyed out, Only in your camp ({far})')
+        place = await a.evaluate(f"""(() => {{ const f = __pl.placed.get({fid});
+          __pl.startDigging('field', {{ x: f.x + 3, z: f.z }});
+          for (let r = 3; r < 8; r += 0.5) for (let k = 0; k < 24; k++) {{ const g = k / 24 * 6.283; __pl.movePlacing(f.x + Math.cos(g) * r, f.z + Math.sin(g) * r); if (__pl.placing.ok) return [__pl.placing.x, __pl.placing.z, document.getElementById('placeGo').textContent]; }}
+          return null; }})()""")
+        expect(place is not None and place[2] == 'Dig', f'choosing the spot like placing, with a Dig button ({place})')
+        await shot(a, 'farming_choose')
+        await a.evaluate("__pl.finishPlacing()"); await idle(a, 60); await a.wait_for_timeout(1500)
+        fld = await a.evaluate(f"(() => {{ const t = {FIELD}; return t ? [t.x, t.z, t.built, __pl.placedName(t)] : null; }})()")
+        expect(fld is not None and abs(fld[0] - place[0]) < 1e-6 and abs(fld[1] - place[1]) < 1e-6 and fld[2] and fld[3] == 'Farm field', f'dug: a farm field where they chose ({fld})')
+        expect(await a.evaluate("__pl.you.wear['stone-hoe'][0]") == 29, 'digging took a use of the hoe')
+        grass = await a.evaluate(f"""(() => {{ const t = {FIELD}, d = __pl.DETAILS[0], f = __pl.rectOf(t.x, t.z, t.rot, 'field'); let inside = 0, shown = 0;
+          for (let i = 0; i < d.xs.length; i++) if (Math.abs(d.xs[i] - f.x) < f.hw && Math.abs(d.zs[i] - f.z) < f.hd) {{ inside++; if (!(d.hide && d.hide[i])) shown++; }}
+          return [inside, shown]; }})()""")
+        expect(grass[1] == 0, f'no grass grows through it ({grass[0]} clumps under it, {grass[1]} showing)')
+        b = await W.page('farmB'); await join(b); await b.wait_for_timeout(800)
+        expect(await b.evaluate(f"!!{FIELD}"), 'the other phone sees the field')
+        their = await b.evaluate(f"(() => {{ const t = {FIELD}; return [__pl.digActions({{ x: t.x, z: t.z }}).map((x) => x.note), __pl.menuActions({{ kind: 'placed', th: t, name: '' }}).map((x) => x.label)]; }})()")
+        expect(their[0] == ['Only in your camp'] and 'Plant berry seeds' not in their[1] and 'Flatten field' not in their[1], f"someone else can't dig, plant or flatten in the camp ({their})")
+        # planting: a sprout
+        acts = await a.evaluate(f"__pl.fieldActions({FIELD}).map((x) => [x.label, x.note || '', !!x.disabled])")
+        expect([x[0] for x in acts] == ['Plant berry seeds', 'Flatten field', 'Inspect', 'Walk here'] and acts[1][1] == '4 s', f'its tap menu: Plant berry seeds, Flatten field ({acts})')
+        fid2 = await a.evaluate(f"{FIELD}.id")
+        await a.evaluate(f"__pl.queueTask({{ type: 'plant', id: {fid2}, seed: 'berry-seeds' }})"); await idle(a, 40); await a.wait_for_timeout(1200)
+        crop = await a.evaluate(f"(() => {{ const t = {FIELD}, c = t.view.userData.parts.cropParts; return [t.crop && t.crop.kind, __pl.you.carry['berry-seeds'], !!c && c.sprout.visible, !!c && c.bush.visible, __pl.placedName(t), __pl.fieldState(t)]; }})()")
+        expect(crop[0] == 'berry-bush' and crop[1] == 1 and crop[2] and not crop[3], f'planted: a sprout, and one packet of seeds left ({crop})')
+        expect(crop[4] == 'Farm field · berry bush' and crop[5].startswith('Berry bush sprout · grown in '), f'named for what grows on it ({crop[4]}; {crop[5]})')
+        expect(await b.evaluate(f"(() => {{ const t = {FIELD}; return !!t.crop && t.view.userData.parts.cropParts.sprout.visible; }})()"), 'the other phone sees the sprout')
+        menu = await a.evaluate(f"__pl.fieldActions({FIELD}).map((x) => [x.label, x.note || '', !!x.disabled])")
+        expect(menu[0][0].startswith('Grown in ') and menu[0][2] and menu[1] == ['Flatten field', 'The berry bush is lost', False], f'while it grows: how long, and Flatten warns ({menu})')
+        await shot(a, 'farming_sprout')
+        # half grown (on this phone only, to see it): a young bush, smaller than a grown one
+        young = await a.evaluate(f"""(() => {{ const t = {FIELD}, at = t.crop.at, g = __pl.CROPS[t.crop.kind].growMs; t.crop.at = Date.now() - g * 0.6; __pl.drawCrop(t);
+          const c = t.view.userData.parts.cropParts, out = [c.sprout.visible, c.bush.visible, c.fruit.visible, c.bush.scale.x]; t.crop.at = at; __pl.drawCrop(t); return out; }})()""")
+        expect(not young[0] and young[1] and not young[2] and 0.2 < young[3] < 0.75, f'part way: a young bush with no berries yet ({young})')
+        # the admin's Grow now: grown, with its berries
+        adm = await W.page('farmAdmin'); await open_admin(adm)
+        await adm.evaluate(f"({send})({{ t: 'a.regrow', what: 'placed', id: {fid2} }})"); await a.wait_for_timeout(1500)
+        grown = await a.evaluate(f"(() => {{ const t = {FIELD}, c = t.view.userData.parts.cropParts; return [__pl.cropK(t), __pl.cropBerriesNow(t), c.fruit.visible, c.berries.filter((m) => m.visible).length, __pl.fieldState(t)]; }})()")
+        expect(grown[0] == 1 and grown[1] == 5 and grown[2] and grown[3] == 5, f'Grow now: grown, with 5 berries showing ({grown})')
+        await shot(a, 'farming_grown')
+        # picking with the knife: 2 at once, like a wild bush
+        menu = await a.evaluate(f"__pl.fieldActions({FIELD}).map((x) => [x.label, x.note || '', !!x.disabled])")
+        expect(menu[0] == ['Pick berries', '5 left', False], f'grown: Pick berries, 5 left ({menu[0]})')
+        await a.evaluate(f"__pl.queueTask({{ type: 'harvest', id: {fid2} }})"); await idle(a, 40); await a.wait_for_timeout(1500)
+        got = await a.evaluate(f"[__pl.you.carry.berry || 0, __pl.cropBerriesNow({FIELD}), __pl.you.wear.knife[0]]")
+        expect(got[0] == 2 and got[1] == 3, f'picked 2 berries with the knife, 3 left ({got})')
+        expect(await b.evaluate(f"__pl.cropBerriesNow({FIELD})") == 3, 'the other phone sees 3 left')
+        # Flatten field: gone, crop and all, for both phones
+        await a.evaluate(f"__pl.queueTask({{ type: 'flatten', id: {fid2} }})"); await idle(a, 40); await a.wait_for_timeout(1500)
+        expect(await a.evaluate(f"!{FIELD}") and await b.evaluate(f"!{FIELD}"), 'Flatten field: it is gone for both phones')
+        expect(await a.evaluate("__pl.you.wear['stone-hoe'][0]") == 28, 'flattening took a use of the hoe too')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
 async def server_tests():
     """The server's own code, tested with no browser (quick): the admin's fire, claim, Log, rename and message tools, live item numbers, that an old admin flag gives a player nothing, that things which aren't in the world can't be chopped, mined or picked, societies, task lists carried on while away, old things left on the ground fading, and stumps and boulders growing back."""
     import subprocess
     from lib import bundle
     bundle()
-    for f in ['admin_extras.mjs', 'live_items.mjs', 'stale_admin.mjs', 'cheats.mjs', 'societies.mjs', 'tasks.mjs', 'fade.mjs', 'forget.mjs', 'accounts.mjs', 'regrow.mjs', 'toolbar.mjs']:
+    for f in ['admin_extras.mjs', 'live_items.mjs', 'stale_admin.mjs', 'cheats.mjs', 'societies.mjs', 'tasks.mjs', 'fade.mjs', 'forget.mjs', 'accounts.mjs', 'regrow.mjs', 'toolbar.mjs', 'farming.mjs']:
         r = subprocess.run(['node', f], cwd=HERE, capture_output=True, text=True, timeout=180)
         last = (r.stdout.strip().splitlines() or ['(nothing printed)'])[-1]
         if r.returncode: print(r.stdout[-4000:], r.stderr[-2000:])
@@ -2216,7 +2295,7 @@ async def leaving():
         expect(await text(a, '#playSub') == 'Make your person', 'and the old person is gone: Play says Make your person')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'tasks_away': tasks_away, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'tool_bar': tool_bar, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'craft_mat': craft_mat, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'loading': loading, 'sideways': sideways, 'menu_rest': menu_rest, 'tips': tips, 'placed_kinds': placed_kinds, 'placing_grid': placing_grid, 'leaving': leaving, 'server_tests': server_tests}
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'tasks_away': tasks_away, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'tool_bar': tool_bar, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'craft_mat': craft_mat, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'loading': loading, 'sideways': sideways, 'menu_rest': menu_rest, 'tips': tips, 'placed_kinds': placed_kinds, 'placing_grid': placing_grid, 'farming': farming, 'leaving': leaving, 'server_tests': server_tests}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

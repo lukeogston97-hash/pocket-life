@@ -3,10 +3,10 @@
 // person, with their needs caught up to now) or 'world' (also needs the shared world). run gets the message (m), your
 // person (p), the world (w), reply() to answer just you, and save() to save your person straight away; `this` is the
 // world (index.js), so this.send() tells everyone. Remember a spam limit in LIMITS (shared.js) for anything new.
-import { PLACEABLES, fireRule, seatAt } from './placed.js';
+import { PLACEABLES, fireRule, seatAt, CROPS, cropSource, cropGrown, cropBerries } from './placed.js';
 import { SOC, socMax, INVITE_MS } from './societies.js';
-import { fuelRoom, placeSnap, placeClash } from './rules.js';
-import { FILTER, G, starText, badName, freshStats, addCarry, takeCarry, wearList, applyGives, eatOne, craft, spend, clean, blank, num, kindOk, START, REST, BERRY_SRC, cleanLook, REPORTS_KEEP, laidNow, onBar, equipTool, unequipTool } from './shared.js';
+import { fuelRoom, placeSnap, placeClash, berryPicked } from './rules.js';
+import { FILTER, G, starText, badName, freshStats, addCarry, takeCarry, wearList, applyGives, eatOne, craft, spend, clean, blank, num, kindOk, START, REST, BERRY_SRC, cleanLook, REPORTS_KEEP, laidNow, onBar, equipTool, unequipTool, HOUR } from './shared.js';
 const SIT_OPEN = 365 * 24 * 3600000; // sitting has no set time: `until` is far off, and ends when they stand up, do something else, or the fire goes out
 
 export const ACTIONS = {
@@ -348,6 +348,7 @@ export const ACTIONS = {
     const th = list[i], item = th && PLACEABLES[th.kind] && PLACEABLES[th.kind].item;
     const no = (why) => { reply({ t: 'placeNo', why }); reply(this.mine(p)); };
     if (!th || Math.hypot(th.x - p.x, th.z - p.z) > 3) { reply(this.mine(p)); return; }
+    if ((PLACEABLES[th.kind] || {}).madeWith) return no('Flatten it with a hoe'); // a farm field (0.1.18)
     const why = th.built ? this.whyNotTakeDown(th, p, me.admin) : '';
     if (why) return no(why);
     if (!addCarry(p, item, 1, G)) return no('Too heavy');
@@ -364,6 +365,7 @@ export const ACTIONS = {
     const list = this.placedList(), i = list.findIndex((th) => th.id === m.id), th = list[i];
     const no = (why) => { reply({ t: 'placeNo', why }); reply(this.mine(p)); };
     if (!th || !th.built || Math.hypot(th.x - p.x, th.z - p.z) > 3) { reply(this.mine(p)); return; }
+    if ((PLACEABLES[th.kind] || {}).madeWith) return no('Flatten it with a hoe'); // a farm field (0.1.18)
     const why = this.whyNotTakeDown(th, p, me.admin);
     if (why) return no(why);
     if (p.sit && p.sit.fire === th.id) this.standUp(p);
@@ -386,6 +388,93 @@ export const ACTIONS = {
     reply(this.mine(p));
   } },
   // a fire: light it, put it out, or add fuel (n sticks, as many as fit)
+  // Farming (0.1.18, Luke): a farm field is dug with its tool (the stone hoe) on the tool bar, only in your own camp, on the
+  // placing grid. It's ready straight away (no building) and takes a use of the hoe. m: { kind, x, z, rot }
+  dig: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
+    const kind = typeof m.kind === 'string' && Object.hasOwn(PLACEABLES, m.kind) ? m.kind : null, rule = kind && PLACEABLES[kind];
+    const no = (why) => { reply({ t: 'placeNo', why }); reply(this.mine(p)); };
+    if (!rule || !rule.madeWith) return no("That can't be dug");
+    const tool = rule.madeWith, { x, z, rot } = placeSnap(num(m.x), num(m.z), num(m.rot), rule); // on the placing grid (rules.js)
+    if (!onBar(p, tool, G)) return no(`You need a ${String((G.items[tool] || {}).name || tool).toLowerCase()} on your tool bar`);
+    if (!me.admin && Math.hypot(x - p.x, z - p.z) > 4) return no('Too far away');
+    if (rule.inCamp && !me.admin) { const c = this.claimAt(x, z); if (!c || !this.claimIsMine(c, p.who)) return no('Farm fields only go in your camp'); }
+    if (placeClash(this.placedList(), { x, z, rot }, kind, PLACEABLES)) return no('Too close to something else');
+    const land = me.admin ? null : this.cantPlaceAt(x, z); // not in the water, off the land or inside a tree or rock (guard.js)
+    if (land) return no(land);
+    if (!this.worked(ws, me, p, rule.makeSeconds)) { reply({ t: 'slow' }); reply(this.mine(p)); return; } // digging takes time (guard.js)
+    const th = { id: w.nextId++, kind, x, z, rot, built: true, fuel: 0, lit: false, at: Date.now(), by: p.who };
+    this.placedList().push(th);
+    spend(p, 'dig', G);
+    this.wearTool(p, tool, reply);
+    await this.save();
+    save();
+    this.sendPlaced(th, null);
+    reply(this.mine(p));
+  } },
+  // flattening a farm field with the same tool: back to grass, and whatever grew on it is gone
+  flatten: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
+    const list = this.placedList(), i = list.findIndex((th) => th.id === m.id), th = list[i], rule = th && PLACEABLES[th.kind];
+    const no = (why) => { reply({ t: 'placeNo', why }); reply(this.mine(p)); };
+    if (!th || !rule || !rule.madeWith) { reply(this.mine(p)); return; }
+    if (!me.admin && Math.hypot(th.x - p.x, th.z - p.z) > 3 + (rule.solid || 0.5)) return no('Too far away');
+    const c = this.notYours(p, th.x, th.z, me.admin);
+    if (c) return no(this.claimNo(c));
+    if (!onBar(p, rule.madeWith, G)) return no(`You need a ${String((G.items[rule.madeWith] || {}).name || rule.madeWith).toLowerCase()} on your tool bar`);
+    if (!this.worked(ws, me, p, rule.flattenSeconds)) { reply({ t: 'slow' }); reply(this.mine(p)); return; }
+    list.splice(i, 1);
+    spend(p, 'dig', G);
+    this.wearTool(p, rule.madeWith, reply);
+    await this.save();
+    save();
+    this.send({ t: 'unplaced', id: th.id }, null);
+    reply(this.mine(p));
+  } },
+  // planting seeds on an empty farm field (m.seed: the seed item): it grows by itself from now (placed.js)
+  plant: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
+    const th = this.placedById(m.id), rule = th && PLACEABLES[th.kind];
+    const no = (why) => { reply({ t: 'placeNo', why }); if (th) reply({ t: 'placed', thing: this.placedView(th) }); reply(this.mine(p)); };
+    if (!th || !rule || !rule.madeWith) { reply(this.mine(p)); return; }
+    const kind = Object.keys(CROPS).find((k) => CROPS[k].seed === m.seed && (CROPS[k].on || 'field') === th.kind);
+    if (!kind) return no("That doesn't grow here");
+    if (th.crop) return no('Something is already growing here');
+    if (!p.carry[m.seed]) return no('You have no seeds to plant');
+    if (!me.admin && Math.hypot(th.x - p.x, th.z - p.z) > 3 + (rule.solid || 0.5)) return no('Too far away');
+    const c = this.notYours(p, th.x, th.z, me.admin);
+    if (c) return no(this.claimNo(c));
+    if (!this.worked(ws, me, p, CROPS[kind].plantSeconds)) { reply({ t: 'slow' }); reply({ t: 'placed', thing: this.placedView(th) }); reply(this.mine(p)); return; } // (the game showed it planted)
+    takeCarry(p, m.seed, 1);
+    th.crop = { kind, at: Date.now() };
+    spend(p, 'plant', G);
+    await this.save();
+    save();
+    this.sendPlaced(th, null);
+    reply(this.mine(p));
+  } },
+  // picking a grown crop, the same as its "like" source (a berry bush): one at a time, or a few with the knife on the bar
+  harvest: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
+    const th = this.placedById(m.id), src = th && th.crop && cropSource(th.crop), rule = th && PLACEABLES[th.kind];
+    const no = (why) => { reply({ t: 'placeNo', why }); if (th) reply({ t: 'placed', thing: this.placedView(th) }); reply(this.mine(p)); };
+    if (!th || !src || !src.harvest) { reply(this.mine(p)); return; }
+    if (!me.admin && Math.hypot(th.x - p.x, th.z - p.z) > 3 + ((rule && rule.solid) || 0.5)) return no('Too far away');
+    const c = this.notYours(p, th.x, th.z, me.admin);
+    if (c) return no(this.claimNo(c));
+    const now = Date.now();
+    if (!cropGrown(th.crop, now)) return no('Not grown yet');
+    const kind = Object.keys(src.harvest)[0], have = cropBerries(th.crop, now);
+    if (have < 1) return no('None to pick yet');
+    const many = src.tool && src.toolHarvest && onBar(p, src.tool, G) ? Number(src.toolHarvest[kind]) || 1 : 1;
+    const n = have >= many ? many : 1;
+    if (!addCarry(p, kind, n, G)) return no('Too heavy');
+    let b = th.crop.berries || [null, null];
+    for (let k = 0; k < n; k++) b = berryPicked(b[0], b[1], src.holds || 5, (src.regrowHours || 0) * HOUR, now); // (rules.js, the same as a wild bush)
+    th.crop.berries = b;
+    spend(p, 'harvest', G);
+    if (n > 1) this.wearTool(p, src.tool, reply);
+    await this.save();
+    save();
+    this.sendPlaced(th, null);
+    reply(this.mine(p));
+  } },
   fire: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
     const th = this.placedById(m.id), f = th && fireRule(th.kind);
     if (!th || !f || !th.built || Math.hypot(th.x - p.x, th.z - p.z) > 3) { if (th) this.sendPlaced(th, reply, {}); reply(this.mine(p)); return; }

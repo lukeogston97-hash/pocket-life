@@ -21,6 +21,8 @@
 - How the Items tab looks (25 Nov 2026, Luke: the list of every number was "way too long"; he picked "tap an item to open"): one line per item, A to Z, summing up its own numbers ("weighs 1 · 20 uses", "weighs 1 · +10 food", and "Changed" if any of its numbers are), with the Craft kinds as chips (All, Tools, Food, Building, Materials) and the search (by name, names that start with what's typed first). Tap a line to open its numbers, one item at a time, as thin rows (Weight, Uses, Fills hunger by, Needs <item>, Makes). Save shows only once a box is changed (Enter saves too), Reset once it has been, with "was X" beside it. A search that finds one item opens it. An item with two recipes would show Recipe 1 and Recipe 2. Check: `admin_items`.
 - Copy my changes: lines like `items.knife.weight: 1 -> 4`, to send to Claude. Claude writes them into game-data.json, then they are Reset in admin. That is how a change becomes permanent.
 
+- Farming (0.1.18): a farm field's tap menu has Grow now (grown and full of berries) besides Move and Remove; Regrow everything grows every crop; Settings has a Farming group with Planted crops grow in (h); the World tab counts farm fields and how many are planted (docs/design/farming.md).
+
 ## People (admin mode)
 - A person's page also shows their task list as the server has it (what they carry on with while away, 0.1.7), with Clear task list (two taps; their game stops too if they're playing).
 - And their recipes found on the craft mat (0.1.8): how many of how many, by name, with Find all (every recipe) and Clear found (two taps). Tool a.found { id, all } in server/src/admin.js, in the Log as Found recipes.

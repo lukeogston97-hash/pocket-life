@@ -25,6 +25,8 @@ const RULES = {
   hungerPerHour: drop('hunger'),
   thirstPerHour: drop('thirst'),
   restPerHour: drop('rest'),
+  // how long a crop on a farm field takes to grow (0.1.18): one number for every crop (placed.js cropGrowMs reads it)
+  cropGrowHours: { get: () => (Object.values(G.crops || {})[0] || {}).growHours || 24, set: (v) => { for (const c of Object.values(G.crops || {})) c.growHours = v; } },
 };
 export const LIVE_LIST = (G.liveSettings || []).filter((d) => RULES[d.id]);
 const BASE = Object.fromEntries(LIVE_LIST.map((d) => [d.id, RULES[d.id].get()])); // the numbers from game-data.json

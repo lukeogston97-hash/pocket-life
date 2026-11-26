@@ -7,17 +7,18 @@
 // Kept apart from the away routine so other things (a schedule, later) can hand the server tasks to run too.
 // These are methods of the World (index.js adds them to it), so `this` is the world.
 import { ACTIONS } from './actions.js';
-import { PLACEABLES, fireRule, seatAt } from './placed.js';
+import { PLACEABLES, fireRule, seatAt, CROPS, cropSource, cropGrown, cropBerries } from './placed.js';
 import { fuelRoom, recipeWants } from './rules.js';
 import { weightOf, onBar, carriedWeight } from './needs.js';
 import { G, num, dist, spend } from './shared.js';
 
 export const MAX_TASKS = 30; // the same as the game's list (MAX_QUEUE in game/moving.js)
-const TYPES = ['pickup', 'use', 'drop', 'chop', 'cut', 'walk', 'mine', 'fish', 'place', 'build', 'unplace', 'apart', 'tend', 'sit', 'make'];
+const TYPES = ['pickup', 'use', 'drop', 'chop', 'cut', 'walk', 'mine', 'fish', 'place', 'build', 'unplace', 'apart', 'tend', 'sit', 'make', 'dig', 'flatten', 'plant', 'harvest'];
 const WHATS = ['tree', 'stump', 'oldStump', 'rock', 'boulder'];
 // what each kind of task can't do without (one missing: the task is dropped)
 const NEEDS = { pickup: ['id'], use: ['source'], drop: ['kind', 'n'], chop: ['what'], cut: ['plant', 'i'], walk: ['x', 'z'], mine: ['idx'], fish: [],
-  place: ['item', 'kind', 'x', 'z'], build: ['id'], unplace: ['id'], apart: ['id'], tend: ['id', 'do'], sit: ['id'], make: ['id', 'recipe'] };
+  place: ['item', 'kind', 'x', 'z'], build: ['id'], unplace: ['id'], apart: ['id'], tend: ['id', 'do'], sit: ['id'], make: ['id', 'recipe'],
+  dig: ['kind', 'x', 'z'], flatten: ['id'], plant: ['id', 'seed'], harvest: ['id'] }; // farming (0.1.18)
 const int = (v, most) => (Number.isInteger(v) && v >= 0 && v < most ? v : undefined);
 const has = (obj, k) => typeof k === 'string' && !!obj && Object.hasOwn(obj, k);
 // replies that mean "no" (someone got there first, too far, in someone else's camp, too heavy...)
@@ -42,7 +43,7 @@ export function cleanTasks(list) {
     for (const k of ['n', 'which']) { const v = int(t[k], 100); if (v !== undefined) c[k] = v; }
     for (const k of ['x', 'z']) if (Number.isFinite(t[k]) && Math.abs(t[k]) <= edge) c[k] = num(t[k]);
     for (const k of ['rot', 'top', 'stop']) if (Number.isFinite(t[k]) && Math.abs(t[k]) < 100) c[k] = num(t[k]);
-    for (const k of ['kind', 'item', 'fuel']) if (has(G.items, t[k]) || (k === 'kind' && has(PLACEABLES, t[k]))) c[k] = t[k];
+    for (const k of ['kind', 'item', 'fuel', 'seed']) if (has(G.items, t[k]) || (k === 'kind' && has(PLACEABLES, t[k]))) c[k] = t[k];
     if (has(G.recipes, t.recipe)) c.recipe = t.recipe;
     if (has(G.plants, t.plant)) c.plant = t.plant;
     if (has(G.sources, t.source)) c.source = t.source;
@@ -205,6 +206,29 @@ export const taskMethods = {
         if (Object.entries(recipeWants(r)).some(([k, n]) => (p.carry[k] || 0) < n)) return null; // not got what it takes (tools it keeps too)
         return { to: nearThing(th), seconds: r.seconds || 1.6, pose: 'kneel' };
       }
+      // farming (0.1.18): dig a field (its tool on the bar, in their own camp), flatten one, plant seeds, pick what grew
+      case 'dig': {
+        const rule = PLACEABLES[task.kind];
+        if (!rule || !rule.madeWith || !onBar(p, rule.madeWith, G)) return null;
+        if (rule.inCamp) { const c = this.claimAt(task.x, task.z); if (!c || !this.claimIsMine(c, p.who)) return null; }
+        const s = rule.solid || 0.5;
+        return { to: toward(at, [task.x, task.z], s + 0.45, s + 0.9), seconds: rule.makeSeconds || 8, pose: 'chop' };
+      }
+      case 'flatten': {
+        const th = this.placedById(task.id), rule = th && PLACEABLES[th.kind];
+        return rule && rule.madeWith && onBar(p, rule.madeWith, G) ? { to: nearThing(th), seconds: rule.flattenSeconds || 4, pose: 'chop' } : null;
+      }
+      case 'plant': {
+        const th = this.placedById(task.id), rule = th && PLACEABLES[th.kind];
+        const kind = rule && Object.keys(CROPS).find((k) => CROPS[k].seed === task.seed && (CROPS[k].on || 'field') === th.kind);
+        if (!kind || th.crop || !(p.carry[task.seed] > 0)) return null; // something's growing there already, or no seeds left
+        return { to: nearThing(th), seconds: CROPS[kind].plantSeconds || 3, pose: 'kneel' };
+      }
+      case 'harvest': {
+        const th = this.placedById(task.id), src = th && th.crop && cropSource(th.crop);
+        if (!src || !src.harvest || !cropGrown(th.crop) || cropBerries(th.crop) < 1 || !this.canCarry(p, src.harvest)) return null;
+        return { to: nearThing(th), seconds: src.seconds || 2, pose: src.pose || 'pick' };
+      }
       default: return null;
     }
   },
@@ -233,6 +257,10 @@ export const taskMethods = {
       case 'tend': return { t: 'fire', id: task.id, do: task.do, n: task.n || 1, fuel: task.fuel };
       case 'sit': return { t: 'sit', id: task.id, seat: task.seat };
       case 'make': return { t: 'craft', id: task.recipe };
+      case 'dig': return { t: 'dig', kind: task.kind, x: task.x, z: task.z, rot: task.rot || 0 };
+      case 'flatten': return { t: 'flatten', id: task.id };
+      case 'plant': return { t: 'plant', id: task.id, seed: task.seed };
+      case 'harvest': return { t: 'harvest', id: task.id };
       default: return null;
     }
   },
