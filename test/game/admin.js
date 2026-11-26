@@ -91,6 +91,8 @@ const BERRY_SOURCE = () => Object.values(SOURCES).find(harvests);
 const LIVE_SET = {
   maxPlaying: (v) => { SETTINGS.maxPlaying = v; },
   toolSlots: (v) => { if (SETTINGS.toolSlots !== v) { SETTINGS.toolSlots = v; if (player && bagOpen()) drawBag(); } }, // the tool bar's spots (inventory.js)
+  inventorySquares: (v) => { if (SETTINGS.inventorySquares !== v) { SETTINGS.inventorySquares = v; if (player && bagOpen()) drawBag(); } }, // (0.2.1, you.js invSquares)
+  stackSize: (v) => { if (SETTINGS.stackSize !== v) { SETTINGS.stackSize = v; if (player && bagOpen()) drawBag(); } }, // how many of one thing fit in a square (rules.js stackOf)
   societyMax: (v) => { game.SOCIETY.maxMembers = v; }, // (society.js; members are told the number with their society too)
   respawnMinutes: (v) => { SETTINGS.respawnMinutes = v; },
   berryRegrowHours: (v) => { const s = BERRY_SOURCE(); if (s && s.regrowHours !== v) { s.regrowHours = v; for (const b of berryBushes) { b.userData.shown = -1; drawBerries(b); } } },
@@ -104,7 +106,7 @@ const LIVE_SET = {
   restPerHour: (v) => { if (STAT.rest) STAT.rest.perHour = -v; },
   cropGrowHours: (v) => { for (const c of Object.values(CROPS)) c.growMs = v * 3600000; }, // (placeables.js: the crops show it within a second)
 };
-const LIVE_BASE = { maxPlaying: SETTINGS.maxPlaying, toolSlots: SETTINGS.toolSlots ?? 7, societyMax: (DATA.societies || {}).maxMembers ?? 3, respawnMinutes: SETTINGS.respawnMinutes, berryRegrowHours: (BERRY_SOURCE() || {}).regrowHours,
+const LIVE_BASE = { maxPlaying: SETTINGS.maxPlaying, toolSlots: SETTINGS.toolSlots ?? 7, inventorySquares: SETTINGS.inventorySquares ?? 10, stackSize: SETTINGS.stackSize ?? 10, societyMax: (DATA.societies || {}).maxMembers ?? 3, respawnMinutes: SETTINGS.respawnMinutes, berryRegrowHours: (BERRY_SOURCE() || {}).regrowHours,
   treeRegrowDays: daysSpan(CHOP.regrowDays)[0], treeRegrowDaysMost: daysSpan(CHOP.regrowDays)[1], boulderRegrowDays: MINE.regrowDays ?? 3, rockBackHours: MINE.rockBackHours ?? 4, fadeDays: SETTINGS.fadeDays ?? 7,
   hungerPerHour: -((STAT.hunger || {}).perHour || 0), thirstPerHour: -((STAT.thirst || {}).perHour || 0), restPerHour: -((STAT.rest || {}).perHour || 0),
   cropGrowHours: (Object.values(DATA.crops || {})[0] || {}).growHours ?? 24 };

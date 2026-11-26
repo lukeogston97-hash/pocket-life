@@ -13,7 +13,7 @@ import WORLDS from '../worlds.json'; // minimum version for each link
 import FILTER from '../words.json'; // the chat filter, copied from game-data.json by tools/worlds.py
 import G from '../game.json'; // needs, items, berry bushes, away rules: copied from game-data.json by tools/worlds.py
 import { starText, badName } from './rules.js'; // the rules the game and the server share (a copy of test/game/rules.js)
-import { HOUR, MINUTE, freshStats, advanceStats, addCarry, takeCarry, wearList, applyGives, eatOne, posAt, dist, craft, sleepMs, spend, useTimeZone, isNight, morningAfter, ageOf, barOf, onBar, carriedWeight, equipTool, unequipTool, toolSlots } from './needs.js';
+import { HOUR, MINUTE, freshStats, advanceStats, addCarry, carryNo, invSquares, squaresOf, takeCarry, wearList, applyGives, eatOne, posAt, dist, craft, sleepMs, spend, useTimeZone, isNight, morningAfter, ageOf, barOf, onBar, carriedWeight, equipTool, unequipTool, toolSlots } from './needs.js';
 
 export const PROTOCOL = 2; // bump when the game and server stop understanding each other
 export const CORS = { 'Access-Control-Allow-Origin': '*' };
@@ -98,4 +98,4 @@ export const pickRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
 // boulders) has none and never fades.
 export const laidNow = (now = Date.now()) => Math.floor(now / HOUR);
 
-export { WORLDS, FILTER, G, starText, badName, HOUR, MINUTE, freshStats, advanceStats, addCarry, takeCarry, wearList, applyGives, eatOne, posAt, dist, craft, sleepMs, spend, isNight, morningAfter, ageOf, barOf, onBar, carriedWeight, equipTool, unequipTool, toolSlots };
+export { WORLDS, FILTER, G, starText, badName, HOUR, MINUTE, freshStats, advanceStats, addCarry, carryNo, invSquares, squaresOf, takeCarry, wearList, applyGives, eatOne, posAt, dist, craft, sleepMs, spend, isNight, morningAfter, ageOf, barOf, onBar, carriedWeight, equipTool, unequipTool, toolSlots };

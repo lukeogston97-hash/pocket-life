@@ -22,7 +22,7 @@ import { $, buildItem, campfireModel, countLabel, harvests, ITEMS, RECIPES, shad
 import { disposeMaterials, HIP_Y, setArm } from './people.js';
 import { HIT_BOX, HIT_MAT, itemViews } from './world-items.js';
 import {
-  addToCarry, addWeight, carried, drawCarry, drawHeld, hasTool, headTop, player, showGain, showTag, takeFromCarry,
+  addToCarry, carryNo, drawCarry, drawHeld, hasTool, headTop, player, showGain, showTag, takeFromCarry,
   toolNeed, toolWhy, you,
 } from './you.js';
 import { slowness, spendEnergy } from './needs.js';
@@ -616,7 +616,8 @@ Object.assign(TASK_KINDS, {
       const th = placed.get(t.id);
       if (!th || (th.built && PLACEABLES[th.kind].fire && isLit(th))) { nextTask(); return; }
       const P = PLACEABLES[th.kind];
-      if (carried() + ITEMS[P.item].weight > SETTINGS.carryCapacity) { showTag('Too heavy', headTop(), 2); nextTask(); return; }
+      const no = carryNo({ [P.item]: 1 });
+      if (no) { showTag(no, headTop(), 2); nextTask(); return; }
       goNear(th, () => {
         face(th.x, th.z);
         startAction({ pose: 'bend', seconds: th.built ? 2 : 0.9, mid: () => sendNow({ t: 'unplace', id: th.id }) });
@@ -785,8 +786,8 @@ export function placedActions(th) {
       run: () => queueTask({ type: 'tend', id: th.id, do: 'out' }) });
   }
   else { // once it's out: pack it into your inventory, or take it apart for what it's made of (only who built it; the server checks)
-    const heavy = carried() + ITEMS[P.item].weight > SETTINGS.carryCapacity;
-    out.push({ label: 'Pack up', disabled: heavy, note: heavy ? 'Too heavy' : F && fuelLeft(th) > 0 ? 'Fuel left is lost' : 'Into your inventory', run: () => queueTask({ type: 'unplace', id: th.id }) });
+    const no = carryNo({ [P.item]: 1 }); // too heavy, or no square for it (0.2.1)
+    out.push({ label: 'Pack up', disabled: !!no, note: no || (F && fuelLeft(th) > 0 ? 'Fuel left is lost' : 'Into your inventory'), run: () => queueTask({ type: 'unplace', id: th.id }) });
     out.push({ label: 'Take apart', note: takeApartNote(th), run: () => queueTask({ type: 'apart', id: th.id }) });
   }
   out.push({ label: 'Inspect', foot: true, run: () => showTag(fireState(th) || P.name, V(th.x, groundY(th.x, th.z) + 1.1, th.z), 2, 5) }, walkHere);
@@ -1028,7 +1029,7 @@ Object.assign(TASK_KINDS, {
       const th = placed.get(t.id), def = th && cropOf(th);
       if (!def) { nextTask(); return; }
       const src = def.like, kind = Object.keys(src.harvest)[0];
-      const no = () => (cropK(th) < 1 ? 'Not grown yet' : cropBerriesNow(th) < 1 ? `Next ${ITEMS[kind].name.toLowerCase()} in ${cropNextIn(th)}` : carried() + addWeight(kind, 1) > SETTINGS.carryCapacity ? 'Too heavy' : '');
+      const no = () => (cropK(th) < 1 ? 'Not grown yet' : cropBerriesNow(th) < 1 ? `Next ${ITEMS[kind].name.toLowerCase()} in ${cropNextIn(th)}` : carryNo({ [kind]: 1 }));
       if (no()) { showTag(no(), headTop(), 2); nextTask(); return; }
       goNear(th, () => {
         if (!placed.has(th.id) || !cropOf(th) || no()) { if (cropOf(th)) showTag(no(), headTop(), 2); nextTask(); return; }
@@ -1038,7 +1039,8 @@ Object.assign(TASK_KINDS, {
         startAction({ pose: src.pose, seconds: src.seconds, tool: cropPickCount(th) > 1 ? src.tool : null, end: () => {
           if (!placed.has(th.id) || !cropOf(th) || no()) return;
           const n = cropPickCount(th);
-          if (carried() + addWeight(kind, n) > SETTINGS.carryCapacity) { showTag('Too heavy', headTop(), 2); return; } // (the same as a wild bush)
+          const full = carryNo({ [kind]: n });
+          if (full) { showTag(full, headTop(), 2); return; } // (the same as a wild bush)
           addToCarry(kind, n);
           let b = th.crop.berries || [null, null];
           for (let i = 0; i < n; i++) b = berryPicked(b[0], b[1], bushHolds(src), src.regrowHours * 3600000, Date.now()); // (rules.js)

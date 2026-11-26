@@ -2464,7 +2464,32 @@ async def leaving():
         expect(await text(a, '#playSub') == 'Make your person', 'and the old person is gone: Play says Make your person')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'tasks_away': tasks_away, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'tool_bar': tool_bar, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'craft_mat': craft_mat, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'loading': loading, 'sideways': sideways, 'menu_rest': menu_rest, 'tips': tips, 'placed_kinds': placed_kinds, 'parts_look': parts_look, 'ore_vein': ore_vein, 'stress': stress, 'placing_grid': placing_grid, 'farming': farming, 'leaving': leaving, 'server_tests': server_tests}
+async def squares():
+    """The inventory's 10 squares (0.2.1, Luke): one square holds up to 10 of a thing, so 15 sticks are a square of 10 and a
+    square of 5, and the grid shows exactly 10 squares. With every square used, a tool can't be unequipped and something new
+    can't be picked up ("Your inventory is full"); the server agrees (toolbar.mjs J tries every way in)."""
+    kit = {'stick': 15, 'twine': 1, 'sharp-stone': 1, 'short-handle': 1, 'berry': 1, 'fish': 1, 'cooked-fish': 1, 'axe-head': 1, 'pick-head': 1, 'knife': 1}
+    async with world({}, KIT=json.dumps(kit)) as W:
+        a = await W.page('squares'); await join(a)
+        await a.click('#bagBtn'); await a.wait_for_timeout(500)
+        look = await a.evaluate("""(() => ({ cells: document.querySelectorAll('#bagList > li').length, empty: document.querySelectorAll('#bagList > li.bag-slot').length,
+          sticks: [...document.querySelectorAll('#bagList .bag-tile[data-kind="stick"]')].map((b) => (b.querySelector('.count') || {}).textContent || '1') }))()""")
+        expect(look['cells'] == 10 and look['empty'] == 0 and sorted(look['sticks']) == ['10', '5'], f'10 squares, all used: 15 sticks are a square of 10 and a square of 5 ({look})')
+        await shot(a, 'squares-full')
+        await a.click('#toolBar .bag-tile[data-kind="knife"]'); await a.wait_for_timeout(200)
+        await a.evaluate("[...document.querySelectorAll('#bagInfo button')].find((b) => b.textContent === 'Unequip').click()"); await a.wait_for_timeout(400)
+        tag = await a.evaluate("[...document.querySelectorAll('.tag3d')].map((e) => e.textContent).join(' ')")
+        expect(await a.evaluate('__pl.you.bar.knife === 1') and 'Your inventory is full' in tag, f'Unequip with every square used: it says so, and the knife stays on the bar ({tag!r})')
+        sid = await a.evaluate("(() => { for (const id of __pl.itemViews.keys()) { const it = __pl.getItem(id); if (it && it.kind === 'stone') return id; } return null; })()")
+        expect(sid is not None, f'a stone lying about ({sid})')
+        await a.wait_for_timeout(2600)  # (the last tag fades first)
+        await a.evaluate(f"__pl.queueTask({{ type: 'pickup', id: {sid} }})"); await a.wait_for_timeout(500)
+        tag = await a.evaluate("[...document.querySelectorAll('.tag3d')].map((e) => e.textContent).join(' ')")
+        expect('Your inventory is full' in tag and not await a.evaluate('__pl.tasks.current || __pl.tasks.list.length'), f'picking up a stone (something new): Your inventory is full, nothing queued ({tag!r})')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'tasks_away': tasks_away, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'tool_bar': tool_bar, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'craft_mat': craft_mat, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'loading': loading, 'sideways': sideways, 'menu_rest': menu_rest, 'tips': tips, 'placed_kinds': placed_kinds, 'parts_look': parts_look, 'ore_vein': ore_vein, 'stress': stress, 'placing_grid': placing_grid, 'farming': farming, 'leaving': leaving, 'squares': squares, 'server_tests': server_tests}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

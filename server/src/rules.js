@@ -184,6 +184,16 @@ export function tidyBar(bar, carry, items, slots) {
   return out;
 }
 
+/* ---------- inventory squares and stacks (0.2.1, Luke: "Lock in 10 squares for inventory, keep the 30 weight") ----------
+   The inventory has settings.inventorySquares squares. One square holds a stack of one kind of thing: up to
+   settings.stackSize, or the item's own "stack"; a tool or something you place is 1 a square (Luke). Tools on the tool
+   bar don't use squares. The carryCapacity weight still counts as well (bagWeight). items: each with uses (a tool),
+   places (something you place) and stack. size: settings.stackSize. */
+export const stackOf = (it, size) => (!it || it.uses || it.places ? 1 : Math.max(1, Math.floor(Number(it.stack) || Number(size) || 10)));
+// how many squares what's carried takes (the tools on the bar take none)
+export const squaresUsed = (carry, bar, items, size) => Object.entries(carry || {})
+  .reduce((s, [k, n]) => s + Math.ceil(Math.max(0, n - ((bar || {})[k] || 0)) / stackOf(items[k], size)), 0);
+
 /* ---------- claims: can a fire lit at x, z claim the land round it? ---------- */
 // o: { radius, spawnRadius, pond: { x, z }, hasClaim, claims: [{ x, z, name }] } (claims: every other claim's fire)
 // Returns null if it can, else why not: { why: 'has' | 'pond' | 'near', name }

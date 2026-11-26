@@ -1,6 +1,6 @@
 {
   "_help": {
-    "settings": "carryCapacity is the most weight a person can carry (tools on the tool bar don't count). toolSlots is how many spots the tool bar has (above the inventory): only tools on it get used, and they weigh nothing. walkSpeed is in metres per second. worldSize is how wide the square world is in metres (100 makes it 100 m x 100 m, with the clearing in the middle); it can be 40 to 300, and the bigger it is the more your phone has to draw. needsSpeed is 1 for real time; set it higher to test, for example 60 makes an hour of hunger and thirst pass in a minute. autoName fills in a name from testNames on the Make your person screen (handy while testing; set it to false for the real game). respawnMinutes is how often (online) the world adds one stick and one stone, if there are fewer on the ground than startInWorld: sticks under trees, stones by boulders. maxPlaying is how many people can play at once (20 for now, to stay inside Cloudflare's free plan); anyone else waits in line on the main menu and joins by themselves when a spot opens. Run tools/worlds.py test-build after changing it. worldTimeZone is the one clock the whole world runs on (date, time, day and night), the same for every player: Australia/Darwin for the Oceania world. craftSearchFrom: Craft shows a search box once you know this many recipes. fadeDays: things left lying on the ground fade away after this many days (0: never). Only what people put there (dropped, chopped, mined, a dead person's things, a campfire taken apart) and what the admin adds; the sticks and stones the world tops up by itself stay. Inside a camp the days don't run. The admin can change it live.",
+    "settings": "carryCapacity is the most weight a person can carry (tools on the tool bar don't count). toolSlots is how many spots the tool bar has (above the inventory): only tools on it get used, and they weigh nothing. inventorySquares is how many squares the inventory has (Luke, 0.2.1: 10), and stackSize how many of one thing fit in one square (10); an item can have its own \"stack\", and tools and things you place are always 1 a square. Tools on the tool bar take no square. The carryCapacity weight still counts too. Both are live settings as well. walkSpeed is in metres per second. worldSize is how wide the square world is in metres (100 makes it 100 m x 100 m, with the clearing in the middle); it can be 40 to 300, and the bigger it is the more your phone has to draw. needsSpeed is 1 for real time; set it higher to test, for example 60 makes an hour of hunger and thirst pass in a minute. autoName fills in a name from testNames on the Make your person screen (handy while testing; set it to false for the real game). respawnMinutes is how often (online) the world adds one stick and one stone, if there are fewer on the ground than startInWorld: sticks under trees, stones by boulders. maxPlaying is how many people can play at once (20 for now, to stay inside Cloudflare's free plan); anyone else waits in line on the main menu and joins by themselves when a spot opens. Run tools/worlds.py test-build after changing it. worldTimeZone is the one clock the whole world runs on (date, time, day and night), the same for every player: Australia/Darwin for the Oceania world. craftSearchFrom: Craft shows a search box once you know this many recipes. fadeDays: things left lying on the ground fade away after this many days (0: never). Only what people put there (dropped, chopped, mined, a dead person's things, a campfire taken apart) and what the admin adds; the sticks and stones the world tops up by itself stay. Inside a camp the days don't run. The admin can change it live.",
     "stats": "Stats run in real time. Every stat goes from 0 to 100. perHour is how much it changes each real hour, and whileAsleep is used instead while sleeping. lowAt shows the warning (the ring pulses red, and under 10 it flashes). atZero is what happens to other stats each hour while this one is empty. Health heals (4 an hour, 8 asleep, so about a day to full) when nothing is empty, and the person dies when health reaches 0. fullLabel is shown when you try to eat or drink but don't need to. gainLabel is the word in the pop-up when eating or drinking fills it (+10 food, +15 water), since '+10 Hunger' would read like getting hungrier; without it the need's name is used. Hunger lasts about a day (a berry fills 10), thirst about 16 hours awake (a drink fills 15), Rest about 16 hours awake and 8 asleep (whileAsleepAtNight: faster at night, about 6 hours). With no water you die in about 3 days, with no food in about a week. collapseAtZero (Rest): when it runs out your person collapses asleep where they stand and can't be woken until it's back to wakeAt (25). Stamina (id energy) is not deadly. icon: heart, food, drop, moon or bolt. The server uses the same numbers (copied by tools/worlds.py).",
     "energyCosts": "Stamina (the yellow ring, id energy) is short-term: every task takes these amounts and walking takes walkPerMetre for each metre. It comes back by itself quickly (perHour in its need: 600 an hour, so empty to full in about 10 minutes; whileAsleep 1500 when sleeping, whileSitting 2400 when sitting by a fire). Below slowBelow (20) your person is out of breath: walking and tasks take slowBy (1.5) times as long. It never stops you and it's not deadly. The server uses the same numbers. dig is digging or flattening a farm field, plant is planting seeds.",
     "away": "How a person looks after themselves while their player is away (the server does this). near: 'pond' keeps them strolling round the main pond (anything else: round where you left them). wanderMin and wanderMax: how far in metres from there they stroll. strollSpeed in metres per second. While away they first carry on with what's left of their task list (the game sends it to the server, which does each task the same way: server/src/tasks.js), stopping to eat and drink as above and to sleep when tired (not just because it's night); things that have gone are skipped. Coming back, what's left of the list is back on your screen. They eat what they carry when hunger is under eatBelow, go for berries if they have none, and drink at the pond when thirst is under drinkBelow. After sleepAfterHours away they lie down asleep: hunger and thirst keep dropping slowly (the asleep rates) but stop at asleepFloor, so they can't die; after goneAfterDays asleep (7 days away in all since 0.1.14; was 3) they leave the world and their things stay where they slept. A grave marks where someone died for graveHours. idleMinutes: if you're in the game but don't touch anything for this long, your person goes on autopilot and does the same, until you tap. sleepBelow: someone on autopilot or away lies down to sleep when Rest is under this, and gets up when it's full. At night (see night) they go to sleep until morning. comeBackSeconds: for this long after a player's connection goes, their person stays right where they are, so a short break in the connection changes nothing (the game carries on from where it was). With a claim (see claims) they stay within it instead of by the pond, keep its fire fed from their bag, and still walk to the pond to drink.",
@@ -11,6 +11,8 @@
   "settings": {
     "carryCapacity": 30,
     "toolSlots": 7,
+    "inventorySquares": 10,
+    "stackSize": 10,
     "craftSearchFrom": 15,
     "walkSpeed": 2.2,
     "worldSize": 100,
@@ -153,6 +155,24 @@
       "unit": "people",
       "min": 1,
       "max": 100,
+      "step": 1
+    },
+    {
+      "id": "inventorySquares",
+      "name": "Inventory squares",
+      "group": "Players",
+      "unit": "squares",
+      "min": 5,
+      "max": 30,
+      "step": 1
+    },
+    {
+      "id": "stackSize",
+      "name": "Stack size",
+      "group": "Players",
+      "unit": "a square",
+      "min": 1,
+      "max": 99,
       "step": 1
     },
     {

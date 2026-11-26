@@ -9,7 +9,7 @@
 import { ACTIONS } from './actions.js';
 import { PLACEABLES, fireRule, seatAt, CROPS, cropSource, cropGrown, cropBerries } from './placed.js';
 import { fuelRoom, recipeWants } from './rules.js';
-import { weightOf, onBar, carriedWeight } from './needs.js';
+import { onBar, barOf, addCarry } from './needs.js';
 import { G, num, dist, spend } from './shared.js';
 
 export const MAX_TASKS = 30; // the same as the game's list (MAX_QUEUE in game/moving.js)
@@ -23,7 +23,7 @@ const int = (v, most) => (Number.isInteger(v) && v >= 0 && v < most ? v : undefi
 const has = (obj, k) => typeof k === 'string' && !!obj && Object.hasOwn(obj, k);
 // replies that mean "no" (someone got there first, too far, in someone else's camp, too heavy...)
 const NO = ['placeNo', 'cutNo', 'sitNo', 'tree', 'rock', 'oldStump', 'placed'];
-const refused = (r) => r.ok === false || NO.includes(r.t) || (r.t === 'fished' && /far|heavy/i.test(r.why || ''));
+const refused = (r) => r.ok === false || NO.includes(r.t) || (r.t === 'fished' && /far|heavy|full/i.test(r.why || ''));
 // where to stand to use something at `spot`: where they are if that's close enough (reach), else `stop` metres short of it
 function toward(at, spot, stop, reach = stop + 0.35) {
   const d = dist(at, spot);
@@ -83,7 +83,8 @@ export const taskMethods = {
     const E = (G.needs || []).find((s) => s.id === 'energy');
     return E && p.stats && p.stats.energy != null && p.stats.energy < (E.slowBelow || 0) ? E.slowBy || 1 : 1;
   },
-  canCarry(p, gives) { return carriedWeight(p, G) + weightOf(gives, G) <= (G.carryCapacity || 30); }, // (tools on the tool bar don't count)
+  // room for these in what they carry: tried on a copy (tools on the tool bar weigh nothing; 0.2.1: a square for each stack too)
+  canCarry(p, gives) { const t = { carry: { ...p.carry }, bar: { ...barOf(p, G) }, wear: structuredClone(p.wear || {}) }; return Object.entries(gives || {}).every(([k, n]) => addCarry(t, k, n, G)); },
   // the nearest spot on the shore of the main pond (for drinking and fishing)
   shoreNear(at, L) {
     if (L && L.shore && L.shore.length) return L.shore.reduce((a, b) => (dist(at, a) < dist(at, b) ? a : b));

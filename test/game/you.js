@@ -1,7 +1,7 @@
 /* ---------- you: plain data, plus your 3D person ---------- */
 import * as THREE from 'three';
 import { game, share } from './links.js';
-import { bagWeight, barUsed } from './rules.js';
+import { bagWeight, barUsed, squaresUsed, stackOf } from './rules.js';
 import { app, camera, clamp01, DATA, labelsEl, scene, SETTINGS, V } from './core.js';
 import { groundY } from './land.js';
 import { interactive } from './nature.js';
@@ -37,6 +37,32 @@ export const hasTool = (kind) => onBar(kind) > 0;
 export const barRoom = () => Math.max(0, toolSlots() - barUsed(you.bar));
 // what adding these would weigh (a tool going on the bar weighs nothing)
 export const addWeight = (kind, n = 1) => (ITEMS[kind] ? ITEMS[kind].weight * (n - (ITEMS[kind].uses ? Math.min(n, barRoom()) : 0)) : 0);
+// The inventory's squares (0.2.1, Luke: lock it at 10, and the 30 weight still counts): one square holds a stack of one kind
+// (rules.js stackOf: settings.stackSize, or 1 for a tool or something you place). Tools on the tool bar take none.
+// Both are live settings, like the tool bar's spots.
+export const invSquares = () => Math.max(1, Math.floor(Number(SETTINGS.inventorySquares) || 10));
+export const stackOfKind = (kind) => stackOf(ITEMS[kind], SETTINGS.stackSize);
+export const squaresTaken = (carry = you.carry, bar = you.bar) => squaresUsed(carry, bar, ITEMS, SETTINGS.stackSize);
+export const FULL = 'Your inventory is full';
+// why these can't go in your inventory now ('' if they can): gives { kind: n }. Too heavy, or no square for them. A tool goes
+// on the tool bar while there's room (no weight, no square). planned: weight already promised to tasks on your list.
+// Someone over the squares already (from before 0.2.1) can still top up a stack. The server does the same (needs.js carryNo).
+export function carryNo(gives, planned = 0) {
+  const carry = { ...you.carry }, bar = { ...you.bar };
+  let room = barRoom(), w = carried() + planned;
+  for (const [k, n] of Object.entries(gives || {})) {
+    const it = ITEMS[k];
+    if (!it || !(n > 0)) continue;
+    const up = it.uses ? Math.min(n, room) : 0;
+    room -= up;
+    w += it.weight * (n - up);
+    carry[k] = (carry[k] || 0) + n;
+    if (up) bar[k] = (bar[k] || 0) + up;
+  }
+  if (w > SETTINGS.carryCapacity + 1e-6) return 'Too heavy';
+  const after = squaresTaken(carry, bar);
+  return after > invSquares() && after > squaresTaken() ? FULL : '';
+}
 // a task needs a tool that isn't on your tool bar: what to say (in your inventory: equip it; else you need one)
 export const toolNeed = (kind) => (you.carry[kind] > 0 ? `Equip your ${ITEMS[kind].name.toLowerCase()}` : `Needs a ${ITEMS[kind].name.toLowerCase()}`);
 export const toolWhy = (kind) => (you.carry[kind] > 0 ? `Equip your ${ITEMS[kind].name.toLowerCase()} first` : `You need a ${ITEMS[kind].name.toLowerCase()}`);

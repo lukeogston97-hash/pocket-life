@@ -211,7 +211,7 @@ def server_files(d):
     berry = next((k for s in srcs.values() for k in (s.get('harvest') or {})), 'berry')
     game = {
         'needs': d['stats'],
-        'items': {k: {'name': v.get('name', k), 'weight': v.get('weight', 1), 'eat': v.get('eat'), 'uses': (v.get('tool') or {}).get('uses', 0), 'places': v.get('places'),
+        'items': {k: {'name': v.get('name', k), 'weight': v.get('weight', 1), 'eat': v.get('eat'), 'uses': (v.get('tool') or {}).get('uses', 0), 'places': v.get('places'), **({'stack': v['stack']} if v.get('stack') else {}),
                        'startInWorld': v.get('startInWorld', 0), 'spawnsNear': v.get('spawnsNear')} for k, v in d['items'].items()},
         # (seconds and pose: how long a task takes and how it looks, for people carrying on with their task list while away, tasks.js)
         'recipes': {r['id']: {'needs': r['needs'], 'makes': r['makes'], **({'keeps': r['keeps']} if r.get('keeps') else {}), **({'near': r['near']} if r.get('near') else {}), **({'seconds': r['seconds']} if r.get('seconds') else {})} for r in d.get('recipes', [])},
@@ -222,6 +222,8 @@ def server_files(d):
         'berryKind': berry,
         'carryCapacity': d['settings']['carryCapacity'],
         'toolSlots': d['settings'].get('toolSlots', 7),  # the tool bar's spots (0.1.17); a live setting too
+        'inventorySquares': d['settings'].get('inventorySquares', 10),  # the inventory's squares and how many of a thing fit in one (0.2.1); live settings too
+        'stackSize': d['settings'].get('stackSize', 10),
         'maxPlaying': d['settings'].get('maxPlaying', 20),
         'respawnMinutes': d['settings'].get('respawnMinutes', 10),
         'fadeDays': d['settings'].get('fadeDays', 7),

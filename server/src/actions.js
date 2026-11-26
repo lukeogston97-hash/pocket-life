@@ -6,7 +6,7 @@
 import { PLACEABLES, fireRule, seatAt, CROPS, cropSource, cropGrown, cropBerries } from './placed.js';
 import { SOC, socMax, INVITE_MS } from './societies.js';
 import { fuelRoom, placeSnap, placeClash, berryPicked } from './rules.js';
-import { FILTER, G, starText, badName, freshStats, addCarry, takeCarry, wearList, applyGives, eatOne, craft, spend, clean, blank, num, kindOk, START, REST, BERRY_SRC, cleanLook, REPORTS_KEEP, laidNow, onBar, equipTool, unequipTool, HOUR } from './shared.js';
+import { FILTER, G, starText, badName, freshStats, addCarry, carryNo, takeCarry, wearList, applyGives, eatOne, craft, spend, clean, blank, num, kindOk, START, REST, BERRY_SRC, cleanLook, REPORTS_KEEP, laidNow, onBar, equipTool, unequipTool, HOUR } from './shared.js';
 const SIT_OPEN = 365 * 24 * 3600000; // sitting has no set time: `until` is far off, and ends when they stand up, do something else, or the fire goes out
 
 export const ACTIONS = {
@@ -162,7 +162,7 @@ export const ACTIONS = {
     this.wearTool(p, F.tool, reply);
     if (this.pondFish(F) < 1) reply({ t: 'fished', why: 'No fish left. Try again later' });
     else if (Math.random() >= F.chance) reply({ t: 'fished', why: 'Nothing bites' });
-    else if (!addCarry(p, F.catch, 1, G)) reply({ t: 'fished', why: 'Too heavy' });
+    else if (!addCarry(p, F.catch, 1, G)) reply({ t: 'fished', why: carryNo(p, F.catch, 1, G) || 'Too heavy to carry' });
     else { w.pond.fish -= 1; reply({ t: 'fished', caught: F.catch }); await this.save(); }
     save();
     reply(this.mine(p));
@@ -175,7 +175,7 @@ export const ACTIONS = {
     if (i < 0) { reply({ t: 'took', id: m.id, ok: false }); return; } // someone got there first
     if (!me.admin && !this.near(p, [w.items[i].x, w.items[i].z])) { reply({ t: 'took', id: m.id, ok: false, why: 'Too far away' }); return; }
     const got = w.items[i];
-    if (!addCarry(p, got.kind, 1, G, got.uses)) { reply({ t: 'took', id: m.id, ok: false, why: 'Too heavy' }); return; } // (a worn tool stays worn; a tool goes on the tool bar if there's room)
+    if (!addCarry(p, got.kind, 1, G, got.uses)) { reply({ t: 'took', id: m.id, ok: false, why: carryNo(p, got.kind, 1, G) || 'Too heavy to carry' }); return; } // (a worn tool stays worn; a tool goes on the tool bar if there's room)
     w.items.splice(i, 1);
     spend(p, 'pickup', G);
     reply({ t: 'took', id: m.id, ok: true }); // (said before saving, so the game always hears it before any other news of what they carry)
@@ -301,7 +301,8 @@ export const ACTIONS = {
     // with the bush's tool (a knife) a few come off at once (toolHarvest), and the tool wears
     const many = BERRY_SRC.tool && BERRY_SRC.toolHarvest && onBar(p, BERRY_SRC.tool, G) ? Number(BERRY_SRC.toolHarvest[G.berryKind]) || 1 : 1;
     const n = this.berriesOn(i) >= many ? many : 1;
-    if (this.berriesOn(i) < 1 || !addCarry(p, G.berryKind, n, G)) { reply({ t: 'picked', bush: i, ok: false }); return; }
+    if (this.berriesOn(i) < 1) { reply({ t: 'picked', bush: i, ok: false }); return; }
+    if (!addCarry(p, G.berryKind, n, G)) { reply({ t: 'picked', bush: i, ok: false, why: carryNo(p, G.berryKind, n, G) }); return; }
     this.takeBerries(i, n);
     spend(p, 'harvest', G);
     if (n > 1) { this.wearTool(p, BERRY_SRC.tool, reply); reply(this.mine(p)); }
@@ -351,7 +352,7 @@ export const ACTIONS = {
     if ((PLACEABLES[th.kind] || {}).madeWith) return no('Flatten it with a hoe'); // a farm field (0.1.18)
     const why = th.built ? this.whyNotTakeDown(th, p, me.admin) : '';
     if (why) return no(why);
-    if (!addCarry(p, item, 1, G)) return no('Too heavy');
+    if (!addCarry(p, item, 1, G)) return no(carryNo(p, item, 1, G) || 'Too heavy to carry');
     if (p.sit && p.sit.fire === th.id) this.standUp(p);
     list.splice(i, 1);
     await this.save();
@@ -464,7 +465,7 @@ export const ACTIONS = {
     if (have < 1) return no('None to pick yet');
     const many = src.tool && src.toolHarvest && onBar(p, src.tool, G) ? Number(src.toolHarvest[kind]) || 1 : 1;
     const n = have >= many ? many : 1;
-    if (!addCarry(p, kind, n, G)) return no('Too heavy');
+    if (!addCarry(p, kind, n, G)) return no(carryNo(p, kind, n, G) || 'Too heavy to carry');
     let b = th.crop.berries || [null, null];
     for (let k = 0; k < n; k++) b = berryPicked(b[0], b[1], src.holds || 5, (src.regrowHours || 0) * HOUR, now); // (rules.js, the same as a wild bush)
     th.crop.berries = b;

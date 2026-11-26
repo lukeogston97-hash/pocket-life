@@ -3,7 +3,7 @@
 // What it checks: someone from before the tool bar gets their tools put on it; new tools go on the bar while there's room
 // and weigh nothing there; only tools on the bar get used and wear; a broken one is replaced by a spare; equip, unequip
 // and swap (with the weight and full-bar checks); dropping a tool from the bar; making a tool when the inventory is full;
-// the live setting for how many spots there are.
+// the live setting for how many spots there are. Also the inventory's 10 squares and stacks (0.2.1).
 import { readFileSync } from 'node:fs';
 import { World } from './build/server.mjs';
 
@@ -117,6 +117,52 @@ me = lastMe(await ask(s, { t: 'sleep', on: true }));
 expect(me && me.sleeping === true && me.collapsed === false && me.bar, 'Sleep: the answer says asleep, with the tool bar too', JSON.stringify(me && { sleeping: me.sleeping, collapsed: me.collapsed }));
 me = lastMe(await ask(s, { t: 'sleep', on: false }));
 expect(me && me.sleeping === false, 'and awake again', JSON.stringify(me && { sleeping: me.sleeping }));
+
+console.log('J. the inventory has 10 squares, up to 10 of a thing in each, tools and things you place 1 (0.2.1, Luke)');
+let nextItem = 500;
+const lay = (kind) => { const id = nextItem++; w.world.items.push({ id, kind, x: p.x, z: p.z, rot: 0 }); return id; };
+const take = async (kind) => { await wait(250); const got = await ask(s, { t: 'take', id: lay(kind) }); return got.find((m) => m.t === 'took') || {}; }; // (spaced out: picking up has a spam limit, 5 a second)
+const squares = () => { const me = meNow(), bar = me.bar || {}; return Object.entries(me.carry).reduce((a, [k, n]) => a + Math.ceil(Math.max(0, n - (bar[k] || 0)) / (DATA.items[k].tool || DATA.items[k].places ? 1 : 10)), 0); };
+const TEN = { stick: 1, stone: 1, twine: 1, 'sharp-stone': 1, 'short-handle': 1, berry: 1, fish: 1, 'cooked-fish': 1, 'axe-head': 1, 'pick-head': 1 };
+Object.assign(p, { carry: { ...TEN }, wear: {}, bar: {}, x: 0, z: 0 });
+expect(squares() === 10, '10 different things: all 10 squares used', squares());
+let r = await take('hoe-head');
+expect(r.ok === false && r.why === 'Your inventory is full' && !p.carry['hoe-head'], 'something new: Your inventory is full', JSON.stringify(r));
+r = await take('stick');
+expect(r.ok === true && p.carry.stick === 2, 'one more stick: it goes on the stack', JSON.stringify(r));
+r = await take('knife');
+expect(r.ok === true && p.bar.knife === 1, 'a tool goes on the tool bar, so it needs no square', JSON.stringify(p.bar));
+const unGot = await ask(s, { t: 'unequip', kind: 'knife' });
+expect(said(unGot) === 'Your inventory is full' && p.bar.knife === 1, "unequipping it: no square for it", said(unGot));
+Object.assign(p, { carry: { stick: 9 }, wear: {}, bar: {} });
+r = await take('stick'); r = await take('stick');
+expect(p.carry.stick === 11 && squares() === 2, '11 sticks: a square of 10 and a square of 1', squares());
+Object.assign(p, { carry: { ...TEN, campfire: 1 }, wear: {}, bar: {} });
+expect(squares() === 11, 'over the squares already (from before 0.2.1)', squares());
+r = await take('stone');
+expect(r.ok === true && p.carry.stone === 2, 'can still top up a stack', JSON.stringify(r));
+r = await take('hoe-head');
+expect(r.ok === false && /full/.test(r.why), 'but nothing new', r.why);
+const longStick = Object.values(DATA.recipes).find((x) => x.makes && x.makes['long-stick']);
+Object.assign(p, { carry: { ...TEN, stick: 4, twine: 2 }, wear: {}, bar: {}, found: [] });
+me = lastMe(await ask(s, { t: 'craft', id: longStick.id }));
+expect(!me.carry['long-stick'] && me.carry.stick === 4, 'making something new with no square for it: not made', JSON.stringify(me.carry));
+Object.assign(p, { carry: { ...TEN, stick: 2, twine: 1 }, wear: {}, bar: {} });
+me = lastMe(await ask(s, { t: 'craft', id: longStick.id }));
+expect(me.carry['long-stick'] === 1 && !me.carry.stick, 'its things used up free the square it needs: made', JSON.stringify(me.carry));
+Object.assign(p, { carry: { ...TEN }, wear: {}, bar: {} });
+await w.setLive('inventorySquares', 11);
+r = await take('hoe-head');
+expect(r.ok === true, 'Inventory squares is a live setting: 11 squares, it fits', JSON.stringify(r));
+await w.setLive('inventorySquares', null);
+await w.setLive('stackSize', 20);
+Object.assign(p, { carry: { stick: 19 }, wear: {}, bar: {} });
+r = await take('stick');
+expect(Math.ceil(p.carry.stick / 20) === 1 && w.liveView().some((x) => x.id === 'stackSize' && x.value === 20), 'Stack size is a live setting: 20 sticks in one square', p.carry.stick);
+await w.setLive('stackSize', null);
+expect((w.liveView().find((x) => x.id === 'inventorySquares') || {}).value === 10 && (w.liveView().find((x) => x.id === 'stackSize') || {}).value === 10, 'Reset: 10 and 10 again');
+Object.assign(p, { carry: { ...TEN, berry: 10 }, wear: {}, bar: {} });
+expect(!w.canCarry(p, { berry: 1 }) && w.canCarry(p, { stick: 1 }), 'carrying on while away: a berry needs a new square, a stick has room');
 
 const failed = results.filter((r) => !r).length;
 console.log(failed ? `\n${failed} of ${results.length} FAILED` : `\nall ${results.length} ok`);

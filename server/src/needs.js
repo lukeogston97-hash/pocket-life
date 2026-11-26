@@ -1,7 +1,7 @@
 // People live on the server: their needs, what they carry and where they are.
 // G is server/game.json (copied from the game's game-data.json by tools/worlds.py).
 
-import { needsStep, recipeWants, barUsed, bagWeight, tidyBar } from './rules.js';
+import { needsStep, recipeWants, barUsed, bagWeight, tidyBar, squaresUsed } from './rules.js';
 
 export const HOUR = 3600000, MINUTE = 60000;
 const clampStat = (v) => Math.max(0, Math.min(100, v));
@@ -91,13 +91,29 @@ export function barOf(p, G) {
 export const onBar = (p, kind, G) => barOf(p, G)[kind] || 0;
 // what counts toward carryCapacity: everything but the tools on the bar
 export const carriedWeight = (p, G) => bagWeight(p.carry, barOf(p, G), G.items);
+// The inventory's squares (0.2.1, Luke: 10, and the 30 weight still counts): G.inventorySquares and G.stackSize are live
+// settings, so they're read each time. rules.js squaresUsed: a square holds a stack of one kind; tools on the bar take none.
+export const invSquares = (G) => Math.max(1, Math.floor(Number(G.inventorySquares) || 10));
+export const squaresOf = (p, G) => squaresUsed(p.carry, barOf(p, G), G.items, G.stackSize);
+// why n more of a kind can't go in what someone carries ('' if they can), in words for the player: too heavy, or no square
+// for them. A tool goes on the tool bar while there's room (no weight, no square). Someone over the squares already (from
+// before 0.2.1) can still top up a stack that has room.
+export function carryNo(p, kind, n, G) {
+  const it = Object.hasOwn(G.items, kind) ? G.items[kind] : null;
+  if (!it) return "That can't be carried";
+  const bar = barOf(p, G), up = it.uses ? Math.max(0, Math.min(n, toolSlots(G) - barUsed(bar))) : 0;
+  if (carriedWeight(p, G) + it.weight * (n - up) > G.carryCapacity + 1e-6) return 'Too heavy to carry';
+  const after = squaresUsed({ ...p.carry, [kind]: (p.carry[kind] || 0) + n }, up ? { ...bar, [kind]: (bar[kind] || 0) + up } : bar, G.items, G.stackSize);
+  if (after > invSquares(G) && after > squaresOf(p, G)) return 'Your inventory is full';
+  return '';
+}
 // putting things in what someone carries: a tool goes on the tool bar while there's room (Luke, 0.1.17), else in the
-// inventory, where it weighs. uses: how worn the new ones are (a worn tool picked up), else new. False if too heavy.
+// inventory, where it weighs. uses: how worn the new ones are (a worn tool picked up), else new. False if too heavy or
+// there's no square for them (carryNo says which).
 export function addCarry(p, kind, n, G, uses) {
   const it = Object.hasOwn(G.items, kind) ? G.items[kind] : null;
-  if (!it) return false;
+  if (!it || carryNo(p, kind, n, G)) return false;
   const bar = barOf(p, G), up = it.uses ? Math.max(0, Math.min(n, toolSlots(G) - barUsed(bar))) : 0;
-  if (carriedWeight(p, G) + it.weight * (n - up) > G.carryCapacity + 1e-6) return false;
   if (it.uses) {
     const list = wearList(p, kind, G), b = bar[kind] || 0, left = uses ?? it.uses;
     list.splice(b, 0, ...Array(up).fill(left)); // the bar's come first in the list
@@ -150,6 +166,7 @@ export function unequipTool(p, kind, which, G) {
   const bar = barOf(p, G), b = (it && bar[kind]) || 0;
   if (b < 1) return "That isn't on your tool bar";
   if (carriedWeight(p, G) + it.weight > G.carryCapacity + 1e-6) return 'Too heavy to carry';
+  if (squaresOf(p, G) + 1 > invSquares(G)) return 'Your inventory is full'; // (a tool takes a square of its own)
   shiftWear(p, kind, Number.isInteger(which) && which >= 0 && which < b ? which : b - 1, b - 1, G);
   if (b > 1) bar[kind] = b - 1; else delete bar[kind];
   return '';

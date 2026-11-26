@@ -4,7 +4,7 @@
 // regrow everything, clear loose items, restore an earlier time (restore.js), reset the world or everything), Settings (live settings, live.js). Single things in the world
 // (trees, rocks, berry bushes, campfires, loose items) are moved, regrown and removed from their tap menus.
 // These are methods of the World (index.js adds them to it), so `this` is the world.
-import { FILTER, G, starText, MINUTE, HOUR, clean, blank, num, kindOk, addCarry, takeCarry, ageOf, pickRandom, laidNow, barOf } from './shared.js';
+import { FILTER, G, starText, MINUTE, HOUR, clean, blank, num, kindOk, addCarry, carryNo, takeCarry, ageOf, pickRandom, laidNow, barOf } from './shared.js';
 import { fireRule, PLACEABLES, cropGrowMs } from './placed.js';
 import { placeSnap } from './rules.js';
 import { CLAIM_KIND } from './claims.js';
@@ -241,7 +241,7 @@ export const adminMethods = {
         this.catchUp(them);
         let text;
         if (m.t === 'a.give') {
-          if (!addCarry(them, m.kind, n, G)) return done('Too heavy for them to carry');
+          if (!addCarry(them, m.kind, n, G)) return done(/full/.test(carryNo(them, m.kind, n, G)) ? 'Their inventory is full' : 'Too heavy for them to carry');
           text = `Gave ${them.name} ${n}`;
         } else text = takeCarry(them, m.kind, n) ? `Took from ${them.name}` : 'They had none';
         this.touch(them); await this.flush(them.who);
