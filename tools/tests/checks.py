@@ -1573,7 +1573,7 @@ async def admin_items():
         # find the stone knife: one line, opened, with its own numbers and its recipe's together
         await a.fill('#adminItemsFind', 'stone knife'); await a.wait_for_timeout(500)
         lines, labels = await a.evaluate(folds), [r['label'] for r in await a.evaluate(rows)]
-        expect([l['name'] for l in lines] == ['Stone knife'] and lines[0]['open'] and labels == ['Weight', 'Uses', 'Needs sharp stone', 'Needs stick', 'Needs twine', 'Makes'], f'a search that finds one item opens it: its own numbers and its recipe ({labels})')
+        expect([l['name'] for l in lines] == ['Stone knife'] and lines[0]['open'] and labels == ['Weight', 'Uses', 'Needs sharp stone', 'Needs short tool handle', 'Needs twine', 'Makes'], f'a search that finds one item opens it: its own numbers and its recipe ({labels})')
         expect(all(r['btns'] == [] for r in await a.evaluate(rows)), 'no Save or Reset until a number is changed')
         # change its weight in the real box
         w0 = await p.evaluate("Number(document.getElementById('carryWeight').textContent)")
