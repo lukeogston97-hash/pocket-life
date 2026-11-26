@@ -420,10 +420,19 @@ const SHAPES = {
     const { wood, cut } = branchGeos(len, t, look.twig), lean = new THREE.Group();
     lean.rotation.x = (Math.random() - 0.5) * 0.6;
     lean.add(new THREE.Mesh(wood, tinted(look.colour, 0.07)), new THREE.Mesh(cut, matFor(look.cut || '#d6bf92')));
-    if (look.lashing) { // a long stick: two sticks tied together in the middle with twine
+    if (look.lashing) { // a long tool handle: two sticks tied together in the middle with twine
       for (const dx of [-0.035, 0.035]) {
         const band = new THREE.Mesh(new THREE.CylinderGeometry(t * 1.3, t * 1.3, 0.026, 7).rotateZ(Math.PI / 2), matFor(look.lashing));
         band.position.x = dx;
+        lean.add(band);
+      }
+    }
+    if (look.grip) { // a short tool handle (0.1.21): twine wrapped round the thick end for a grip, following the stick's bend
+      const half = len / 2;
+      for (let k = 0; k < 4; k++) {
+        const u = 0.5 + k * 0.13, r = t * (0.6 + 0.55 * (u + 1) / 2) * 1.18; // (u: -1 the tip, 1 the snapped end, as in branchGeos)
+        const band = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.022, 7).rotateZ(Math.PI / 2), matFor(look.grip));
+        band.position.set(u * half, len * 0.035 * (1 - u * u), len * 0.02 * u);
         lean.add(band);
       }
     }

@@ -110,8 +110,8 @@
       "startInWorld": 0,
       "spawnsNear": null
     },
-    "twig": {
-      "name": "Twig",
+    "short-handle": {
+      "name": "Short tool handle",
       "weight": 1,
       "eat": null,
       "uses": 0,
@@ -120,7 +120,7 @@
       "spawnsNear": null
     },
     "long-stick": {
-      "name": "Long stick",
+      "name": "Long tool handle",
       "weight": 2,
       "eat": null,
       "uses": 0,
@@ -268,25 +268,23 @@
         "sharp-stone": 1
       }
     },
-    "knife": {
+    "short-handle": {
       "needs": {
-        "sharp-stone": 1,
         "stick": 1,
         "twine": 1
       },
       "makes": {
-        "knife": 1
+        "short-handle": 1
       }
     },
-    "twig": {
+    "knife": {
       "needs": {
-        "stick": 1
+        "sharp-stone": 1,
+        "short-handle": 1,
+        "twine": 1
       },
       "makes": {
-        "twig": 2
-      },
-      "keeps": {
-        "sharp-stone": 1
+        "knife": 1
       }
     },
     "berry-seeds": {
@@ -379,7 +377,7 @@
     "campfire": {
       "needs": {
         "log": 1,
-        "twig": 2,
+        "stick": 2,
         "stone": 2
       },
       "makes": {
@@ -561,8 +559,7 @@
         "maxFuel": 24,
         "maxHours": 168,
         "otherFuels": {
-          "log": 43200,
-          "twig": 300
+          "log": 43200
         },
         "lightSeconds": 3
       },
@@ -736,6 +733,9 @@
     "nameMax": 20,
     "inviteMinutes": 5,
     "inviteReach": 8
+  },
+  "retired": {
+    "twig": "stick"
   },
   "start": {
     "x": 0.6,

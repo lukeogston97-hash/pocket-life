@@ -186,7 +186,7 @@ async def walking():
 
 
 async def grass_and_tools():
-    """Tall grass by hand gives twine; make a knife; the knife cuts grass and picks 2 berries; tools wear."""
+    """Tall grass by hand gives twine; make a short tool handle, then a knife; the knife cuts grass and picks 2 berries; tools wear."""
     async with world(TESTKIT=1) as W:
         a = await W.page('grassA'); await join(a)
         n = await a.evaluate('__pl.plants.tallGrass.clumps.length')
@@ -201,8 +201,10 @@ async def grass_and_tools():
         said = await mat_make(a, [('stone', 2)])
         expect(said == 'Sharp stone' and await a.evaluate('__pl.you.carry["sharp-stone"] === 1 && __pl.you.carry.stone === 1'), f'2 stones on the craft mat make a sharp stone ({said})')
         await a.click('#bagBtn'); await a.click('#bagTabRecipes'); await a.wait_for_timeout(300); await shot(a, 'craft')
-        said = await mat_make(a, [('sharp-stone', 1), ('stick', 1), ('twine', 1)])
-        expect(await a.evaluate('!!__pl.you.carry.knife && !__pl.you.carry["sharp-stone"]'), f'made a stone knife from a sharp stone, stick and twine ({said})')
+        said = await mat_make(a, [('stick', 1), ('twine', 1)])
+        expect(said == 'Short tool handle' and await a.evaluate('__pl.you.carry["short-handle"] === 1'), f'a stick and twine make a short tool handle (0.1.21) ({said})')
+        said = await mat_make(a, [('sharp-stone', 1), ('short-handle', 1), ('twine', 1)])
+        expect(await a.evaluate('!!__pl.you.carry.knife && !__pl.you.carry["sharp-stone"] && !__pl.you.carry["short-handle"]'), f'made a stone knife from a sharp stone, a short tool handle and twine ({said})')
         await a.evaluate("""(() => { const P = __pl.plants.tallGrass, p = __pl.player.position;
           const c = P.clumps.filter((c) => !c.readyAt).sort((x, y) => Math.hypot(x.x - p.x, x.z - p.z) - Math.hypot(y.x - p.x, y.z - p.z))[0];
           __pl.queueTask({ type: 'cut', plant: 'tallGrass', i: c.i, x: c.x, z: c.z }); })()""")
@@ -449,8 +451,8 @@ async def campfire():
     async with world(CAMPKIT=1) as W:
         a = await W.page('fireA'); await join(a)
         b = await W.page('fireB'); await join(b)
-        await mat_make(a, [('log', 1), ('twig', 2), ('stone', 2)])
-        expect(await a.evaluate('__pl.you.carry.campfire === 1 && !__pl.you.carry.log && __pl.you.carry.stick === 6 && !__pl.you.carry.stone && !__pl.you.carry.twig'), 'crafting a campfire uses 1 log, 2 twigs and 2 stones')
+        await mat_make(a, [('log', 1), ('stick', 2), ('stone', 2)])
+        expect(await a.evaluate('__pl.you.carry.campfire === 1 && !__pl.you.carry.log && __pl.you.carry.stick === 6 && !__pl.you.carry.stone'), 'crafting a campfire uses 1 log, 2 sticks and 2 stones')
         await a.click('#bagBtn'); await a.wait_for_timeout(400); await shot(a, 'campfire-bag')
         expect(await a.evaluate("document.getElementById('bagInfo').hidden"), 'the info bar waits for a tap')
         await a.click('#bagList .bag-tile[data-kind="campfire"]'); await a.wait_for_timeout(200)
@@ -573,7 +575,7 @@ async def admin_tools():
         expect(name in await text(a, '#adminPlayer'), 'their page opens')
         sticks = await b.evaluate('__pl.you.carry.stick || 0')
         await a.click('#adminPlayer >> text=Give items'); await a.click('#adminPickCount >> text=5'); await a.fill('#adminPickFind', 'stick')
-        await a.click('#adminPickList >> text="Stick"'); await a.wait_for_timeout(900)  # (exactly Stick: the list is in name order, and Long stick comes first since 0.1.8)
+        await a.click('#adminPickList >> text="Stick"'); await a.wait_for_timeout(900)  # (exactly Stick: the list is in name order)
         expect(await b.evaluate('__pl.you.carry.stick || 0') == sticks + 5, 'gave them 5 sticks')
         await a.click('#adminPlayer >> text=Take all'); await a.wait_for_timeout(900)
         expect(not await b.evaluate('__pl.you.carry.stick'), 'took them back')
@@ -1500,7 +1502,7 @@ async def admin_taps():
 
 async def live_items_game():
     """The admin's item and recipe numbers reach a player's own game: the weight they carry, what a recipe needs and whether they can make it, and someone joining later gets the same."""
-    card = """(() => { const c = document.querySelector('#foundList .found-row[data-recipe="knife"]'); if (!c) return null;
+    card = """(() => { const c = document.querySelector('#foundList .found-row[data-recipe="short-handle"]'); if (!c) return null;
       const chips = [...c.querySelectorAll('.need-chip')]; return { chips: chips.map((x) => x.textContent), canMake: !c.classList.contains('missing') && chips.every((x) => x.classList.contains('ok')) }; })()"""
     async with world(TESTKIT=1) as W:
         p = await W.page('liveP'); await join(p)
@@ -1514,7 +1516,7 @@ async def live_items_game():
         told = await ask("{ t: 'a.liveItem', at: ['items', 'stick', 'weight'], value: 3 }")
         await p.wait_for_function("Number(document.getElementById('carryWeight').textContent) === 10", timeout=20000)
         expect(told == 'Changed to 3' and await weight(p) == 10, f"a stick made to weigh 3: the player's game shows 10 carried ({await weight(p)})")
-        # the knife recipe, as the player sees it in Found (0.1.8): they knock 2 stones into a sharp stone, then the admin gives them every recipe
+        # the short tool handle recipe (a stick and twine, 0.1.21; the knife until then), as the player sees it in Recipes: they knock 2 stones into a sharp stone, then the admin gives them every recipe
         await mat_make(p, [('stone', 2)])
         pid = await p.evaluate('__pl.net.myId')
         told = await ask(f"{{ t: 'a.found', id: '{pid}', all: true }}")
@@ -1522,18 +1524,18 @@ async def live_items_game():
         expect('found every recipe' in str(told), f'the admin gives them every recipe ({told})')
         await p.click('#bagBtn'); await p.click('#bagTabRecipes'); await p.wait_for_function(f"!!({card})", timeout=20000)
         c0 = await p.evaluate(card)
-        expect(c0['canMake'] and c0['chips'] == ['Sharp stones 1/1', 'Sticks 1/1', 'Twine 1/1'], f"the player can make a stone knife from what they carry ({c0['chips']})")
-        await ask("{ t: 'a.liveItem', at: ['recipes', 'knife', 'needs', 'stick'], value: 3 }")
+        expect(c0['canMake'] and c0['chips'] == ['Sticks 1/1', 'Twine 1/1'], f"the player can make a short tool handle from what they carry ({c0['chips']})")
+        await ask("{ t: 'a.liveItem', at: ['recipes', 'short-handle', 'needs', 'stick'], value: 3 }")
         await p.wait_for_function(f"(() => {{ const c = {card}; return c && !c.canMake; }})()", timeout=20000)
         c1 = await p.evaluate(card)
-        await p.click('#foundList .found-row[data-recipe="knife"]'); await p.wait_for_timeout(300)
+        await p.click('#foundList .found-row[data-recipe="short-handle"]'); await p.wait_for_timeout(300)
         why = await p.evaluate("document.getElementById('matWhy').textContent")
-        expect(not c1['canMake'] and 'Still need 1 stick' in why, f"a knife made to need 3 sticks: the open Recipes list greys it out, and tapping it says 1 more stick ({c1}, {why})")
+        expect(not c1['canMake'] and 'Still need 1 stick' in why, f"a short tool handle made to need 3 sticks: the open Recipes list greys it out, and tapping it says 1 more stick ({c1}, {why})")
         # back to the game file's numbers
-        expect(await ask("{ t: 'a.liveItem', at: ['recipes', 'knife', 'needs', 'stick'], value: null }") == 'Back to what the game file says', 'Reset answers plainly')
+        expect(await ask("{ t: 'a.liveItem', at: ['recipes', 'short-handle', 'needs', 'stick'], value: null }") == 'Back to what the game file says', 'Reset answers plainly')
         await ask("{ t: 'a.liveItem', at: ['items', 'stick', 'weight'], value: null }")
         await p.wait_for_function(f"(() => {{ const c = {card}; return c && c.canMake; }})() && Number(document.getElementById('carryWeight').textContent) === 5", timeout=20000)
-        expect(await weight(p) == 5 and (await p.evaluate(card))['canMake'], 'Reset puts both back for the player: 5 carried (2 stones became a sharp stone), and the knife can be made again')
+        expect(await weight(p) == 5 and (await p.evaluate(card))['canMake'], 'Reset puts both back for the player: 5 carried (2 stones became a sharp stone), and the short tool handle can be made again')
         # someone who joins later gets the admin's numbers on the way in
         await ask("{ t: 'a.liveItem', at: ['items', 'stick', 'weight'], value: 2 }")
         q = await W.page('liveQ'); await join(q)
@@ -1855,21 +1857,21 @@ async def craft_mat():
         await shot(a, 'mat-discovered')
         await a.click('#matClear')
         expect('Try a sharp stone' not in await a.evaluate("document.getElementById('matEmpty').textContent"), 'Clear empties the mat, and the tip goes once something is made')
-        # a twig: a stick cut with the sharp stone, which is kept (it's a tool in this recipe)
-        await a.click(row('twig')); await a.wait_for_timeout(300)
-        expect(await a.evaluate(said) == 'Twig', f'Twig: a stick and the sharp stone ({await a.evaluate(said)})')
+        # a short tool handle (0.1.21, Luke): a stick with twine wrapped round it for a grip
+        await a.click(row('short-handle')); await a.wait_for_timeout(300)
+        expect(await a.evaluate(said) == 'Short tool handle', f'Short tool handle: a stick and twine ({await a.evaluate(said)})')
         await a.click('#matMake'); await a.wait_for_timeout(1800)
-        expect(await a.evaluate("__pl.you.carry.twig === 2 && __pl.you.carry['sharp-stone'] === 1 && __pl.you.carry.stick === 2"), 'a stick cut into 2 twigs, and the sharp stone is kept')
+        expect(await a.evaluate("__pl.you.carry['short-handle'] === 1 && __pl.you.carry.stick === 2 && __pl.you.carry.twine === 2"), 'a stick and a twine make a short tool handle')
         await a.click(row('knife')); await a.wait_for_timeout(300)
-        expect(await a.evaluate(said) == 'Stone knife', 'a sharp stone, a stick and twine: a stone knife')
+        expect(await a.evaluate(said) == 'Stone knife', 'a sharp stone, a short tool handle and twine: a stone knife')
         await a.click('#matMake'); await a.wait_for_timeout(1800)
-        expect(await a.evaluate("__pl.you.carry.knife === 1 && !__pl.you.carry['sharp-stone'] && __pl.you.found.length === 3"), 'a stone knife, its sharp stone used up as the blade')
+        expect(await a.evaluate("__pl.you.carry.knife === 1 && !__pl.you.carry['sharp-stone'] && !__pl.you.carry['short-handle'] && __pl.you.found.length === 3"), 'a stone knife, its sharp stone the blade and the short tool handle its handle')
         # Recipes: every recipe under its heading, the ones you have everything for first, the rest greyed out, made or not
         # (Luke, 0.1.12), each part simple to advanced (0.1.20: by steps from things found lying about); tap one and the mat
         # shows its things (what's missing shows faded)
         rows = await a.evaluate("[...document.querySelectorAll('#foundList .found-row')].map((r) => [r.dataset.recipe, r.classList.contains('missing')])")
         chips = await a.evaluate("[...document.querySelectorAll('#foundChips .craft-chip')].map((c) => c.textContent)")
-        can = sum(1 for _, grey in rows if not grey)  # (2 stones and a twine left: the sharp stone, and since 0.1.18 the hoe head)
+        can = sum(1 for _, grey in rows if not grey)  # (2 sticks, 2 stones and a twine left: the sharp stone, the hoe head and both tool handles)
         D = json.load(open(os.path.join(HERE, '..', '..', 'test', 'game-data.json')))
         rec, made = {r['id']: r for r in D['recipes']}, {k: r for r in D['recipes'] for k in r['makes']}
         def steps(k, seen=()):
@@ -1879,8 +1881,8 @@ async def craft_mat():
         heads = [c.rsplit(' ', 1)[0] for c in chips]
         expect(rows[0] == ['sharp-stone', False] and len(rows) == len(D['recipes']) and not any(grey for _, grey in rows[:can]) and all(grey for _, grey in rows[can:]) and ['knife', True] in rows and chips[0] == f'All {len(rows)}',
                f'Recipes lists what they have everything for first (the sharp stone), then the rest greyed out, the knife they made too, and cooked fish ({rows}, {chips})')
-        expect(st[:can] == sorted(st[:can]) and st[can:] == sorted(st[can:]) and rows.index(['long-stick', True]) < rows.index(['fishing-spear', True]) < rows.index(['stone-axe', True]),
-               f'each part goes simple to advanced: a long stick before a fishing spear before a stone axe ({list(zip([r for r, _ in rows], st))})')
+        expect(st[:can] == sorted(st[:can]) and st[can:] == sorted(st[can:]) and [r for r, _ in rows].index('long-stick') < [r for r, _ in rows].index('fishing-spear') < [r for r, _ in rows].index('stone-axe'),
+               f'each part goes simple to advanced: a long tool handle before a fishing spear before a stone axe ({list(zip([r for r, _ in rows], st))})')
         expect(heads[:4] == ['All', 'Materials', 'Parts', 'Tools'] and 'Food' in heads and heads[1:] == [g for g in D['itemGroups'] if g in heads],
                f'the headings: All, Materials, Parts, Tools, then Food and the rest, in the order game-data.json gives ({chips})')
         await shot(a, 'mat-found')
@@ -1897,15 +1899,15 @@ async def craft_mat():
         await a.evaluate("[...document.querySelectorAll('#foundChips .craft-chip')].find((c) => c.textContent.startsWith('All ')).click()"); await a.wait_for_timeout(300)
         await a.click(row('knife')); await a.wait_for_timeout(300)
         need = await a.evaluate("[...document.querySelectorAll('#matList .mat-tile.need')].map((t) => t.dataset.kind)")
-        expect(need == ['sharp-stone'] and await a.evaluate(said) == 'Stone knife' and 'Still need 1 sharp stone' in await a.evaluate("document.getElementById('matWhy').textContent") and await a.evaluate("document.getElementById('matMake').disabled"),
-               f'tapping the knife puts its stick and twine on the mat, the sharp stone shows as still needed, and Make is off ({need})')
+        expect(need == ['sharp-stone', 'short-handle'] and await a.evaluate(said) == 'Stone knife' and 'Still need 1 sharp stone, 1 short tool handle' in await a.evaluate("document.getElementById('matWhy').textContent") and await a.evaluate("document.getElementById('matMake').disabled"),
+               f'tapping the knife puts its twine on the mat, the sharp stone and short tool handle show as still needed, and Make is off ({need})')
         await shot(a, 'mat-goal')
         # one greyed out puts its things on the mat too: as many as it takes, with what you don't have faded
         await a.click('#foundList .found-row.missing[data-recipe="campfire"]'); await a.wait_for_timeout(300)
         took = await a.evaluate("""(() => { const out = {};
           for (const t of document.querySelectorAll('#matList .mat-tile')) { const c = t.querySelector('.count'); out[t.dataset.kind] = (out[t.dataset.kind] || 0) + (c ? Number(c.textContent.replace('+', '')) : 1); }
           return out; })()""")
-        expect(await a.evaluate(said) == 'Campfire' and took == {'log': 1, 'twig': 2, 'stone': 2}, f'tapping the greyed-out campfire puts a log, 2 twigs and 2 stones on the mat, the log faded ({took})')
+        expect(await a.evaluate(said) == 'Campfire' and took == {'log': 1, 'stick': 2, 'stone': 2}, f'tapping the greyed-out campfire puts a log, 2 sticks and 2 stones on the mat, the log faded ({took})')
         await shot(a, 'mat-greyed')
         # the recipe you tap stays what the mat shows, even when the part you have makes something else, and Make stays off
         # (Luke, 0.1.12: Campfire said sharp stone, Fishing spear and Stone knife said stone axe head)
@@ -1916,10 +1918,10 @@ async def craft_mat():
             out[id] = [m('matName').textContent, m('matMake').disabled, m('matWhy').textContent];
           }
           __pl.you.carry = keep; return out; })()""")
-        expect(odd == {'campfire': ['Campfire', True, 'Still need 1 log, 2 twigs'], 'fishing-spear': ['Fishing spear', True, 'Still need 1 long stick'], 'knife': ['Stone knife', True, 'Still need 1 stick']},
+        expect(odd == {'campfire': ['Campfire', True, 'Still need 1 log, 2 sticks'], 'fishing-spear': ['Fishing spear', True, 'Still need 1 long tool handle'], 'knife': ['Stone knife', True, 'Still need 1 short tool handle']},
                f'with 2 stones, a sharp stone and twine, tapping Campfire, Fishing spear and Stone knife shows each one with what it still needs, not a sharp stone or an axe head ({odd})')
         await a.click('#bagClose')
-        expect(await a.evaluate('__pl.you.carry.stick === 1 && __pl.you.carry.twine === 1'), 'closing it puts nothing anywhere: things only leave the bag on Make')
+        expect(await a.evaluate('__pl.you.carry.stick === 2 && __pl.you.carry.twine === 1'), 'closing it puts nothing anywhere: things only leave the bag on Make')
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
@@ -2299,7 +2301,7 @@ async def server_tests():
     import subprocess
     from lib import bundle
     bundle()
-    for f in ['admin_extras.mjs', 'live_items.mjs', 'stale_admin.mjs', 'cheats.mjs', 'societies.mjs', 'tasks.mjs', 'fade.mjs', 'forget.mjs', 'accounts.mjs', 'regrow.mjs', 'toolbar.mjs', 'farming.mjs']:
+    for f in ['admin_extras.mjs', 'live_items.mjs', 'stale_admin.mjs', 'cheats.mjs', 'societies.mjs', 'tasks.mjs', 'fade.mjs', 'forget.mjs', 'accounts.mjs', 'regrow.mjs', 'toolbar.mjs', 'farming.mjs', 'retire.mjs']:
         r = subprocess.run(['node', f], cwd=HERE, capture_output=True, text=True, timeout=180)
         last = (r.stdout.strip().splitlines() or ['(nothing printed)'])[-1]
         if r.returncode: print(r.stdout[-4000:], r.stderr[-2000:])

@@ -134,4 +134,38 @@ export const personsMethods = {
     p.lastKind = null;
     if (w && out.length) { w.items.push(...out); this.save(); this.send({ t: 'added', items: out }, null); }
   },
+  // Starting up: items taken out of the game (game-data.json "retired", Luke 26 Nov 2026: twigs) that are still in someone's
+  // inventory or on the ground become what it says (another item, or null: just gone), so the game and the server never
+  // meet a thing they don't know. Runs every time the world starts, so an earlier time restored is tidied too.
+  // Returns the people who changed and whether the world did, to be saved.
+  retireOld() {
+    const into = {};
+    for (const [old, to] of Object.entries(G.retired || {})) if (!Object.hasOwn(G.items, old)) into[old] = to && Object.hasOwn(G.items, to) ? to : null;
+    const people = [];
+    let world = false;
+    if (!Object.keys(into).length) return { people, world };
+    for (const p of this.persons.values()) {
+      let changed = false;
+      for (const [old, to] of Object.entries(into)) {
+        const n = (p.carry || {})[old];
+        if (n === undefined) continue;
+        delete p.carry[old];
+        if (to && n > 0) p.carry[to] = (p.carry[to] || 0) + n;
+        if (p.wear) delete p.wear[old];
+        if (p.bar) delete p.bar[old];
+        changed = true;
+      }
+      const found = Array.isArray(p.found) ? p.found.filter((id) => Object.hasOwn(G.recipes || {}, id)) : null; // (the recipe that made it went too)
+      if (found && found.length !== p.found.length) { p.found = found; changed = true; }
+      if (Object.hasOwn(into, p.lastKind)) { p.lastKind = into[p.lastKind] && p.carry[into[p.lastKind]] ? into[p.lastKind] : Object.keys(p.carry || {})[0] || null; changed = true; }
+      if (changed) people.push(p);
+    }
+    const w = this.world;
+    if (w && Array.isArray(w.items) && w.items.some((it) => Object.hasOwn(into, it.kind))) {
+      w.items = w.items.filter((it) => !Object.hasOwn(into, it.kind) || into[it.kind]);
+      for (const it of w.items) if (Object.hasOwn(into, it.kind)) { it.kind = into[it.kind]; delete it.uses; }
+      world = true;
+    }
+    return { people, world };
+  },
 };

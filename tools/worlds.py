@@ -49,6 +49,13 @@ def problems(d):
         if it.get('places') is not None: known(it['places'], f'{w}.places', placeables, 'placeable')
         if it.get('spawnsNear') not in (None, 'trees', 'boulders'): out.append(f'{w}: spawnsNear is "trees" or "boulders"')
         if not whole(it.get('startInWorld', 0)) or it.get('startInWorld', 0) < 0: out.append(f'{w}: startInWorld should be a whole number')
+    # items taken out of the game (0.1.21): what any left over become, another item or null (just gone)
+    retired = d.get('retired', {})
+    if not isinstance(retired, dict): out.append('retired: a list like {"twig": "stick"}')
+    else:
+        for k, to in retired.items():
+            if k in items: out.append(f'retired.{k}: "{k}" is still an item, so it isn\'t taken out (remove it from items first)')
+            if to is not None and to not in items: out.append(f'retired.{k}: there is no item called "{to}" for it to become (or null to just take it away)')
     groups = d.get('itemGroups')
     if groups is not None and (not isinstance(groups, list) or not groups or not all(isinstance(g, str) and g.strip() for g in groups) or len(set(groups)) != len(groups)):
         out.append('itemGroups: a list of headings (words), each one once')
@@ -185,6 +192,8 @@ def server_files(d):
         'liveSettings': d.get('liveSettings', []),
         'claims': d.get('claims', {}),
         'societies': d.get('societies', {}),
+        # items taken out of the game and what any left over become (0.1.21, twigs into sticks: retireOld in persons.js)
+        'retired': d.get('retired', {}),
         'start': {'x': 0.6, 'z': 1.9},
         'pond': {'x': -5.6, 'z': -0.9, 'r': 5.0},  # the main pond's middle and rough radius (POND in game/land.js)
     }

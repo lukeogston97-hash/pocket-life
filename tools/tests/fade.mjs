@@ -28,7 +28,7 @@ async function start() {
   // a world with a spot where sticks turn up and one for stones (so they're the world's own), and a camp at 50, 50
   w.world = { format: 1, nextId: 100, items: [], bushes: [], graves: [], spots: { stick: [[10, 10]], stone: [[5, 5]] }, caps: {}, holds: 5, regrowMs: 4 * HOUR,
     placed: [{ id: 1, kind: 'campfire', x: 50, z: 50, rot: 0, built: true, fuel: 6 * HOUR, lit: true, at: Date.now(), by: 'cam', claim: 'cam' }] };
-  const p = { who: 'cam', state: 'alive', name: 'Cam', look: {}, age: 30, born: Date.now(), x: 30, z: 30, ry: 0, stats: { health: 100, rest: 80, hunger: 50, thirst: 65, energy: 100 }, statsAt: Date.now(), carry: { log: 2, twig: 1 }, log: {} };
+  const p = { who: 'cam', state: 'alive', name: 'Cam', look: {}, age: 30, born: Date.now(), x: 30, z: 30, ry: 0, stats: { health: 100, rest: 80, hunger: 50, thirst: 65, energy: 100 }, statsAt: Date.now(), carry: { log: 2, twine: 1 }, log: {} };
   w.persons.set('cam', p);
   const sock = (att) => { const s = { att, got: [], send(t) { this.got.push(JSON.parse(t)); }, close() {}, serializeAttachment(a) { this.att = structuredClone(a); }, deserializeAttachment() { return structuredClone(this.att); } }; socks.push(s); return s; };
   const me = sock({ id: 'cam', who: 'cam', watch: false, admin: false, alive: true, from: 'a', v: DATA.version, b: DATA.build, e: DATA.era, link: 'test' });
@@ -51,7 +51,7 @@ const newStone = S.put('stone', 21, 20, H - 6 * 24);        // dropped 6 days ag
 const oldAxe = S.put('stone-axe', 22, 20, H - 8 * 24, { uses: 3 }); // a worn tool left for 8 days
 const campLog = S.put('log', 51, 50, H - 8 * 24);           // 8 days old, but inside the camp
 const edgeLog = S.put('log', 50, 61, H - 8 * 24);           // 8 days old, a metre outside the camp's 10 m
-const legacy = S.put('twig', 30, 30, null);                 // from before fading: no time on it, and twigs don't top up
+const legacy = S.put('twine', 30, 30, null);                 // from before fading: no time on it, and twine doesn't top up
 S.me.got.length = 0;
 let changed = S.w.fadeOld(now);
 expect(changed === true, 'the sweep says the world changed (so it gets saved)');
@@ -80,7 +80,7 @@ expect(S.has(wildStick), 'the world\'s own stick is still there');
 
 console.log('C. the number of days is a live setting: 0 means nothing fades');
 S = await start();
-const ancient = S.put('log', 20, 20, H - 400 * 24), twoDays = S.put('twig', 21, 20, H - 2 * 24);
+const ancient = S.put('log', 20, 20, H - 400 * 24), twoDays = S.put('twine', 21, 20, H - 2 * 24);
 expect((await S.ask(S.admin, { t: 'a.live', id: 'fadeDays', value: 0 })).some((m) => m.t === 'admin'), 'the admin sets Things left on the ground fade after: 0');
 S.w.fadeOld(now);
 expect(S.has(ancient) && S.has(twoDays), 'with 0 days, a log left for over a year stays');
@@ -93,8 +93,8 @@ expect(live && live.value === 7 && live.base === 7 && !live.changed, 'Reset puts
 
 console.log('D. things get their time when they are put down, however that happens');
 S = await start();
-await S.ask(S.me, { t: 'drop', items: [{ kind: 'log' }, { kind: 'twig' }] });
-const dropped = S.w.world.items.filter((it) => it.kind === 'log' || it.kind === 'twig');
+await S.ask(S.me, { t: 'drop', items: [{ kind: 'log' }, { kind: 'twine' }] });
+const dropped = S.w.world.items.filter((it) => it.kind === 'log' || it.kind === 'twine');
 expect(dropped.length === 2 && dropped.every((it) => it.laid === hours(Date.now())), 'dropping: both things have the time on them', JSON.stringify(dropped.map((it) => it.laid)));
 await S.ask(S.admin, { t: 'a.add', kind: 'stone', n: 3, x: 40, z: 40 });
 const added = S.w.world.items.filter((it) => it.kind === 'stone');
@@ -114,17 +114,17 @@ expect(S.w.world.items.length === grown.length, 'so a month later every one of t
 
 console.log('E. a lot fading at once is sent as the whole world, once');
 S = await start();
-for (let k = 0; k < 45; k++) S.put('twig', 20 + k * 0.1, 20, H - 9 * 24);
+for (let k = 0; k < 45; k++) S.put('twine', 20 + k * 0.1, 20, H - 9 * 24);
 S.me.got.length = 0;
 S.w.fadeOld(now);
 expect(S.w.world.items.length === 0 && S.me.got.filter((m) => m.t === 'world').length === 1 && !S.me.got.some((m) => m.t === 'gone'), '45 things fade: one message with the world as it is now', `${S.me.got.length} messages`);
 
 console.log('F. the tick looks once an hour');
 S = await start();
-const stale = S.put('twig', 20, 20, H - 9 * 24);
+const stale = S.put('twine', 20, 20, H - 9 * 24);
 await S.w.alarm();
 expect(!S.has(stale) && S.w.fadeAt > Date.now() + 59 * 60000, 'the first tick looks, and sets the next look for an hour on');
-const later = S.put('twig', 20, 20, H - 9 * 24);
+const later = S.put('twine', 20, 20, H - 9 * 24);
 await S.w.alarm();
 expect(S.has(later), 'the next tick, a minute later, doesn\'t look again');
 

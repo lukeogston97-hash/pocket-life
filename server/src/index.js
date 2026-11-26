@@ -67,6 +67,9 @@ export class World extends DurableObject {
       this.accounts = (await ctx.storage.get('accounts')) || freshAccounts();
       Object.assign(this.usage, (await ctx.storage.get('usage')) || {});
       for (const [k, p] of await ctx.storage.list({ prefix: 'p:' })) this.persons.set(k.slice(2), p);
+      const old = this.retireOld(); // items taken out of the game (twigs, 0.1.21) become what game-data.json's "retired" says (persons.js)
+      for (const p of old.people) this.touch(p);
+      if (old.world) await this.put('world', this.world);
       if (this.world && this.socTidy()) { await this.put('world', this.world); await this.saveSocs(); } // (claims from before 0.1.5 become societies: societies.js)
       if (!(await ctx.storage.getAlarm())) await ctx.storage.setAlarm(Date.now() + TICK_MS);
     });

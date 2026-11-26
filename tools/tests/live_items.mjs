@@ -51,13 +51,13 @@ expect((await S.tool({ t: 'a.give', id: 'abc', kind: 'knife', n: 1 })).startsWit
 await S.tool({ t: 'a.take', id: 'abc', kind: 'knife', n: 1 });
 expect(await S.tool({ t: 'a.liveItem', at: ['items', 'knife', 'weight'], value: 4 }) === 'Changed to 4', 'the admin makes a knife weigh 4');
 expect(await S.tool({ t: 'a.give', id: 'abc', kind: 'knife', n: 1 }) === 'Too heavy for them to carry', 'now the same bag has no room for it');
-S.person().carry = { stick: 1, 'sharp-stone': 1, twine: 1 };
-await S.tool({ t: 'a.liveItem', at: ['recipes', 'knife', 'needs', 'stick'], value: 2 });
+S.person().carry = { 'short-handle': 1, 'sharp-stone': 1, twine: 1 }; // (0.1.21: the knife's handle is a short tool handle)
+await S.tool({ t: 'a.liveItem', at: ['recipes', 'knife', 'needs', 'short-handle'], value: 2 });
 await S.ask(S.player, { t: 'craft', id: 'knife' });
-expect(!S.person().carry.knife && S.person().carry.stick === 1, 'a knife now needs 2 sticks: 1 stick is not enough to craft one');
-S.person().carry = { stick: 2, 'sharp-stone': 1, twine: 1 };
+expect(!S.person().carry.knife && S.person().carry['short-handle'] === 1, 'a knife now needs 2 short tool handles: 1 is not enough to craft one');
+S.person().carry = { 'short-handle': 2, 'sharp-stone': 1, twine: 1 };
 await S.ask(S.player, { t: 'craft', id: 'knife' });
-expect(S.person().carry.knife === 1 && !S.person().carry.stick, 'with 2 sticks it crafts, and both sticks are used');
+expect(S.person().carry.knife === 1 && !S.person().carry['short-handle'], 'with 2 short tool handles it crafts, and both are used');
 expect(S.player.got.some((m) => m.t === 'liveItems') && S.admin.got.some((m) => m.t === 'liveItems'), 'every game is told the new numbers');
 list = await view();
 const kw = list.find((e) => same(e.at, ['items', 'knife', 'weight']));
@@ -102,10 +102,10 @@ console.log('D. what wins: the admin, until Reset; the file, once they agree');
 await S.tool({ t: 'a.liveItem', at: ['items', 'log', 'weight'], value: FILE.items.log.weight });
 expect(!(store.get('liveItems').items || {}).log, 'a number set to the same as the file\'s is not kept as a change');
 const kept = structuredClone(store.get('liveItems'));
-expect(same(kept, { items: { knife: { weight: 4 } }, recipes: { knife: { needs: { stick: 2 } } } }), 'what is stored is just the two changes', JSON.stringify(kept));
+expect(same(kept, { items: { knife: { weight: 4 } }, recipes: { knife: { needs: { 'short-handle': 2 } } } }), 'what is stored is just the two changes', JSON.stringify(kept));
 S = await start(store); // the server restarts on the same storage (a new build, or Cloudflare moving it)
 list = await view();
-expect(valueAt(list, ['items', 'knife', 'weight']) === 4 && valueAt(list, ['recipes', 'knife', 'needs', 'stick']) === 2, 'after a restart the admin\'s numbers still win');
+expect(valueAt(list, ['items', 'knife', 'weight']) === 4 && valueAt(list, ['recipes', 'knife', 'needs', 'short-handle']) === 2, 'after a restart the admin\'s numbers still win');
 expect(await S.tool({ t: 'a.liveItem', at: ['items', 'knife', 'weight'], value: null }) === 'Back to what the game file says', 'Reset puts one back');
 expect(valueAt(await view(), ['items', 'knife', 'weight']) === FILE.items.knife.weight, 'to the file\'s number');
 // changes left behind for things a later build took out, or that are no longer allowed: ignored, and dropped
