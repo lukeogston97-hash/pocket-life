@@ -1,11 +1,19 @@
 /* ---------- the world's items: plain data plus what's drawn for each ---------- */
-const world = { items: [] }; // { id, kind, x, z, rot }
-const itemViews = new Map();
+import * as THREE from 'three';
+import { game } from './links.js';
+import { rand, rr, scene, withWorldRand } from './core.js';
+import { CLEAR, groundY, pondShape, WALK_LIMIT } from './land.js';
+import { interactive, roomAt } from './nature.js';
+import { buildItem, ITEMS, shadowsOn } from './items.js';
+import { disposeMaterials } from './people.js';
+
+export const world = { items: [] }; // { id, kind, x, z, rot }
+export const itemViews = new Map();
 let nextItemId = 1;
 // every thing on the ground has an invisible hit area round it, a bit bigger than it is, so it's easy to tap or click
-const HIT_MAT = new THREE.MeshBasicMaterial({ visible: false });
+export const HIT_MAT = new THREE.MeshBasicMaterial({ visible: false });
 HIT_MAT.userData.shared = true;
-const HIT_BOX = new THREE.BoxGeometry(1, 1, 1), HIT_BALL = new THREE.SphereGeometry(1, 8, 6);
+export const HIT_BOX = new THREE.BoxGeometry(1, 1, 1), HIT_BALL = new THREE.SphereGeometry(1, 8, 6);
 /* ---------- drawn together ----------
    Things whose shapes are shared (sticks, stones, logs, berries: sharedGeo in items.js) are drawn as copies of one
    mesh per shape (an InstancedMesh), so a thousand sticks cost about the same to draw as one. Each copy keeps its own
@@ -32,7 +40,7 @@ function batchFor(geo, src) {
     mesh.count = b.n;
     mesh.castShadow = mesh.receiveShadow = true;
     mesh.frustumCulled = false; // they're all over the world, so there's nothing to gain from checking
-    mesh.visible = !freshLook;
+    mesh.visible = !game.freshLook;
     scene.add(mesh);
     b.mesh = mesh; b.cap = cap;
   }
@@ -61,8 +69,8 @@ function batchRemove(b, i) {
   b.owners.length = b.n;
   batchTouched(b);
 }
-const showItemBatches = (on) => { for (const b of itemBatches.values()) if (b.mesh) b.mesh.visible = on; };
-function addWorldItem(kind, x, z, rot, id, uses) { // uses: a worn tool's uses left (none means new)
+export const showItemBatches = (on) => { for (const b of itemBatches.values()) if (b.mesh) b.mesh.visible = on; };
+export function addWorldItem(kind, x, z, rot, id, uses) { // uses: a worn tool's uses left (none means new)
   if (id != null && itemViews.has(id)) return getItem(id); // already here
   const item = { id: id ?? nextItemId++, kind, x, z, rot, ...(uses != null ? { uses } : {}) };
   if (id != null) nextItemId = Math.max(nextItemId, id + 1);
@@ -88,13 +96,13 @@ function addWorldItem(kind, x, z, rot, id, uses) { // uses: a worn tool's uses l
   view.rotation.y = rot;
   view.userData.label = ITEMS[kind].name;
   view.userData.itemId = item.id;
-  view.visible = !freshLook;
+  view.visible = !game.freshLook;
   scene.add(view);
   interactive.push(view);
   itemViews.set(item.id, view);
   return item;
 }
-function removeWorldItem(id) {
+export function removeWorldItem(id) {
   const i = world.items.findIndex((it) => it.id === id);
   if (i >= 0) world.items.splice(i, 1);
   const view = itemViews.get(id);
@@ -107,9 +115,9 @@ function removeWorldItem(id) {
     itemViews.delete(id);
   }
 }
-const getItem = (id) => world.items.find((it) => it.id === id);
+export const getItem = (id) => world.items.find((it) => it.id === id);
 // a see-through copy of a model (where a queued drop will land)
-function seeThrough(model, opacity = 0.45) {
+export function seeThrough(model, opacity = 0.45) {
   const fade = (x) => { const c = x.clone(); if (!x.userData.shared) x.dispose(); c.userData = {}; c.transparent = true; c.opacity = opacity; c.depthWrite = false; return c; };
   model.traverse((m) => {
     if (!m.isMesh) return;
@@ -152,4 +160,4 @@ for (const it of Object.values(ITEMS)) {
   scatterWide(it.id, it.startInWorld - it.startNear);
 }
 // the starting layout, kept so a new (or reset) shared world always starts the same way
-const START_ITEMS = world.items.map(({ kind, x, z, rot }) => ({ kind, x, z, rot }));
+export const START_ITEMS = world.items.map(({ kind, x, z, rot }) => ({ kind, x, z, rot }));

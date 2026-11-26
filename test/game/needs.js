@@ -1,6 +1,17 @@
 /* ---------- needs: they change with real time, even while you're away ---------- */
-const clampStat = (v) => Math.max(0, Math.min(100, v));
-const freshStats = () => Object.fromEntries(STATS.map((s) => [s.id, clampStat(s.start)]));
+import * as THREE from 'three';
+import { game, share } from './links.js';
+import { needsStep } from './rules.js';
+import { app, DATA, HAZE, hemi, scene, SETTINGS, smoothstep, sun, SUN_OFFSET, V } from './core.js';
+import { $, deg, STATS } from './items.js';
+import { headTop, measureHud, player, showTag, ui, WORLD_TZ, worldNow, you } from './you.js';
+// shared for files further down game/main.js, and the variables other files change (game/links.js)
+share({
+  get timeSpeed() { return timeSpeed; }, set timeSpeed(v) { timeSpeed = v; },
+});
+
+export const clampStat = (v) => Math.max(0, Math.min(100, v));
+export const freshStats = () => Object.fromEntries(STATS.map((s) => [s.id, clampStat(s.start)]));
 // Needs are small rings (how full) with an icon; tap them to see the names and numbers.
 const NEED_ICONS = {
   heart: '<path d="M19.5 12.6 12 20l-7.5-7.4A5 5 0 1 1 12 6a5 5 0 1 1 7.5 6.6z"/>',
@@ -14,8 +25,8 @@ const iconFor = (s) => NEED_ICONS[s.icon] || NEED_ICONS[{ health: 'heart', hunge
 // and it comes back quickly by itself. Below slowBelow your person slows down (slowBy) instead of stopping.
 const COSTS = DATA.energyCosts || {};
 const ENERGY = STATS.find((s) => s.id === 'energy');
-const slowness = () => (ENERGY && you.stats && you.stats.energy != null && you.stats.energy < (ENERGY.slowBelow || 0) ? ENERGY.slowBy || 1 : 1);
-function spendEnergy(what, amount = 1) {
+export const slowness = () => (ENERGY && you.stats && you.stats.energy != null && you.stats.energy < (ENERGY.slowBelow || 0) ? ENERGY.slowBy || 1 : 1);
+export function spendEnergy(what, amount = 1) {
   const c = (COSTS[what] || 0) * amount;
   if (c && you.stats && you.stats.energy != null) { you.stats.energy = Math.max(0, you.stats.energy - c); }
 }
@@ -37,9 +48,9 @@ function buildNeeds() {
     return row;
   }));
 }
-$('needs').addEventListener('click', () => { $('needs').classList.toggle('open'); tipDid('rings'); hideHint(); drawNeeds(); setTimeout(measureHud, 50); });
+$('needs').addEventListener('click', () => { $('needs').classList.toggle('open'); game.tipDid('rings'); game.hideHint(); drawNeeds(); setTimeout(measureHud, 50); });
 buildNeeds();
-function drawNeeds() {
+export function drawNeeds() {
   if (!you.stats) return;
   for (const s of STATS) {
     const v = you.stats[s.id];
@@ -60,8 +71,8 @@ function stepStats(hours) {
 }
 // the admin's "speed up time" for testing ({ x, until }), told by the server
 let timeSpeed = null;
-function setSpeed(sp) { timeSpeed = sp && sp.until > Date.now() ? sp : null; tickStats(); if (admin.on) drawAdmin(); }
-function tickStats() {
+export function setSpeed(sp) { timeSpeed = sp && sp.until > Date.now() ? sp : null; tickStats(); if (game.admin.on) game.drawAdmin(); }
+export function tickStats() {
   if (!you.stats || you.dead) return;
   const now = Date.now();
   const fast = timeSpeed && now < timeSpeed.until ? timeSpeed.x : 1;
@@ -75,12 +86,12 @@ function tickStats() {
     hours -= h;
   }
   const low = STATS.find((s) => s.lowAt != null && s.lowLabel && before[s.id] > s.lowAt && you.stats[s.id] <= s.lowAt);
-  if (low && !action) showTag(low.lowLabel, headTop(), 2);
+  if (low && !game.action) showTag(low.lowLabel, headTop(), 2);
   // Rest ran out: collapse asleep where you stand (the server does the same and tells everyone)
-  if (REST && REST.collapseAtZero && you.stats.rest <= 0 && !you.sleeping && player) {
-    stopQueue();
+  if (game.REST && game.REST.collapseAtZero && you.stats.rest <= 0 && !you.sleeping && player) {
+    game.stopQueue();
     you.collapsed = true;
-    setSleeping(true, true);
+    game.setSleeping(true, true);
     showTag('Collapsed from tiredness', headTop(), 3);
   }
   drawNeeds();
@@ -90,17 +101,17 @@ function tickStats() {
 const DAYLIGHT = (DATA.daylight || []).filter((k) => k && Number.isFinite(k.hour)).sort((a, b) => a.hour - b.hour);
 const SUN_DIR = V(SUN_OFFSET.x, 0, SUN_OFFSET.z).normalize();
 const SUN_DIST = SUN_OFFSET.length();
-const sky = new THREE.Color(HAZE);
+export const sky = new THREE.Color(HAZE);
 const colA = new THREE.Color(), colB = new THREE.Color(), srgb = {};
 const lerpNum = (a, b, t) => (Number.isFinite(a) && Number.isFinite(b) ? a + (b - a) * t : null);
 let hourOverride = null; // lets a test pick the time of day
 // the colour the phone's browser draws its own bars in (theme-color in index.html) follows the sky, so the game runs
 // right up into them: the pale haze by day, deep blue at night, and the plain haze while making your person
 const themeMeta = document.querySelector('meta[name="theme-color"]');
-function setTheme(hex) { if (themeMeta && themeMeta.getAttribute('content') !== hex) themeMeta.setAttribute('content', hex); }
+export function setTheme(hex) { if (themeMeta && themeMeta.getAttribute('content') !== hex) themeMeta.setAttribute('content', hex); }
 // night in the world's clock (night in game-data.json: from and to, in hours): Rest fills faster asleep, and autopilot goes to bed
 const NIGHT = DATA.night || null;
-function nightNow() {
+export function nightNow() {
   if (!NIGHT) return false;
   let h = hourOverride;
   if (h == null) { const d = worldNow(); h = d.getUTCHours() + d.getUTCMinutes() / 60; }
@@ -108,10 +119,10 @@ function nightNow() {
 }
 function localHour() {
   if (hourOverride != null) return hourOverride;
-  const d = worldNow(ui.mode === 'menu' && menuRegion ? menuRegion.timeZone : WORLD_TZ); // on the main menu, the region being looked at
+  const d = worldNow(ui.mode === 'menu' && game.menuRegion ? game.menuRegion.timeZone : WORLD_TZ); // on the main menu, the region being looked at
   return d.getUTCHours() + d.getUTCMinutes() / 60 + d.getUTCSeconds() / 3600;
 }
-function applyDaylight() {
+export function applyDaylight() {
   const n = DAYLIGHT.length;
   if (n < 2) return;
   const hour = localHour();

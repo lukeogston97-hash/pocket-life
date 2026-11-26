@@ -1,4 +1,34 @@
 /* ---------- making your person ---------- */
+import * as THREE from 'three';
+import { game, share } from './links.js';
+import { badName } from './rules.js';
+import { app, camera, DATA, HAZE, reduceMotion, SETTINGS, TEST_BUILD, V, VERSION } from './core.js';
+import { groundY, POND } from './land.js';
+import { berryBushes, oldStumps, rocks, trees } from './nature.js';
+import { drawPlants } from './plants.js';
+import { drawBerries, drawRock, showParts } from './world-build.js';
+import { $, DEFAULT_LOOK, deg, ITEMS, LOOKS } from './items.js';
+import { disposeMaterials, pscene, refreshPreview } from './people.js';
+import { itemViews, showItemBatches } from './world-items.js';
+import {
+  drawCarry, drawHeld, drawHud, formatTime, headTop, player, REGIONS, removeLabel, removePlayer, ring, showTag, ui,
+  worldNow, you,
+} from './you.js';
+import { applyDaylight, drawNeeds, setTheme } from './needs.js';
+import { hideHint, startTips } from './tips.js';
+import { closeBag, closeCraft } from './inventory.js';
+import { controls, placeCamera } from './camera.js';
+import { auto, AWAY, drawQueue, resetPose, sendTasks, stopQueue, walk } from './moving.js';
+import { fireLight, forgetSit, placed, stopPlacing } from './placeables.js';
+import { closeMenu, closePause, keysDown, openPause } from './input.js';
+// shared for files further down game/main.js, and the variables other files change (game/links.js)
+share({
+  closeLeave, closeLink, closeRules, closeSettings,
+  get menuJoining() { return menuJoining; }, set menuJoining(v) { menuJoining = v; },
+  get menuLine() { return menuLine; }, set menuLine(v) { menuLine = v; },
+  get menuYours() { return menuYours; }, set menuYours(v) { menuYours = v; },
+});
+
 function buildChoice(boxId, list, key, kind) {
   const box = $(boxId);
   for (const o of list) {
@@ -15,7 +45,7 @@ function buildChoice(boxId, list, key, kind) {
       b.className = kind === 'seg' ? 'seg-btn' : 'chip-btn';
       b.textContent = o.label;
     }
-    b.addEventListener('click', () => { draft[key] = o.id; syncForm(); refreshPreview(); });
+    b.addEventListener('click', () => { game.draft[key] = o.id; syncForm(); refreshPreview(); });
     box.appendChild(b);
   }
 }
@@ -25,22 +55,22 @@ const CHOICES = [
 ];
 for (const [boxId, key, kind] of CHOICES) buildChoice(boxId, LOOKS[key], key, kind);
 function syncForm() {
-  for (const [boxId, key] of CHOICES) for (const b of $(boxId).children) b.setAttribute('aria-pressed', String(b.dataset.id === draft[key]));
-  $('ageInput').value = String(draft.age);
-  $('ageOut').textContent = String(draft.age);
-  if ($('nameInput').value !== draft.name) $('nameInput').value = draft.name;
+  for (const [boxId, key] of CHOICES) for (const b of $(boxId).children) b.setAttribute('aria-pressed', String(b.dataset.id === game.draft[key]));
+  $('ageInput').value = String(game.draft.age);
+  $('ageOut').textContent = String(game.draft.age);
+  if ($('nameInput').value !== game.draft.name) $('nameInput').value = game.draft.name;
 }
 $('ageInput').min = String(LOOKS.age.min);
 $('ageInput').max = String(LOOKS.age.max);
-$('ageInput').addEventListener('input', (e) => { draft.age = Number(e.target.value); $('ageOut').textContent = String(draft.age); refreshPreview(); });
-$('nameInput').addEventListener('input', (e) => { draft.name = e.target.value; $('nameErr').hidden = true; });
+$('ageInput').addEventListener('input', (e) => { game.draft.age = Number(e.target.value); $('ageOut').textContent = String(game.draft.age); refreshPreview(); });
+$('nameInput').addEventListener('input', (e) => { game.draft.name = e.target.value; $('nameErr').hidden = true; });
 const pv = $('previewSpace');
-pv.addEventListener('pointerdown', (e) => { previewDrag = { x: e.clientX, spin: previewSpin }; pv.setPointerCapture(e.pointerId); });
-pv.addEventListener('pointermove', (e) => { if (previewDrag) previewSpin = previewDrag.spin + (e.clientX - previewDrag.x) * 0.012; });
-pv.addEventListener('pointerup', () => { previewDrag = null; });
-pv.addEventListener('pointercancel', () => { previewDrag = null; });
+pv.addEventListener('pointerdown', (e) => { game.previewDrag = { x: e.clientX, spin: game.previewSpin }; pv.setPointerCapture(e.pointerId); });
+pv.addEventListener('pointermove', (e) => { if (game.previewDrag) game.previewSpin = game.previewDrag.spin + (e.clientX - game.previewDrag.x) * 0.012; });
+pv.addEventListener('pointerup', () => { game.previewDrag = null; });
+pv.addEventListener('pointercancel', () => { game.previewDrag = null; });
 
-function enterCreator() {
+export function enterCreator() {
   ui.mode = 'creator';
   closeMenu();
   closePause();
@@ -53,26 +83,26 @@ function enterCreator() {
   closeBag();
   closeCraft();
   hideHint();
-  removeLabel(tagLabel);
-  tagLabel = null;
-  draft = { ...DEFAULT_LOOK };
+  removeLabel(game.tagLabel);
+  game.tagLabel = null;
+  game.draft = { ...DEFAULT_LOOK };
   setTheme(HAZE); // (the stage's own pale background, whatever the time of day)
   // while testing, a ready-made name so starting is one tap (settings.autoName; you can still change it)
   if (SETTINGS.autoName) {
     const names = DATA.testNames && DATA.testNames.length ? DATA.testNames : ['Alex', 'Sam', 'Jo'];
-    draft.name = names[Math.floor(Math.random() * names.length)];
+    game.draft.name = names[Math.floor(Math.random() * names.length)];
   }
   syncForm();
   refreshPreview();
 }
-function enterWorld() {
+export function enterWorld() {
   ui.mode = 'world';
   app.classList.remove('is-creating', 'is-menu');
   $('creator').hidden = true;
   $('mainMenu').hidden = true;
   controls.enabled = true;
   ring.visible = true;
-  if (previewPerson) { pscene.remove(previewPerson); disposeMaterials(previewPerson); previewPerson = null; }
+  if (game.previewPerson) { pscene.remove(game.previewPerson); disposeMaterials(game.previewPerson); game.previewPerson = null; }
   drawHud();
   drawCarry();
   drawNeeds();
@@ -83,25 +113,25 @@ function enterWorld() {
 }
 $('sheet').addEventListener('submit', (e) => {
   e.preventDefault();
-  const name = (draft.name || '').trim().slice(0, 20);
-  if (!name || badName(name, FILTER)) {
+  const name = (game.draft.name || '').trim().slice(0, 20);
+  if (!name || badName(name, game.FILTER)) {
     $('nameErr').textContent = name ? 'Pick a different name.' : 'Give your person a name to start.';
     $('nameErr').hidden = false; $('nameInput').focus(); return;
   }
   $('nameInput').blur();
-  if (!online()) { showJoining(true); return; }
-  if (creating) return;
-  creating = true;
+  if (!game.online()) { showJoining(true); return; }
+  if (game.creating) return;
+  game.creating = true;
   you.carry = {};
   you.bar = {};
   you.lastKind = null;
-  net.sock.send(JSON.stringify({ t: 'create', name, age: draft.age, look: { ...draft, name } }));
+  game.net.sock.send(JSON.stringify({ t: 'create', name, age: game.draft.age, look: { ...game.draft, name } }));
 });
 
 /* ---------- the end of a life ----------
    The server decides when someone dies (needs run on the server, even while you're away).
    Everything they carried is left on the ground where they fell, with a small grave for a day. */
-function die(m) {
+export function die(m) {
   if (you.dead || !player) return;
   you.dead = true;
   closeMenu();
@@ -120,7 +150,7 @@ function die(m) {
   drawNeeds();
   resetPose();
   player.rotation.x = -Math.PI / 2; // lying where they fell
-  player.position.y = playerGround + 0.2;
+  player.position.y = game.playerGround + 0.2;
   $('deathTitle').textContent = `${m.name || you.look.name} has died`;
   $('deathText').textContent = `${m.cause ? `They died of ${m.cause}` : 'They died'} at ${m.age || you.look.age}. Their things are on the ground where they fell.`;
   $('death').hidden = false;
@@ -129,7 +159,7 @@ function die(m) {
 function endLife() {
   stopQueue();
   walk.target = null;
-  action = null;
+  game.action = null;
   removePlayer();
   you.look = null;
   you.stats = null;
@@ -140,10 +170,10 @@ function endLife() {
    The first screen: Play, What's new, Settings and Feedback over a live view of the world, the camera slowly
    circling the main pond. The game joins the world just to watch (no person, not counted as playing);
    Play asks the server for your person on the same connection, and Exit in the pause menu comes back here. */
-const menuCam = { angle: deg(26) };
-function enterMenu() {
+export const menuCam = { angle: deg(26) };
+export function enterMenu() {
   ui.mode = 'menu';
-  closeMenu(); closePause(); closeBag(); closeCraft(); closeSay(); hideHint();
+  closeMenu(); closePause(); closeBag(); closeCraft(); game.closeSay(); hideHint();
   keysDown.clear();
   app.classList.remove('is-creating');
   app.classList.add('is-menu');
@@ -152,9 +182,9 @@ function enterMenu() {
   menuJoining = false;
   controls.enabled = false;
   ring.visible = false; // the ring under your person
-  if (previewPerson) { pscene.remove(previewPerson); disposeMaterials(previewPerson); previewPerson = null; }
-  removeLabel(tagLabel);
-  tagLabel = null;
+  if (game.previewPerson) { pscene.remove(game.previewPerson); disposeMaterials(game.previewPerson); game.previewPerson = null; }
+  removeLabel(game.tagLabel);
+  game.tagLabel = null;
   applyDaylight(); // the right time of day from the first frame (it's otherwise only brought up to date once a second)
   drawMenu();
 }
@@ -168,22 +198,22 @@ function drawRegions() {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'region';
-    b.classList.toggle('on', r === menuRegion);
+    b.classList.toggle('on', r === game.menuRegion);
     b.classList.toggle('soon', !r.open);
-    b.setAttribute('aria-pressed', r === menuRegion ? 'true' : 'false');
+    b.setAttribute('aria-pressed', r === game.menuRegion ? 'true' : 'false');
     const name = document.createElement('span'); name.textContent = r.name;
-    const n = others.size; // (one world for now, so the open one has everyone)
+    const n = game.others.size; // (one world for now, so the open one has everyone)
     const sub = document.createElement('small'); sub.textContent = !r.open ? 'Coming soon' : n ? `${n} ${n === 1 ? 'person' : 'people'}` : 'Nobody yet';
     b.append(name, sub);
-    b.addEventListener('click', () => { menuRegion = r; shownAt = -1; applyDaylight(); drawMenu(); });
+    b.addEventListener('click', () => { game.menuRegion = r; game.shownAt = -1; applyDaylight(); drawMenu(); });
     return b;
   }));
 }
 // A world nobody has played yet looks untouched: every tree standing, bushes full, grass grown, nothing on the ground,
 // no campfires and nobody there. Only how it's drawn changes; going back to the open world shows it as it really is.
-function setFresh(on) {
-  if (freshLook === on) return;
-  freshLook = on;
+export function setFresh(on) {
+  if (game.freshLook === on) return;
+  game.freshLook = on;
   trees.forEach((t) => { showParts(t, on || t.state === 'tree'); if (t.stump) t.stump.visible = !on; });
   oldStumps.forEach((t) => showParts(t, on || !t.gone));
   rocks.forEach(drawRock);
@@ -194,12 +224,12 @@ function setFresh(on) {
   for (const b of berryBushes) drawBerries(b);
   drawPlants();
 }
-function drawMenu() {
-  setFresh(ui.mode === 'menu' && !!menuRegion && !menuRegion.open);
+export function drawMenu() {
+  setFresh(ui.mode === 'menu' && !!game.menuRegion && !game.menuRegion.open);
   drawRegions();
-  if (menuRegion && !menuRegion.open) { // looking at a world that isn't open yet
-    $('playText').textContent = `${menuRegion.name} is coming soon`;
-    $('playSub').textContent = `${formatTime(worldNow(menuRegion.timeZone))} there now`;
+  if (game.menuRegion && !game.menuRegion.open) { // looking at a world that isn't open yet
+    $('playText').textContent = `${game.menuRegion.name} is coming soon`;
+    $('playSub').textContent = `${formatTime(worldNow(game.menuRegion.timeZone))} there now`;
     $('playBtn').disabled = true;
     return drawMenuNet();
   }
@@ -216,43 +246,43 @@ let menuYours; // undefined until the server says; null when you have no person
 let menuLine = 0, menuJoining = false; // your place in line when the world is full; Play was tapped and the server hasn't answered
 const ordinal = (n) => `${n}${[11, 12, 13].includes(n % 100) ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th'}`;
 // the camera slowly circles the main pond (it holds still if the phone asks for less motion)
-function menuCamera(dt) {
+export function menuCamera(dt) {
   if (!reduceMotion) menuCam.angle += dt * 0.035; // about three minutes a lap
   const t = V(POND.x, groundY(POND.x, POND.z) + 1.0, POND.z);
   controls.target.copy(t);
   camera.position.copy(t).add(V().setFromSpherical(new THREE.Spherical(30, deg(57), menuCam.angle)));
   camera.lookAt(t);
 }
-function sendHello() {
-  net.sock.send(JSON.stringify({ t: 'hello', proto: 2, watch: net.mode === 'watch', v: VERSION, b: DATA.build || 0, e: DATA.era || 0, link: TEST_BUILD ? 'test' : 'release', pid,
-    ...(adminMode.code && net.mode === 'watch' ? { admin: true, adminCode: adminMode.code } : {}) })); // admin mode: only ever while watching, never with a person (admin-mode.js)
+export function sendHello() {
+  game.net.sock.send(JSON.stringify({ t: 'hello', proto: 2, watch: game.net.mode === 'watch', v: VERSION, b: DATA.build || 0, e: DATA.era || 0, link: TEST_BUILD ? 'test' : 'release', pid: game.pid,
+    ...(game.adminMode.code && game.net.mode === 'watch' ? { admin: true, adminCode: game.adminMode.code } : {}) })); // admin mode: only ever while watching, never with a person (admin-mode.js)
 }
 // Play: the same connection now plays your person (or makes a new one)
 function play() {
-  if (ui.mode !== 'menu' || (menuRegion && !menuRegion.open)) return;
+  if (ui.mode !== 'menu' || (game.menuRegion && !game.menuRegion.open)) return;
   setFresh(false);
-  net.mode = 'play';
+  game.net.mode = 'play';
   menuJoining = true; // until the server answers
   drawMenu();
-  if (net.sock && net.sock.readyState === 1) sendHello();
-  else { showJoining(true); goOnline(); }
+  if (game.net.sock && game.net.sock.readyState === 1) sendHello();
+  else { showJoining(true); game.goOnline(); }
 }
 // back to the main menu: from making a person, or Exit in the pause menu (your person goes away and looks after themselves)
-function toMenu() {
+export function toMenu() {
   sendTasks(); // what's left of your task list: your person carries on with it while you're away (moving.js)
-  net.mode = 'watch';
+  game.net.mode = 'watch';
   menuLine = 0;
   dropPlayer();
   enterMenu();
-  if (net.sock && net.sock.readyState === 1) sendHello();
+  if (game.net.sock && game.net.sock.readyState === 1) sendHello();
 }
 // your person is no longer shown here (the server looks after them now)
-function dropPlayer() {
+export function dropPlayer() {
   if (!player) return;
   forgetSit(); // a sit carries on while you're away (the server keeps it)
   stopPlacing();
   stopQueue();
-  action = null;
+  game.action = null;
   auto.on = false; $('autoChip').hidden = true;
   removePlayer();
   you.look = null; you.stats = null; you.dead = false; you.sleeping = false;
@@ -260,16 +290,16 @@ function dropPlayer() {
 $('playBtn').addEventListener('click', play);
 $('creatorBack').addEventListener('click', toMenu);
 $('exitBtn').addEventListener('click', () => { closePause(); toMenu(); });
-$('menuNewsBtn').addEventListener('click', () => openNews());
-$('menuFeedbackBtn').addEventListener('click', () => openFeedback());
+$('menuNewsBtn').addEventListener('click', () => game.openNews());
+$('menuFeedbackBtn').addEventListener('click', () => game.openFeedback());
 function openSettings() {
   $('settings').hidden = false;
   $('settingsClose').focus();
 }
 $('menuSettingsBtn').addEventListener('click', openSettings);
 // the same three in the pause menu, so you don't have to leave the world for them
-$('pauseNewsBtn').addEventListener('click', () => { closePause(); openNews(); });
-$('pauseFeedbackBtn').addEventListener('click', () => { closePause(); openFeedback(); });
+$('pauseNewsBtn').addEventListener('click', () => { closePause(); game.openNews(); });
+$('pauseFeedbackBtn').addEventListener('click', () => { closePause(); game.openFeedback(); });
 $('pauseSettingsBtn').addEventListener('click', () => { closePause(); openSettings(); });
 function closeSettings() { $('settings').hidden = true; }
 /* ---------- Play on other devices (Settings): link codes ----------
@@ -279,48 +309,48 @@ function closeSettings() { $('settings').hidden = true; }
    Linking or unlinking starts the page again, so the game rejoins as the right person. net.linked comes from the server. */
 const LINK_NOTE_KEY = 'pocket-life:linkNote';
 let linkWanted = '';
-function drawLinkRow() { $('linkLbl').textContent = net.linked ? 'Playing on other devices' : 'Play on other devices'; }
+export function drawLinkRow() { $('linkLbl').textContent = game.net.linked ? 'Playing on other devices' : 'Play on other devices'; }
 function hasPerson() { return !!((you.look && !you.dead && ui.mode === 'world') || menuYours); }
 function openLink() {
   closeSettings();
-  paused = true;
+  game.paused = true;
   $('link').hidden = false;
   $('linkSure').hidden = true; $('linkSure').disabled = false;
   $('linkCode').hidden = true;
   $('linkUseBox').hidden = false;
   $('linkInput').value = '';
   $('linkGet').hidden = !hasPerson();
-  $('linkUnlink').hidden = !net.linked;
+  $('linkUnlink').hidden = !game.net.linked;
   $('linkTitle').textContent = 'Play on other devices';
   $('linkText').textContent = hasPerson()
     ? 'Get a code here and type it on your other device, to play the same person on both. Or type a code from your other device below.'
     : 'Type the code from your other device to play your person here.';
   $('linkCancel').focus();
 }
-function closeLink() { $('link').hidden = true; paused = false; linkWanted = ''; }
+function closeLink() { $('link').hidden = true; game.paused = false; linkWanted = ''; }
 function linkSay(text) { $('linkText').textContent = text; }
 function linkSend(msg) {
-  if (!online()) { linkSay('You need to be online to do this.'); return false; }
-  net.sock.send(JSON.stringify({ ...msg, pid }));
+  if (!game.online()) { linkSay('You need to be online to do this.'); return false; }
+  game.net.sock.send(JSON.stringify({ ...msg, pid: game.pid }));
   return true;
 }
 // the server's answers (online.js)
-function linkGotCode(m) {
+export function linkGotCode(m) {
   if ($('link').hidden) return;
   $('linkCode').textContent = m.code; $('linkCode').hidden = false;
   $('linkGet').hidden = true; $('linkUseBox').hidden = true; $('linkUnlink').hidden = true;
   linkSay(`On your other device, open Settings, tap Play on other devices and type this code. It works once, for ${m.minutes} minutes.`);
 }
-function linkAsk(m) {
+export function linkAsk(m) {
   if ($('link').hidden) return;
   $('linkTitle').textContent = `Play as ${m.theirs}?`;
   linkSay(`You'll play as ${m.theirs} on this device. Your guest person here, ${m.mine}, will be removed. This can't be undone.`);
   $('linkUseBox').hidden = true; $('linkGet').hidden = true; $('linkUnlink').hidden = true;
   $('linkSure').textContent = 'Play as ' + m.theirs; $('linkSure').hidden = false;
 }
-function linkNo(m) { if (!$('link').hidden) { linkSay(m.text || "That didn't work. Try again."); $('linkSure').hidden = true; $('linkUseBox').hidden = false; } }
-function linked() { location.reload(); }
-function unlinked() { forgotten(); }
+export function linkNo(m) { if (!$('link').hidden) { linkSay(m.text || "That didn't work. Try again."); $('linkSure').hidden = true; $('linkUseBox').hidden = false; } }
+export function linked() { location.reload(); }
+export function unlinked() { forgotten(); }
 $('linkBtn').addEventListener('click', openLink);
 $('linkCancel').addEventListener('click', closeLink);
 $('link').addEventListener('click', (e) => { if (e.target === $('link')) closeLink(); });
@@ -343,10 +373,10 @@ $('linkSure').addEventListener('click', () => {
   if (ok) $('linkSure').disabled = true;
 });
 // once per device, a minute after making a person: you can play on your other devices too
-function linkNoteLater() {
-  if (net.linked) return;
+export function linkNoteLater() {
+  if (game.net.linked) return;
   try { if (localStorage.getItem(LINK_NOTE_KEY)) return; localStorage.setItem(LINK_NOTE_KEY, '1'); } catch (err) { return; }
-  setTimeout(() => { if (ui.mode === 'world' && !net.linked) showTag('Play on your other devices too: Settings, Play on other devices', headTop(), 4); }, 60000);
+  setTimeout(() => { if (ui.mode === 'world' && !game.net.linked) showTag('Play on your other devices too: Settings, Play on other devices', headTop(), 4); }, 60000);
 }
 /* ---------- Leave the world for good (Settings) ----------
    A warning, then hold the button for 2 seconds. The server drops their things where they stand, takes them out of their
@@ -356,13 +386,13 @@ const HOLD_MS = 2000;
 let holdStart = 0, holdTimer = 0;
 function openLeave() {
   closeSettings();
-  paused = true;
+  game.paused = true;
   const name = (you.look && !you.dead && you.look.name) || (menuYours && menuYours.name) || '';
   $('leaveText').textContent = `${name ? `${name} and everything` : 'Everything'} about you will be removed: your person, past people and feedback. The things you carry drop where you stand. This can't be undone.`;
   $('leave').hidden = false;
   $('leaveCancel').focus();
 }
-function closeLeave() { holdStop(); $('leave').hidden = true; paused = false; }
+function closeLeave() { holdStop(); $('leave').hidden = true; game.paused = false; }
 function holdStop() { cancelAnimationFrame(holdTimer); holdStart = 0; $('leaveHold').style.setProperty('--hold', 0); }
 function holdStep() {
   if (!holdStart) return;
@@ -370,8 +400,8 @@ function holdStep() {
   $('leaveHold').style.setProperty('--hold', f);
   if (f < 1) { holdTimer = requestAnimationFrame(holdStep); return; }
   holdStart = 0;
-  if (!online()) { holdStop(); showTag('You need to be online to leave the world', headTop(), 2.5); return; }
-  net.sock.send(JSON.stringify({ t: 'forget', pid }));
+  if (!game.online()) { holdStop(); showTag('You need to be online to leave the world', headTop(), 2.5); return; }
+  game.net.sock.send(JSON.stringify({ t: 'forget', pid: game.pid }));
   $('leaveHold').disabled = true;
   $('leaveHold').firstElementChild.textContent = 'Leaving…';
 }
@@ -382,8 +412,8 @@ $('leaveHold').addEventListener('pointerdown', (e) => { e.preventDefault(); hold
 for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) $('leaveHold').addEventListener(ev, () => { if (holdStart) holdStop(); });
 $('leaveHold').addEventListener('contextmenu', (e) => e.preventDefault());
 // the server says they're gone: a new id for this phone, and the game starts again from the top
-function forgotten() {
-  try { localStorage.setItem(PID_KEY, crypto.randomUUID()); } catch (err) { /* not kept: the page makes one anyway */ }
+export function forgotten() {
+  try { localStorage.setItem(game.PID_KEY, crypto.randomUUID()); } catch (err) { /* not kept: the page makes one anyway */ }
   location.reload();
 }
 $('settingsClose').addEventListener('click', closeSettings);
@@ -395,12 +425,12 @@ $('settings').addEventListener('click', (e) => { if (e.target === $('settings'))
 let rulesLoaded = false;
 async function openRules() {
   closeSettings();
-  paused = true;
+  game.paused = true;
   $('rules').hidden = false;
   $('rulesClose').focus();
   if (rulesLoaded) return;
   const body = $('rulesBody');
-  body.replaceChildren(el('p', 'admin-empty', 'Loading…'));
+  body.replaceChildren(game.el('p', 'admin-empty', 'Loading…'));
   try {
     const res = await fetch(`privacy.html?v=${VERSION}.${DATA.build || 0}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -412,19 +442,19 @@ async function openRules() {
     body.scrollTop = 0;
     rulesLoaded = true;
   } catch (err) { // offline, or the page didn't arrive: say so, with the way to it
-    const p = el('p', '', "Couldn't load this just now. Check your connection, or ");
-    const a = el('a', '', 'open the page');
+    const p = game.el('p', '', "Couldn't load this just now. Check your connection, or ");
+    const a = game.el('a', '', 'open the page');
     a.href = 'privacy.html'; a.target = '_blank'; a.rel = 'noopener';
     p.append(a, '.');
     body.replaceChildren(p);
   }
 }
-function closeRules() { if ($('rules').hidden) return; $('rules').hidden = true; paused = false; }
+export function closeRules() { if ($('rules').hidden) return; $('rules').hidden = true; game.paused = false; }
 $('rulesBtn').addEventListener('click', openRules);
 $('rulesClose').addEventListener('click', closeRules);
 $('rules').addEventListener('click', (e) => { if (e.target === $('rules')) closeRules(); });
 // coming back to a person who died or left while you were away
-function showGoneCard(d) {
+export function showGoneCard(d) {
   const away = d.away ? ' while you were away' : '';
   $('deathTitle').textContent = d.gone ? `${d.name} has left the world` : `${d.name} has died`;
   $('deathText').textContent = d.gone
@@ -433,12 +463,12 @@ function showGoneCard(d) {
   $('death').hidden = false;
 }
 // what your person did while you were away
-function showWelcomeBack(a) {
+export function showWelcomeBack(a) {
   const hrs = a.ms / 3600000;
   const mins = Math.max(1, Math.round(a.ms / 60000));
   const long = hrs >= 1 ? `${Math.round(hrs)} hour${Math.round(hrs) === 1 ? '' : 's'}` : `${mins} minute${mins === 1 ? '' : 's'}`;
   const bits = [];
-  const fruit = ITEMS[Object.keys((BERRY_SOURCE() || {}).harvest || {})[0]] || { name: 'berry', plural: 'berries' }; // what people away pick
+  const fruit = ITEMS[Object.keys((game.BERRY_SOURCE() || {}).harvest || {})[0]] || { name: 'berry', plural: 'berries' }; // what people away pick
   const times = (n) => (n === 1 ? 'once' : n === 2 ? 'twice' : `${n} times`); // (they eat whatever they carry, so no food is named)
   if (a.tasks) bits.push(`did ${a.tasks} ${a.tasks === 1 ? 'thing' : 'things'} on your task list`); // (server/src/tasks.js)
   if (a.picked) bits.push(`picked ${a.picked} ${(a.picked === 1 ? fruit.name : fruit.plural).toLowerCase()}`);
@@ -453,9 +483,9 @@ function showWelcomeBack(a) {
 }
 $('backBtn').addEventListener('click', () => { $('back').hidden = true; });
 // joining the world, or getting back after the internet dropped
-function showJoining(on, inWorld = false) {
+export function showJoining(on, inWorld = false) {
   $('joining').hidden = !on;
-  const stuck = net.fails >= 2; // a couple of tries and still no answer: say so, and what to check (the game keeps trying by itself)
+  const stuck = game.net.fails >= 2; // a couple of tries and still no answer: say so, and what to check (the game keeps trying by itself)
   $('joiningText').textContent = inWorld ? `${stuck ? "Can't reach the world. Check your connection." : 'Reconnecting…'} Your person carries on while you're gone.`
     : stuck ? "Can't reach the world. Check your connection. Still trying…" : 'Joining the world…';
 }

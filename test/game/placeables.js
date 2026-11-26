@@ -4,7 +4,42 @@
    A fire's fuel is how many ms of burning are left; it only goes down while lit, so it keeps burning (and goes out
    by itself) whether or not anyone is watching. Everything here is generic: a new placeable is a data entry, and
    only a new kind of behaviour (like fire or seats) needs code. */
-const PLACEABLES = {};
+import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { game, share } from './links.js';
+import {
+  berriesGrown, berryPicked, claimProblem, cropGrowth, cropStage, fireRuleOf, fuelLeftAt, fuelRoom, PLACE_GRID,
+  placeClash, placeRect, placeSnap, seatSpotOf,
+} from './rules.js';
+import {
+  app, clamp01, DATA, hash, mat, pick, rand, reduceMotion, rr, scene, SETTINGS, smoothstep, sun, V, withOwnRand,
+} from './core.js';
+import { flatReach, groundUnder, groundY, landAsMade, POND, pondShape, setFlats, WALK_LIMIT } from './land.js';
+import { addSpot, BUSH_COLOURS, crownGeoB, interactive, removeSpotNear, roomAt, WALK_THROUGH } from './nature.js';
+import { drawPlant, plants } from './plants.js';
+import { bushHolds, DETAILS, growEvery, liftNear } from './world-build.js';
+import { $, buildItem, campfireModel, countLabel, harvests, ITEMS, RECIPES, shadowsOn, SOURCES } from './items.js';
+import { disposeMaterials, HIP_Y, setArm } from './people.js';
+import { HIT_BOX, HIT_MAT, itemViews } from './world-items.js';
+import {
+  addToCarry, addWeight, carried, drawCarry, drawHeld, hasTool, headTop, player, showGain, showTag, takeFromCarry,
+  toolNeed, toolWhy, you,
+} from './you.js';
+import { slowness, spendEnergy } from './needs.js';
+import { cantMake, closeBag, closeCraft, make, recipeKnown, recipeName } from './inventory.js';
+import { controls } from './camera.js';
+import {
+  allTasks, approach, clearCellsNear, drawQueue, face, nextTask, queueTask, setLegs, solidAt, startAction, TASK_KINDS,
+  tasks, walkFirst, walkTo,
+} from './moving.js';
+// shared for files further down game/main.js, and the variables other files change (game/links.js)
+share({
+  get claimCheckAt() { return claimCheckAt; }, set claimCheckAt(v) { claimCheckAt = v; }, endSit,
+  get isLit() { return isLit; }, get notMineAt() { return notMineAt; }, get PLACEABLES() { return PLACEABLES; },
+  get placing() { return placing; }, get roomFor() { return roomFor; }, startPlacing, stationNear,
+});
+
+export const PLACEABLES = {};
 for (const [kind, raw] of Object.entries(DATA.placeables || {})) {
   const item = Object.keys(ITEMS).find((k) => (DATA.items[k] || {}).places === kind);
   const tool = raw.madeWith && ITEMS[raw.madeWith] && ITEMS[raw.madeWith].uses ? raw.madeWith : null; // dug with a tool instead (0.1.18, the farm field)
@@ -24,17 +59,17 @@ for (const [kind, raw] of Object.entries(DATA.placeables || {})) {
 }
 // Farming (0.1.18): what grows on a farm field. A seed planted there grows by itself (rules.js cropGrowth), then it's
 // picked like its "like" source (a berry bush: holds 5, grow back, the knife picks 2). The server has the final say.
-const CROPS = {};
+export const CROPS = {};
 for (const [id, raw] of Object.entries(DATA.crops || {})) {
   const on = raw.on || 'field', like = SOURCES[raw.like];
   if (!ITEMS[raw.seed] || !PLACEABLES[on] || !like || !harvests(like)) continue;
   CROPS[id] = { id, name: raw.name || id, seed: raw.seed, on, growMs: (Number(raw.growHours) || 24) * 3600000, plantSeconds: Math.max(1, Number(raw.plantSeconds) || 3), like };
 }
-const placed = new Map(); // id -> { id, kind, x, z, rot, built, fuel, lit, at, progress, view }
+export const placed = new Map(); // id -> { id, kind, x, z, rot, built, fuel, lit, at, progress, view }
 
 /* ---------- fire and fuel ---------- */
-const fuelLeft = (th, now = Date.now()) => fuelLeftAt(th, now); // ms of burning left (rules.js)
-const isLit = (th) => !!th.lit && fuelLeft(th) > 0;
+export const fuelLeft = (th, now = Date.now()) => fuelLeftAt(th, now); // ms of burning left (rules.js)
+export const isLit = (th) => !!th.lit && fuelLeft(th) > 0;
 const fuelIn = (th) => (PLACEABLES[th.kind].fire ? fuelLeft(th) / PLACEABLES[th.kind].fire.each : 0); // in sticks (can be part of one)
 // how many more sticks fit (one that only part fits still goes on; the server works it out the same way)
 const roomFor = (th, kind) => { const f = PLACEABLES[th.kind].fire; return f ? fuelRoom(f, fuelLeft(th), kind) : 0; };
@@ -60,7 +95,7 @@ function fireState(th) {
   return `${isLit(th) ? 'Burning' : 'Out'} · ${left > 0 ? `${timeLeft(left)} of fuel (holds ${timeLeft(f.max)})` : 'no fuel'}`;
 }
 // the tap menu's title: what it is and, for a fire, whether it's lit and how much fuel it has
-const placedName = (th) => {
+export const placedName = (th) => {
   const P = PLACEABLES[th.kind];
   if (P.madeWith) { const def = th.crop && CROPS[th.crop.kind]; return def ? `${P.name} · ${def.name.toLowerCase()}` : P.name; } // a farm field: what grows on it
   if (!th.built) return `${P.name} (not built)`;
@@ -71,8 +106,8 @@ const placedName = (th) => {
 };
 
 /* ---------- seats round it ---------- */
-const seatSpot = (th, k) => seatSpotOf(th, PLACEABLES[th.kind].seats, k); // rules.js, the same on the server
-const seatTaken = (th, k) => [...others.values()].some((o) => o.sit && o.sit[0] === th.id && o.sit[1] === k);
+export const seatSpot = (th, k) => seatSpotOf(th, PLACEABLES[th.kind].seats, k); // rules.js, the same on the server
+const seatTaken = (th, k) => [...game.others.values()].some((o) => o.sit && o.sit[0] === th.id && o.sit[1] === k);
 // the nearest free seat you can stand at, or -1
 function freeSeat(th) {
   const s = PLACEABLES[th.kind].seats;
@@ -87,14 +122,14 @@ function freeSeat(th) {
   return best;
 }
 // sitting on the ground, legs out in front, hands on the knees (anyone: you or someone else)
-function sitPose(m, P, ground) {
+export function sitPose(m, P, ground) {
   m.rotation.x = 0;
   P.legL.rotation.x = -1.38; P.legR.rotation.x = -1.5; P.legL.scale.y = P.legR.scale.y = 1; P.footL.rotation.x = P.footR.rotation.x = 0;
   P.body.rotation.x = P.body.userData.stoop + 0.14;
   setArm(P.armL, -0.75); setArm(P.armR, -0.7);
   m.position.y = ground - (HIP_Y - 0.1) * m.scale.y;
 }
-function unsitPose(m, P, ground) {
+export function unsitPose(m, P, ground) {
   setLegs(P, 0);
   P.body.rotation.x = P.body.userData.stoop;
   setArm(P.armL, 0); setArm(P.armR, 0);
@@ -113,7 +148,7 @@ emberMat.userData.shared = true;
 const charMat = mat('#2e2a26');
 charMat.userData.shared = true;
 // one warm light that follows the nearest lit fire (a fixed number of lights, so nothing has to be redrawn from scratch)
-const fireLight = new THREE.PointLight('#ff9a4a', 0, 9, 1.6);
+export const fireLight = new THREE.PointLight('#ff9a4a', 0, 9, 1.6);
 scene.add(fireLight);
 /* How a placed thing looks comes from the data: its item's shape (the item's look.shape in game-data.json), the same
    name items are drawn by. A shape can have a builder here that knows how the thing is put together. It gives
@@ -237,13 +272,13 @@ function drawPlaced(th) {
   th.shown = { lit, show };
 }
 const tmpV = V();
-function setPlaced(v) {
+export function setPlaced(v) {
   if (!v || !PLACEABLES[v.kind]) return;
   let th = placed.get(v.id);
   if (!th) {
     th = { id: v.id, kind: v.kind, x: Number(v.x) || 0, z: Number(v.z) || 0, rot: Number(v.rot) || 0, progress: 0 };
     th.view = makePlacedView(th);
-    th.view.visible = !freshLook;
+    th.view.visible = !game.freshLook;
     scene.add(th.view);
     interactive.push(th.view);
     placed.set(th.id, th);
@@ -264,7 +299,7 @@ function setPlaced(v) {
     drawCrop(th);
   }
 }
-function removePlaced(id) {
+export function removePlaced(id) {
   const th = placed.get(id);
   if (!th) return;
   scene.remove(th.view);
@@ -279,14 +314,14 @@ function removePlaced(id) {
   if (you.sit && you.sit.fire === id) endSit(false);
 }
 // the whole list from the server (joining, or the world was reset)
-function usePlaced(list) {
+export function usePlaced(list) {
   const ids = new Set((list || []).map((v) => v.id));
   for (const id of [...placed.keys()]) if (!ids.has(id)) removePlaced(id);
   for (const v of list || []) setPlaced(v);
 }
 // every frame: flames flicker, fires that ran out go out, the light sits on the nearest lit fire
 let placedTick = 0;
-function animatePlaced(dt) {
+export function animatePlaced(dt) {
   if (flatsDue) levelPlaced();
   if (digGhost && digGhost.until && Date.now() > digGhost.until) dropDigGhost(); // the server said no, or it's slow
   placedTick += dt;
@@ -307,9 +342,9 @@ function animatePlaced(dt) {
     const size = 0.65 + 0.35 * Math.min(1, fuelIn(th) / 4);
     for (const f of parts.flame.children) {
       const [r, h] = f.userData.base, ph = f.userData.phase;
-      const flick = reduceMotion ? 1 : 1 + Math.sin(elapsed * 9 + ph) * 0.12 + Math.sin(elapsed * 23 + ph * 2) * 0.07;
+      const flick = reduceMotion ? 1 : 1 + Math.sin(game.elapsed * 9 + ph) * 0.12 + Math.sin(game.elapsed * 23 + ph * 2) * 0.07;
       f.scale.set(r * size * (2 - flick) * 0.95, h * size * flick, r * size * (2 - flick) * 0.95);
-      f.rotation.z = reduceMotion ? 0 : Math.sin(elapsed * 3 + ph) * 0.06;
+      f.rotation.z = reduceMotion ? 0 : Math.sin(game.elapsed * 3 + ph) * 0.06;
     }
     const d = (th.x - c.x) ** 2 + (th.z - c.z) ** 2;
     if (d < nd) { nd = d; near = th; }
@@ -317,20 +352,20 @@ function animatePlaced(dt) {
   if (near && nd < 40 * 40) {
     const dark = clamp01(1.45 - sun.intensity / 2); // strong at night, a soft glow by day
     fireLight.position.set(near.x, groundY(near.x, near.z) + 0.6, near.z);
-    fireLight.intensity = (5 + (reduceMotion ? 0 : Math.sin(elapsed * 11) * 0.6 + Math.sin(elapsed * 27) * 0.4)) * dark * (0.7 + 0.3 * Math.min(1, fuelIn(near) / 4));
+    fireLight.intensity = (5 + (reduceMotion ? 0 : Math.sin(game.elapsed * 11) * 0.6 + Math.sin(game.elapsed * 27) * 0.4)) * dark * (0.7 + 0.3 * Math.min(1, fuelIn(near) / 4));
   } else fireLight.intensity = 0;
 }
 
 /* ---------- placing: pick a spot, then your person goes and puts it down ---------- */
-const placing = { on: false, item: null, kind: null, x: 0, z: 0, rot: 0, at: null, ghost: null, ok: false, dig: false, picks: [], why: '' }; // at: where you last tapped; dig: choosing farm fields (picks)
+export const placing = { on: false, item: null, kind: null, x: 0, z: 0, rot: 0, at: null, ghost: null, ok: false, dig: false, picks: [], why: '' }; // at: where you last tapped; dig: choosing farm fields (picks)
 // the square it takes on the grid, outlined on the ground (green, or red where it can't go)
 const placeRing = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 4, 1, Math.PI / 4).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#9fd88a', transparent: true, opacity: 0.8, depthWrite: false, depthTest: false }));
 placeRing.visible = false;
 placeRing.renderOrder = 2;
 scene.add(placeRing);
-const rectOf = (x, z, rot, kind) => placeRect({ x, z, rot }, PLACEABLES[kind]); // rules.js
+export const rectOf = (x, z, rot, kind) => placeRect({ x, z, rot }, PLACEABLES[kind]); // rules.js
 // why it can't go here (or null if it can). x, z, rot are already on the grid (placeSnap)
-function cantPlaceAt(x, z, kind, rot = 0) {
+export function cantPlaceAt(x, z, kind, rot = 0) {
   const P = PLACEABLES[kind], f = rectOf(x, z, rot, kind);
   if (P.inCamp) { const c = claimAt(x, z); if (!c || !claimMine(c)) return `${P.name}s only go in your camp`; } // (a farm field, 0.1.18; the server says the same)
   if (Math.abs(x) > WALK_LIMIT - 1 || Math.abs(z) > WALK_LIMIT - 1) return 'Too close to the forest';
@@ -352,7 +387,7 @@ function inRect(f, x, z, margin = 0) {
 // (0.1.18: they used to keep their ground, but the land's 2 m triangles still tipped it, and rocks floated), loose items
 // and the grass
 let flatsDue = false, grassMoved = [];
-function levelPlaced() {
+export function levelPlaced() {
   flatsDue = false;
   const rects = [...placed.values()].map((th) => Object.assign(rectOf(th.x, th.z, th.rot, th.kind), { th }));
   const items = [...itemViews.values()].map((v) => [v, groundY(v.position.x, v.position.z)]);
@@ -385,12 +420,12 @@ function levelPlaced() {
       if (Math.abs(lift) > 0.001) { m[i * 16 + 13] = d.y0[i] + lift; grassMoved.push(i); }
     }
   }
-  detailAt = null; // grass is drawn again next frame
+  game.detailAt = null; // grass is drawn again next frame
 }
-function startPlacing(item) {
+export function startPlacing(item) {
   const kind = ITEMS[item] && ITEMS[item].places;
   if (!kind || !player || you.dead || !you.carry[item]) return;
-  closeBag(); closeCraft(); closeMenu();
+  closeBag(); closeCraft(); game.closeMenu();
   stopPlacing();
   const ghost = placingGhost(placedModel(item).model);
   Object.assign(placing, { on: true, item, kind, ghost, dig: false, picks: [], rot: Math.round(player.rotation.y / (Math.PI / 2)) * (Math.PI / 2) }); // facing one of 4 ways
@@ -410,10 +445,10 @@ function placingGhost(model) {
 // tap on the ground adds another field (a see-through one on its square), a tap on one already chosen takes it off, and
 // Dig digs them all, one after another, with the tool on your tool bar.
 const MAX_DIGS = 20;
-function startDigging(kind, at) {
+export function startDigging(kind, at) {
   const P = PLACEABLES[kind];
   if (!P || !P.madeWith || !player || you.dead || !at) return;
-  closeBag(); closeCraft(); closeMenu();
+  closeBag(); closeCraft(); game.closeMenu();
   stopPlacing();
   Object.assign(placing, { on: true, item: null, kind, ghost: null, dig: true, picks: [], why: '', rot: 0, ok: false });
   $('placeBar').hidden = false;
@@ -466,7 +501,7 @@ function drawDigging() {
   $('placeGo').disabled = !n;
 }
 // a tap on the ground: the nearest spot on the grid to it
-function movePlacing(x, z) {
+export function movePlacing(x, z) {
   if (!placing.on) return;
   if (placing.dig) { pickDig(x, z); return; }
   placing.at = [x, z];
@@ -489,7 +524,7 @@ function movePlacing(x, z) {
   $('placeGo').disabled = !!why;
 }
 // the Turn button: a quarter turn (farm fields: all the ones chosen, so their rows run the other way)
-function turnPlacing() {
+export function turnPlacing() {
   if (!placing.on) return;
   placing.rot += Math.PI / 2;
   if (!placing.dig) { movePlacing(...placing.at); return; }
@@ -498,7 +533,7 @@ function turnPlacing() {
     k.ghost.rotation.y = k.ring.rotation.y = k.rot;
   }
 }
-function stopPlacing() {
+export function stopPlacing() {
   if (placing.ghost) { scene.remove(placing.ghost); disposeMaterials(placing.ghost); }
   for (const k of placing.picks || []) dropPick(k);
   placing.on = false; placing.ghost = null; placing.dig = false; placing.picks = []; placing.why = '';
@@ -507,7 +542,7 @@ function stopPlacing() {
   $('placeBar').hidden = true;
   app.classList.remove('placing');
 }
-function finishPlacing() {
+export function finishPlacing() {
   if (placing.on && placing.dig) { // farm fields: dig every one chosen, in the order they were chosen
     const list = placing.picks.map((k) => ({ type: 'dig', kind: k.kind, x: k.x, z: k.z, rot: k.rot }));
     if (!list.length) return;
@@ -525,7 +560,7 @@ $('placeGo').addEventListener('click', finishPlacing);
 $('placeCancel').addEventListener('click', stopPlacing);
 
 /* ---------- doing things with them: tasks in your queue ---------- */
-const sendNow = (msg) => sendAct(msg); // where you are first (the server checks you're close); kept for when the connection comes back (online.js)
+const sendNow = (msg) => game.sendAct(msg); // where you are first (the server checks you're close); kept for when the connection comes back (online.js)
 const goNear = (th, then) => approach(th.x, th.z, PLACEABLES[th.kind].solid + 0.35, PLACEABLES[th.kind].solid + 0.75, then);
 const placedSpot = (t) => { const th = placed.get(t.id); return th ? V(th.x, groundY(th.x, th.z) + 0.8, th.z) : null; };
 Object.assign(TASK_KINDS, {
@@ -558,7 +593,7 @@ Object.assign(TASK_KINDS, {
         const P = PLACEABLES[th.kind];
         face(th.x, th.z);
         showTag(`${P.buildVerb}…`, headTop(), 2, P.buildSeconds * slowness() + 0.3);
-        tagLabel.busy = true;
+        game.tagLabel.busy = true;
         startAction({ pose: 'kneel', seconds: P.buildSeconds,
           tick: (k) => { th.progress = k; drawPlaced(th); },
           cancel: () => { th.progress = 0; drawPlaced(th); },
@@ -620,7 +655,7 @@ Object.assign(TASK_KINDS, {
         if (t.do === 'out' && !isLit(th)) { nextTask(); return; }
         face(th.x, th.z);
         const secs = t.do === 'light' ? F.lightSeconds : 1.2;
-        if (t.do === 'light') { showTag('Lighting the fire…', headTop(), 2, secs * slowness() + 0.3); tagLabel.busy = true; }
+        if (t.do === 'light') { showTag('Lighting the fire…', headTop(), 2, secs * slowness() + 0.3); game.tagLabel.busy = true; }
         startAction({ pose: t.do === 'out' ? 'bend' : 'kneel', seconds: secs, end: () => {
           burnNow(th);
           if (t.do === 'add') {
@@ -659,8 +694,8 @@ Object.assign(TASK_KINDS, {
         if (!placed.has(th.id)) { nextTask(); return; }
         if (seatTaken(th, k)) { const again = freeSeat(th); if (again < 0) { showTag('No room by the fire', headTop(), 2); nextTask(); return; } TASK_KINDS.sit.start(t); return; }
         const [sx, sz] = seatSpot(th, k);
-        playerGround = groundY(sx, sz);
-        player.position.set(sx, playerGround, sz);
+        game.playerGround = groundY(sx, sz);
+        player.position.set(sx, game.playerGround, sz);
         face(th.x, th.z);
         you.sit = { fire: th.id, seat: k };
         sendNow({ t: 'sit', id: th.id, seat: k });
@@ -676,42 +711,42 @@ Object.assign(TASK_KINDS, {
   },
 });
 // while sitting (called each frame instead of walking): stay put, stand up if the fire has gone out
-function holdSit(P) {
+export function holdSit(P) {
   const th = placed.get(you.sit.fire);
   if (th) player.rotation.y = Math.atan2(th.x - player.position.x, th.z - player.position.z);
-  sitPose(player, P, playerGround);
+  sitPose(player, P, game.playerGround);
   if (!th || (PLACEABLES[th.kind].fire && !isLit(th))) endSit(true);
 }
 // standing up: tell the server (unless it already knows), and move on to the next thing in the queue
-function endSit(tell = true, next = true) {
+export function endSit(tell = true, next = true) {
   if (!you.sit) return;
   you.sit = null;
-  if (player) unsitPose(player, player.userData.parts, playerGround);
+  if (player) unsitPose(player, player.userData.parts, game.playerGround);
   if (tell) sendNow({ t: 'sit', off: true });
   if (next && tasks.current && tasks.current.type === 'sit') nextTask();
 }
 // back in the game while still sitting (you left the task running): carry on sitting
-function resumeSit(s) {
+export function resumeSit(s) {
   const th = s && placed.get(s.fire);
   if (!th || !player) return;
   const [x, z] = seatSpot(th, s.seat);
-  playerGround = groundY(x, z);
-  player.position.set(x, playerGround, z);
+  game.playerGround = groundY(x, z);
+  player.position.set(x, game.playerGround, z);
   tasks.current = { type: 'sit', id: th.id };
   you.sit = { fire: th.id, seat: s.seat };
   drawQueue();
 }
 // leaving the world (Exit, or your person died): forget the sit here; the server still has it while you're away
-function forgetSit() {
+export function forgetSit() {
   if (!you.sit) return;
   you.sit = null;
   if (tasks.current && tasks.current.type === 'sit') tasks.current = null;
-  if (player) unsitPose(player, player.userData.parts, playerGround);
+  if (player) unsitPose(player, player.userData.parts, game.playerGround);
 }
 
 /* ---------- the tap menu for a placed thing ---------- */
 // the tap menu: what you'll most likely want first, putting the fire out last, Inspect and Walk here small along the bottom
-function placedActions(th) {
+export function placedActions(th) {
   const P = PLACEABLES[th.kind], name = P.name.toLowerCase();
   if (P.madeWith) return fieldActions(th); // a farm field (0.1.18)
   const walkHere = { label: 'Walk here', foot: true, run: () => walkFirst(V(th.x + P.solid + 0.8, 0, th.z)) };
@@ -745,7 +780,7 @@ function placedActions(th) {
   }
   if (P.seats && (!F || lit)) out.push({ label: F ? 'Sit by the fire' : `Sit by the ${name}`, run: () => queueTask({ type: 'sit', id: th.id }) });
   if (lit) { // a society's fire (0.1.5): putting it out ends the society, so only its leader can (the server checks too)
-    const lead = you.soc && th.claim && th.claim.who === `s:${you.soc.id}` ? you.soc.members.find((x) => x.lead) : null, notLeader = lead && lead.id !== net.myId;
+    const lead = you.soc && th.claim && th.claim.who === `s:${you.soc.id}` ? you.soc.members.find((x) => x.lead) : null, notLeader = lead && lead.id !== game.net.myId;
     out.push({ label: 'Put out fire', note: notLeader ? `Only ${lead.name} can put it out` : th.claim && claimMine(th) ? `Ends ${you.soc ? you.soc.name : 'your camp'}` : '', disabled: !!notLeader,
       run: () => queueTask({ type: 'tend', id: th.id, do: 'out' }) });
   }
@@ -769,7 +804,7 @@ function takeApartNote(th) {
    A recipe with "near": "campfire" can only be made by a built one (a fire has to be lit), so cooking is just recipes.
    The server checks the same with a little more room (stationFor in server/src/placed.js). */
 const STATION_REACH = 3; // metres from its edge
-function stationNear(kind) {
+export function stationNear(kind) {
   const P = PLACEABLES[kind];
   if (!P || !player) return null;
   for (const th of placed.values()) {
@@ -802,9 +837,9 @@ Object.assign(TASK_KINDS, {
    knife picks 2). Flatten field (the hoe again) takes the field away, and whatever grew on it. The server decides
    (dig, flatten, plant and harvest in server/src/actions.js); the game shows it straight away and is put right if not. */
 const cropOf = (th) => (th.crop && CROPS[th.crop.kind]) || null;
-const cropK = (th) => { const def = cropOf(th); return def ? cropGrowth(th.crop.at, def.growMs, Date.now()) : 0; }; // how grown, 0 to 1
+export const cropK = (th) => { const def = cropOf(th); return def ? cropGrowth(th.crop.at, def.growMs, Date.now()) : 0; }; // how grown, 0 to 1
 // berries on a grown crop right now (picked ones grow back one by one, like a wild bush's: rules.js)
-function cropBerriesNow(th) {
+export function cropBerriesNow(th) {
   const def = cropOf(th);
   if (!def || cropK(th) < 1) return 0;
   const src = def.like, b = th.crop.berries || [null, null];
@@ -817,7 +852,7 @@ function cropNextIn(th) {
   return b[1] == null ? '1 min' : timeLeft(Math.max(60000, b[1] + growEvery(src) - Date.now()));
 }
 // what it is right now, for Inspect: "Berry bush sprout · grown in 18 h", "Berry bush · 3 berries"
-function fieldState(th) {
+export function fieldState(th) {
   const def = cropOf(th);
   if (!def) return 'Dug and ready for seeds';
   const stage = cropStage(cropK(th)), name = def.name, kind = Object.keys(def.like.harvest)[0];
@@ -871,7 +906,7 @@ function cropParts(th) {
 }
 // what's shown changes when it grows a step, or a berry is picked or grows back
 const cropShownKey = (th) => { if (!cropOf(th)) return ''; const k = cropK(th); return `${th.crop.kind}|${Math.floor(k * 40)}|${k >= 1 ? cropBerriesNow(th) : 0}`; };
-function drawCrop(th) {
+export function drawCrop(th) {
   const parts = th.view.userData.parts;
   if (!parts.crop) return;
   th.cropShown = cropShownKey(th);
@@ -923,7 +958,7 @@ Object.assign(TASK_KINDS, {
         if (now) { showTag(now, headTop(), 2); nextTask(); return; }
         face(t.x, t.z);
         showTag(`${P.makeVerb}…`, headTop(), 2, P.makeSeconds * slowness() + 0.3);
-        tagLabel.busy = true;
+        game.tagLabel.busy = true;
         startAction({ pose: 'chop', seconds: P.makeSeconds, tool: P.madeWith,
           tick: (k) => showDigGhost(t, k),
           cancel: dropDigGhost,
@@ -949,7 +984,7 @@ Object.assign(TASK_KINDS, {
         if (!placed.has(th.id)) { nextTask(); return; }
         face(th.x, th.z);
         showTag('Flattening the field…', headTop(), 2, P.flattenSeconds * slowness() + 0.3);
-        tagLabel.busy = true;
+        game.tagLabel.busy = true;
         startAction({ pose: 'chop', seconds: P.flattenSeconds, tool: P.madeWith,
           tick: (k) => { th.view.scale.y = 1 - 0.6 * k; },
           cancel: () => { th.view.scale.y = 1; },
@@ -971,7 +1006,7 @@ Object.assign(TASK_KINDS, {
         face(th.x, th.z);
         const what = ITEMS[t.seed].plural.toLowerCase();
         showTag(`Planting ${what}…`, headTop(), 2, def.plantSeconds * slowness() + 0.3);
-        tagLabel.busy = true;
+        game.tagLabel.busy = true;
         startAction({ pose: 'kneel', seconds: def.plantSeconds, end: () => {
           if (!placed.has(th.id) || no()) return;
           takeFromCarry(t.seed, 1);
@@ -999,7 +1034,7 @@ Object.assign(TASK_KINDS, {
         if (!placed.has(th.id) || !cropOf(th) || no()) { if (cropOf(th)) showTag(no(), headTop(), 2); nextTask(); return; }
         face(th.x, th.z);
         showTag(`${src.verb}…`, headTop(), 2, src.seconds * slowness() + 0.3);
-        tagLabel.busy = true;
+        game.tagLabel.busy = true;
         startAction({ pose: src.pose, seconds: src.seconds, tool: cropPickCount(th) > 1 ? src.tool : null, end: () => {
           if (!placed.has(th.id) || !cropOf(th) || no()) return;
           const n = cropPickCount(th);
@@ -1021,7 +1056,7 @@ Object.assign(TASK_KINDS, {
   },
 });
 // a farm field's tap menu: plant seeds, how long it has to grow, or pick what grew; flatten it; Inspect and Walk here
-function fieldActions(th) {
+export function fieldActions(th) {
   const P = PLACEABLES[th.kind], def = cropOf(th), out = [];
   if (!def) { // seeds that grow here: one Plant for each kind you carry (or one that says you have none)
     const all = Object.values(CROPS).filter((c) => c.on === th.kind), mine = all.filter((c) => you.carry[c.seed] > 0);
@@ -1042,7 +1077,7 @@ function fieldActions(th) {
   return out;
 }
 // Dig farm field, on the ground's tap menu (input.js): carrying a hoe, in your own camp
-function digActions(at) {
+export function digActions(at) {
   const out = [];
   for (const P of Object.values(PLACEABLES)) {
     if (!P.madeWith || !(you.carry[P.madeWith] > 0)) continue;
@@ -1058,16 +1093,16 @@ function digActions(at) {
    counts while its fire is lit. Inside someone else's claim you can only walk through: the tap menus say so
    (menuActions in input.js), placing there is refused, and autopilot leaves their things alone. */
 const CLAIMS = { radius: 10, spawnRadius: 16, placeable: 'campfire', ringShowsWithin: 25, ...(DATA.claims || {}) };
-const claimOn = (th) => !!th.claim && isLit(th);
+export const claimOn = (th) => !!th.claim && isLit(th);
 // yours to use: your society's claim ('s:<id>', society.js), or one from before 0.1.5 (your own id)
-const claimMine = (th) => !!th.claim && (th.claim.who === net.myId || (!!you.soc && th.claim.who === `s:${you.soc.id}`));
+export const claimMine = (th) => !!th.claim && (th.claim.who === game.net.myId || (!!you.soc && th.claim.who === `s:${you.soc.id}`));
 // what a claim is called: yours, or by its society's name ("Luke's camp", "Rivers"). Players see a claim as a camp (0.1.6)
 const claimName = (th) => (claimMine(th) ? 'Your camp' : th.claim.name);
-const claimAt = (x, z) => { for (const th of placed.values()) if (claimOn(th) && Math.hypot(th.x - x, th.z - z) <= CLAIMS.radius) return th; return null; };
+export const claimAt = (x, z) => { for (const th of placed.values()) if (claimOn(th) && Math.hypot(th.x - x, th.z - z) <= CLAIMS.radius) return th; return null; };
 // someone else's claim at x, z (the admin can do anything anywhere)
-const notMineAt = (x, z) => { const c = claimAt(x, z); return c && !claimMine(c) ? c : null; };
+export const notMineAt = (x, z) => { const c = claimAt(x, z); return c && !claimMine(c) ? c : null; };
 // placing a campfire: would lighting it there claim the land? { ok, text } (the server has the final say)
-function claimHere(x, z) {
+export function claimHere(x, z) {
   const soc = you.soc; // one claim each: your society's (0.1.5)
   if (soc) return { ok: false, text: soc.lead ? 'You have a camp, so this is just a fire' : `You're in ${soc.name}, so this is just a fire` };
   const all = [...placed.values()].filter(claimOn);
@@ -1098,7 +1133,7 @@ function claimRingMesh(x, z, material) {
   scene.add(mesh);
   return mesh;
 }
-function drawClaimRing(th) {
+export function drawClaimRing(th) {
   const want = claimOn(th) ? (claimMine(th) ? 'mine' : 'theirs') : null;
   if (th.ring && th.ring.userData.kind === want && th.ring.userData.x === th.x && th.ring.userData.z === th.z) return;
   if (th.ring) { scene.remove(th.ring); th.ring.geometry.dispose(); th.ring = null; }
@@ -1113,7 +1148,7 @@ function showPlaceClaim(at, claim) {
 }
 // every half second: rings near you show, fires that went out lose theirs, and walking into a claim says whose it is
 let claimCheckAt = 0, inClaim = null;
-function updateClaims(now) {
+export function updateClaims(now) {
   if (now - claimCheckAt < 500 || !player) return;
   claimCheckAt = now;
   for (const th of placed.values()) {

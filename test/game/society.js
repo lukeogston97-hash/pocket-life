@@ -5,6 +5,20 @@
    the leader can rename it. The leader taps a person nearby to invite them (inviteAction, used by the person's tap menu
    in input.js); the invite card asks them to Join. Name tags show it once it has 2 or more people (others.js drawTag).
    Its claim is th.claim.who 's:<id>' (claimMine in placeables.js). */
+import { game, share } from './links.js';
+import { DATA } from './core.js';
+import { $ } from './items.js';
+import { headTop, player, showTag, ui, you } from './you.js';
+import { claimOn, placed } from './placeables.js';
+import { closeMenu, closePause } from './input.js';
+import { net, others } from './online.js';
+import { el, twoTaps } from './admin.js';
+import { drawTag, online, PERSON_STATE_WORDS } from './others.js';
+// shared for files further down game/main.js, and the variables other files change (game/links.js)
+share({
+  closeSociety, inviteAction, setSociety, get SOCIETY() { return SOCIETY; }, societyMessage,
+});
+
 const SOCIETY = { maxMembers: 3, nameMax: 20, inviteMinutes: 5, inviteReach: 8, ...(DATA.societies || {}) };
 you.soc = null;
 const socSend = (m) => { if (!online()) { showTag("You're offline right now", headTop(), 2.5); return false; } net.sock.send(JSON.stringify(m)); return true; };
@@ -26,25 +40,25 @@ function setSociety(soc) {
   if (JSON.stringify(you.soc) === was) return;
   if (!$('society').hidden) drawSociety();
   if (you.soc && invite && you.soc.name === invite.soc) hideInvite(); // you joined
-  claimCheckAt = 0; // claim rings: yours or theirs (placeables.js)
+  game.claimCheckAt = 0; // claim rings: yours or theirs (placeables.js)
 }
 
 /* ---------- the Society panel (Menu > Society) ---------- */
-function openSociety() {
+export function openSociety() {
   if (ui.mode !== 'world' || !player || you.dead) return;
   closeMenu();
-  paused = true;
+  game.paused = true;
   drawSociety();
   $('society').hidden = false;
 }
-function closeSociety() { $('society').hidden = true; paused = false; $('socName').blur(); }
+function closeSociety() { $('society').hidden = true; game.paused = false; $('socName').blur(); }
 $('socClose').addEventListener('click', closeSociety);
 $('society').addEventListener('click', (e) => { if (e.target === $('society')) closeSociety(); });
 $('pauseSocietyBtn').addEventListener('click', () => { closePause(); openSociety(); });
 // your own claim's fire from before 0.1.5 (lit), if you have one
 const myOwnClaim = () => [...placed.values()].find((th) => claimOn(th) && th.claim.who === net.myId) || null;
 const STATE_SHORT = { ...PERSON_STATE_WORDS, gone: 'not in the world' }; // (others.js)
-function drawSociety() {
+export function drawSociety() {
   const s = you.soc, list = $('socMembers');
   $('socErr').hidden = true;
   resetLeave(); // (a Leave tapped once goes back to Leave)
@@ -93,7 +107,7 @@ $('socNameForm').addEventListener('submit', (e) => {
 });
 
 /* ---------- inviting: the leader taps a person (input.js thingActions) ---------- */
-function inviteAction(o) {
+export function inviteAction(o) {
   const s = you.soc;
   if (!s || !s.lead) return null;
   if (o.soc && o.soc === s.name) return { label: `In ${s.name}`, disabled: true }; // (o.soc shows only with 2 or more: someone alone in their own can be invited)

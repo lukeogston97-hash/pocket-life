@@ -8,7 +8,6 @@ from contextlib import asynccontextmanager
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, '..', '..'))
 SHOTS = os.path.join(HERE, 'shots')
-THREE = os.path.join(HERE, 'node_modules', 'three')
 FONTS = os.path.join(HERE, 'node_modules', '@fontsource', 'nunito', 'files')  # the game's font, for pictures (pictures.py)
 CHROME = os.environ.get('CHROME', '/usr/bin/google-chrome')
 HTTP_PORT, WS_PORT = 8794, 8795
@@ -78,10 +77,8 @@ class World:
         pg.on('pageerror', lambda e: self.errors.append(f'{pid}: {e}'))
         pg.on('console', lambda m: self.errors.append(f'{pid}: {m.text}') if m.type == 'error' and not any(n in m.text for n in NOISE) else None)
 
-        async def three_js(route):
-            if not three: await route.abort(); return
-            await route.fulfill(path=os.path.join(THREE, route.request.url.split('three@0.170.0/')[1]), content_type='application/javascript', headers={'Access-Control-Allow-Origin': '*'})
-        await pg.route('https://cdn.jsdelivr.net/npm/three@0.170.0/**', three_js)
+        # three.js is kept with the game (test/vendor/three-*): three=False stops it arriving, for the loading screen's checks
+        if not three: await pg.route('**/vendor/three-*/**', lambda r: r.abort())
         if slow:
             async def held(route):
                 await asyncio.sleep(slow / 1000); await route.continue_()

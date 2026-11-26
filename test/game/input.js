@@ -1,8 +1,39 @@
 /* ---------- tapping and clicking the world ---------- */
 // Left-click or tap: walk there, or pick up or use what's there. Right-click, or hold a finger down
 // on a phone, opens a small menu of what you can do with that thing.
-const ray = new THREE.Raycaster();
-const ndc = new THREE.Vector2();
+import * as THREE from 'three';
+import { game, share } from './links.js';
+import { app, camera, canvas, clamp01, lerpAngle, scene, SETTINGS, V } from './core.js';
+import { groundY, pondShape, terrain, water, WATER_Y, WORLD_HALF } from './land.js';
+import { berryBushes, interactive, oldStumps, rocks, trees } from './nature.js';
+import { growsIn, plantNear, plantReady, PLANTS, plants, plantTarget } from './plants.js';
+import { berriesOn, CHOP, copyOwner, growsBackIn, MINE, readyIn, ripe, stumpGrowsIn, treeNear } from './world-build.js';
+import { $, buildItem, harvests, ITEMS, SOURCES } from './items.js';
+import { disposeMaterials, setArm } from './people.js';
+import { getItem, HIT_MAT, itemViews, world } from './world-items.js';
+import {
+  hasTool, headTop, heldView, hudZone, measureHud, player, removeLabel, ring, showTag, tapMark, toolNeed, ui, you,
+} from './you.js';
+import { slowness, spendEnergy } from './needs.js';
+import { hideHint } from './tips.js';
+import { bagDropAt, bagOpen, closeBag, closeCraft, craftOpen, itemPic } from './inventory.js';
+import { controls } from './camera.js';
+import {
+  feetOnGround, findPath, inWorld, nextTask, queuedItem, queueTask, resetPose, REST, setLegs, setSleeping,
+  shorePointToward, solidAt, tooTiredToWake, wakeUp, walk, walkFirst,
+} from './moving.js';
+import {
+  digActions, endSit, holdSit, movePlacing, notMineAt, placed, placedActions, placedName, placing, stopPlacing,
+} from './placeables.js';
+// shared for files further down game/main.js, and the variables other files change (game/links.js)
+share({
+  get camFree() { return camFree; }, set camFree(v) { camFree = v; }, closeMenu, get ndc() { return ndc; },
+  get paused() { return paused; }, set paused(v) { paused = v; }, pickTarget, get ray() { return ray; }, toCanvas,
+  get wasWalking() { return wasWalking; }, set wasWalking(v) { wasWalking = v; },
+});
+
+export const ray = new THREE.Raycaster();
+export const ndc = new THREE.Vector2();
 const tmp2 = V();
 let down = null, multi = false, pressTimer = null, swallowTap = false, lastPointer = 'mouse';
 function toCanvas(e) {
@@ -15,7 +46,7 @@ canvas.addEventListener('pointerdown', (e) => {
   lastPointer = e.pointerType;
   if (bagOpen()) closeBag();
   if (craftOpen()) closeCraft();
-  if (!$('chat').hidden) closeSay(); // tapping the world puts the chat away
+  if (!$('chat').hidden) game.closeSay(); // tapping the world puts the chat away
   cancelPress();
   if (!e.isPrimary) { multi = true; return; }
   multi = false;
@@ -47,7 +78,7 @@ function endWorldDrag() {
   controls.enableRotate = true;
   if (!wdrag) return;
   clearTimeout(wdrag.timer);
-  if (wdrag.ghost) { wdrag.ghost.remove(); bagDragging = false; dragPoint = null; }
+  if (wdrag.ghost) { wdrag.ghost.remove(); game.bagDragging = false; game.dragPoint = null; }
   wdrag = null;
 }
 canvas.addEventListener('pointermove', (e) => {
@@ -58,15 +89,15 @@ canvas.addEventListener('pointermove', (e) => {
     g.appendChild(itemPic(wdrag.item.kind));
     document.body.appendChild(g);
     wdrag.ghost = g;
-    bagDragging = true;
-    dragPoint = { x: e.clientX, y: e.clientY, armed: false };
+    game.bagDragging = true;
+    game.dragPoint = { x: e.clientX, y: e.clientY, armed: false };
     controls.enableRotate = false; // the view holds still while you drag (it slides at the edges instead)
     down = null; // not a tap any more
     cancelPress();
   }
   if (wdrag && wdrag.ghost) {
     wdrag.ghost.style.transform = `translate(${e.clientX - 28}px, ${e.clientY - 28}px)`;
-    if (dragPoint) { dragPoint.x = e.clientX; dragPoint.y = e.clientY; }
+    if (game.dragPoint) { game.dragPoint.x = e.clientX; game.dragPoint.y = e.clientY; }
   }
   if (pressTimer && down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 10) cancelPress();
 });
@@ -125,7 +156,7 @@ function itemCloseTo(x, z, maxM) {
 function personNear(px, py, maxPx = 42) {
   const w = canvas.clientWidth, h = canvas.clientHeight;
   let best = null, bd = maxPx;
-  for (const o of others.values()) {
+  for (const o of game.others.values()) {
     if (!o.shown) continue; // not drawn (too many people about)
     tmp2.copy(o.mesh.position); tmp2.y += 0.9;
     tmp2.project(camera);
@@ -135,7 +166,7 @@ function personNear(px, py, maxPx = 42) {
   }
   return best;
 }
-function pickTarget(px, py) {
+export function pickTarget(px, py) {
   const someone = personNear(px, py);
   if (someone) return { kind: 'person', person: someone, name: someone.title };
   ray.setFromCamera(ndc, camera);
@@ -208,7 +239,7 @@ function showTapRing(p) {
   tapRing.userData.age = 0;
   tapRing.visible = true;
 }
-function fadeTapRing(dt) {
+export function fadeTapRing(dt) {
   if (!tapRing.visible) return;
   const age = (tapRing.userData.age += dt), life = DOUBLE_MS / 1000;
   tapRing.material.opacity = 0.55 * Math.max(0, 1 - age / life);
@@ -216,9 +247,9 @@ function fadeTapRing(dt) {
   if (age >= life) tapRing.visible = false;
 }
 function handleTap(px, py) {
-  if (ui.mode === 'admin') { adminTap(px, py); return; } // admin mode: what the admin can do with it (admin-mode.js)
+  if (ui.mode === 'admin') { game.adminTap(px, py); return; } // admin mode: what the admin can do with it (admin-mode.js)
   if (ui.mode !== 'world' || !player || you.dead || paused) return;
-  if (!online()) { showTag('Reconnecting…', headTop(), 1.5); return; }
+  if (!game.online()) { showTag('Reconnecting…', headTop(), 1.5); return; }
   if (placing.on) { // choosing where to put something: a tap moves it there
     ray.setFromCamera(ndc, camera);
     const g = ray.intersectObject(terrain, false)[0];
@@ -266,7 +297,7 @@ function targetSpot(t) {
   return null;
 }
 // the small menu. Inside someone else's claim it only says whose claim it is, with Walk here (and Admin for the admin)
-function menuActions(t) {
+export function menuActions(t) {
   const acts = thingActions(t), at = t && targetSpot(t), c = at && notMineAt(at[0], at[1]);
   if (!c) return acts;
   const soc = String(c.claim.who).startsWith('s:'); // a society's claim (0.1.5: every claim is one), called by its name
@@ -276,14 +307,14 @@ function menuActions(t) {
 function thingActions(t) {
   if (!t) return [];
   if (t.kind === 'person') {
-    const o = t.person, isMuted = muted.has(o.who);
+    const o = t.person, isMuted = game.muted.has(o.who);
     return [{ label: isMuted ? 'Unmute' : 'Mute', note: isMuted ? '' : 'Hide what they say', run: () => {
-        setMuted(o.who, !isMuted);
+        game.setMuted(o.who, !isMuted);
         if (!isMuted && o.bubble) { removeLabel(o.bubble); o.bubble = null; }
         showTag(isMuted ? `${o.title} unmuted` : `${o.title} muted`, headTop(), 2);
       } },
-      ...[inviteAction(o)].filter(Boolean), // the leader of a society can invite them (society.js)
-      { label: 'Report', run: () => openReport(o) },
+      ...[game.inviteAction(o)].filter(Boolean), // the leader of a society can invite them (society.js)
+      { label: 'Report', run: () => game.openReport(o) },
       { label: 'Walk here', foot: true, run: () => walkFirst(V(o.mesh.position.x, 0, o.mesh.position.z)) }];
   }
   if (t.kind === 'ground' || t.kind === 'thing' || t.kind === 'shore') { // (Dig farm field: carrying a hoe, placeables.js)
@@ -372,7 +403,7 @@ function openMenuAt(px, py, known) {
 // Ones marked foot (Inspect, Walk here) sit small along the bottom. Past MENU_MAX others, the rest go under More,
 // so a menu never gets long as things are added; Admin always shows.
 const MENU_MAX = 5;
-function showActs(acts, back) {
+export function showActs(acts, back) {
   const actBtn = (a) => {
     const b = document.createElement('button');
     b.type = 'button';
@@ -404,7 +435,7 @@ function showActs(acts, back) {
   }
   $('actList').replaceChildren(...rows);
 }
-function closeMenu() { $('actMenu').hidden = true; menuGlow = null; }
+export function closeMenu() { $('actMenu').hidden = true; menuGlow = null; }
 // pressing anywhere else closes the menu (and that press doesn't also walk)
 document.addEventListener('pointerdown', (e) => {
   if ($('actMenu').hidden || $('actMenu').contains(e.target)) return;
@@ -417,7 +448,7 @@ document.addEventListener('pointerdown', (e) => {
 
 /* ---------- pause menu (Escape on a computer): your person waits, the real-time clock keeps going ---------- */
 let paused = false;
-function openPause() {
+export function openPause() {
   if (ui.mode !== 'world' || !player || you.dead) return;
   closeMenu();
   closeBag();
@@ -427,28 +458,28 @@ function openPause() {
   $('pause').hidden = false;
   $('resumeBtn').focus();
 }
-function closePause() { paused = false; $('pause').hidden = true; }
+export function closePause() { paused = false; $('pause').hidden = true; }
 $('resumeBtn').addEventListener('click', closePause);
 $('pause').addEventListener('click', (e) => { if (e.target === $('pause')) closePause(); });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && ui.mode === 'menu') { if (!$('leave').hidden) closeLeave(); if (!$('link').hidden) closeLink(); closeNews(); closeFeedback(); closeSettings(); closeRules(); if (!$('adminLogin').hidden) $('adminLoginCancel').click(); return; }
+  if (e.key === 'Escape' && ui.mode === 'menu') { if (!$('leave').hidden) game.closeLeave(); if (!$('link').hidden) game.closeLink(); game.closeNews(); game.closeFeedback(); game.closeSettings(); game.closeRules(); if (!$('adminLogin').hidden) $('adminLoginCancel').click(); return; }
   if (e.key === 'Escape' && ui.mode === 'admin') { if (!$('actMenu').hidden) closeMenu(); return; } // (never the pause menu: there's no person to pause)
   if (e.key !== 'Escape' || ui.mode !== 'world') return;
   e.preventDefault();
-  if (maint.on) return;
+  if (game.maint.on) return;
   if (placing.on) stopPlacing();
-  else if (!$('news').hidden) closeNews();
-  else if (!$('society').hidden) closeSociety();
-  else if (!$('leave').hidden) closeLeave();
-  else if (!$('link').hidden) closeLink();
-  else if (!$('settings').hidden) closeSettings();
-  else if (!$('rules').hidden) closeRules();
+  else if (!$('news').hidden) game.closeNews();
+  else if (!$('society').hidden) game.closeSociety();
+  else if (!$('leave').hidden) game.closeLeave();
+  else if (!$('link').hidden) game.closeLink();
+  else if (!$('settings').hidden) game.closeSettings();
+  else if (!$('rules').hidden) game.closeRules();
   else if (!$('back').hidden) $('back').hidden = true;
-  else if (!$('adminPick').hidden) closePicker();
-  else if (!$('adminPanel').hidden) adminEscape(); // the player page goes back to Players, else the panel closes
-  else if (!$('report').hidden) closeReport();
-  else if (!$('feedback').hidden) closeFeedback();
-  else if (!$('chat').hidden) closeSay();
+  else if (!$('adminPick').hidden) game.closePicker();
+  else if (!$('adminPanel').hidden) game.adminEscape(); // the player page goes back to Players, else the panel closes
+  else if (!$('report').hidden) game.closeReport();
+  else if (!$('feedback').hidden) game.closeFeedback();
+  else if (!$('chat').hidden) game.closeSay();
   else if (!$('actMenu').hidden) closeMenu();
   else if (!$('death').hidden) return;
   else if (craftOpen()) closeCraft();
@@ -459,9 +490,9 @@ document.addEventListener('keydown', (e) => {
 
 /* ---------- camera keys on a computer: W A S D move the view, Q and E turn round your person, R and F tilt ---------- */
 const CAM_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'KeyR', 'KeyF']);
-const keysDown = new Set();
+export const keysDown = new Set();
 let camFree = false, wasWalking = false; // camFree: you've moved the view off your person (it glides back when they walk)
-const typing = (el) => el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
+export const typing = (el) => el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
 document.addEventListener('keydown', (e) => {
   if (!CAM_KEYS.has(e.code) || e.ctrlKey || e.metaKey || e.altKey) return;
   if ((ui.mode !== 'world' && ui.mode !== 'admin') || paused || typing(e.target)) return;
@@ -471,10 +502,10 @@ document.addEventListener('keydown', (e) => {
 });
 document.addEventListener('keyup', (e) => keysDown.delete(e.code));
 window.addEventListener('blur', () => keysDown.clear());
-const panVel = V();
-const camVel = { turn: 0, tilt: 0 }; // turning and tilting speed, eased so keys start and stop smoothly
-const keyAxis = (plus, minus) => (keysDown.has(plus) ? 1 : 0) - (keysDown.has(minus) ? 1 : 0);
-function keyCamera(dt) {
+export const panVel = V();
+export const camVel = { turn: 0, tilt: 0 }; // turning and tilting speed, eased so keys start and stop smoothly
+export const keyAxis = (plus, minus) => (keysDown.has(plus) ? 1 : 0) - (keysDown.has(minus) ? 1 : 0);
+export function keyCamera(dt) {
   const t = controls.target;
   // Q and E: turn round your person
   camVel.turn += (keyAxis('KeyE', 'KeyQ') * 1.5 - camVel.turn) * Math.min(1, dt * 5);
@@ -516,13 +547,13 @@ function keyCamera(dt) {
 // dragging something near the edge of the screen slides the view that way, so you can take it further than you can see
 // (only once the drag has been away from the edge, so starting in the bag doesn't move it)
 const edgeOf = (p, size, zone) => (p < zone ? Math.max(-1, p / zone - 1) : p > size - zone ? Math.min(1, (p - size + zone) / zone) : 0);
-function edgePan(dt) {
-  if (!dragPoint || ui.mode !== 'world') return;
-  if (dragPoint.inSheet) { dragPoint.armed = false; return; } // a tool dragged over the inventory, on or off the tool bar (0.1.17)
+export function edgePan(dt) {
+  if (!game.dragPoint || ui.mode !== 'world') return;
+  if (game.dragPoint.inSheet) { game.dragPoint.armed = false; return; } // a tool dragged over the inventory, on or off the tool bar (0.1.17)
   const r = canvas.getBoundingClientRect(), zone = Math.min(r.width, r.height) * 0.12;
-  const ex = edgeOf(dragPoint.x - r.left, r.width, zone), ey = edgeOf(dragPoint.y - r.top, r.height, zone);
-  if (!ex && !ey) { dragPoint.armed = true; return; }
-  if (!dragPoint.armed) return;
+  const ex = edgeOf(game.dragPoint.x - r.left, r.width, zone), ey = edgeOf(game.dragPoint.y - r.top, r.height, zone);
+  if (!ex && !ey) { game.dragPoint.armed = true; return; }
+  if (!game.dragPoint.armed) return;
   const t = controls.target;
   const fwd = V(t.x - camera.position.x, 0, t.z - camera.position.z).normalize();
   const right = V(-fwd.z, 0, fwd.x);
@@ -536,26 +567,26 @@ function edgePan(dt) {
   camera.position.z += dz;
   camFree = true;
 }
-function updatePlayer(dt) {
+export function updatePlayer(dt) {
   const P = player.userData.parts;
   const carrying = !!heldView;
   const holdX = -0.25; // how far forward the arm holds something
   const stoop = P.body.userData.stoop;
-  if (action) {
-    const t = elapsed - action.t0, dur = action.seconds, k = clamp01(t / dur);
-    if (action.tick) action.tick(k); // building shows its progress
+  if (game.action) {
+    const t = game.elapsed - game.action.t0, dur = game.action.seconds, k = clamp01(t / dur);
+    if (game.action.tick) game.action.tick(k); // building shows its progress
     setLegs(P, 0);
-    if (action.pose === 'chop') {
+    if (game.action.pose === 'chop') {
       const sw = (Math.sin(t * 5.5) + 1) / 2, env = clamp01(Math.min(t, dur - t) / 0.3);
       P.body.rotation.x = stoop + (0.08 + 0.22 * sw) * env;
       setArm(P.armR, (-2.5 + sw * 2.0) * env);
       setArm(P.armL, carrying ? -0.15 * env : (-2.3 + sw * 1.9) * env); // a tool is swung with the right hand only
-    } else if (action.pose === 'kneel' || action.pose === 'pick') {
+    } else if (game.action.pose === 'kneel' || game.action.pose === 'pick') {
       // ease in, keep going, ease out
       const env = clamp01(Math.min(t, dur - t) / 0.3), wave = Math.sin(t * 7);
-      if (action.pose === 'kneel') {
+      if (game.action.pose === 'kneel') {
         P.body.rotation.x = stoop + 1.05 * env;
-        player.position.y = playerGround - 0.12 * env;
+        player.position.y = game.playerGround - 0.12 * env;
         setLegs(P, 0, (0.12 * env) / player.scale.y);
         setArm(P.armR, (-0.6 + wave * 0.3) * env + (carrying ? holdX * (1 - env) : 0));
         setArm(P.armL, carrying ? -0.3 * env : (-0.6 + wave * 0.3) * env); // with a tool only the right hand works
@@ -568,15 +599,15 @@ function updatePlayer(dt) {
       // a quick bend from the hips to pick up or put down
       const s = Math.sin(k * Math.PI);
       P.body.rotation.x = stoop + 1.0 * s;
-      player.position.y = playerGround - 0.14 * s;
+      player.position.y = game.playerGround - 0.14 * s;
       setLegs(P, 0, (0.14 * s) / player.scale.y);
       setArm(P.armR, -0.55 * s + (carrying ? holdX * (1 - s) : 0));
       setArm(P.armL, -0.35 * s);
     }
-    if (k >= 0.5 && !action.done) { action.done = true; if (action.mid) action.mid(); }
+    if (k >= 0.5 && !game.action.done) { game.action.done = true; if (game.action.mid) game.action.mid(); }
     if (k >= 1) {
-      const a = action;
-      action = null;
+      const a = game.action;
+      game.action = null;
       resetPose();
       if (a.end) a.end();
       nextTask();
@@ -588,7 +619,7 @@ function updatePlayer(dt) {
     const stop = (message) => {
       walk.target = null;
       setLegs(P, 0);
-      player.position.y = playerGround;
+      player.position.y = game.playerGround;
       const ok = walk.onArrive, fail = walk.onFail;
       walk.onArrive = walk.onFail = null;
       if (message) { showTag(message, headTop(), 2); if (fail) fail(); }
@@ -596,18 +627,18 @@ function updatePlayer(dt) {
     };
     // the next point on the route (the last one is where you're going)
     while (walk.path && walk.path.length > 1 && Math.hypot(walk.path[0][0] - player.position.x, walk.path[0][1] - player.position.z) < 0.25) {
-      walk.path.shift(); walk.best = Infinity; walk.bestAt = elapsed;
+      walk.path.shift(); walk.best = Infinity; walk.bestAt = game.elapsed;
     }
     const aim = walk.path && walk.path.length > 1 ? walk.path[0] : [walk.target.x, walk.target.z];
     const ax = aim[0] - player.position.x, az = aim[1] - player.position.z, ad = Math.hypot(ax, az);
-    if (ad < walk.best - 0.05) { walk.best = ad; walk.bestAt = elapsed; }
+    if (ad < walk.best - 0.05) { walk.best = ad; walk.bestAt = game.elapsed; }
     if (d < 0.06) stop();
-    else if (elapsed - walk.bestAt > 1.5) {
+    else if (game.elapsed - walk.bestAt > 1.5) {
       // not getting any closer: look for a new way round once, then give up
       if (!walk.replanned) {
         walk.replanned = true;
         walk.path = findPath(player.position.x, player.position.z, walk.target.x, walk.target.z);
-        walk.best = Infinity; walk.bestAt = elapsed;
+        walk.best = Infinity; walk.bestAt = game.elapsed;
         if (!walk.path) stop("Can't get there");
       } else stop("Can't get there");
     }
@@ -628,8 +659,8 @@ function updatePlayer(dt) {
       if (!ok) stop("Can't get there");
       else {
         spendEnergy('walkPerMetre', Math.hypot(nx - player.position.x, nz - player.position.z));
-        playerGround = groundY(nx, nz);
-        player.position.set(nx, playerGround, nz);
+        game.playerGround = groundY(nx, nz);
+        player.position.set(nx, game.playerGround, nz);
         player.rotation.y = lerpAngle(player.rotation.y, heading, Math.min(1, dt * 10));
         walk.phase += dt * 9;
         const sw = Math.sin(walk.phase);
@@ -640,13 +671,13 @@ function updatePlayer(dt) {
       }
     }
   } else {
-    P.torso.scale.y = 1 + Math.sin(elapsed * 2.2) * 0.012;
+    P.torso.scale.y = 1 + Math.sin(game.elapsed * 2.2) * 0.012;
     setArm(P.armL, 0);
     setArm(P.armR, carrying ? holdX : 0);
   }
   if (!you.sit) feetOnGround(player, P);
-  ring.position.set(player.position.x, playerGround + 0.04, player.position.z);
-  const age = elapsed - (tapMark.userData.born ?? -9);
+  ring.position.set(player.position.x, game.playerGround + 0.04, player.position.z);
+  const age = game.elapsed - (tapMark.userData.born ?? -9);
   tapMark.material.opacity = age < 0.8 ? 0.85 * (1 - age / 0.8) : 0;
   tapMark.scale.setScalar(1 + age * 1.2);
 }
@@ -657,7 +688,7 @@ function updatePlayer(dt) {
 // thing's shapes, drawn from the inside only, so just a thin rim shows round the edge.
 const GLOW_MAT = new THREE.MeshBasicMaterial({ color: 0xfff1cf, transparent: true, opacity: 0.5, side: THREE.BackSide, depthWrite: false, fog: false });
 const GLOW_PAD = 0.045; // metres the rim sticks out
-let hoverAt = null, hoverWait = 0, hoverGlow = null, menuGlow = null, glowOn = null, glowShell = null;
+export let hoverAt = null, hoverWait = 0, hoverGlow = null, menuGlow = null, glowOn = null, glowShell = null;
 const glowKinds = new Map(); // item kind -> its outline model, built once
 function glowMatrix(geo) { // grow a shape a little round its own middle
   if (!geo.boundingSphere) geo.computeBoundingSphere();
@@ -703,7 +734,7 @@ function showGlow(g) {
   g.view.add(glowShell);
 }
 // called every frame: works out what's under the mouse now and then (the camera may have moved under it)
-function updateGlow(dt) {
+export function updateGlow(dt) {
   const live = ui.mode === 'world' && player && !you.dead && !paused && !placing.on;
   if (!live) { hoverGlow = menuGlow = null; clearGlow(); return; }
   if (!hoverAt || lastPointer !== 'mouse') hoverGlow = null;

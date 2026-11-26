@@ -1,18 +1,30 @@
 /* ---------- the game's data (loaded at the top, before the world was built) ---------- */
-const LOOKS = DATA.looks;
-const BODY_SHAPES = DATA.bodyShapes;
+import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { share } from './links.js';
+import { ITEM_GROUPS, itemGroupOf } from './rules.js';
+import { DATA, hash, mat, V } from './core.js';
+import { berryBushes, interactive, jitterGeo } from './nature.js';
+import { drawBerries, woodMat } from './world-build.js';
+// shared for files further down game/main.js, and the variables other files change (game/links.js)
+share({
+  get harvests() { return harvests; }, get shadowsOn() { return shadowsOn; }, get SOURCES() { return SOURCES; },
+});
+
+export const LOOKS = DATA.looks;
+export const BODY_SHAPES = DATA.bodyShapes;
 // how a new person starts out (defaultLook in the data; anything missing falls back to the first choice)
-const pickId = (list, id) => (list.some((o) => o.id === id) ? id : list[0].id);
+export const pickId = (list, id) => (list.some((o) => o.id === id) ? id : list[0].id);
 const DL = DATA.defaultLook || {};
-const DEFAULT_LOOK = {
+export const DEFAULT_LOOK = {
   name: '',
   age: Math.round(Math.min(LOOKS.age.max, Math.max(LOOKS.age.min, Number(DL.age) || LOOKS.age.start))),
   ...Object.fromEntries(['sex', 'skin', 'build', 'hair', 'hairColour', 'tunic'].map((k) => [k, pickId(LOOKS[k], DL[k])])),
 };
-const find = (list, id) => list.find((o) => o.id === id) || list[0];
-const deg = THREE.MathUtils.degToRad;
-const $ = (id) => document.getElementById(id);
-const fmt = (n) => String(Math.round(n * 10) / 10);
+export const find = (list, id) => list.find((o) => o.id === id) || list[0];
+export const deg = THREE.MathUtils.degToRad;
+export const $ = (id) => document.getElementById(id);
+export const fmt = (n) => String(Math.round(n * 10) / 10);
 woodMat.userData.shared = true;
 
 /* ---------- item shapes: the data picks one of these and sets its sizes and colour ---------- */
@@ -147,7 +159,7 @@ const knifeBladeGeo = (() => {
 // Only Math.random here, never the world's random numbers, so the world's layout never shifts.
 const fireStoneGeo = jitterGeo(new THREE.IcosahedronGeometry(1, 1), 0.2, 91);
 const FUEL_STICKS = 5; // the teepee: how many sticks it shows when the fire is full
-function campfireModel(look = {}) {
+export function campfireModel(look = {}) {
   const R = look.size ?? 0.36, g = new THREE.Group(), pieces = [], fuel = [];
   const wood = look.colour || '#8a6847';
   const piece = (obj, to, from) => { obj.position.set(...to.p); obj.quaternion.copy(to.q); g.add(obj); pieces.push({ obj, to, from }); };
@@ -538,9 +550,9 @@ const SHAPES = {
 
 /* ---------- items and recipes from the data, checked so a typo can't break the game ---------- */
 // the headings in Recipes and the admin's item lists, in order (itemGroups in game-data.json), and which one a thing is under
-const GROUPS = Array.isArray(DATA.itemGroups) && DATA.itemGroups.length ? DATA.itemGroups.map(String) : ITEM_GROUPS;
-const groupOf = (it) => itemGroupOf(it, GROUPS); // rules.js
-const ITEMS = {};
+export const GROUPS = Array.isArray(DATA.itemGroups) && DATA.itemGroups.length ? DATA.itemGroups.map(String) : ITEM_GROUPS;
+export const groupOf = (it) => itemGroupOf(it, GROUPS); // rules.js
+export const ITEMS = {};
 for (const [id, raw] of Object.entries(DATA.items || {})) {
   const look = { ...(raw.look || {}) };
   if (!SHAPES[look.shape]) { console.warn(`Item "${id}" has an unknown shape "${look.shape}", so it's drawn as a rock.`); look.shape = 'rock'; }
@@ -559,23 +571,23 @@ for (const [id, raw] of Object.entries(DATA.items || {})) {
   };
   ITEMS[id].startNear = Math.min(ITEMS[id].startNear, ITEMS[id].startInWorld);
 }
-const RECIPES = (DATA.recipes || []).filter((r) => {
+export const RECIPES = (DATA.recipes || []).filter((r) => {
   const ok = r && r.id && r.needs && r.makes && [...Object.keys(r.needs), ...Object.keys(r.makes)].every((k) => ITEMS[k]);
   if (!ok) console.warn('Skipping a recipe that names an item that does not exist:', r);
   return ok;
 });
-const buildItem = (kind) => SHAPES[ITEMS[kind].look.shape](ITEMS[kind].look);
-const countLabel = (kind, n) => `${n} ${n === 1 ? ITEMS[kind].name : ITEMS[kind].plural}`;
-const shadowsOn = (obj) => { obj.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } }); return obj; };
+export const buildItem = (kind) => SHAPES[ITEMS[kind].look.shape](ITEMS[kind].look);
+export const countLabel = (kind, n) => `${n} ${n === 1 ? ITEMS[kind].name : ITEMS[kind].plural}`;
+export const shadowsOn = (obj) => { obj.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } }); return obj; };
 
 /* ---------- needs (health, hunger, thirst...) and things you can use, from the data ---------- */
-const STATS = (DATA.stats || []).filter((s) => s && s.id).map((s) => ({ name: s.id, colour: '#8a8a7a', start: 100, perHour: 0, ...s }));
-const STAT = Object.fromEntries(STATS.map((s) => [s.id, s]));
+export const STATS = (DATA.stats || []).filter((s) => s && s.id).map((s) => ({ name: s.id, colour: '#8a8a7a', start: 100, perHour: 0, ...s }));
+export const STAT = Object.fromEntries(STATS.map((s) => [s.id, s]));
 // food you carry: what eating one gives, like { "hunger": 5 }
 for (const [id, raw] of Object.entries(DATA.items || {})) {
   if (ITEMS[id]) ITEMS[id].eat = Object.fromEntries(Object.entries(raw.eat || {}).filter(([k, v]) => STAT[k] && Number.isFinite(v)));
 }
-const SOURCES = {};
+export const SOURCES = {};
 for (const [id, raw] of Object.entries(DATA.sources || {})) {
   const gives = Object.fromEntries(Object.entries(raw.gives || {}).filter(([k, v]) => STAT[k] && Number.isFinite(v)));
   // harvest: what picking it puts in your inventory; regrowHours: how long until it can be picked again
@@ -589,7 +601,7 @@ for (const [id, raw] of Object.entries(DATA.sources || {})) {
     // fish: fishing here with a tool (the pond): how long a try takes and what it catches; the server holds the fish
     fish: raw.fish && ITEMS[raw.fish.tool] && ITEMS[raw.fish.catch] ? { action: raw.fish.action || 'Fish', verb: raw.fish.verb || 'Fishing', seconds: Math.max(1, Number(raw.fish.seconds) || 8), tool: raw.fish.tool, catch: raw.fish.catch } : null };
 }
-const harvests = (src) => Object.keys(src.harvest).length > 0;
+export const harvests = (src) => Object.keys(src.harvest).length > 0;
 // a thing in the world becomes usable when a source has its name, like "Pond" or "Berry bush"
 for (const obj of interactive) {
   const src = Object.values(SOURCES).find((s) => s.name === obj.userData.label);

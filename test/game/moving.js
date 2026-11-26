@@ -1,11 +1,36 @@
 /* ---------- moving about ---------- */
-const walk = { target: null, path: null, replanned: false, onArrive: null, onFail: null, phase: 0, side: 0, best: Infinity, bestAt: 0 };
+import * as THREE from 'three';
+import { game, share } from './links.js';
+import { clamp01, DATA, rand, scene, SETTINGS, V } from './core.js';
+import { groundY, heightAt, POND, pondShape, WALK_LIMIT, WATER_Y } from './land.js';
+import { berryBushes, oldStumps, rocks, roomAt, spotKey, spots, trees, WALK_THROUGH } from './nature.js';
+import { growsIn, plantReady, PLANTS, plants, setPlant } from './plants.js';
+import { berriesOn, CHOP, drawBerries, MINE, pickBerry, readyIn, ripe } from './world-build.js';
+import { $, buildItem, countLabel, harvests, ITEMS, SOURCES, STAT, STATS } from './items.js';
+import { disposeMaterials, setArm } from './people.js';
+import { getItem, itemViews, removeWorldItem, seeThrough } from './world-items.js';
+import {
+  addLabel, addToCarry, addWeight, barRoom, carried, drawCarry, drawHeld, hasTool, headTop, player, removeLabel,
+  showGain, showTag, takeFromCarry, tapMark, toolWhy, ui, weightOf, you,
+} from './you.js';
+import { clampStat, drawNeeds, nightNow, slowness, spendEnergy } from './needs.js';
+import { hideHint } from './tips.js';
+import { closeBag, closeCraft } from './inventory.js';
+// shared for files further down game/main.js, and the variables other files change (game/links.js)
+share({
+  get action() { return action; }, set action(v) { action = v; }, get allTasks() { return allTasks; }, clearCellsNear,
+  dropItems, eatOne, queueTask, get REST() { return REST; }, setSleeping, get spareInBag() { return spareInBag; },
+  startAction, stopQueue, get tasksSent() { return tasksSent; }, set tasksSent(v) { tasksSent = v; },
+  get walk() { return walk; },
+});
+
+export const walk = { target: null, path: null, replanned: false, onArrive: null, onFail: null, phase: 0, side: 0, best: Infinity, bestAt: 0 };
 let action = null; // what your person is doing right now: bending to pick up or put down, drinking, eating
 // legs: s swings them for walking. drop (in the person's own size) is how far the hips come down for a bend or a
 // kneel: the legs step apart to make up for it, so the feet stay on the ground (before 0.1.17 they sank into it).
 // The feet stay flat whatever the legs do.
 const LEG_LEN = 0.8; // hip to ankle
-function setLegs(P, s, drop = 0) {
+export function setLegs(P, s, drop = 0) {
   const lunge = drop > 0 ? Math.acos(Math.max(0.3, 1 - drop / LEG_LEN)) : 0;
   P.legL.rotation.x = s * 0.55 - lunge; P.legR.rotation.x = -s * 0.55 + lunge;
   P.legL.scale.y = P.legR.scale.y = 1;
@@ -13,7 +38,7 @@ function setLegs(P, s, drop = 0) {
 }
 // on a slope the uphill foot would go into the ground: that leg bends up a little (shorter) so the foot sits on top
 const _foot = new THREE.Vector3();
-function feetOnGround(m, P) {
+export function feetOnGround(m, P) {
   P.legL.scale.y = P.legR.scale.y = 1;
   m.updateMatrixWorld(true);
   const sc = m.scale.y;
@@ -23,7 +48,7 @@ function feetOnGround(m, P) {
     if (into > 0.003) hip.scale.y = Math.max(0.7, 1 - into / (LEG_LEN * Math.cos(hip.rotation.x) * sc));
   }
 }
-function shorePointToward(from) {
+export function shorePointToward(from) {
   const a = Math.atan2((from.z - POND.z) * 1.22, from.x - POND.x);
   for (let k = 0.6; k < 2; k += 0.02) {
     const baseR = POND.r * (1 + 0.13 * Math.sin(a * 3 + 1.1) + 0.06 * Math.sin(a * 5 - 0.7));
@@ -32,12 +57,12 @@ function shorePointToward(from) {
   }
   return V(from.x, 0, from.z);
 }
-const inWorld = (v) => Math.max(-WALK_LIMIT, Math.min(WALK_LIMIT, v)); // the forest past the edge is too thick to walk into
+export const inWorld = (v) => Math.max(-WALK_LIMIT, Math.min(WALK_LIMIT, v)); // the forest past the edge is too thick to walk into
 // Solid things your person walks round: rocks, logs, stumps and tree trunks. Bushes and farm fields are walked through
 // (0.1.18, Luke); all: count them too, for where things go (a seat by the fire, the server's spots).
 // Returns the thing you'd be standing in at x, z (or null), and how far into it.
 const BODY_R = 0.22;
-function solidAt(x, z, pad = 0, all = false) { // pad: keep that much further away
+export function solidAt(x, z, pad = 0, all = false) { // pad: keep that much further away
   let best = null;
   for (let i = -1; i <= 1; i++) {
     for (let j = -1; j <= 1; j++) {
@@ -54,13 +79,13 @@ function solidAt(x, z, pad = 0, all = false) { // pad: keep that much further aw
   return best;
 }
 // somewhere you can stand: out of the pond (onto the nearest shore) and out of anything solid
-function onDryLand(x, z) {
+export function onDryLand(x, z) {
   if (pondShape(x, z) < 0.9) { const s = shorePointToward(V(x, 0, z)); x = s.x; z = s.z; }
   if (solidAt(x, z)) [x, z] = outsideSolid(x, z);
   return [x, z];
 }
 // a spot you tapped inside something solid moves to just outside it
-function outsideSolid(x, z) {
+export function outsideSolid(x, z) {
   for (let n = 0; n < 3; n++) {
     const s = solidAt(x, z);
     if (!s) break;
@@ -84,9 +109,9 @@ function freeCell(ix, iz) {
   if (!cellFree[k]) { const x = cellPos(ix), z = cellPos(iz); cellFree[k] = pondShape(x, z) >= 0.9 && !solidAt(x, z) ? 1 : 2; }
   return cellFree[k] === 1;
 }
-const freeAt = (x, z) => freeCell(toCell(x), toCell(z));
+export const freeAt = (x, z) => freeCell(toCell(x), toCell(z));
 // check these cells again (something that blocked the way has gone)
-function clearCellsNear(x, z, r) {
+export function clearCellsNear(x, z, r) {
   const n = Math.ceil(r / PATH_CELL) + 1, cx = toCell(x), cz = toCell(z);
   for (let i = -n; i <= n; i++) for (let j = -n; j <= n; j++) {
     const ix = cx + i, iz = cz + j;
@@ -123,7 +148,7 @@ function nearestFree(x, z) {
   return null;
 }
 // A route from (ax, az) to (bx, bz) as a list of points to walk through, or null if there's no way
-function findPath(ax, az, bx, bz) {
+export function findPath(ax, az, bx, bz) {
   if (clearLine(ax, az, bx, bz)) return [[bx, bz]];
   const s = nearestFree(ax, az), g = nearestFree(bx, bz);
   if (!s || !g) return null;
@@ -166,7 +191,7 @@ function findPath(ax, az, bx, bz) {
   }
   return out;
 }
-function walkTo(p, onArrive, onFail) {
+export function walkTo(p, onArrive, onFail) {
   const [ox, oz] = outsideSolid(inWorld(p.x), inWorld(p.z));
   const dest = V(inWorld(ox), 0, inWorld(oz));
   walk.target = dest;
@@ -176,31 +201,31 @@ function walkTo(p, onArrive, onFail) {
   walk.onFail = onFail || null;
   walk.side = 0;
   walk.best = Infinity;
-  walk.bestAt = elapsed;
+  walk.bestAt = game.elapsed;
   tapMark.position.set(dest.x, groundY(dest.x, dest.z) + 0.05, dest.z);
-  tapMark.userData.born = elapsed;
+  tapMark.userData.born = game.elapsed;
 }
-const face = (x, z) => { player.rotation.y = Math.atan2(x - player.position.x, z - player.position.z); };
-function resetPose() {
+export const face = (x, z) => { player.rotation.y = Math.atan2(x - player.position.x, z - player.position.z); };
+export function resetPose() {
   if (!player) return;
   if (you.using) { you.using = null; drawHeld(); } // done with the tool: put it away
   const P = player.userData.parts;
   player.rotation.x = 0;
-  player.position.y = playerGround;
+  player.position.y = game.playerGround;
   P.body.rotation.x = P.body.userData.stoop;
   setLegs(P, 0);
 }
-function startAction(a) {
+export function startAction(a) {
   walk.target = null;
-  action = { t0: elapsed, done: false, seconds: 0.5, pose: 'bend', ...a };
+  action = { t0: game.elapsed, done: false, seconds: 0.5, pose: 'bend', ...a };
   action.seconds *= slowness(); // out of breath: it takes longer
   const tool = a.tool && hasTool(a.tool) ? a.tool : null; // the tool comes out only while it's being used (only tools on the tool bar get used)
   if (tool !== (you.using || null)) { you.using = tool; drawHeld(); }
-  if (online()) net.sock.send(JSON.stringify({ t: 'act', pose: action.pose, seconds: action.seconds }));
+  if (game.online()) game.net.sock.send(JSON.stringify({ t: 'act', pose: action.pose, seconds: action.seconds }));
 }
 // other people's actions, shown the same way as yours: a bend to pick something up, picking berries, kneeling to drink
-function animateAct(m, P, ground, act, dt) {
-  const t = elapsed - act.t0, dur = act.seconds, k = clamp01(t / dur), stoop = P.body.userData.stoop;
+export function animateAct(m, P, ground, act, dt) {
+  const t = game.elapsed - act.t0, dur = act.seconds, k = clamp01(t / dur), stoop = P.body.userData.stoop;
   setLegs(P, 0);
   if (act.pose === 'chop') {
     const sw = (Math.sin(t * 5.5) + 1) / 2, env = clamp01(Math.min(t, dur - t) / 0.3);
@@ -233,17 +258,17 @@ function animateAct(m, P, ground, act, dt) {
 }
 
 /* ---------- your queue: tap several things and your person does them in turn ---------- */
-const tasks = { current: null, list: [] }; // { type: 'pickup', id } | { type: 'use', source, ... } | { type: 'drop', kind, n }
+export const tasks = { current: null, list: [] }; // { type: 'pickup', id } | { type: 'use', source, ... } | { type: 'drop', kind, n }
 const MAX_QUEUE = 30;
 // More kinds of task, added by other parts (placeables.js: place, build, tend a fire, sit). Each is
 // { start(t), name(t, now), spot(t), stop(t) }: start does it (and calls nextTask when done), name is how it shows
 // in the queue, spot is where its number goes, and stop (optional) is called when it's stopped part way.
-const TASK_KINDS = {};
-const allTasks = () => (tasks.current ? [tasks.current, ...tasks.list] : [...tasks.list]);
+export const TASK_KINDS = {};
+export const allTasks = () => (tasks.current ? [tasks.current, ...tasks.list] : [...tasks.list]);
 const listed = (t) => t.type !== 'drop' || Number.isFinite(t.x); // a drop with a spot (from a drag) is a task like any other; Drop 1 happens by your feet
 const shownTasks = () => allTasks().filter(listed);
 const took = new Set(); // loose items you've picked up, so the second half of moving one knows the pick-up happened
-const queuedItem = (id) => allTasks().some((q) => q.type === 'pickup' && q.id === id); // already in your queue: can't be tapped or dragged again
+export const queuedItem = (id) => allTasks().some((q) => q.type === 'pickup' && q.id === id); // already in your queue: can't be tapped or dragged again
 // how many of a kind in your bag aren't already queued to be dropped somewhere
 const spareInBag = (kind) => (you.carry[kind] || 0) - allTasks().reduce((n, q) => n + (q.type === 'drop' && q.kind === kind && !q.landed ? q.n : 0), 0);
 // the weight you'll be carrying once everything queued is picked up or harvested
@@ -271,7 +296,7 @@ function cantUse(t, planning) {
   }
   return useHelps(src) ? null : fullLabel(src);
 }
-function queueTask(t) {
+export function queueTask(t) {
   if (!wakeUp()) return;
   if (t.type === 'pickup') {
     if (allTasks().some((q) => q.type === 'pickup' && q.id === t.id)) return;
@@ -290,10 +315,10 @@ function queueTask(t) {
   if (t.type === 'sit' && you.sit) return; // already sitting
   tasks.list.push(t);
   if (!tasks.current) nextTask();
-  else if (you.sit && tasks.current.type === 'sit') endSit(true); // a new task while sitting by the fire: stand up and do it
+  else if (you.sit && tasks.current.type === 'sit') game.endSit(true); // a new task while sitting by the fire: stand up and do it
   else drawQueue();
 }
-function stopQueue() {
+export function stopQueue() {
   const cur = tasks.current;
   if (cur && TASK_KINDS[cur.type] && TASK_KINDS[cur.type].stop) TASK_KINDS[cur.type].stop(cur);
   tasks.list = [];
@@ -304,17 +329,17 @@ function stopQueue() {
     if (action.cancel) action.cancel();
     action = null;
     resetPose();
-    if (tagLabel && tagLabel.busy) { removeLabel(tagLabel); tagLabel = null; }
+    if (game.tagLabel && game.tagLabel.busy) { removeLabel(game.tagLabel); game.tagLabel = null; }
   }
   drawQueue();
 }
 // walk up to a spot, then do something there (if you can't get there, move on to the next thing)
-function approach(x, z, stopAt, reach, then) {
+export function approach(x, z, stopAt, reach, then) {
   const dx = x - player.position.x, dz = z - player.position.z, d = Math.hypot(dx, dz);
   if (d <= reach) { then(); return; }
   walkTo(V(x - (dx / d) * stopAt, 0, z - (dz / d) * stopAt), then, nextTask);
 }
-function nextTask() {
+export function nextTask() {
   tasks.current = tasks.list.shift() || null;
   drawQueue();
   const t = tasks.current;
@@ -346,8 +371,8 @@ function nextTask() {
    After away.idleMinutes with no taps and nothing queued, your person carries on by themselves, the same way they
    do while you're away: eat what they carry, pick berries, drink at the pond, and stroll about near where you left off.
    Touch anything and you're back in charge. */
-const AWAY = { idleMinutes: 3, wanderMin: 25, wanderMax: 50, eatBelow: 60, drinkBelow: 55, ...(DATA.away || {}) };
-const auto = { on: false, home: null, nextAt: 0, drinking: false };
+export const AWAY = { idleMinutes: 3, wanderMin: 25, wanderMax: 50, eatBelow: 60, drinkBelow: 55, ...(DATA.away || {}) };
+export const auto = { on: false, home: null, nextAt: 0, drinking: false };
 let lastInput = performance.now();
 function tookInput() {
   lastInput = performance.now();
@@ -360,7 +385,7 @@ for (const ev of ['pointerdown', 'keydown', 'wheel']) document.addEventListener(
 function busy() { return !!(tasks.current || tasks.list.length || action || walk.target); }
 function autopilot() {
   const now = performance.now();
-  if (ui.mode !== 'world' || !player || you.dead || maint.on || !online() || !you.stats) return; // (the Menu being open doesn't stop it)
+  if (ui.mode !== 'world' || !player || you.dead || game.maint.on || !game.online() || !you.stats) return; // (the Menu being open doesn't stop it)
   if (!auto.on) {
     if (busy() || now - lastInput < AWAY.idleMinutes * 60000) return;
     auto.on = true;
@@ -389,7 +414,7 @@ function autopilot() {
   auto.drinking = false;
   const hasFood = Object.keys(you.carry).some((k) => ITEMS[k] && ITEMS[k].eat);
   if (!hasFood && st.hunger < AWAY.eatBelow + 20) { // getting peckish with nothing to eat: go and pick some
-    const near = berryBushes.filter((b) => ripe(b) && !b.userData.removed && !notMineAt(b.position.x, b.position.z)).sort((a, b) => a.position.distanceTo(player.position) - b.position.distanceTo(player.position))[0];
+    const near = berryBushes.filter((b) => ripe(b) && !b.userData.removed && !game.notMineAt(b.position.x, b.position.z)).sort((a, b) => a.position.distanceTo(player.position) - b.position.distanceTo(player.position))[0];
     if (near) { queueTask(bushTask(near)); return; }
   }
   // rest a little, then stroll somewhere near where you left off
@@ -412,7 +437,7 @@ function bushTask(b) {
 }
 setInterval(autopilot, 2000);
 // Sleeping: lie down where you are (Rest fills up); giving your person anything to do wakes them
-function setSleeping(on, fromServer = false) {
+export function setSleeping(on, fromServer = false) {
   on = !!on;
   if (!player || you.dead) { you.sleeping = on; return; }
   const was = !!you.sleeping;
@@ -420,27 +445,27 @@ function setSleeping(on, fromServer = false) {
   if (on) {
     stopQueue();
     player.rotation.x = -Math.PI / 2;
-    player.position.y = playerGround + 0.2;
+    player.position.y = game.playerGround + 0.2;
     if (!was) showTag('Zzz…', headTop(), 2.5);
   } else if (was) {
     resetPose();
     you.collapsed = false;
     if (!fromServer) showTag('Awake', headTop(), 1.5);
   }
-  if (!fromServer && online()) net.sock.send(JSON.stringify({ t: 'sleep', on }));
+  if (!fromServer && game.online()) game.net.sock.send(JSON.stringify({ t: 'sleep', on }));
   drawNeeds();
 }
 // Waking: any task wakes your person, unless they collapsed from no Rest and it isn't back to wakeAt yet.
-const REST = STATS.find((s) => s.id === 'rest');
-const tooTiredToWake = () => !!(you.collapsed && REST && you.stats && you.stats.rest < (REST.wakeAt || 0));
-function wakeUp() {
+export const REST = STATS.find((s) => s.id === 'rest');
+export const tooTiredToWake = () => !!(you.collapsed && REST && you.stats && you.stats.rest < (REST.wakeAt || 0));
+export function wakeUp() {
   if (!you.sleeping) return true;
   if (tooTiredToWake()) { showTag(`Too tired to get up yet (Rest ${Math.floor(you.stats.rest)} of ${REST.wakeAt})`, headTop(), 2.5); return false; }
   setSleeping(false);
   return true;
 }
 // a walk joins the end of the queue, so it never interrupts anything
-function walkFirst(p) {
+export function walkFirst(p) {
   if (!wakeUp()) return;
   const t = { type: 'walk', x: p.x, z: p.z };
   const last = tasks.list[tasks.list.length - 1];
@@ -466,7 +491,7 @@ function doPickup(item) {
     took.add(item.id);
     addToCarry(item.kind);
     spendEnergy('pickup');
-    shareTake(item); // online: tell the world (if someone beat you to it, it comes back out of your inventory)
+    game.shareTake(item); // online: tell the world (if someone beat you to it, it comes back out of your inventory)
     drawHeld();
     drawCarry();
     showGain(`+1 ${ITEMS[item.kind].name.toLowerCase()}`);
@@ -479,13 +504,13 @@ function doUse(t) {
   if (why) { showTag(why, headTop(), 2); nextTask(); return; }
   if (t.water) face(POND.x, POND.z); else face(t.x, t.z);
   showTag(`${src.verb}…`, headTop(), 2, src.seconds + 0.3);
-  tagLabel.busy = true;
+  game.tagLabel.busy = true;
   startAction({ pose: src.pose, seconds: src.seconds, tool: harvests(src) && src.tool && src.toolHarvest ? src.tool : null, end: () => {
     if (harvests(src)) harvestFrom(src, t);
     else {
       applyGives(src.gives);
       spendEnergy('drink');
-      sendAct({ t: 'drink', source: src.id });
+      game.sendAct({ t: 'drink', source: src.id });
     }
   } });
 }
@@ -511,7 +536,7 @@ function harvestFrom(src, t) {
   you.lastPick = Object.values(got).reduce((a, n) => a + n, 0);
   if (many) you.tool = src.tool;
   spendEnergy('harvest');
-  if (b) { for (let k = 0; k < you.lastPick; k++) pickBerry(b); drawBerries(b); sharePick(t.bush); }
+  if (b) { for (let k = 0; k < you.lastPick; k++) pickBerry(b); drawBerries(b); game.sharePick(t.bush); }
   drawHeld();
   drawCarry();
   showGain(Object.entries(got).map(([k, n]) => `+${countLabel(k, n).toLowerCase()}`).join(', '));
@@ -523,7 +548,7 @@ function eatOne(kind) {
   if (!useHelps({ gives })) { showTag(fullLabel({ gives }), headTop(), 2); return; }
   takeFromCarry(kind, 1);
   applyGives(gives);
-  sendAct({ t: 'eat', kind });
+  game.sendAct({ t: 'eat', kind });
   drawHeld();
   drawCarry();
 }
@@ -539,13 +564,13 @@ function doCut(t) {
   const secs = tool ? def.toolSeconds || def.seconds : def.seconds || 6;
   face(t.x, t.z);
   showTag(`${def.verb || 'Cutting'}…`, headTop(), 2, secs * slowness() + 0.3);
-  tagLabel.busy = true;
+  game.tagLabel.busy = true;
   startAction({ pose: def.pose || 'pick', seconds: secs, tool, end: () => {
     if (!plantReady(c)) { showTag('Someone cut it first', headTop(), 2); return; }
     for (const [k, n] of Object.entries(def.gives || {})) addToCarry(k, n);
     setPlant(t.plant, t.i, Date.now() + 2 * 3600000); // the server sends the real time it grows back
     spendEnergy('harvest');
-    sendAct({ t: 'cut', plant: t.plant, i: t.i });
+    game.sendAct({ t: 'cut', plant: t.plant, i: t.i });
     drawHeld();
     drawCarry();
     showGain(Object.entries(def.gives || {}).map(([k, n]) => `+${countLabel(k, n).toLowerCase()}`).join(', '));
@@ -560,10 +585,10 @@ function doChop(t) {
   if ((t.what === 'tree' && trees[t.idx] && trees[t.idx].state !== 'tree') || (t.what === 'stump' && trees[t.idx] && trees[t.idx].state !== 'stump')) { nextTask(); return; }
   face(t.x, t.z);
   showTag(`${taskName(t, true)}…`, headTop(), 2, (rule.seconds || 10) + 0.3); // (the same words as the task list)
-  tagLabel.busy = true;
+  game.tagLabel.busy = true;
   startAction({ pose: 'chop', seconds: rule.seconds || 10, tool: CHOP.tool, end: () => {
     spendEnergy('chop');
-    sendAct({ t: 'chop', what: t.what, idx: t.idx, id: t.id, x: t.x, z: t.z });
+    game.sendAct({ t: 'chop', what: t.what, idx: t.idx, id: t.id, x: t.x, z: t.z });
   } });
 }
 // mining (0.2.9): swing the pickaxe at a rock or boulder, then the server drops the stones round it
@@ -574,10 +599,10 @@ function doMine(t) {
   if (MINE.tool && !hasTool(MINE.tool)) { showTag(toolWhy(MINE.tool), headTop(), 2); nextTask(); return; }
   face(r.x, r.z);
   showTag(`${taskName(t, true)}…`, headTop(), 2, (rule.seconds || 10) + 0.3);
-  tagLabel.busy = true;
+  game.tagLabel.busy = true;
   startAction({ pose: 'chop', seconds: rule.seconds || 10, tool: MINE.tool, end: () => {
     spendEnergy('chop');
-    sendAct({ t: 'quarry', what: r.boulder ? 'boulder' : 'rock', idx: t.idx, x: Math.round(player.position.x * 100) / 100, z: Math.round(player.position.z * 100) / 100 });
+    game.sendAct({ t: 'quarry', what: r.boulder ? 'boulder' : 'rock', idx: t.idx, x: Math.round(player.position.x * 100) / 100, z: Math.round(player.position.z * 100) / 100 });
   } });
 }
 Object.assign(TASK_KINDS, {
@@ -604,8 +629,8 @@ Object.assign(TASK_KINDS, {
       const go = () => {
         face(POND.x, POND.z);
         showTag(`${F.verb}…`, headTop(), 2, F.seconds + 0.3);
-        tagLabel.busy = true;
-        startAction({ pose: 'kneel', seconds: F.seconds, tool: F.tool, end: () => { spendEnergy('fish'); sendAct({ t: 'fish' }); } });
+        game.tagLabel.busy = true;
+        startAction({ pose: 'kneel', seconds: F.seconds, tool: F.tool, end: () => { spendEnergy('fish'); game.sendAct({ t: 'fish' }); } });
       };
       const shore = shorePointToward(player.position);
       if (Math.hypot(shore.x - player.position.x, shore.z - player.position.z) < 0.35) go();
@@ -633,7 +658,7 @@ function doDrop(t) {
       const taken = takeFromCarry(t.kind, t.n, t.which); // (a tool: that one, so the tool bar keeps up)
       const out = [];
       for (let i = 0; i < taken; i++) { const s = dropSpot(i, at); out.push({ kind: t.kind, x: s.x, z: s.z, rot: i === 0 && Number.isFinite(t.rot) ? t.rot : rand() * Math.PI, ...(i === 0 && t.which != null ? { which: t.which } : {}) }); }
-      placeItems(out);
+      game.placeItems(out);
       t.landed = true; // its see-through copy goes
       drawHeld();
       drawCarry();
@@ -666,7 +691,7 @@ function taskSpot(t) {
   return null;
 }
 // a see-through copy where each queued drop will land (and turned the way it will lie), until it's down
-const dropGhosts = new Map(); // task -> its see-through model
+export const dropGhosts = new Map(); // task -> its see-through model
 function drawDropGhosts() {
   const want = ui.mode === 'world' && player && !you.dead ? allTasks().filter((t) => t.type === 'drop' && Number.isFinite(t.x) && !t.landed && ITEMS[t.kind]) : [];
   for (const [t, g] of dropGhosts) if (!want.includes(t)) { scene.remove(g); disposeMaterials(g); dropGhosts.delete(t); }
@@ -682,7 +707,7 @@ function drawDropGhosts() {
   }
 }
 // what a task is called in the task list: "Pick up stick" next, "Picking up stick" now (the same words as the tap menu)
-function taskName(t, now) {
+export function taskName(t, now) {
   if (t.type === 'pickup') { const it = getItem(t.id); const n = it ? ITEMS[it.kind].name.toLowerCase() : 'item'; return now ? `Picking up ${n}` : `Pick up ${n}`; }
   if (t.type === 'use') {
     const src = SOURCES[t.source];
@@ -699,7 +724,7 @@ function taskName(t, now) {
 }
 // the list above the bottom bar: what your person is doing now, then what's next
 let queueOpen = false; // the full list is showing
-function drawQueue() {
+export function drawQueue() {
   syncTasksSoon(); // (the server keeps a copy, for while you're away)
   drawDropGhosts();
   for (const b of badges) removeLabel(b);
@@ -753,7 +778,7 @@ function drawQueue() {
     const key = `${p.x.toFixed(1)},${p.z.toFixed(1)}`;
     if (used.has(key)) return;
     used.add(key);
-    badges.push(addLabel({ cls: 'qnum', text: String(i + 1), anchor: p, gap: 2, born: elapsed - 1 }));
+    badges.push(addLabel({ cls: 'qnum', text: String(i + 1), anchor: p, gap: 2, born: game.elapsed - 1 }));
   });
 }
 $('queueStop').addEventListener('click', stopQueue);
@@ -780,17 +805,17 @@ function taskListForServer() {
   }
   return out.slice(0, MAX_QUEUE);
 }
-function sendTasks() {
+export function sendTasks() {
   clearTimeout(tasksTimer); tasksTimer = 0;
-  if (!online() || !player || you.dead) return;
+  if (!game.online() || !player || you.dead) return;
   const text = JSON.stringify(taskListForServer());
   if (text === tasksSent) return;
   tasksSent = text;
-  net.sock.send(`{"t":"tasks","list":${text}}`);
+  game.net.sock.send(`{"t":"tasks","list":${text}}`);
 }
 function syncTasksSoon() { if (!tasksTimer) tasksTimer = setTimeout(sendTasks, 3000); }
 // back after a while away: what's left of the list the server was working through (the same shapes as here)
-function takeTasksBack(list) {
+export function takeTasksBack(list) {
   tasks.list = (Array.isArray(list) ? list : []).filter((t) => t && typeof t.type === 'string').slice(0, MAX_QUEUE);
   tasksSent = '';
   if (!tasks.current && tasks.list.length && !action && !you.sit) nextTask(); else drawQueue();

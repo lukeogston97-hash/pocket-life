@@ -1,0 +1,11 @@
+# Cloudflare Pages: the game's code files are modules that import each other by their plain names, so the phone checks
+# each one against the server every time (a quick "not changed" when it's the same) and never mixes old and new files.
+/game/*
+  Cache-Control: no-cache
+/test/game/*
+  Cache-Control: no-cache
+# three.js is kept in a folder named for its version and never changes, so phones can keep it for good
+/vendor/*
+  Cache-Control: public, max-age=31536000, immutable
+/test/vendor/*
+  Cache-Control: public, max-age=31536000, immutable

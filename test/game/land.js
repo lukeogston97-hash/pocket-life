@@ -1,15 +1,18 @@
 /* ---------- the land ---------- */
 // The world is a square, settings.worldSize metres across, with the clearing and pond in the middle.
 // Past its edge is thick forest you can't walk into, and the land carries on into the haze.
-const WORLD_HALF = Math.min(300, Math.max(40, Number(SETTINGS.worldSize) || 100)) / 2;
-const WALK_LIMIT = WORLD_HALF - 2; // how far from the middle you can walk, along either axis
-const WALL_DEPTH = 8;              // the thick forest past the edge, drawn in full detail
-const FOREST_END = WORLD_HALF + 62; // after that the forest is simpler, out to here
+import * as THREE from 'three';
+import { fbm, hash, scene, SETTINGS, smoothstep } from './core.js';
+
+export const WORLD_HALF = Math.min(300, Math.max(40, Number(SETTINGS.worldSize) || 100)) / 2;
+export const WALK_LIMIT = WORLD_HALF - 2; // how far from the middle you can walk, along either axis
+export const WALL_DEPTH = 8;              // the thick forest past the edge, drawn in full detail
+export const FOREST_END = WORLD_HALF + 62; // after that the forest is simpler, out to here
 const LAND_HALF = WORLD_HALF + 80;  // and the land carries on a little further, well into the haze
-const squareDist = (x, z) => Math.max(Math.abs(x), Math.abs(z));
-const POND = { x: -5.6, z: -0.9, r: 5.0 };
-const CLEAR = { x: 0.6, z: 1.6 };
-function pondShape(x, z) {
+export const squareDist = (x, z) => Math.max(Math.abs(x), Math.abs(z));
+export const POND = { x: -5.6, z: -0.9, r: 5.0 };
+export const CLEAR = { x: 0.6, z: 1.6 };
+export function pondShape(x, z) {
   const dx = x - POND.x, dz = (z - POND.z) * 1.22;
   const a = Math.atan2(dz, dx);
   const r = POND.r * (1 + 0.13 * Math.sin(a * 3 + 1.1) + 0.06 * Math.sin(a * 5 - 0.7));
@@ -23,8 +26,8 @@ function baseHeight(x, z) {
   return h;
 }
 const POND_BASE = baseHeight(POND.x, POND.z);
-const WATER_Y = POND_BASE - 0.32;
-function heightAt(x, z) {
+export const WATER_Y = POND_BASE - 0.32;
+export function heightAt(x, z) {
   const p = pondShape(x, z);
   let h = baseHeight(x, z);
   h += (POND_BASE - h) * (1 - smoothstep(0.95, 1.7, p));
@@ -75,7 +78,7 @@ tg.computeVertexNormals();
   }
   tg.setAttribute('color', new THREE.BufferAttribute(col, 3));
 }
-const terrain = new THREE.Mesh(tg, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1, metalness: 0 }));
+export const terrain = new THREE.Mesh(tg, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1, metalness: 0 }));
 terrain.receiveShadow = true;
 scene.add(terrain);
 terrain.updateMatrixWorld();
@@ -99,7 +102,7 @@ const groundCells = (() => {
   for (let t = 0; t < tris; t++) span(t, (c) => { list[fill[c]++] = t; });
   return { p, N, cellOf, start, list };
 })();
-function groundY(x, z, p = groundCells.p) { // (p: the land's heights to use; landAsMade is the land before any flattening)
+export function groundY(x, z, p = groundCells.p) { // (p: the land's heights to use; landAsMade is the land before any flattening)
   const { N, cellOf, start, list } = groundCells;
   if (Math.abs(x) >= SIZE / 2 || Math.abs(z) >= SIZE / 2) return heightAt(x, z);
   const c = cellOf(z) * N + cellOf(x);
@@ -121,7 +124,7 @@ function groundY(x, z, p = groundCells.p) { // (p: the land's heights to use; la
    Worked out the same in every game from the list of placed things (oldest first, so a new thing next to an old one
    takes the ground the old one left, and never tilts it). It goes back to the land as made when the thing is removed. */
 const FLAT_IN = 1.4, FLAT_OUT = 2.8;
-const landAsMade = groundCells.p.slice();
+export const landAsMade = groundCells.p.slice();
 const flatLock = new Float32Array(landAsMade.length / 3); // how flat each corner already is (1: under something placed)
 let flatTouched = [];
 // how far x, z is outside a placed thing's square (0 inside): f is { x, z, rot, hw, hd }
@@ -131,9 +134,9 @@ function outsideRect(f, x, z) {
   return Math.hypot(Math.max(0, Math.abs(lx) - f.hw), Math.max(0, Math.abs(lz) - f.hd));
 }
 const flatWeight = (f, x, z) => { const d = outsideRect(f, x, z); return d <= FLAT_IN ? 1 : 1 - smoothstep(FLAT_IN, FLAT_OUT, d); };
-const flatReach = (f) => Math.hypot(f.hw, f.hd) + FLAT_OUT;
+export const flatReach = (f) => Math.hypot(f.hw, f.hd) + FLAT_OUT;
 // the ground over a placed thing's square (and a margin): its average height, and highest minus lowest
-function groundUnder(f, margin = 0) {
+export function groundUnder(f, margin = 0) {
   let sum = 0, n = 0, lo = Infinity, hi = -Infinity;
   const ex = f.hw + margin, ez = f.hd + margin, c = Math.cos(f.rot || 0), s = Math.sin(f.rot || 0);
   const stepsX = Math.max(1, Math.ceil(ex / 0.25)), stepsZ = Math.max(1, Math.ceil(ez / 0.25));
@@ -155,7 +158,7 @@ function landCornersNear(x, z, r, fn) {
 // level the land under these things (all of them, every time the list changes); gives each one its height, f.y.
 // keep(x, z, from, to) can say how much of the way from its height to `to` the land corner at x, z may go (0 to 1).
 // Trees, rocks and bushes go up or down with the ground instead (liftNear in game/world-build.js).
-function setFlats(list, keep = () => 1) {
+export function setFlats(list, keep = () => 1) {
   const p = groundCells.p;
   for (const v of flatTouched) { p[v * 3 + 1] = landAsMade[v * 3 + 1]; flatLock[v] = 0; }
   flatTouched = [];
@@ -189,13 +192,13 @@ const waterTris = (() => {
   out.computeVertexNormals();
   return out;
 })();
-const water = new THREE.Mesh(waterTris, new THREE.MeshStandardMaterial({ color: '#86bdb7', roughness: 0.16, metalness: 0, transparent: true, opacity: 0.86, flatShading: true }));
+export const water = new THREE.Mesh(waterTris, new THREE.MeshStandardMaterial({ color: '#86bdb7', roughness: 0.16, metalness: 0, transparent: true, opacity: 0.86, flatShading: true }));
 water.position.set(POND.x, WATER_Y, POND.z);
 water.receiveShadow = true;
 water.userData.label = 'Pond';
 scene.add(water);
 const waterBase = water.geometry.attributes.position.array.slice();
-function animateWater(t) {
+export function animateWater(t) {
   const a = water.geometry.attributes.position.array;
   for (let i = 0; i < a.length; i += 3) {
     const x = waterBase[i], z = waterBase[i + 2];

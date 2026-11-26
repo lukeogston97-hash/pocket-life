@@ -280,13 +280,10 @@ async def screens():
 async def new_home():
     """The old GitHub address sends you to pocketlife.pages.dev with your phone's id, so you keep your person."""
     import json as _j
-    from lib import ROOT, THREE, HTTP_PORT, WS_PORT
+    from lib import ROOT, HTTP_PORT, WS_PORT
     async with world() as W:
         ctx = await W.browser.new_context(viewport={'width': 390, 'height': 844})
         pg = await ctx.new_page()
-        async def three(route):
-            await route.fulfill(path=os.path.join(THREE, route.request.url.split('three@0.170.0/')[1]), content_type='application/javascript', headers={'Access-Control-Allow-Origin': '*'})
-        await pg.route('https://cdn.jsdelivr.net/npm/three@0.170.0/**', three)
         await pg.route('https://fonts.**', lambda r: r.abort())
         async def local(route):  # both addresses are served from this computer's copy of test/
             url = route.request.url

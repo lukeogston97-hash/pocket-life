@@ -2,8 +2,14 @@
    Each kind is laid out on its own random numbers (so nothing else in the world moves), some near the start and the
    rest through the wider world. A cut clump drops to stubble and grows back by itself at a random time (the server
    keeps when each one is ready again: world.plants). Blades are one InstancedMesh, so forty clumps cost very little. */
-const PLANTS = DATA.plants || {};
-const plants = {}; // kind -> { def, clumps: [{ i, x, z, readyAt }], per, blades, heads, bladeM, headM }
+import * as THREE from 'three';
+import { game } from './links.js';
+import { DATA, mat, rand, rr, tint, V, withOwnRand } from './core.js';
+import { CLEAR, groundY, pondShape, WALK_LIMIT } from './land.js';
+import { dummy, IM, interactive, put, roomAt } from './nature.js';
+
+export const PLANTS = DATA.plants || {};
+export const plants = {}; // kind -> { def, clumps: [{ i, x, z, readyAt }], per, blades, heads, bladeM, headM }
 const bladeGeo = new THREE.ConeGeometry(0.02, 1, 3, 1, true).translate(0, 0.5, 0);
 const seedGeo = new THREE.IcosahedronGeometry(1, 0);
 for (const [kind, def] of Object.entries(PLANTS)) {
@@ -38,11 +44,11 @@ for (const [kind, def] of Object.entries(PLANTS)) {
   P.headM = P.heads.instanceMatrix.array.slice();
   interactive.push(P.blades);
 }
-const plantReady = (c) => !c.readyAt || Date.now() >= c.readyAt;
+export const plantReady = (c) => !c.readyAt || Date.now() >= c.readyAt;
 // a cut clump is short stubble with no seed heads; a grown one is as it was laid out
 const STUB = new THREE.Matrix4().makeScale(1, 0.22, 1), NONE = new THREE.Matrix4().makeScale(0, 0, 0), tmpM = new THREE.Matrix4();
-function drawPlant(kind, c) {
-  const P = plants[kind], up = freshLook || plantReady(c);
+export function drawPlant(kind, c) {
+  const P = plants[kind], up = game.freshLook || plantReady(c);
   if (c.shown === up) return;
   c.shown = up;
   for (let k = 0; k < P.per; k++) {
@@ -58,18 +64,18 @@ function drawPlant(kind, c) {
   }
   P.blades.instanceMatrix.needsUpdate = P.heads.instanceMatrix.needsUpdate = true;
 }
-function setPlant(kind, i, readyAt) {
+export function setPlant(kind, i, readyAt) {
   const c = plants[kind] && plants[kind].clumps[i];
   if (!c) return;
   c.readyAt = readyAt || 0;
   drawPlant(kind, c);
 }
-const drawPlants = () => { for (const [kind, P] of Object.entries(plants)) for (const c of P.clumps) drawPlant(kind, c); };
+export const drawPlants = () => { for (const [kind, P] of Object.entries(plants)) for (const c of P.clumps) drawPlant(kind, c); };
 // the clump nearest a ground point (thin blades are hard to tap exactly)
-function plantNear(gp, within = 0.8) {
+export function plantNear(gp, within = 0.8) {
   let best = null, bd = within;
   for (const [kind, P] of Object.entries(plants)) for (const c of P.clumps) { const d = Math.hypot(c.x - gp.x, c.z - gp.z); if (d < bd) { bd = d; best = { kind, c }; } }
   return best;
 }
-const plantTarget = (kind, c) => ({ kind: 'plant', plant: kind, i: c.i, x: c.x, z: c.z, name: PLANTS[kind].name });
-const growsIn = (c) => { const mins = Math.max(1, Math.ceil((c.readyAt - Date.now()) / 60000)); return mins >= 90 ? `${Math.round(mins / 60)} h` : `${mins} min`; };
+export const plantTarget = (kind, c) => ({ kind: 'plant', plant: kind, i: c.i, x: c.x, z: c.z, name: PLANTS[kind].name });
+export const growsIn = (c) => { const mins = Math.max(1, Math.ceil((c.readyAt - Date.now()) / 60000)); return mins >= 90 ? `${Math.round(mins / 60)} h` : `${mins} min`; };

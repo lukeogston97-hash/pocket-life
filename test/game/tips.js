@@ -6,6 +6,15 @@
    - The next one waits tips.gap seconds, or tips.pace seconds if you haven't tried the last one yet.
    - A tip for something you've already done is never shown.
    - Which ones you've seen is kept on this phone (pocket-life:tips), so each shows once. */
+import { game, share } from './links.js';
+import { DATA } from './core.js';
+import { $ } from './items.js';
+import { player, ui, you } from './you.js';
+// shared for files further down game/main.js, and the variables other files change (game/links.js)
+share({
+  hideHint, tipDid,
+});
+
 const TIP_SET = DATA.tips || {};
 const TIP_WORDS = TIP_SET.words || {};
 const TIPS_KEY = 'pocket-life:tips';
@@ -22,30 +31,30 @@ const TIP_RULES = {
   craft: { done: (b) => b.bag || (you.found || []).length > 0 },
 };
 const tipOrder = () => Object.keys(TIP_WORDS).filter((id) => TIP_RULES[id]);
-const tip = { id: null, since: 0, hidAt: -999, tried: true, base: null }; // the one showing, when the last one went, and whether it was tried
+export const tip = { id: null, since: 0, hidAt: -999, tried: true, base: null }; // the one showing, when the last one went, and whether it was tried
 function saveTips() { try { localStorage.setItem(TIPS_KEY, JSON.stringify(tipsSeen)); } catch (err) { /* not kept: they'll show again next visit */ } }
 function markTip(id) { if (!tipsSeen.includes(id)) { tipsSeen.push(id); saveTips(); } }
 // coming into the world: what "done" is measured from
-function startTips() {
+export function startTips() {
   hideHint();
   tip.base = { x: player.position.x, z: player.position.z, hunger: null, thirst: null, rings: false, bag: false };
   tip.hidAt = -999;
   tip.tried = true;
 }
 // something a tip waits for was just done (the rings were opened, the inventory was opened)
-function tipDid(what) { if (tip.base) tip.base[what] = true; }
+export function tipDid(what) { if (tip.base) tip.base[what] = true; }
 // the pill is put away: leaving the world, or the rings or the inventory opened over it. Seen, if it had been up a few seconds.
-function hideHint() {
+export function hideHint() {
   $('hint').hidden = true;
   if (!tip.id) return;
   if (tipClock() - tip.since >= 3) { markTip(tip.id); tip.hidAt = tipClock(); tip.tried = false; }
   tip.id = null;
 }
 // is there room for the pill, and is your person up and about?
-const tipRoom = () => !paused && !you.sleeping && !bagOpen() && !$('needs').classList.contains('open') && $('chat').hidden && !placing.on
+const tipRoom = () => !game.paused && !you.sleeping && !game.bagOpen() && !$('needs').classList.contains('open') && $('chat').hidden && !game.placing.on
   && !document.querySelector('.modal:not([hidden])') && $('back').hidden;
 // once a second while you play (loop.js)
-function tickTips() {
+export function tickTips() {
   const b = tip.base;
   if (ui.mode !== 'world' || !player || you.dead || !b) return;
   const now = tipClock();
