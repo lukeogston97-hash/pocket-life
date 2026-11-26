@@ -77,8 +77,13 @@ class World:
         pg.on('pageerror', lambda e: self.errors.append(f'{pid}: {e}'))
         pg.on('console', lambda m: self.errors.append(f'{pid}: {m.text}') if m.type == 'error' and not any(n in m.text for n in NOISE) else None)
 
-        # three.js is kept with the game (test/vendor/three-*): three=False stops it arriving, for the loading screen's checks
+        # three.js is kept with the game (vendor/three-*, 0.2.0): three=False stops it arriving, for the loading screen's checks.
+        # A release from before 0.2.0 (the release link, path='') still fetches it from jsDelivr: that's served from here too.
         if not three: await pg.route('**/vendor/three-*/**', lambda r: r.abort())
+        async def three_js(route):
+            if not three: await route.abort(); return
+            await route.fulfill(path=os.path.join(HERE, 'node_modules', 'three', route.request.url.split('three@0.170.0/')[1]), content_type='application/javascript', headers={'Access-Control-Allow-Origin': '*'})
+        await pg.route('https://cdn.jsdelivr.net/npm/three@0.170.0/**', three_js)
         if slow:
             async def held(route):
                 await asyncio.sleep(slow / 1000); await route.continue_()
