@@ -149,10 +149,16 @@ export function matIs(mat, r) {
   return on.length === Object.keys(want).length && on.every(([k, n]) => want[k] === n);
 }
 
-/* ---------- kinds of item: the buttons in Craft and the admin's item picker ---------- */
-export const ITEM_GROUPS = ['Tools', 'Food', 'Building', 'Clothes', 'Materials'];
-// it: { uses, eat, places } (a tool wears out, food has eat, a placeable has places)
-export function itemGroupOf(it) { return it.uses ? 'Tools' : Object.keys(it.eat || {}).length ? 'Food' : it.places ? 'Building' : 'Materials'; }
+/* ---------- kinds of item: the headings in Recipes and in the admin's item lists ----------
+   The list and its order come from itemGroups in game-data.json (Luke, 26 Nov 2026); this one is only the fallback. */
+export const ITEM_GROUPS = ['Materials', 'Parts', 'Tools', 'Food', 'Building', 'Clothing', 'Decoration', 'Misc'];
+// it: { group, uses, eat, places }: its own group if it has one (the tool heads are Parts), else a tool is Tools, food
+// Food, a placeable Building, anything else Materials (or the last heading, if the list has no such one)
+export function itemGroupOf(it, groups = ITEM_GROUPS) {
+  if (it.group && groups.includes(it.group)) return it.group;
+  const g = it.uses ? 'Tools' : Object.keys(it.eat || {}).length ? 'Food' : it.places ? 'Building' : 'Materials';
+  return groups.includes(g) ? g : groups[groups.length - 1];
+}
 
 /* ---------- the tool bar (0.1.17, Luke) ----------
    Tools sit on a bar of settings.toolSlots spots above the inventory. Only tools on the bar get used (by themselves, no

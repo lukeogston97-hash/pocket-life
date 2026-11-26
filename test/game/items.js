@@ -514,6 +514,9 @@ const SHAPES = {
 };
 
 /* ---------- items and recipes from the data, checked so a typo can't break the game ---------- */
+// the headings in Recipes and the admin's item lists, in order (itemGroups in game-data.json), and which one a thing is under
+const GROUPS = Array.isArray(DATA.itemGroups) && DATA.itemGroups.length ? DATA.itemGroups.map(String) : ITEM_GROUPS;
+const groupOf = (it) => itemGroupOf(it, GROUPS); // rules.js
 const ITEMS = {};
 for (const [id, raw] of Object.entries(DATA.items || {})) {
   const look = { ...(raw.look || {}) };
@@ -524,6 +527,7 @@ for (const [id, raw] of Object.entries(DATA.items || {})) {
     name,
     plural: raw.plural || name + 's',
     weight: Number.isFinite(raw.weight) ? raw.weight : 1,
+    group: typeof raw.group === 'string' ? raw.group : '', // its heading in Recipes and the admin's lists, where the usual one is wrong (rules.js itemGroupOf)
     look,
     startInWorld: Math.max(0, Math.floor(raw.startInWorld || 0)),
     startNear: Math.max(0, Math.floor(raw.startNear ?? 4)),

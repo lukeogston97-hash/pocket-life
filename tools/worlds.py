@@ -49,6 +49,13 @@ def problems(d):
         if it.get('places') is not None: known(it['places'], f'{w}.places', placeables, 'placeable')
         if it.get('spawnsNear') not in (None, 'trees', 'boulders'): out.append(f'{w}: spawnsNear is "trees" or "boulders"')
         if not whole(it.get('startInWorld', 0)) or it.get('startInWorld', 0) < 0: out.append(f'{w}: startInWorld should be a whole number')
+    groups = d.get('itemGroups')
+    if groups is not None and (not isinstance(groups, list) or not groups or not all(isinstance(g, str) and g.strip() for g in groups) or len(set(groups)) != len(groups)):
+        out.append('itemGroups: a list of headings (words), each one once')
+    for k, it in items.items():
+        if it.get('group') is not None and it['group'] not in (groups or []): out.append(f'items.{k}: group "{it["group"]}" is not one of itemGroups ({", ".join(groups or [])})')
+    for r in d.get('recipes', []):
+        if r.get('group') is not None and r['group'] not in (groups or []): out.append(f'recipes.{r.get("id")}: group "{r["group"]}" is not one of itemGroups')
     ids = [r.get('id') for r in d.get('recipes', [])]
     if len(set(ids)) != len(ids): out.append('recipes: two recipes share an id')
     for r in d.get('recipes', []):

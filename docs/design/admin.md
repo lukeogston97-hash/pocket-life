@@ -13,7 +13,7 @@ How it works now. How it got this way (the admin player before admin mode, the f
 - Not built: switching worlds (Luke: "not need just yet"; the top bar already names the world, which is where it would go), and from the first mockup a panel for the selected thing, a map and camera modes.
 
 ## Tapping things in the world
-- The ground: Add item (a picker with search, the Craft kinds and 1, 5 or 10) and Fly here.
+- The ground: Add item (a picker with search, the Recipes headings and 1, 5 or 10) and Fly here.
 - A person: their page, fly to, follow, move (tap where they go), fill needs, mute, kick, ban.
 - A loose item: remove.
 - A tree, stump, rock, boulder or berry bush: Move (then tap where it goes), Regrow (a stump back to a tree, a mined boulder back, a bush full of berries) and Remove (asks once more; gone for good).
@@ -47,7 +47,7 @@ How it works now. How it got this way (the admin player before admin mode, the f
 ## Changing numbers live: what wins
 - game-data.json is where every number starts. A change the admin makes sits on top and wins, also over a new build, until its Reset is tapped. A changed number says "Changed (was X)".
 - Settings tab: the live settings (liveSettings in game-data.json for names, groups, units and limits; server/src/live.js and LIVE_SET plus LIVE_BASE in game/admin.js wire up each id; saved as 'live'; games get them in welcome and 'live'). Groups now: Players (player limit, people in a camp, tool bar spots), Respawn times, Farming (planted crops grow in), Need rates.
-- Items tab (server/src/live-items.js, storage key `liveItems`): an item's weight, a tool's uses, how much a food fills, and how many of each thing a recipe needs and makes. Every game gets them straight away. Not changeable there: names, looks, new items or ingredients, and how many lie about in the world. It shows one line per item, A to Z, summing up its numbers ("weighs 1 · 20 uses", "Changed" if any are), with the Craft kinds as chips and a search; tap a line to open its numbers (Save once a box changes, Reset once it has). Check: `admin_items`.
+- Items tab (server/src/live-items.js, storage key `liveItems`): an item's weight, a tool's uses, how much a food fills, and how many of each thing a recipe needs and makes. Every game gets them straight away. Not changeable there: names, looks, new items or ingredients, and how many lie about in the world. It shows one line per item, A to Z, summing up its numbers ("weighs 1 · 20 uses", "Changed" if any are), with the Recipes headings as chips (0.1.20) and a search; tap a line to open its numbers (Save once a box changes, Reset once it has). Check: `admin_items`.
 - Copy my changes: lines like `items.knife.weight: 1 -> 4`, to send to Claude, who writes them into game-data.json; then they're Reset in admin. That's how a change becomes permanent.
 
 ## Log

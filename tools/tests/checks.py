@@ -436,7 +436,7 @@ async def smoke():
         n = found[0][0]
         expect(n > 3 and all(x[0] == n and x[3] >= 3 for x in found) and found[0][1:3] == [n, 0] and found[0][4]
                and found[1][1:3] == [n - 1, 1] and found[1][5] == 'sharp-stone' and found[1][4] and found[2][1:3] == [0, -1] and not found[2][4],
-               f"Recipes lists every recipe with Tools, Building and Materials buttons, greyed out when you don't have everything for it (made or not), those you do first, and the line about greyed out only when one is ({found})")
+               f"Recipes lists every recipe with its headings, greyed out when you don't have everything for it (made or not), those you do first, and the line about greyed out only when one is ({found})")
         await a.evaluate("(() => { const p = __pl.player.position; __pl.queueTask({ type: 'walk', x: p.x + 1.5, z: p.z + 1 }); })()")
         await idle(a, 20)
         await a.click('#menuBtn'); await a.wait_for_timeout(300); await a.click('#exitBtn'); await a.wait_for_timeout(1500)
@@ -1162,8 +1162,14 @@ async def fishing():
         # raw fish can't be eaten; cooking by the lit fire takes a moment and makes cooked fish
         await a.evaluate("__pl.sendAct({ t: 'eat', kind: 'fish' })"); await a.wait_for_timeout(800)
         expect(await a.evaluate('__pl.you.carry.fish') == 2, "raw fish can't be eaten")
-        await a.click('#bagBtn'); await a.click('#bagTabRecipes')
-        expect(not await a.evaluate("!!document.querySelector('#foundList .found-row[data-recipe=\"cooked-fish\"]')"), 'Recipes (the craft mat) never lists cooking: that is at the campfire')
+        # Recipes lists cooked fish under Food (0.1.20, Luke: "not hidden"), marked At a campfire; the mat can't make it, it says where
+        await a.click('#bagBtn'); await a.click('#bagTabRecipes'); await a.wait_for_timeout(300)
+        await a.evaluate("[...document.querySelectorAll('#foundChips .craft-chip')].find((c) => c.textContent.startsWith('Food ')).click()"); await a.wait_for_timeout(300)
+        food = await a.evaluate("[...document.querySelectorAll('#foundList .found-row')].map((r) => [r.dataset.recipe, r.classList.contains('missing'), [...r.querySelectorAll('.need-chip')].map((c) => c.textContent)])")
+        await a.click('#foundList .found-row[data-recipe="cooked-fish"]'); await a.wait_for_timeout(300)
+        mat = await a.evaluate("[document.getElementById('matWhy').textContent, document.getElementById('matMake').disabled]")
+        expect(food == [['cooked-fish', False, ['Raw fish 1/1', 'At a campfire']]] and mat == ['Cook it at a lit campfire', True],
+               f'Recipes lists cooked fish under Food, marked At a campfire; tapping it says to cook it at a lit campfire, and Make stays off ({food}, {mat})')
         await a.click('#bagClose')
         await a.evaluate(f"__pl.queueTask({{ type: 'make', id: {fid}, recipe: 'cooked-fish' }})"); await idle(a, 40); await a.wait_for_timeout(800)
         made = await a.evaluate("[__pl.you.carry.fish || 0, __pl.you.carry['cooked-fish'] || 0]")
@@ -1556,11 +1562,14 @@ async def admin_items():
         kn, be = [l for l in lines if l['name'] == 'Stone knife'][0], [l for l in lines if l['name'] == 'Berry'][0]
         want = (f"weighs {D['items']['knife']['weight']} · {KNIFE_USES} uses", f"weighs {D['items']['berry']['weight']} · +{D['items']['berry']['eat']['hunger']} food")
         expect((kn['sum'], be['sum']) == want, f"each line sums up the item's own numbers ({kn['sum']!r}, {be['sum']!r})")
-        # the kind chips: the same kinds as Craft
+        # the kind chips: the same headings as Recipes (0.1.20)
         kinds = await a.evaluate("[...document.querySelectorAll('#adminItemsKinds button')].map((b) => b.textContent)")
         await a.click('#adminItemsKinds >> text=Tools'); await a.wait_for_timeout(300)
         tools = [l['name'] for l in await a.evaluate(folds)]
-        expect(kinds[:3] == ['All', 'Tools', 'Food'] and 'Stone knife' in tools and 'Fishing spear' in tools and 'Berry' not in tools and 'Stick' not in tools, f'chips {kinds}: Tools shows only tools ({tools})')
+        await a.click('#adminItemsKinds >> text=Parts'); await a.wait_for_timeout(300)
+        parts = [l['name'] for l in await a.evaluate(folds)]
+        expect(kinds[:4] == ['All', 'Materials', 'Parts', 'Tools'] and kinds[1:] == [g for g in D['itemGroups'] if g in kinds] and 'Stone knife' in tools and 'Fishing spear' in tools and 'Berry' not in tools and 'Stick' not in tools
+               and 'Stone axe head' in parts and 'Stone axe' not in parts, f'chips {kinds}: Tools shows only tools ({tools}), Parts the heads ({parts})')
         await a.click('#adminItemsKinds >> text=All'); await a.wait_for_timeout(300)
         # find the stone knife: one line, opened, with its own numbers and its recipe's together
         await a.fill('#adminItemsFind', 'stone knife'); await a.wait_for_timeout(500)
@@ -1577,8 +1586,11 @@ async def admin_items():
         row, line = (await a.evaluate(rows))[0], (await a.evaluate(folds))[0]
         expect(row['value'] == '4' and row['btns'] == ['Reset'] and line['changed'] and line['open'] and line['sum'].startswith('weighs 4'), f'Save marks it changed with what it was, offers Reset, and its line says Changed ({row}, {line})')
         expect('1 changed' in await text(a, '#adminItemsState'), f"the tab says how many are changed ({await text(a, '#adminItemsState')})")
-        # a player carrying nothing that changed is unaffected; give them a knife and it weighs 4
+        # a player carrying nothing that changed is unaffected; give them a knife (it goes on their tool bar, where a tool weighs
+        # nothing: 0.1.17), take it off the bar, and it weighs 4
         await a.evaluate(f"window.__sock.send(JSON.stringify({{ t: 'a.give', id: '{await p.evaluate('__pl.net.myId')}', kind: 'knife', n: 1 }}))")
+        await p.wait_for_function("(__pl.you.wear.knife || []).length === 1", timeout=20000)
+        await p.evaluate("__pl.sendAct({ t: 'unequip', kind: 'knife', which: 0 })")
         carried = "Number(document.getElementById('carryWeight').textContent)"
         try: await p.wait_for_function(f"{carried} === {w0 + 4}", timeout=20000)
         except Exception: pass  # (the line below says what it was instead)
@@ -1852,14 +1864,37 @@ async def craft_mat():
         expect(await a.evaluate(said) == 'Stone knife', 'a sharp stone, a stick and twine: a stone knife')
         await a.click('#matMake'); await a.wait_for_timeout(1800)
         expect(await a.evaluate("__pl.you.carry.knife === 1 && !__pl.you.carry['sharp-stone'] && __pl.you.found.length === 3"), 'a stone knife, its sharp stone used up as the blade')
-        # Recipes: every recipe by kind, the ones you have everything for first, the rest greyed out, made or not (Luke, 0.1.12);
-        # tap one and the mat shows its things (what's missing shows faded)
+        # Recipes: every recipe under its heading, the ones you have everything for first, the rest greyed out, made or not
+        # (Luke, 0.1.12), each part simple to advanced (0.1.20: by steps from things found lying about); tap one and the mat
+        # shows its things (what's missing shows faded)
         rows = await a.evaluate("[...document.querySelectorAll('#foundList .found-row')].map((r) => [r.dataset.recipe, r.classList.contains('missing')])")
         chips = await a.evaluate("[...document.querySelectorAll('#foundChips .craft-chip')].map((c) => c.textContent)")
         can = sum(1 for _, grey in rows if not grey)  # (2 stones and a twine left: the sharp stone, and since 0.1.18 the hoe head)
-        expect(rows[0] == ['sharp-stone', False] and len(rows) > 3 and not any(grey for _, grey in rows[:can]) and all(grey for _, grey in rows[can:]) and ['knife', True] in rows and chips[0] == f'All {len(rows)}' and len(chips) >= 3,
-               f'Recipes lists what they have everything for first (the sharp stone), then the rest greyed out, the knife they made too, with All, Tools, Building and Materials ({rows}, {chips})')
+        D = json.load(open(os.path.join(HERE, '..', '..', 'test', 'game-data.json')))
+        rec, made = {r['id']: r for r in D['recipes']}, {k: r for r in D['recipes'] for k in r['makes']}
+        def steps(k, seen=()):
+            r = made.get(k)
+            return 0 if not r or k in seen else 1 + max([0] + [steps(x, seen + (k,)) for x in {**r['needs'], **r.get('keeps', {})}])
+        st = [steps(next(iter(rec[r]['makes']))) for r, _ in rows]
+        heads = [c.rsplit(' ', 1)[0] for c in chips]
+        expect(rows[0] == ['sharp-stone', False] and len(rows) == len(D['recipes']) and not any(grey for _, grey in rows[:can]) and all(grey for _, grey in rows[can:]) and ['knife', True] in rows and chips[0] == f'All {len(rows)}',
+               f'Recipes lists what they have everything for first (the sharp stone), then the rest greyed out, the knife they made too, and cooked fish ({rows}, {chips})')
+        expect(st[:can] == sorted(st[:can]) and st[can:] == sorted(st[can:]) and rows.index(['long-stick', True]) < rows.index(['fishing-spear', True]) < rows.index(['stone-axe', True]),
+               f'each part goes simple to advanced: a long stick before a fishing spear before a stone axe ({list(zip([r for r, _ in rows], st))})')
+        expect(heads[:4] == ['All', 'Materials', 'Parts', 'Tools'] and 'Food' in heads and heads[1:] == [g for g in D['itemGroups'] if g in heads],
+               f'the headings: All, Materials, Parts, Tools, then Food and the rest, in the order game-data.json gives ({chips})')
         await shot(a, 'mat-found')
+        # Food: cooked fish, greyed out (no fish), made at a campfire; tapping it says what it still needs and where to cook it
+        await a.evaluate("[...document.querySelectorAll('#foundChips .craft-chip')].find((c) => c.textContent.startsWith('Food ')).click()"); await a.wait_for_timeout(300)
+        food = await a.evaluate("[...document.querySelectorAll('#foundList .found-row')].map((r) => [r.dataset.recipe, r.classList.contains('missing')])")
+        inview = await a.evaluate("(() => { const r = document.getElementById('foundChips').getBoundingClientRect(), c = document.querySelector('#foundChips .craft-chip.on').getBoundingClientRect(); return [c.left >= r.left - 1 && c.right <= r.right + 1, document.querySelector('#foundChips .craft-chip.on').textContent]; })()")
+        expect(inview == [True, 'Food 1'], f'the picked heading slides into sight in its row ({inview})')
+        await a.click(row('cooked-fish')); await a.wait_for_timeout(300)
+        why = await a.evaluate("document.getElementById('matWhy').textContent")
+        expect(food == [['cooked-fish', True]] and await a.evaluate(said) == 'Cooked fish' and why == 'Still need 1 raw fish, then cook it at a lit campfire' and await a.evaluate("document.getElementById('matMake').disabled"),
+               f'Food lists cooked fish, greyed out; tapping it says to get a raw fish and cook it at a lit campfire, and Make is off ({food}, {why!r})')
+        await shot(a, 'mat-food')
+        await a.evaluate("[...document.querySelectorAll('#foundChips .craft-chip')].find((c) => c.textContent.startsWith('All ')).click()"); await a.wait_for_timeout(300)
         await a.click(row('knife')); await a.wait_for_timeout(300)
         need = await a.evaluate("[...document.querySelectorAll('#matList .mat-tile.need')].map((t) => t.dataset.kind)")
         expect(need == ['sharp-stone'] and await a.evaluate(said) == 'Stone knife' and 'Still need 1 sharp stone' in await a.evaluate("document.getElementById('matWhy').textContent") and await a.evaluate("document.getElementById('matMake').disabled"),
