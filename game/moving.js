@@ -33,17 +33,19 @@ function shorePointToward(from) {
   return V(from.x, 0, from.z);
 }
 const inWorld = (v) => Math.max(-WALK_LIMIT, Math.min(WALK_LIMIT, v)); // the forest past the edge is too thick to walk into
-// Solid things your person walks round: rocks, bushes, logs, stumps and tree trunks.
+// Solid things your person walks round: rocks, logs, stumps and tree trunks. Bushes and farm fields are walked through
+// (0.1.18, Luke); all: count them too, for where things go (a seat by the fire, the server's spots).
 // Returns the thing you'd be standing in at x, z (or null), and how far into it.
 const BODY_R = 0.22;
-function solidAt(x, z, pad = 0) { // pad: keep that much further away
+function solidAt(x, z, pad = 0, all = false) { // pad: keep that much further away
   let best = null;
   for (let i = -1; i <= 1; i++) {
     for (let j = -1; j <= 1; j++) {
       const a = spots.get(spotKey(x + i * 4, z + j * 4));
       if (!a) continue;
       for (let k = 0; k < a.length; k += 4) {
-        const r = (a[k + 3] ? 0.3 : a[k + 2] * 0.8) + BODY_R + pad; // a tree's trunk, not its crown
+        if (a[k + 3] === WALK_THROUGH && !all) continue;
+        const r = (a[k + 3] === 1 ? 0.3 : a[k + 2] * 0.8) + BODY_R + pad; // a tree's trunk, not its crown
         const d = Math.hypot(a[k] - x, a[k + 1] - z);
         if (d < r && (!best || r - d > best.depth)) best = { x: a[k], z: a[k + 1], r, depth: r - d };
       }
@@ -69,7 +71,7 @@ function outsideSolid(x, z) {
   return [x, z];
 }
 /* ---------- finding a way round things ----------
-   The walkable ground is a grid of half-metre cells (free unless a rock, bush, log, trunk or the pond is there).
+   The walkable ground is a grid of half-metre cells (free unless a rock, log, stump, trunk or the pond is there).
    A walk finds a route through it (A*), then cuts corners wherever there's a clear straight line,
    so your person (and people strolling while away) go round obstacles instead of getting stuck on them. */
 const PATH_CELL = 0.5, GRID_N = Math.ceil((WALK_LIMIT * 2) / PATH_CELL) + 1;

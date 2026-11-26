@@ -44,7 +44,7 @@ for (const set of [...Object.values(far), drawnTogether.bushes, ...drawnTogether
 for (const set of [...Object.values(near), wild.bush, ...wild.boulders, wild.rock, wild.stump, wild.stumpTop, wild.log, wild.logEnd]) {
   interactive.push(...buildSet(set));
 }
-for (const t of [...trees, ...oldStumps, ...rocks]) t.parts = t.parts.map(([m, key, idx]) => ({ ...(m.byKey.get(key) || {}), idx }));
+for (const t of [...trees, ...oldStumps, ...rocks, ...wildBushes]) t.parts = t.parts.map(([m, key, idx]) => ({ ...(m.byKey.get(key) || {}), idx }));
 for (const b of berryBushes) b.userData.parts = (b.userData.parts || []).map(([m, key, idx]) => ({ ...(m.byKey.get(key) || {}), idx }));
 // which tree or old stump a tapped copy belongs to (the drawn mesh and its copy number)
 const copyOwner = new Map();
@@ -52,7 +52,8 @@ trees.forEach((t, i) => { for (const p of t.parts) for (const mesh of [p.full, p
 oldStumps.forEach((t, i) => { for (const p of t.parts) if (p.full) copyOwner.set(`${p.full.uuid}:${p.idx}`, { kind: 'oldStump', i }); });
 rocks.forEach((t, i) => { for (const p of t.parts) if (p.full) copyOwner.set(`${p.full.uuid}:${p.idx}`, { kind: 'rock', i }); });
 // a moved thing (admin): its laid-out copy, shifted by t.off
-const shifted = (t, m4) => (t.off ? new THREE.Matrix4().makeTranslation(t.off[0], t.off[1], t.off[2]).multiply(m4) : m4);
+// (and lifted with the ground under it, where that was levelled: t.lift, setLift below)
+const shifted = (t, m4) => (t.off || t.lift ? new THREE.Matrix4().makeTranslation((t.off || [0])[0], ((t.off || [0, 0])[1]) + (t.lift || 0), (t.off || [0, 0, 0])[2]).multiply(m4) : m4);
 // remember each drawn copy as it was laid out (once, before it's hidden or moved)
 function keepParts(t) {
   for (const p of t.parts) for (const mesh of [p.full, p.simple]) {
@@ -91,7 +92,7 @@ const NO_TREE = new THREE.Matrix4().makeScale(0, 0, 0);
 const stumpMat = mat('#7a5c40'), stumpTopMat = mat('#cfb48a');
 function setTreeState(i, state, since) {
   const t = trees[i];
-  if (t && state === 'stump') t.since = since || t.since || Date.now(); // when it was chopped (it grows back regrowDays after)
+  if (t && state === 'stump') t.since = since || t.since || Date.now(); // when it was chopped (it grows back regrowDays after: stumpGrowsIn)
   if (!t || t.state === state) return;
   const standing = state === 'tree';
   showParts(t, standing || freshLook);
@@ -120,7 +121,7 @@ function setTreeState(i, state, since) {
   t.state = state;
 }
 // how long until a stump grows back into a tree, like "2 d 5 h" or "40 min" (the same as a fire's fuel)
-const stumpGrowsIn = (t) => growsBackIn(t.since, CHOP.regrowDays || 3);
+const stumpGrowsIn = (i) => { const t = trees[i]; return growsBackIn(t.since, stumpBackMs(CHOP.regrowDays, i, t.since) / 86400000); }; // (each stump its own time, rules.js)
 function growsBackIn(since, days) {
   const mins = Math.max(1, Math.ceil(((since || Date.now()) + days * 86400000 - Date.now()) / 60000));
   if (mins < 90) return `${mins} min`;
@@ -199,30 +200,44 @@ function moveLayoutThing(what, i, x, z) {
   else removeSpotNear(t.x, t.z);
   clearCellsNear(t.x, t.z, t.spot[0] + 1);
   const was = [t.x, t.z];
-  t.off = [x - t.from[0], groundY(x, z) - groundY(t.from[0], t.from[1]), z - t.from[1]];
+  t.off = [x - t.from[0], groundY(x, z, landAsMade) - groundY(t.from[0], t.from[1], landAsMade), z - t.from[1]]; // (the ground as made: setLift adds any levelling)
   t.x = x; t.z = z;
+  t.lift = groundMovedUnder(x, z, what === 'tree' ? TRUNK_R : t.r); // (on levelled ground)
+  if (t.lift) LIFTED.add(t); else LIFTED.delete(t);
   if (what === 'tree') {
     showParts(t, t.state === 'tree' || freshLook);
     if (t.stump) t.stump.position.set(x, groundY(x, z) - 0.05, z);
   } else {
     drawRock(t);
-    if (t.proxy) t.proxy.position.set(x, t.proxy.position.y - groundY(was[0], was[1]) + groundY(x, z), z);
+    if (t.proxy) t.proxy.position.set(x, t.proxy.position.y - groundY(was[0], was[1]) + groundY(x, z), z); // (the tap target: roughly on the ground)
   }
   if (t.state !== 'gone') addSpot(x, z, t.spot[0], t.spot[1]);
   clearCellsNear(x, z, t.spot[0] + 1);
 }
+// a berry bush as it was laid out: its place, the ground under it then, and its drawn copies and berries (once)
+function bushBase(b) {
+  const u = b.userData;
+  if (u.from) return;
+  keepParts({ parts: u.parts || [] });
+  u.from = [b.position.x, b.position.z, groundY(b.position.x, b.position.z, landAsMade)];
+  const { start, n } = u.berries;
+  u.berryBase = berryMatrices.slice(start * 16, (start + n) * 16);
+}
 function moveBush(b, x, z) {
   const u = b.userData;
-  if (!u.from) { // where it was laid out, and its drawn copies and berries as they were
-    keepParts({ parts: u.parts || [] });
-    u.from = [b.position.x, b.position.z, b.position.y];
-    const { start, n } = u.berries;
-    u.berryBase = berryMatrices.slice(start * 16, (start + n) * 16);
-  }
+  bushBase(b);
   removeSpotNear(b.position.x, b.position.z);
   clearCellsNear(b.position.x, b.position.z, u.r + 1);
-  const off = [x - u.from[0], groundY(x, z) - u.from[2], z - u.from[1]], T = new THREE.Matrix4().makeTranslation(...off);
-  u.off = off;
+  u.off = [x - u.from[0], groundY(x, z, landAsMade) - u.from[2], z - u.from[1]];
+  u.lift = groundMovedUnder(x, z, u.r); // (on levelled ground)
+  if (u.lift) LIFTED.add(b); else LIFTED.delete(b);
+  drawBushAt(b);
+  if (!u.removed) addSpot(x, z, u.r, WALK_THROUGH);
+  clearCellsNear(x, z, u.r + 1);
+}
+// a berry bush drawn where it is now: moved by the admin (u.off) and lifted with levelled ground (u.lift)
+function drawBushAt(b) {
+  const u = b.userData, off = u.off || [0, 0, 0], T = new THREE.Matrix4().makeTranslation(off[0], off[1] + (u.lift || 0), off[2]);
   for (const p of u.parts || []) for (const mesh of [p.full, p.simple]) {
     if (!mesh || !p.saved[mesh.uuid]) continue;
     mesh.setMatrixAt(p.idx, u.removed ? NO_TREE : T.clone().multiply(p.saved[mesh.uuid]));
@@ -234,9 +249,61 @@ function moveBush(b, x, z) {
   berries.computeBoundingSphere();
   u.shown = -1;
   drawBerries(b);
-  b.position.set(x, groundY(x, z), z);
-  if (!u.removed) addSpot(x, z, u.r);
-  clearCellsNear(x, z, u.r + 1);
+  b.position.set(u.from[0] + off[0], u.from[2] + off[1] + (u.lift || 0), u.from[1] + off[2]);
+}
+
+/* ---------- things on levelled ground (0.1.18 test 2, Luke: "it leaves floating rocks") ----------
+   When the ground under placed things is levelled (placeables.js levelPlaced), the trees, rocks and bushes near them go
+   up or down with it, by the least the ground under them moved, so no edge is left in the air (where it rose more they
+   just sit a little deeper). Only how they're drawn changes; the layout never moves. */
+const LIFTED = new Set(); // everything lifted now (so it can be put back when what levelled it is gone)
+const TRUNK_R = 0.35;
+// how far the ground under a thing has moved since the world was made, at its least (x, z: its middle, r: how far out it reaches)
+function groundMovedUnder(x, z, r) {
+  let least = Infinity;
+  for (let k = 0; k <= 16; k++) {
+    const a = (k / 8) * Math.PI * 2, d = k === 16 ? 0 : k < 8 ? r : r * 0.55, px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d;
+    least = Math.min(least, groundY(px, pz) - groundY(px, pz, landAsMade));
+  }
+  return Math.abs(least) < 0.001 ? 0 : least;
+}
+function setLift(kind, t, lift) {
+  const u = kind === 'bush' ? t.userData : t, was = u.lift || 0;
+  if (Math.abs(was - lift) < 0.001) return;
+  if (kind === 'bush') { bushBase(t); u.lift = lift; drawBushAt(t); }
+  else {
+    keepParts(t);
+    t.lift = lift;
+    if (kind === 'tree') {
+      if (t.state === 'tree' || freshLook) showParts(t, true);
+      if (t.stump) t.stump.position.y = groundY(t.x, t.z) - 0.05;
+    } else if (kind === 'rock') {
+      drawRock(t);
+      if (t.proxy) t.proxy.position.y += lift - was;
+    } else {
+      for (const p of t.parts) for (const mesh of [p.full, p.simple]) { // a bush with no berries
+        if (!mesh || !p.saved[mesh.uuid]) continue;
+        mesh.setMatrixAt(p.idx, shifted(t, p.saved[mesh.uuid]));
+        mesh.instanceMatrix.needsUpdate = true;
+      }
+    }
+  }
+  if (lift) LIFTED.add(t); else LIFTED.delete(t);
+}
+// after levelling: everything near these squares onto the ground as it is now, and anything lifted before back down
+function liftNear(rects) {
+  const near = (x, z, r) => rects.some((f) => Math.abs(x - f.x) < flatReach(f) + r + 2.5 && Math.abs(z - f.z) < flatReach(f) + r + 2.5); // (+ a land triangle across)
+  const each = (kind, list, at, r) => {
+    for (const t of list) {
+      const [x, z] = at(t), rr2 = r(t);
+      if (near(x, z, rr2)) setLift(kind, t, groundMovedUnder(x, z, rr2));
+      else if (LIFTED.has(t)) setLift(kind, t, 0);
+    }
+  };
+  each('tree', trees, (t) => [t.x, t.z], () => TRUNK_R);
+  each('rock', rocks, (t) => [t.x, t.z], (t) => t.r);
+  each('bush', berryBushes, (b) => [b.position.x, b.position.z], (b) => b.userData.r);
+  each('wild', wildBushes, (t) => [t.x, t.z], (t) => t.r);
 }
 // a berry bush the admin took out: hidden, can't be tapped, and doesn't block the way
 function removeLayoutThing(what, i) {

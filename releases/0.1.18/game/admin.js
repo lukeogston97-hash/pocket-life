@@ -68,20 +68,24 @@ $('announce').addEventListener('click', () => { $('announce').hidden = true; });
 const BERRY_SOURCE = () => Object.values(SOURCES).find(harvests);
 const LIVE_SET = {
   maxPlaying: (v) => { SETTINGS.maxPlaying = v; },
+  toolSlots: (v) => { if (SETTINGS.toolSlots !== v) { SETTINGS.toolSlots = v; if (player && bagOpen()) drawBag(); } }, // the tool bar's spots (inventory.js)
   societyMax: (v) => { SOCIETY.maxMembers = v; }, // (society.js; members are told the number with their society too)
   respawnMinutes: (v) => { SETTINGS.respawnMinutes = v; },
   berryRegrowHours: (v) => { const s = BERRY_SOURCE(); if (s && s.regrowHours !== v) { s.regrowHours = v; for (const b of berryBushes) { b.userData.shown = -1; drawBerries(b); } } },
-  treeRegrowDays: (v) => { CHOP.regrowDays = v; },
+  treeRegrowDays: (v) => { CHOP.regrowDays = [v, daysSpan(CHOP.regrowDays)[1]]; }, // soonest and latest (rules.js stumpBackMs)
+  treeRegrowDaysMost: (v) => { CHOP.regrowDays = [daysSpan(CHOP.regrowDays)[0], v]; },
   boulderRegrowDays: (v) => { MINE.regrowDays = v; },
   rockBackHours: (v) => { MINE.rockBackHours = v; },
   fadeDays: (v) => { SETTINGS.fadeDays = v; }, // (only the server uses it: server/src/nature.js fadeOld)
   hungerPerHour: (v) => { if (STAT.hunger) STAT.hunger.perHour = -v; },
   thirstPerHour: (v) => { if (STAT.thirst) STAT.thirst.perHour = -v; },
   restPerHour: (v) => { if (STAT.rest) STAT.rest.perHour = -v; },
+  cropGrowHours: (v) => { for (const c of Object.values(CROPS)) c.growMs = v * 3600000; }, // (placeables.js: the crops show it within a second)
 };
-const LIVE_BASE = { maxPlaying: SETTINGS.maxPlaying, societyMax: (DATA.societies || {}).maxMembers ?? 3, respawnMinutes: SETTINGS.respawnMinutes, berryRegrowHours: (BERRY_SOURCE() || {}).regrowHours,
-  treeRegrowDays: CHOP.regrowDays ?? 3, boulderRegrowDays: MINE.regrowDays ?? 3, rockBackHours: MINE.rockBackHours ?? 4, fadeDays: SETTINGS.fadeDays ?? 7,
-  hungerPerHour: -((STAT.hunger || {}).perHour || 0), thirstPerHour: -((STAT.thirst || {}).perHour || 0), restPerHour: -((STAT.rest || {}).perHour || 0) };
+const LIVE_BASE = { maxPlaying: SETTINGS.maxPlaying, toolSlots: SETTINGS.toolSlots ?? 7, societyMax: (DATA.societies || {}).maxMembers ?? 3, respawnMinutes: SETTINGS.respawnMinutes, berryRegrowHours: (BERRY_SOURCE() || {}).regrowHours,
+  treeRegrowDays: daysSpan(CHOP.regrowDays)[0], treeRegrowDaysMost: daysSpan(CHOP.regrowDays)[1], boulderRegrowDays: MINE.regrowDays ?? 3, rockBackHours: MINE.rockBackHours ?? 4, fadeDays: SETTINGS.fadeDays ?? 7,
+  hungerPerHour: -((STAT.hunger || {}).perHour || 0), thirstPerHour: -((STAT.thirst || {}).perHour || 0), restPerHour: -((STAT.rest || {}).perHour || 0),
+  cropGrowHours: (Object.values(DATA.crops || {})[0] || {}).growHours ?? 24 };
 function applyLive(live) {
   if (you.stats && !you.dead) tickStats(); // needs up to now at the old rate first
   for (const [id, set] of Object.entries(LIVE_SET)) { const v = live && live[id] != null ? live[id] : LIVE_BASE[id]; if (v != null) set(v); }
@@ -145,6 +149,7 @@ function adminPlacedActions(th) {
   const fire = (what) => () => adminSend({ t: 'a.fire', id: th.id, do: what });
   const whose = th.claim ? `Ends ${th.claim.name}` : ''; // (a claim is a society: 0.1.5)
   return [{ label: 'Move', note: 'Then tap where it goes', run: () => startMove({ what: 'placed', id: th.id }) },
+    ...(th.crop ? [{ label: 'Grow now', note: 'Grown and full of berries', run: () => adminSend({ t: 'a.regrow', what: 'placed', id: th.id }) }] : []), // a farm field's crop (0.1.18)
     ...(F && th.built ? [{ label: 'Fill with fuel', run: () => adminSend({ t: 'a.regrow', what: 'placed', id: th.id }) },
       th.lit ? (th.claim ? sure('Put out', fire('out'), whose) : { label: 'Put out', run: fire('out') }) : { label: 'Light', run: fire('light') }] : []),
     ...(th.claim ? [sure('End claim', () => adminSend({ t: 'a.claim', id: th.id, do: 'end' }), 'The fire burns on')] : []),
@@ -383,9 +388,9 @@ function drawPlayer() {
     const kinds = Object.entries(p.carry || {}).filter(([k, n]) => n > 0 && ITEMS[k]);
     const bag = entry('Bag', kinds.length ? '' : 'Empty');
     for (const [k, n] of kinds) {
-      const row = el('div', 'admin-row'), btns = el('div', 'admin-btns');
+      const row = el('div', 'admin-row'), btns = el('div', 'admin-btns'), onBar = Math.min(n, (p.bar || {})[k] || 0); // (tools on their tool bar, 0.1.17)
       btns.append(button('Take 1', () => adminSend({ t: 'a.take', id: p.id, kind: k, n: 1 })), ...(n > 1 ? [button('Take all', () => adminSend({ t: 'a.take', id: p.id, kind: k, n }))] : []));
-      row.append(el('span', 'admin-body', countLabel(k, n)), btns);
+      row.append(el('span', 'admin-body', `${countLabel(k, n)}${onBar ? ` · ${onBar === n ? (n > 1 ? 'all ' : '') : `${onBar} `}on the tool bar` : ''}`), btns);
       bag.appendChild(row);
     }
     const give = el('div', 'admin-btns');
@@ -471,14 +476,14 @@ function drawCounts() {
   const kinds = {};
   for (const it of world.items) kinds[it.kind] = (kinds[it.kind] || 0) + 1;
   const loose = Object.entries(kinds).sort((a, b) => b[1] - a[1]).map(([k, c]) => `${c} ${c === 1 ? ITEMS[k].name.toLowerCase() : ITEMS[k].plural.toLowerCase()}`);
-  const fires = {};
-  for (const th of placed.values()) fires[th.kind] = (fires[th.kind] || 0) + 1;
+  const fires = {}, planted = {}; // (every kind of placed thing: campfires, farm fields and how many have something growing)
+  for (const th of placed.values()) { fires[th.kind] = (fires[th.kind] || 0) + 1; if (th.crop) planted[th.kind] = (planted[th.kind] || 0) + 1; }
   const lines = [
     ['Trees', `${n(trees, (t) => t.state === 'tree')}`], ['Tree stumps', `${n(trees, (t) => t.state === 'stump')}`],
     ['Boulders', `${n(rocks, (r) => r.boulder && r.state !== 'gone')} (${n(rocks, (r) => r.boulder && r.state === 'mined')} mined)`],
     ['Rocks', `${n(rocks, (r) => !r.boulder && r.state !== 'gone')} (${n(rocks, (r) => !r.boulder && r.state === 'gone')} broken)`],
     ['Berry bushes', `${bushes.length} (${n(bushes, (b) => berriesOn(b) < bushHolds(SOURCES[b.userData.source] || {}))} picked)`],
-    ...Object.entries(fires).map(([k, c]) => [PLACEABLES[k] ? `${PLACEABLES[k].name}s` : k, String(c)]),
+    ...Object.entries(fires).map(([k, c]) => [PLACEABLES[k] ? `${PLACEABLES[k].name}s` : k, PLACEABLES[k] && PLACEABLES[k].madeWith ? `${c} (${planted[k] || 0} planted)` : String(c)]),
     ['Loose items', `${world.items.length}`]];
   const box = $('adminCounts');
   box.replaceChildren(...lines.flatMap(([a, b]) => [el('span', '', a), el('b', '', b)]));

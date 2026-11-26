@@ -1,6 +1,6 @@
 {
-  "version": "0.1.17",
-  "build": 4,
+  "version": "0.1.18",
+  "build": 2,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -127,7 +127,9 @@
     "walkPerMetre": 0.15,
     "build": 8,
     "tend": 1,
-    "fish": 3
+    "fish": 3,
+    "dig": 8,
+    "plant": 2
   },
   "chopping": {
     "tool": "stone-axe",
@@ -284,6 +286,19 @@
       },
       "startInWorld": 0
     },
+    "hoe-head": {
+      "name": "Stone hoe head",
+      "about": "A flat stone wrapped in twine. Tie it to a long stick to make a hoe.",
+      "plural": "Stone hoe heads",
+      "weight": 1,
+      "look": {
+        "shape": "head",
+        "head": "hoe",
+        "colour": "#8f8a80",
+        "lashing": "#c9b77a"
+      },
+      "startInWorld": 0
+    },
     "berry": {
       "name": "Berry",
       "about": "Picked from berry bushes. Eat one to feel less hungry.",
@@ -298,6 +313,18 @@
       "eat": {
         "hunger": 10
       }
+    },
+    "berry-seeds": {
+      "name": "Berry seeds",
+      "about": "Cut from a berry. Plant them on a farm field and a berry bush grows in about a day.",
+      "plural": "Berry seeds",
+      "weight": 1,
+      "look": {
+        "shape": "seeds",
+        "size": 0.05,
+        "colour": "#b08a58"
+      },
+      "startInWorld": 0
     },
     "fish": {
       "name": "Raw fish",
@@ -369,6 +396,24 @@
       "look": {
         "shape": "pickaxe",
         "length": 0.6,
+        "thickness": 0.025,
+        "colour": "#8a6847",
+        "head": "#8f8a80",
+        "lashing": "#c9b77a"
+      },
+      "tool": {
+        "uses": 30
+      },
+      "startInWorld": 0
+    },
+    "stone-hoe": {
+      "name": "Stone hoe",
+      "about": "Digs farm fields in your camp, and flattens them again. Tap the ground in your camp to dig one.",
+      "plural": "Stone hoes",
+      "weight": 2,
+      "look": {
+        "shape": "hoe",
+        "length": 0.75,
         "thickness": 0.025,
         "colour": "#8a6847",
         "head": "#8f8a80",
@@ -464,6 +509,19 @@
       "about": "Cut a stick into 2 twigs with a sharp stone (you keep the stone)"
     },
     {
+      "id": "berry-seeds",
+      "needs": {
+        "berry": 1
+      },
+      "keeps": {
+        "sharp-stone": 1
+      },
+      "makes": {
+        "berry-seeds": 1
+      },
+      "about": "Cut a berry open for its seeds with a sharp stone (you keep the stone)"
+    },
+    {
       "id": "long-stick",
       "needs": {
         "stick": 2,
@@ -536,6 +594,30 @@
       "about": "Breaks rocks and mines boulders for stones"
     },
     {
+      "id": "hoe-head",
+      "needs": {
+        "stone": 1,
+        "twine": 1
+      },
+      "makes": {
+        "hoe-head": 1
+      },
+      "about": "Wrap a flat stone in twine"
+    },
+    {
+      "id": "stone-hoe",
+      "name": "Stone hoe",
+      "needs": {
+        "hoe-head": 1,
+        "long-stick": 1,
+        "twine": 1
+      },
+      "makes": {
+        "stone-hoe": 1
+      },
+      "about": "Digs farm fields in your camp"
+    },
+    {
       "id": "campfire",
       "name": "Campfire",
       "needs": {
@@ -588,6 +670,25 @@
       "seats": {
         "count": 6,
         "distance": 1.7
+      }
+    },
+    "field": {
+      "name": "Farm field",
+      "madeWith": "stone-hoe",
+      "makeSeconds": 8,
+      "makeVerb": "Digging a farm field",
+      "flattenSeconds": 4,
+      "inCamp": true,
+      "walkOver": true,
+      "solid": 0.75,
+      "size": [
+        3,
+        3
+      ],
+      "look": {
+        "shape": "field",
+        "colour": "#5a3f2b",
+        "ridge": "#7a5a3d"
       }
     }
   },
@@ -948,18 +1049,19 @@
     "berryBushes": "extra: how many more berry bushes grow out in the wider world, besides the ones by the start. seed: their own random numbers, so they're in the same places on every phone (change it to move them all).",
     "tips": "First-steps tips for someone new, shown one at a time in the pill above the needs, each once per phone. words: what each says, in the order they come (walk, pickup, rings, food, craft). Each goes once the player has done what it says, or after show seconds. The next waits gap seconds, or pace seconds if the last one wasn't tried. A tip for something already done is never shown. A new tip needs its rule in game/tips.js (TIP_RULES) too. Friendly full sentences, short enough for two lines on a phone. Luke picked these five (25 Nov 2026): ask him before adding another.",
     "devlog": "What's new, shown in the Menu. Newest first, one entry per version: version, date (the release day, with from for a range), an optional title, and short lines for players in added (+ new features), improved (~ changes to what's there) and fixed (− bug fixes and removed issues). No full stop at the end.",
-    "energyCosts": "Stamina (the yellow ring, id energy) is short-term: every task takes these amounts and walking takes walkPerMetre for each metre. It comes back by itself quickly (perHour in its need: 600 an hour, so empty to full in about 10 minutes; whileAsleep 1500 when sleeping, whileSitting 2400 when sitting by a fire). Below slowBelow (20) your person is out of breath: walking and tasks take slowBy (1.5) times as long. It never stops you and it's not deadly. The server uses the same numbers.",
+    "energyCosts": "Stamina (the yellow ring, id energy) is short-term: every task takes these amounts and walking takes walkPerMetre for each metre. It comes back by itself quickly (perHour in its need: 600 an hour, so empty to full in about 10 minutes; whileAsleep 1500 when sleeping, whileSitting 2400 when sitting by a fire). Below slowBelow (20) your person is out of breath: walking and tasks take slowBy (1.5) times as long. It never stops you and it's not deadly. The server uses the same numbers. dig is digging or flattening a farm field, plant is planting seeds.",
     "chopping": "Chopping with a tool (tool: the item you need). tree: chopping a standing tree (seconds, and what falls: gives); it leaves a stump that grows back into a tree after regrowDays real days: a number, or [soonest, latest] so each stump takes its own time in between (stumpBackMs in rules.js). stump: digging out a stump (then the tree is gone for good). log: chopping a log (an item) into sticks. Each chop wears the tool by one use, and takes energyCosts.chop energy. The server uses the same rules.",
     "plants": "Plants you cut, like tall grass. Each kind is laid out by itself: count clumps (nearStart of them near the start), on its own random numbers (seed) so nothing else moves. action is the tap menu button, verb what shows while doing it. gives goes into your inventory each cut. seconds is how long by hand, toolSeconds with the tool (each use wears the tool). regrowHours [lo, hi]: a cut clump grows back at a random time in between. look: blades per clump, height, colour and tips (the seed heads). Run tools/worlds.py test-build after changing plants.",
     "regions": "The worlds (regions) on the main menu, under Play. Each is its own world on its own clock (timeZone). open: false shows it as Coming soon; tapping it shows this world's view at that region's time of day. For now only one world exists, so only one region can be open, and its timeZone should match settings.worldTimeZone.",
     "night": "Night in the world's clock (settings.worldTimeZone), from the hour 'from' to the hour 'to'. Sleeping at night fills Rest at whileAsleepAtNight instead of whileAsleep. People away or on autopilot go to sleep when night starts and get up in the morning. The server uses the same numbers.",
-    "placeables": "Things you place in the world and build, like the campfire. An item with places (the id of an entry here) gets a Place button in the Inventory: you pick a spot, your person puts it down as an unbuilt site, then builds it (buildSeconds; buildVerb shows while building). solid is how big it is for walking round (metres). size is the squares it takes on the placing grid ([across, deep]; each square is half a metre, 2 x 2 if left out), and it can be turned 4 ways. keepClear: other placed things stay at least this many metres from its square (the campfire keeps room for its seats); without it things can go side by side. The ground under a placed thing is levelled (game/land.js); settings.placeMaxRise is the most the ground may rise and fall (metres) under a spot for something to go there. fire makes it a fire you can light and put out: fuel is the item you add (sticks), secondsEach is how long one burns (900 = 15 minutes), otherFuels are more items it burns with their seconds each (log: 43200, 12 hours; twig: 300, 5 minutes), maxHours is the most it holds in hours of burning (168 = 7 days, so a claim's fire can last the 7-day away timer; without maxHours, maxFuel counts it in fuel items), lightSeconds how long lighting takes. It only burns while lit, keeps burning while players are away, and goes out by itself when the fuel runs out. seats: people can sit round it (count places, distance metres from the middle). Sitting is a task with no set time: your person sits until you stand up, do something else or the fire goes out, and keeps sitting while you're away. Run tools/worlds.py test-build after changing placeables. craftLabel names the tap menu list of recipes made there (recipes with near), like Cook.",
+    "placeables": "Things you place in the world and build, like the campfire. An item with places (the id of an entry here) gets a Place button in the Inventory: you pick a spot, your person puts it down as an unbuilt site, then builds it (buildSeconds; buildVerb shows while building). solid is how big it is for walking round (metres). size is the squares it takes on the placing grid ([across, deep]; each square is half a metre, 2 x 2 if left out), and it can be turned 4 ways. keepClear: other placed things stay at least this many metres from its square (the campfire keeps room for its seats); without it things can go side by side. The ground under a placed thing is levelled (game/land.js); settings.placeMaxRise is the most the ground may rise and fall (metres) under a spot for something to go there. fire makes it a fire you can light and put out: fuel is the item you add (sticks), secondsEach is how long one burns (900 = 15 minutes), otherFuels are more items it burns with their seconds each (log: 43200, 12 hours; twig: 300, 5 minutes), maxHours is the most it holds in hours of burning (168 = 7 days, so a claim's fire can last the 7-day away timer; without maxHours, maxFuel counts it in fuel items), lightSeconds how long lighting takes. It only burns while lit, keeps burning while players are away, and goes out by itself when the fuel runs out. seats: people can sit round it (count places, distance metres from the middle). Sitting is a task with no set time: your person sits until you stand up, do something else or the fire goes out, and keeps sitting while you're away. Run tools/worlds.py test-build after changing placeables. craftLabel names the tap menu list of recipes made there (recipes with near), like Cook. madeWith (0.1.18, the farm field) makes it something you dig with a tool instead of placing from an item: the tool (the stone hoe) has to be on your tool bar, it takes makeSeconds (makeVerb shows meanwhile) and a use of the tool, it's ready straight away (no building), and the same tool flattens it again (flattenSeconds). inCamp: it can only go in your own camp. look (only for one made with a tool) is how it's drawn: shape field is tilled soil (colour, ridge). walkOver: people walk over it instead of round it (the farm field); bushes are walked through too.",
     "mining": "Mining with a tool (tool: the item you need, the stone pickaxe). rock: breaking a small rock (seconds, and what falls: gives); the rock is then gone, but one broken rock comes back by a boulder every rockBackHours. boulder: mining a boulder; gives can be a range like [3, 5]. A mined boulder stays (it can't be removed) and can be mined again after regrowDays real days (the same as trees). Each hit wears the tool by one use and takes energyCosts.chop energy. The server uses the same rules.",
     "liveSettings": "Numbers the admin can change live from the Admin panel (Settings tab) without a new build. Each one's id is wired up in code (server/src/live.js and test/game/admin.js); name, group, unit, min, max and step are just how it shows. The normal value still comes from the rest of this file (settings, chopping, mining, sources, stats); a live change wins until the admin taps Reset.",
     "testNames": "Only for testing: with settings.autoName on, Make your person fills in a random name from this list. autoName is off in the real game, so players type their own name (the checks in tools/tests switch it on for themselves).",
     "bodyShapes": "How each body is drawn, one for each choice in looks.sex (female, male): its height and how wide or long each part is. The builds on Make your person (looks.build: slim, medium, broad) then make it wider or narrower. A new looks.sex choice needs an entry here with the same id.",
     "claims": "Claims (players see a claim as a camp: docs/design/wording.md): your first campfire becomes your claim when you light it: radius metres round it, yours only while the fire burns (once it's out the land is free and anyone can take the cold fire apart). One claim each. Claims can't overlap and can't reach into the free area round the main pond (spawnRadius metres from the pond's middle; the pond itself is about 6 m across from its middle). Inside someone else's claim others can only walk through. placeable: the kind that claims. ringShowsWithin: how near you have to be to see a claim's faint ring. Run tools/worlds.py test-build after changing it.",
-    "societies": "Player groups inside the world (built 0.1.4, reworked 0.1.5). Players see a society and its claim as one camp (0.1.6: Menu > Camp, Invite to camp); only the code and the admin say society and claim. Your claim is your society: lighting your first campfire starts both (named \"<name>'s camp\" until the leader renames it, 2 to nameMax letters, no two the same) and the fire going out ends both. Up to maxMembers people (also a live setting, Admin > Settings). Members can do everything in the claim and keep its fire fed; only the leader can put it out; their own fires are just fires. The leader invites someone playing within inviteReach metres; they have inviteMinutes to tap Join, and must put out their own claim's fire (or leave their society) first. Anyone can leave; the leader can remove people. If the leader leaves or is gone, the member who joined first leads. The last one out ends it and its fire goes out. A player with no person in the world for 3 days (the away timer) leaves."
+    "societies": "Player groups inside the world (built 0.1.4, reworked 0.1.5). Players see a society and its claim as one camp (0.1.6: Menu > Camp, Invite to camp); only the code and the admin say society and claim. Your claim is your society: lighting your first campfire starts both (named \"<name>'s camp\" until the leader renames it, 2 to nameMax letters, no two the same) and the fire going out ends both. Up to maxMembers people (also a live setting, Admin > Settings). Members can do everything in the claim and keep its fire fed; only the leader can put it out; their own fires are just fires. The leader invites someone playing within inviteReach metres; they have inviteMinutes to tap Join, and must put out their own claim's fire (or leave their society) first. Anyone can leave; the leader can remove people. If the leader leaves or is gone, the member who joined first leads. The last one out ends it and its fire goes out. A player with no person in the world for 3 days (the away timer) leaves.",
+    "crops": "Crops (0.1.18, farming): what grows on a farm field. seed is the item you plant (it's used up), on is the placeable it grows on (field), growHours how long it takes from planting to grown (it grows by itself, a sprout, then a small bush, then a full one), plantSeconds how long planting takes, and like is the source whose rules it follows once grown (berryBush: what picking gives, how many it holds, how fast they grow back, the knife picking 2). A field takes one crop; flattening the field loses it. The admin's Settings tab has one live number for how long every crop takes (Farming, Planted crops grow in)."
   },
   "chatFilter": {
     "anywhere": [
@@ -1059,6 +1161,26 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.1.18",
+      "date": "2026-11-26",
+      "title": "Farming",
+      "added": [
+        "Stone hoe: a hoe head (stone and twine), then a long stick and twine",
+        "Dig farm fields in your camp with the hoe, and flatten them again",
+        "Berry seeds: cut a berry on the craft mat with a sharp stone",
+        "Plant berry seeds on a field and a berry bush grows in about a day",
+        "Pick your planted bush like a wild one, and a knife picks 2 at once",
+        "Dig several farm fields at once: tap each spot, then Dig"
+      ],
+      "improved": [
+        "Walk over farm fields, and through bushes and berry bushes"
+      ],
+      "fixed": [
+        "Rocks, trees and bushes stay on the ground next to campfires and farm fields",
+        "Picking berries with a knife shows both berries straight away"
+      ]
+    },
     {
       "version": "0.1.17",
       "date": "2026-11-26",
@@ -1427,6 +1549,15 @@
       "step": 1
     },
     {
+      "id": "cropGrowHours",
+      "name": "Planted crops grow in",
+      "group": "Farming",
+      "unit": "h",
+      "min": 0.1,
+      "max": 240,
+      "step": 0.1
+    },
+    {
       "id": "hungerPerHour",
       "name": "Hunger drops per hour",
       "group": "Need rates",
@@ -1465,5 +1596,15 @@
     "nameMax": 20,
     "inviteMinutes": 5,
     "inviteReach": 8
+  },
+  "crops": {
+    "berry-bush": {
+      "name": "Berry bush",
+      "seed": "berry-seeds",
+      "on": "field",
+      "growHours": 24,
+      "plantSeconds": 3,
+      "like": "berryBush"
+    }
   }
 }

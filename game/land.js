@@ -153,7 +153,8 @@ function landCornersNear(x, z, r, fn) {
   }
 }
 // level the land under these things (all of them, every time the list changes); gives each one its height, f.y.
-// keep(x, z) says how much the land there may change (0 to 1): trees, rocks and bushes keep the ground they stand on.
+// keep(x, z, from, to) can say how much of the way from its height to `to` the land corner at x, z may go (0 to 1).
+// Trees, rocks and bushes go up or down with the ground instead (liftNear in game/world-build.js).
 function setFlats(list, keep = () => 1) {
   const p = groundCells.p;
   for (const v of flatTouched) { p[v * 3 + 1] = landAsMade[v * 3 + 1]; flatLock[v] = 0; }
@@ -162,7 +163,7 @@ function setFlats(list, keep = () => 1) {
     f.y = groundUnder(f).y;
     landCornersNear(f.x, f.z, flatReach(f), (v) => {
       if (landAsMade[v * 3 + 1] < WATER_Y + 0.25) return; // the pond's bank and bed stay as they are
-      const w = flatWeight(f, p[v * 3], p[v * 3 + 2]) * (1 - flatLock[v]) * keep(p[v * 3], p[v * 3 + 2]);
+      const w = flatWeight(f, p[v * 3], p[v * 3 + 2]) * (1 - flatLock[v]) * keep(p[v * 3], p[v * 3 + 2], p[v * 3 + 1], f.y);
       if (w <= 0) return;
       if (!flatLock[v]) flatTouched.push(v);
       p[v * 3 + 1] += (f.y - p[v * 3 + 1]) * w;

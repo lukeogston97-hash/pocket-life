@@ -13,6 +13,7 @@ let recording = null; // while a tree is being placed: [set, chunk, index] of ev
 const trees = []; // every tree you can walk up to: { x, z, s, parts, state }
 const oldStumps = []; // the old stumps already in the world when it was made: { x, z, parts, proxy, gone }
 const rocks = []; // every rock and boulder you can mine (0.2.9): { x, z, r, boulder, parts, proxy, state: whole | mined | gone }
+const wildBushes = []; // bushes with no berries: { x, z, r, parts }, so they can sit on levelled ground (0.1.18; nothing in the layout moves)
 function IM(geo, material, n, shadow = true) {
   const m = new THREE.InstancedMesh(geo, material, n);
   m.count = 0;
@@ -120,7 +121,7 @@ function refillDetail(d, px, pz) {
   let n = 0;
   for (let i = 0; i < xs.length && n < cap; i++) {
     const dx = xs[i] - px, dz = zs[i] - pz, r = (near + (far - near) * us[i]) * detailScale;
-    if (dx * dx + dz * dz > r * r) continue;
+    if (dx * dx + dz * dz > r * r || (d.hide && d.hide[i])) continue; // (hide: under a farm field, levelPlaced in placeables.js)
     for (let k = 0; k < 16; k++) M[n * 16 + k] = ms[i * 16 + k];
     C[n * 3] = cs[i * 3]; C[n * 3 + 1] = cs[i * 3 + 1]; C[n * 3 + 2] = cs[i * 3 + 2];
     n++;
@@ -142,26 +143,30 @@ function removeSpotNear(x, z) {
   if (!a) return;
   for (let k = 0; k < a.length; k += 4) if (Math.abs(a[k] - x) < 0.01 && Math.abs(a[k + 1] - z) < 0.01) { a.splice(k, 4); return; }
 }
-// take the spot at x, z off the map and say how big it was: [r, tree] (for moving something)
+// take the spot at x, z off the map and say how big it was and what it is: [r, kind] (for moving something)
 function takeSpot(x, z) {
   const a = spots.get(spotKey(x, z));
   if (!a) return null;
-  for (let k = 0; k < a.length; k += 4) if (Math.abs(a[k] - x) < 0.01 && Math.abs(a[k + 1] - z) < 0.01) { const out = [a[k + 2], !!a[k + 3]]; a.splice(k, 4); return out; }
+  for (let k = 0; k < a.length; k += 4) if (Math.abs(a[k] - x) < 0.01 && Math.abs(a[k + 1] - z) < 0.01) { const out = [a[k + 2], a[k + 3]]; a.splice(k, 4); return out; }
   return null;
 }
-function addSpot(x, z, r, tree = false) {
+// what a spot is (its 4th number): 0 solid (a rock, stump or log), 1 a tree (only its trunk is in the way), or WALK_THROUGH:
+// it takes room but people walk through it (bushes and farm fields, 0.1.18: Luke, "walk through")
+const WALK_THROUGH = 2;
+function addSpot(x, z, r, kind = 0) {
   const k = spotKey(x, z);
   if (!spots.has(k)) spots.set(k, []);
-  spots.get(k).push(x, z, r, tree ? 1 : 0);
+  spots.get(k).push(x, z, r, kind === true ? 1 : Number(kind) || 0);
 }
 // is there room at x, z? gap is the space needed; a tree counts as treeScale times its crown
-function roomAt(x, z, gap, treeScale = 1) {
+function roomAt(x, z, gap, treeScale = 1, skip = null) { // skip(x, z): spots that don't count (placed things, when placing)
   for (let i = -1; i <= 1; i++) {
     for (let j = -1; j <= 1; j++) {
       const a = spots.get(spotKey(x + i * 4, z + j * 4));
       if (!a) continue;
       for (let k = 0; k < a.length; k += 4) {
-        const r = a[k + 3] ? a[k + 2] * treeScale : a[k + 2];
+        if (skip && skip(a[k], a[k + 1])) continue;
+        const r = a[k + 3] === 1 ? a[k + 2] * treeScale : a[k + 2];
         if (Math.hypot(a[k] - x, a[k + 1] - z) < r + gap) return false;
       }
     }
@@ -438,9 +443,10 @@ function bush(x, z, s = 1, withBerries = true) {
     blobs.push({ ox, oz, r, y: r * 0.6 });
   }
   scene.add(g);
-  recording = withBerries ? [] : null; // a berry bush remembers its drawn copies, so the admin can move or remove it
+  recording = []; // a bush remembers its drawn copies, so the admin can move or remove a berry bush, and any bush can sit on levelled ground
   for (const m of g.children) drawAlong(drawnTogether.bushes, m);
   if (withBerries) g.userData.parts = recording;
+  else wildBushes.push({ x, z, r: s * 0.85, parts: recording });
   recording = null;
   if (withBerries) {
     // each berry bush remembers which berries are its own, so they can be picked and grow back
@@ -457,7 +463,7 @@ function bush(x, z, s = 1, withBerries = true) {
   }
   g.userData.label = withBerries ? 'Berry bush' : 'Bush';
   g.userData.r = s * 0.85;
-  addSpot(x, z, s * 0.85);
+  addSpot(x, z, s * 0.85, WALK_THROUGH);
   interactive.push(g);
   return g;
 }
@@ -537,12 +543,15 @@ withWorldRand(() => {
   const wildBush = (x, z, s) => {
     const y = groundY(x, z);
     const base = new THREE.Color(pick(BUSH_COLOURS));
+    recording = []; // (only notes which copies are its own)
     for (let k = 0; k < 3; k++) {
       const r = s * rr(0.48, 0.7) * (k ? 0.85 : 1);
       const ox = k ? rr(-0.45, 0.45) * s : 0, oz = k ? rr(-0.45, 0.45) * s : 0;
       put(wild.bush, x + ox, y + r * 0.6, z + oz, 0, rand() * 6, 0, r, r * 0.8, r, base.clone().offsetHSL(0, rr(-0.03, 0.03), rr(-0.03, 0.03)));
     }
-    addSpot(x, z, s * 0.9);
+    wildBushes.push({ x, z, r: s * 0.9, parts: recording });
+    recording = null;
+    addSpot(x, z, s * 0.9, WALK_THROUGH);
   };
   for (let i = 0, n = Math.round(area / 125); i < n; i++) {
     const s = rr(0.75, 1.1);

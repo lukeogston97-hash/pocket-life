@@ -55,6 +55,29 @@ export function berryPicked(count, from, holds, regrowMs, t) {
   return [n - 1, f];
 }
 
+/* ---------- farming (0.1.18): a crop planted on a farm field grows by itself ---------- */
+// how grown it is at t: 0 just planted, 1 grown (at: when it was planted, growMs: how long it takes)
+export const cropGrowth = (at, growMs, t) => (growMs > 0 ? Math.max(0, Math.min(1, (t - at) / growMs)) : 1);
+// how it looks at that point: a sprout for the first third, then a small bush getting bigger, then grown
+export const cropStage = (k) => (k >= 1 ? 'grown' : k < 1 / 3 ? 'sprout' : 'young');
+
+/* ---------- stumps growing back into trees ---------- */
+// chopping.regrowDays: a number of days, or [soonest, latest] (Luke, 0.1.16: 1 to 2 days). As [first, second], unsorted.
+export function daysSpan(v, dflt = 3) {
+  const [a, b] = Array.isArray(v) ? v : [v, v];
+  const lo = Number.isFinite(a) ? a : dflt;
+  return [lo, Number.isFinite(b) ? b : lo];
+}
+// How long after it was chopped (since, in ms) stump i grows back, in ms: each stump gets its own time in the span,
+// worked out from the stump and when it was chopped, so the game and the server agree without saying so.
+export function stumpBackMs(days, i, since) {
+  const [a, b] = daysSpan(days), lo = Math.min(a, b), hi = Math.max(a, b);
+  let h = Math.imul((i | 0) + 1, 2654435761) ^ Math.floor((since || 0) / 1000);
+  h = Math.imul(h ^ (h >>> 16), 2246822507);
+  h = Math.imul(h ^ (h >>> 13), 3266489909);
+  return (lo + (hi - lo) * (((h ^ (h >>> 16)) >>> 0) / 4294967296)) * 86400000;
+}
+
 /* ---------- fires and fuel (placeables with "fire" in game-data.json) ---------- */
 // the fire's rules in ms: each fuel it takes and how long one burns, and the most it holds (maxHours of burning,
 // or maxFuel of its main fuel). isItem(kind): is that an item in the game?
@@ -76,6 +99,43 @@ export function seatSpotOf(th, seats, k) {
   return [th.x + Math.sin(a) * d, th.z + Math.cos(a) * d];
 }
 
+/* ---------- the placing grid (0.1.17) ----------
+   Placed things go on an invisible grid of PLACE_GRID metre squares and face one of 4 ways. Each placeable's size is
+   in squares ([across, deep], from game-data.json; 2 x 2 if it doesn't say). Things can sit side by side, but nothing
+   comes within keepClear metres of one that has it (a campfire keeps room round it for its seats). */
+export const PLACE_GRID = 0.5;
+const placeSizeOf = (rule) => (Array.isArray(rule && rule.size) && rule.size.length === 2 ? rule.size.map((n) => Math.max(1, Math.round(Number(n) || 1))) : [2, 2]);
+// the nearest spot on the grid, and the nearest of the 4 ways to face
+export function placeSnap(x, z, rot, rule) {
+  const q = ((Math.round((Number(rot) || 0) / (Math.PI / 2)) % 4) + 4) % 4;
+  const [w, d] = placeSizeOf(rule), [across, deep] = q % 2 ? [d, w] : [w, d];
+  const snap = (v, n) => Math.round((Math.round((Number(v) || 0) / PLACE_GRID - n / 2) + n / 2) * PLACE_GRID * 100) / 100;
+  return { x: snap(x, across), z: snap(z, deep), rot: Math.round(q * (Math.PI / 2) * 100) / 100 };
+}
+// a placed thing's square: { x, z, rot, hw, hd } (half its size across and deep, before turning)
+export function placeRect(th, rule) {
+  const [w, d] = placeSizeOf(rule);
+  return { id: th.id, x: Number(th.x) || 0, z: Number(th.z) || 0, rot: Number(th.rot) || 0, hw: (w * PLACE_GRID) / 2, hd: (d * PLACE_GRID) / 2 };
+}
+// the gap between two squares in metres (below 0 when they overlap). Turned ones count as the box round them.
+export function placeGap(a, b) {
+  const box = (f) => { const c = Math.abs(Math.cos(f.rot)), s = Math.abs(Math.sin(f.rot)); return [c * f.hw + s * f.hd, s * f.hw + c * f.hd]; };
+  const [ax, az] = box(a), [bx, bz] = box(b);
+  const gx = Math.abs(a.x - b.x) - ax - bx, gz = Math.abs(a.z - b.z) - az - bz;
+  if (gx < 0 && gz < 0) return Math.max(gx, gz);
+  return Math.hypot(Math.max(0, gx), Math.max(0, gz));
+}
+// the first placed thing in the way of putting `kind` at th (null if none): rules is the placeables from game-data.json
+export function placeClash(list, th, kind, rules) {
+  const me = placeRect(th, rules[kind]), myClear = Number((rules[kind] || {}).keepClear) || 0;
+  for (const o of list) {
+    if (o.id != null && o.id === th.id) continue;
+    const need = Math.max(myClear, Number((rules[o.kind] || {}).keepClear) || 0);
+    if (placeGap(me, placeRect(o, rules[o.kind])) < need - 0.001) return o;
+  }
+  return null;
+}
+
 /* ---------- crafting on the craft mat (0.1.8): put things together and see what they make ---------- */
 // everything a recipe wants on the mat: what it uses up (needs) and the tools it keeps (keeps, like a sharp stone)
 export function recipeWants(r) {
@@ -93,6 +153,29 @@ export function matIs(mat, r) {
 export const ITEM_GROUPS = ['Tools', 'Food', 'Building', 'Clothes', 'Materials'];
 // it: { uses, eat, places } (a tool wears out, food has eat, a placeable has places)
 export function itemGroupOf(it) { return it.uses ? 'Tools' : Object.keys(it.eat || {}).length ? 'Food' : it.places ? 'Building' : 'Materials'; }
+
+/* ---------- the tool bar (0.1.17, Luke) ----------
+   Tools sit on a bar of settings.toolSlots spots above the inventory. Only tools on the bar get used (by themselves, no
+   picking), and they weigh nothing; a tool in the inventory squares is carried like anything else and has to be equipped
+   first. A tool you make or pick up goes on the bar while there's room. carry: { kind: n }, everything carried; bar:
+   { kind: n }, the tools on the bar (they're part of carry too, the first ones in each tool's wear list). items: the item
+   rules (ITEMS in the game, G.items on the server), each with weight and uses (a tool has uses). */
+export const barUsed = (bar) => Object.values(bar || {}).reduce((s, n) => s + (n > 0 ? n : 0), 0);
+// the weight that counts toward carryCapacity: everything but the tools on the bar
+export const bagWeight = (carry, bar, items) => Object.entries(carry || {})
+  .reduce((s, [k, n]) => s + ((items[k] && items[k].weight) || 0) * Math.max(0, n - ((bar || {})[k] || 0)), 0);
+// keep a bar in step with what's carried: only tools that are carried, never more than slots in all (in items order).
+// bar null (someone from before the tool bar): their tools go on it, as many as fit
+export function tidyBar(bar, carry, items, slots) {
+  const out = {};
+  let room = slots;
+  for (const k of Object.keys(items)) {
+    const want = bar ? (bar[k] || 0) : carry[k] || 0;
+    const n = items[k].uses ? Math.min(Math.floor(want) || 0, carry[k] || 0, room) : 0;
+    if (n > 0) { out[k] = n; room -= n; }
+  }
+  return out;
+}
 
 /* ---------- claims: can a fire lit at x, z claim the land round it? ---------- */
 // o: { radius, spawnRadius, pond: { x, z }, hasClaim, claims: [{ x, z, name }] } (claims: every other claim's fire)

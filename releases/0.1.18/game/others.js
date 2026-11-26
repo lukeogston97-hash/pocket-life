@@ -205,6 +205,7 @@ function updateOthers(dt) {
     const ground = groundY(m.position.x, m.position.z);
     m.position.y = ground;
     if (o.act && P && !(d > 0.02 && o.speed)) { if (!animateAct(m, P, ground, o.act, dt)) o.act = null; }
+    if (P) feetOnGround(m, P);
   }
 }
 // Tell the server where you're going: once when a walk starts (with where it ends, tx and tz), every couple of
