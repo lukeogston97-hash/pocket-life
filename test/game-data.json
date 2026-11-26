@@ -1,6 +1,6 @@
 {
-  "version": "0.1.18",
-  "build": 2,
+  "version": "0.1.19",
+  "build": 1,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -1161,6 +1161,13 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.1.19",
+      "date": "2026-11-26",
+      "improved": [
+        "What's new shows each version by its number only"
+      ]
+    },
     {
       "version": "0.1.18",
       "date": "2026-11-26",

@@ -286,24 +286,24 @@ function thingActions(t) {
       { label: 'Report', run: () => openReport(o) },
       { label: 'Walk here', foot: true, run: () => walkFirst(V(o.mesh.position.x, 0, o.mesh.position.z)) }];
   }
-  if (t.kind === 'ground' || t.kind === 'thing' || t.kind === 'shore') {
-    return [{ label: 'Walk here', run: () => walkToTarget(t) }];
+  if (t.kind === 'ground' || t.kind === 'thing' || t.kind === 'shore') { // (Dig farm field: carrying a hoe, placeables.js)
+    return [...(t.kind === 'ground' && t.point ? digActions(t.point) : []), { label: 'Walk here', foot: true, run: () => walkToTarget(t) }];
   }
   if (t.kind === 'tree' || t.kind === 'stump' || t.kind === 'oldStump') {
     const what = t.kind;
     const rule = CHOP[what === 'oldStump' ? 'stump' : what] || {}, tool = CHOP.tool && ITEMS[CHOP.tool];
-    const has = !tool || you.carry[CHOP.tool];
-    return [{ label: what === 'tree' ? 'Chop tree' : 'Remove stump', note: has ? `${rule.seconds || 15} s` : `Needs a ${tool.name.toLowerCase()}`, disabled: !has,
+    const has = !tool || hasTool(CHOP.tool); // (only a tool on the tool bar gets used, 0.1.17)
+    return [{ label: what === 'tree' ? 'Chop tree' : 'Remove stump', note: has ? `${rule.seconds || 15} s` : toolNeed(CHOP.tool), disabled: !has,
       run: () => queueTask({ type: 'chop', what, idx: t.idx, x: t.x, z: t.z }) },
       ...(what === 'stump' && trees[t.idx] ? [{ label: `Grows back in ${stumpGrowsIn(t.idx)}`, disabled: true }] : []),
       { label: 'Walk here', foot: true, run: () => walkFirst(V(t.x + 1.2, 0, t.z)) }];
   }
   if (t.kind === 'rock') {
     const r = rocks[t.idx], rule = MINE[r.boulder ? 'boulder' : 'rock'] || {}, tool = MINE.tool && ITEMS[MINE.tool];
-    const has = !tool || you.carry[MINE.tool];
+    const has = !tool || hasTool(MINE.tool);
     const walk = { label: 'Walk here', foot: true, run: () => walkFirst(V(r.x + r.r + 0.6, 0, r.z)) };
     if (r.state === 'mined') return [{ label: `Mine again in ${growsBackIn(r.since, MINE.regrowDays || 3)}`, disabled: true }, walk];
-    return [{ label: r.boulder ? 'Mine boulder' : 'Break rock', note: has ? `${rule.seconds || 10} s` : `Needs a ${tool.name.toLowerCase()}`, disabled: !has,
+    return [{ label: r.boulder ? 'Mine boulder' : 'Break rock', note: has ? `${rule.seconds || 10} s` : toolNeed(MINE.tool), disabled: !has,
       run: () => queueTask({ type: 'mine', idx: t.idx, x: r.x, z: r.z }) }, walk];
   }
   if (t.kind === 'self') {
@@ -314,7 +314,7 @@ function thingActions(t) {
   if (t.kind === 'placed') return placedActions(t.th);
   if (t.kind === 'grave') return [{ label: 'Walk here', run: () => walkFirst(V(t.x + 0.8, 0, t.z)) }];
   if (t.kind === 'plant') {
-    const def = PLANTS[t.plant], c = plants[t.plant].clumps[t.i], fast = def.tool && you.carry[def.tool];
+    const def = PLANTS[t.plant], c = plants[t.plant].clumps[t.i], fast = def.tool && hasTool(def.tool);
     const ready = plantReady(c);
     return [{ label: def.action || 'Cut', disabled: !ready,
       note: !ready ? `Grows back in ${growsIn(c)}` : fast ? `${def.toolSeconds || def.seconds} s` : `${def.seconds} s${def.tool ? ` · faster with a ${ITEMS[def.tool].name.toLowerCase()}` : ''}`,
@@ -325,7 +325,7 @@ function thingActions(t) {
     const it = t.item;
     const chopIt = CHOP[it.kind] && CHOP.tool;
     return [{ label: `Pick up ${ITEMS[it.kind].name.toLowerCase()}`, note: it.uses != null ? `${it.uses} ${it.uses === 1 ? 'use' : 'uses'} left` : '', run: () => queueTask({ type: 'pickup', id: it.id }) },
-      ...(chopIt ? [{ label: 'Chop into sticks', note: you.carry[CHOP.tool] ? `${CHOP[it.kind].seconds || 8} s` : `Needs a ${ITEMS[CHOP.tool].name.toLowerCase()}`, disabled: !you.carry[CHOP.tool],
+      ...(chopIt ? [{ label: 'Chop into sticks', note: hasTool(CHOP.tool) ? `${CHOP[it.kind].seconds || 8} s` : toolNeed(CHOP.tool), disabled: !hasTool(CHOP.tool),
         run: () => queueTask({ type: 'chop', what: it.kind, id: it.id, x: it.x, z: it.z }) }] : []),
       { label: 'Walk here', foot: true, run: () => walkFirst(V(it.x, 0, it.z)) }];
   }
@@ -342,9 +342,9 @@ function thingActions(t) {
       return [{ label: src.action || `Pick ${ITEMS[Object.keys(src.harvest)[0]].plural.toLowerCase()}`, note: ready ? (b ? `${berriesOn(b)} left` : '') : `Next in ${readyIn(b)}`,
         disabled: !ready, run: () => queueTask(task) }, walkHere];
     }
-    const F = src.fish, has = F && you.carry[F.tool];
+    const F = src.fish, has = F && hasTool(F.tool);
     return [{ label: src.action || `Use ${src.name.toLowerCase()}`, run: () => queueTask(task) },
-      ...(F ? [{ label: F.action, note: has ? '' : `Needs a ${ITEMS[F.tool].name.toLowerCase()}`, disabled: !has, run: () => queueTask({ type: 'fish' }) }] : []),
+      ...(F ? [{ label: F.action, note: has ? '' : toolNeed(F.tool), disabled: !has, run: () => queueTask({ type: 'fish' }) }] : []),
       walkHere];
   }
   return [];
@@ -518,6 +518,7 @@ function keyCamera(dt) {
 const edgeOf = (p, size, zone) => (p < zone ? Math.max(-1, p / zone - 1) : p > size - zone ? Math.min(1, (p - size + zone) / zone) : 0);
 function edgePan(dt) {
   if (!dragPoint || ui.mode !== 'world') return;
+  if (dragPoint.inSheet) { dragPoint.armed = false; return; } // a tool dragged over the inventory, on or off the tool bar (0.1.17)
   const r = canvas.getBoundingClientRect(), zone = Math.min(r.width, r.height) * 0.12;
   const ex = edgeOf(dragPoint.x - r.left, r.width, zone), ey = edgeOf(dragPoint.y - r.top, r.height, zone);
   if (!ex && !ey) { dragPoint.armed = true; return; }
@@ -548,25 +549,27 @@ function updatePlayer(dt) {
       const sw = (Math.sin(t * 5.5) + 1) / 2, env = clamp01(Math.min(t, dur - t) / 0.3);
       P.body.rotation.x = stoop + (0.08 + 0.22 * sw) * env;
       setArm(P.armR, (-2.5 + sw * 2.0) * env);
-      setArm(P.armL, (-2.3 + sw * 1.9) * env);
+      setArm(P.armL, carrying ? -0.15 * env : (-2.3 + sw * 1.9) * env); // a tool is swung with the right hand only
     } else if (action.pose === 'kneel' || action.pose === 'pick') {
       // ease in, keep going, ease out
       const env = clamp01(Math.min(t, dur - t) / 0.3), wave = Math.sin(t * 7);
       if (action.pose === 'kneel') {
         P.body.rotation.x = stoop + 1.05 * env;
         player.position.y = playerGround - 0.12 * env;
+        setLegs(P, 0, (0.12 * env) / player.scale.y);
         setArm(P.armR, (-0.6 + wave * 0.3) * env + (carrying ? holdX * (1 - env) : 0));
-        setArm(P.armL, (-0.6 + wave * 0.3) * env);
+        setArm(P.armL, carrying ? -0.3 * env : (-0.6 + wave * 0.3) * env); // with a tool only the right hand works
       } else {
         P.body.rotation.x = stoop + 0.15 * env;
         setArm(P.armR, (-1.25 + wave * 0.25) * env + (carrying ? holdX * (1 - env) : 0));
-        setArm(P.armL, (-1.0 - wave * 0.25) * env);
+        setArm(P.armL, carrying ? -0.15 * env : (-1.0 - wave * 0.25) * env);
       }
     } else {
       // a quick bend from the hips to pick up or put down
       const s = Math.sin(k * Math.PI);
       P.body.rotation.x = stoop + 1.0 * s;
       player.position.y = playerGround - 0.14 * s;
+      setLegs(P, 0, (0.14 * s) / player.scale.y);
       setArm(P.armR, -0.55 * s + (carrying ? holdX * (1 - s) : 0));
       setArm(P.armL, -0.35 * s);
     }
@@ -641,6 +644,7 @@ function updatePlayer(dt) {
     setArm(P.armL, 0);
     setArm(P.armR, carrying ? holdX : 0);
   }
+  if (!you.sit) feetOnGround(player, P);
   ring.position.set(player.position.x, playerGround + 0.04, player.position.z);
   const age = elapsed - (tapMark.userData.born ?? -9);
   tapMark.material.opacity = age < 0.8 ? 0.85 * (1 - age / 0.8) : 0;

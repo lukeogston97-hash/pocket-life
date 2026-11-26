@@ -116,7 +116,7 @@ setTimeout(function () { if (!window.__bootStarted) window.__bootFail("This brow
   <p id="hint" class="hint" hidden>Double-tap the ground to walk. Tap anything to see what you can do.</p>
 
   <div id="autoChip" class="auto-chip" hidden>On autopilot · tap to take over</div>
-  <div id="placeBar" class="place-bar glass" hidden aria-live="polite"><span id="placeText">Tap the ground to move it</span><button id="placeCancel" class="small-btn" type="button">Cancel</button><button id="placeGo" class="small-btn go" type="button">Place</button></div>
+  <div id="placeBar" class="place-bar glass" hidden aria-live="polite"><span id="placeText">Tap the ground to move it</span><button id="placeCancel" class="small-btn" type="button">Cancel</button><button id="placeTurn" class="small-btn turn-btn" type="button" aria-label="Turn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/></svg></button><button id="placeGo" class="small-btn go" type="button">Place</button></div>
 
   <div id="queue" class="queue" hidden aria-live="polite">
     <div id="queueNowRow" class="q-now"><small>Now</small><span id="queueNow">Waiting for something to do</span></div>
@@ -145,6 +145,7 @@ setTimeout(function () { if (!window.__bootStarted) window.__bootFail("This brow
         <button id="bagTabBag" class="craft-chip on" type="button" aria-pressed="true">Inventory</button>
         <button id="bagTabRecipes" class="craft-chip" type="button" aria-pressed="false">Recipes</button>
       </div>
+      <div id="bagHeadWeight" class="bag-weight"><span><span class="weight-word">Weight </span><strong id="bagWeight">0 / 30</strong></span><span class="carry-bar wide" aria-hidden="true"><i id="bagBar"></i></span></div>
       <button id="bagClose" class="text-btn" type="button">Close</button>
     </div>
     <div id="mat" class="mat" hidden>
@@ -160,8 +161,8 @@ setTimeout(function () { if (!window.__bootStarted) window.__bootFail("This brow
       </div>
     </div>
     <div id="bagPart">
-      <div class="bag-weight"><span>Weight <strong id="bagWeight">0 / 30</strong></span><span class="carry-bar wide" aria-hidden="true"><i id="bagBar"></i></span></div>
-      <ul id="bagList" class="bag-grid"></ul>
+      <ul id="toolBar" class="tool-bar" aria-label="Tool bar"></ul>
+      <ul id="bagList" class="bag-grid" aria-label="Inventory"></ul>
       <p id="bagEmpty" class="bag-empty">Nothing in your inventory yet. Tap a stick or stone to pick it up.</p>
       <div id="bagInfo" class="bag-info" hidden></div>
     </div>

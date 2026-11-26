@@ -93,6 +93,7 @@ $('sheet').addEventListener('submit', (e) => {
   if (creating) return;
   creating = true;
   you.carry = {};
+  you.bar = {};
   you.lastKind = null;
   net.sock.send(JSON.stringify({ t: 'create', name, age: draft.age, look: { ...draft, name } }));
 });
@@ -112,6 +113,7 @@ function die(m) {
   closeCraft();
   hideHint();
   you.carry = {};
+  you.bar = {};
   you.lastKind = null;
   drawHeld();
   drawCarry();

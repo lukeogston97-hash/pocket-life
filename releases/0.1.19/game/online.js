@@ -234,8 +234,14 @@ function applyMe(m, spawn = false) {
   you.statsAt = m.statsAt || Date.now();
   // what you carry: the server's word, plus anything you're picking up that it hasn't confirmed yet
   const carry = Object.fromEntries(Object.entries(m.carry || {}).filter(([k, n]) => ITEMS[k] && n > 0));
-  for (const kind of shared.taking.values()) carry[kind] = (carry[kind] || 0) + 1;
+  // the tool bar (0.1.17): the server's (a server from before it sends none: your tools go on it, as there)
+  const bar = tidyBar(m.bar && typeof m.bar === 'object' ? m.bar : null, carry, ITEMS, toolSlots());
+  for (const kind of shared.taking.values()) { // (a tool being picked up goes on the bar if there's room, as it will on the server)
+    carry[kind] = (carry[kind] || 0) + 1;
+    if (ITEMS[kind] && ITEMS[kind].uses && barUsed(bar) < toolSlots()) bar[kind] = (bar[kind] || 0) + 1;
+  }
   you.carry = carry;
+  you.bar = bar;
   you.wear = m.wear || {};
   you.seen = m.seen || you.seen || [];
   you.found = Array.isArray(m.found) ? m.found : you.found || []; // the recipes found on the craft mat (inventory.js)
@@ -254,7 +260,7 @@ function layoutData() {
   for (let k = 0; k < 48; k++) {
     const a = (k / 48) * Math.PI * 2;
     const p = shorePointToward(V(POND.x + Math.cos(a) * 20, 0, POND.z + Math.sin(a) * 20));
-    if (!solidAt(p.x, p.z)) shore.push([+p.x.toFixed(2), +p.z.toFixed(2)]);
+    if (!solidAt(p.x, p.z, 0, true)) shore.push([+p.x.toFixed(2), +p.z.toFixed(2)]); // (bushes too, as always: the layout stays the same)
   }
   const open = [];
   for (let t = 0; t < 6000 && open.length < 600; t++) {
@@ -303,12 +309,12 @@ function seedWorld() {
   let n = 0;
   for (const a of spots.values()) {
     for (let k = 0; k < a.length; k += 4, n++) {
-      const tree = a[k + 3], r = a[k + 2];
+      const tree = a[k + 3] === 1, r = a[k + 2];
       const kinds = near(tree ? 'trees' : r > 0.45 ? 'boulders' : '').filter((kind) => spotsFor[kind].length < 400); // sticks fall under trees, stones turn up by boulders
       if (!kinds.length) continue;
       const ang = hash(n, 77) * Math.PI * 2, d = tree ? r + 0.4 : r + 0.35;
       const x = a[k] + Math.cos(ang) * d, z = a[k + 1] + Math.sin(ang) * d;
-      if (squareDist(x, z) > WALK_LIMIT - 1 || pondShape(x, z) < 1.3 || solidAt(x, z)) continue;
+      if (squareDist(x, z) > WALK_LIMIT - 1 || pondShape(x, z) < 1.3 || solidAt(x, z, 0, true)) continue;
       for (const kind of kinds) spotsFor[kind].push([x, z]);
     }
   }

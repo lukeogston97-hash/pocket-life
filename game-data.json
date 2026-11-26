@@ -1,6 +1,6 @@
 {
-  "version": "0.1.18",
-  "build": 2,
+  "version": "0.1.19",
+  "build": 1,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -1048,7 +1048,7 @@
     "away": "How a person looks after themselves while their player is away (the server does this). near: 'pond' keeps them strolling round the main pond (anything else: round where you left them). wanderMin and wanderMax: how far in metres from there they stroll. strollSpeed in metres per second. While away they first carry on with what's left of their task list (the game sends it to the server, which does each task the same way: server/src/tasks.js), stopping to eat and drink as above and to sleep when tired (not just because it's night); things that have gone are skipped. Coming back, what's left of the list is back on your screen. They eat what they carry when hunger is under eatBelow, go for berries if they have none, and drink at the pond when thirst is under drinkBelow. After sleepAfterHours away they lie down asleep: hunger and thirst keep dropping slowly (the asleep rates) but stop at asleepFloor, so they can't die; after goneAfterDays asleep (7 days away in all since 0.1.14; was 3) they leave the world and their things stay where they slept. A grave marks where someone died for graveHours. idleMinutes: if you're in the game but don't touch anything for this long, your person goes on autopilot and does the same, until you tap. sleepBelow: someone on autopilot or away lies down to sleep when Rest is under this, and gets up when it's full. At night (see night) they go to sleep until morning. comeBackSeconds: for this long after a player's connection goes, their person stays right where they are, so a short break in the connection changes nothing (the game carries on from where it was). With a claim (see claims) they stay within it instead of by the pond, keep its fire fed from their bag, and still walk to the pond to drink.",
     "berryBushes": "extra: how many more berry bushes grow out in the wider world, besides the ones by the start. seed: their own random numbers, so they're in the same places on every phone (change it to move them all).",
     "tips": "First-steps tips for someone new, shown one at a time in the pill above the needs, each once per phone. words: what each says, in the order they come (walk, pickup, rings, food, craft). Each goes once the player has done what it says, or after show seconds. The next waits gap seconds, or pace seconds if the last one wasn't tried. A tip for something already done is never shown. A new tip needs its rule in game/tips.js (TIP_RULES) too. Friendly full sentences, short enough for two lines on a phone. Luke picked these five (25 Nov 2026): ask him before adding another.",
-    "devlog": "What's new, shown in the Menu. Newest first, one entry per version: version, date (the release day, with from for a range), an optional title, and short lines for players in added (+ new features), improved (~ changes to what's there) and fixed (− bug fixes and removed issues). No full stop at the end.",
+    "devlog": "What's new, shown in the Menu. Newest first, one entry per version: version, date (the release day, with from for a range), no name (Luke, 26 Nov 2026: versions only), and short lines for players in added (+ new features), improved (~ changes to what's there) and fixed (− bug fixes and removed issues). No full stop at the end.",
     "energyCosts": "Stamina (the yellow ring, id energy) is short-term: every task takes these amounts and walking takes walkPerMetre for each metre. It comes back by itself quickly (perHour in its need: 600 an hour, so empty to full in about 10 minutes; whileAsleep 1500 when sleeping, whileSitting 2400 when sitting by a fire). Below slowBelow (20) your person is out of breath: walking and tasks take slowBy (1.5) times as long. It never stops you and it's not deadly. The server uses the same numbers. dig is digging or flattening a farm field, plant is planting seeds.",
     "chopping": "Chopping with a tool (tool: the item you need). tree: chopping a standing tree (seconds, and what falls: gives); it leaves a stump that grows back into a tree after regrowDays real days: a number, or [soonest, latest] so each stump takes its own time in between (stumpBackMs in rules.js). stump: digging out a stump (then the tree is gone for good). log: chopping a log (an item) into sticks. Each chop wears the tool by one use, and takes energyCosts.chop energy. The server uses the same rules.",
     "plants": "Plants you cut, like tall grass. Each kind is laid out by itself: count clumps (nearStart of them near the start), on its own random numbers (seed) so nothing else moves. action is the tap menu button, verb what shows while doing it. gives goes into your inventory each cut. seconds is how long by hand, toolSeconds with the tool (each use wears the tool). regrowHours [lo, hi]: a cut clump grows back at a random time in between. look: blades per clump, height, colour and tips (the seed heads). Run tools/worlds.py test-build after changing plants.",
@@ -1162,9 +1162,15 @@
   },
   "devlog": [
     {
+      "version": "0.1.19",
+      "date": "2026-11-26",
+      "improved": [
+        "What's new shows each version by its number only"
+      ]
+    },
+    {
       "version": "0.1.18",
       "date": "2026-11-26",
-      "title": "Farming",
       "added": [
         "Stone hoe: a hoe head (stone and twine), then a long stick and twine",
         "Dig farm fields in your camp with the hoe, and flatten them again",
@@ -1292,7 +1298,6 @@
     {
       "version": "0.1.8",
       "date": "2026-11-25",
-      "title": "The craft mat",
       "added": [
         "Craft mat: put things from your inventory together and discover what they make",
         "Found list: tap a recipe you've made to put its things back on the mat",
@@ -1390,7 +1395,6 @@
     },
     {
       "version": "0.0.x",
-      "title": "Early builds",
       "from": "2026-11-21",
       "date": "2026-11-23",
       "added": [
