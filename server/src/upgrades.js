@@ -46,7 +46,7 @@ export const upgradeMethods = {
     const notes = [];
     for (const [who, p] of [...this.persons]) {
       if (p && typeof p === 'object' && !Array.isArray(p) && typeof p.who === 'string') {
-        if (!p.carry || typeof p.carry !== 'object' || Array.isArray(p.carry)) { p.carry = {}; this.touch(p); notes.push(`${who}: inventory reset (it wasn't readable)`); }
+        if (p.state === 'alive' && (!p.carry || typeof p.carry !== 'object' || Array.isArray(p.carry))) { p.carry = {}; this.touch(p); notes.push(`${who}: inventory reset (it wasn't readable)`); }
         continue;
       }
       this.persons.delete(who);
