@@ -1,6 +1,6 @@
 /* ---------- you: plain data, plus your 3D person ---------- */
 const START = { x: 0.6, z: 1.9 };
-const you = { look: null, carry: {}, wear: {}, seen: [], found: [], lastKind: null, lifeStart: 0, stats: null, statsAt: 0, dead: false }; // carry: item id -> how many; stats: need -> 0 to 100
+const you = { look: null, carry: {}, wear: {}, bar: {}, seen: [], found: [], lastKind: null, lifeStart: 0, stats: null, statsAt: 0, dead: false }; // carry: item id -> how many; bar: the tools on the tool bar (0.1.17); stats: need -> 0 to 100
 const ui = { mode: 'menu' }; // menu (the main menu), creator (making your person) or world (playing)
 let player = null, playerGround = 0, heldView = null;
 const ring = new THREE.Mesh(new THREE.RingGeometry(0.44, 0.54, 40).rotateX(-Math.PI / 2),
@@ -10,24 +10,52 @@ const tapMark = new THREE.Mesh(new THREE.RingGeometry(0.2, 0.3, 32).rotateX(-Mat
   new THREE.MeshBasicMaterial({ color: '#fbf8eb', transparent: true, opacity: 0, depthWrite: false }));
 scene.add(tapMark);
 
-/* carrying: everything has a weight, and you can carry up to SETTINGS.carryCapacity */
+/* carrying: everything has a weight, and you can carry up to SETTINGS.carryCapacity. Tools on the tool bar (0.1.17,
+   rules.js) weigh nothing, and only they get used; a tool you make or pick up goes on the bar while there's room.
+   These do the same as the server (server/src/needs.js), which has the final say. */
 const weightOf = (counts) => Object.entries(counts).reduce((sum, [k, n]) => sum + (ITEMS[k] ? ITEMS[k].weight * n : 0), 0);
-const carried = () => weightOf(you.carry);
-function addToCarry(kind, n = 1) {
+const toolSlots = () => Math.max(1, Math.floor(Number(SETTINGS.toolSlots) || 7));
+const carried = () => bagWeight(you.carry, you.bar, ITEMS);
+const onBar = (kind) => you.bar[kind] || 0;
+const hasTool = (kind) => onBar(kind) > 0;
+const barRoom = () => Math.max(0, toolSlots() - barUsed(you.bar));
+// what adding these would weigh (a tool going on the bar weighs nothing)
+const addWeight = (kind, n = 1) => (ITEMS[kind] ? ITEMS[kind].weight * (n - (ITEMS[kind].uses ? Math.min(n, barRoom()) : 0)) : 0);
+// a task needs a tool that isn't on your tool bar: what to say (in your inventory: equip it; else you need one)
+const toolNeed = (kind) => (you.carry[kind] > 0 ? `Equip your ${ITEMS[kind].name.toLowerCase()}` : `Needs a ${ITEMS[kind].name.toLowerCase()}`);
+const toolWhy = (kind) => (you.carry[kind] > 0 ? `Equip your ${ITEMS[kind].name.toLowerCase()} first` : `You need a ${ITEMS[kind].name.toLowerCase()}`);
+function addToCarry(kind, n = 1, uses) {
+  const it = ITEMS[kind];
+  if (it && it.uses) { // the bar's come first in the tool's wear list
+    const up = Math.min(n, barRoom()), list = wearList(kind), b = onBar(kind), left = uses ?? it.uses;
+    list.splice(b, 0, ...Array(up).fill(left));
+    for (let i = up; i < n; i++) list.push(left);
+    you.wear[kind] = list;
+    if (up) you.bar[kind] = b + up;
+  }
   you.carry[kind] = (you.carry[kind] || 0) + n;
   you.lastKind = kind;
 }
-function takeFromCarry(kind, n = 1) {
+// which: for a tool, which one (its place in the wear list; the bar's come first). Else spares in the inventory go first
+function takeFromCarry(kind, n = 1, which) {
   const have = you.carry[kind] || 0;
   const taken = Math.min(have, n);
   if (taken <= 0) return 0;
+  if (ITEMS[kind] && ITEMS[kind].uses) {
+    const list = wearList(kind), b = onBar(kind), one = taken === 1 && Number.isInteger(which) && which >= 0 && which < have;
+    if (one) list.splice(which, 1);
+    list.length = Math.min(list.length, have - taken);
+    you.wear[kind] = list;
+    const nb = Math.min(one && which < b ? b - 1 : b, have - taken);
+    if (nb > 0) you.bar[kind] = nb; else delete you.bar[kind];
+  }
   if (have - taken > 0) you.carry[kind] = have - taken;
   else delete you.carry[kind];
   if (!you.carry[you.lastKind]) you.lastKind = Object.keys(you.carry)[0] || null;
   return taken;
 }
 // your hands are empty unless you're using a tool right now (chopping with the axe, cutting with the knife) (Luke, 0.2.1)
-const heldKind = () => (you.using && you.carry[you.using] ? you.using : null);
+const heldKind = () => (you.using && hasTool(you.using) ? you.using : null);
 function drawHeld() {
   if (heldView) { if (heldView.parent) heldView.parent.remove(heldView); heldView = null; }
   const kind = player && heldKind();

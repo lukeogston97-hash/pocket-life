@@ -9,7 +9,7 @@
 import { ACTIONS } from './actions.js';
 import { PLACEABLES, fireRule, seatAt } from './placed.js';
 import { fuelRoom, recipeWants } from './rules.js';
-import { weightOf } from './needs.js';
+import { weightOf, onBar, carriedWeight } from './needs.js';
 import { G, num, dist, spend } from './shared.js';
 
 export const MAX_TASKS = 30; // the same as the game's list (MAX_QUEUE in game/moving.js)
@@ -82,7 +82,7 @@ export const taskMethods = {
     const E = (G.needs || []).find((s) => s.id === 'energy');
     return E && p.stats && p.stats.energy != null && p.stats.energy < (E.slowBelow || 0) ? E.slowBy || 1 : 1;
   },
-  canCarry(p, gives) { return weightOf(p.carry, G) + weightOf(gives, G) <= (G.carryCapacity || 30); },
+  canCarry(p, gives) { return carriedWeight(p, G) + weightOf(gives, G) <= (G.carryCapacity || 30); }, // (tools on the tool bar don't count)
   // the nearest spot on the shore of the main pond (for drinking and fishing)
   shoreNear(at, L) {
     if (L && L.shore && L.shore.length) return L.shore.reduce((a, b) => (dist(at, a) < dist(at, b) ? a : b));
@@ -121,7 +121,7 @@ export const taskMethods = {
       }
       case 'chop': {
         const C = G.chopping || {}, what = task.what, rule = C[what === 'oldStump' ? 'stump' : what];
-        if (!rule || !rule.seconds || (C.tool && !p.carry[C.tool])) return null;
+        if (!rule || !rule.seconds || (C.tool && !onBar(p, C.tool, G))) return null; // only tools on the tool bar get used
         let spot = null;
         if (what === 'tree' || what === 'stump') {
           const i = task.idx, st = (w.trees || {})[i];
@@ -145,18 +145,18 @@ export const taskMethods = {
         const ready = ((w.plants || {})[task.plant] || {})[i];
         if (ready && ready > Math.max(t, Date.now())) return null; // not grown back yet
         const spot = this.plantSpot(task.plant, i) || (task.x != null ? [task.x, task.z] : null);
-        const tool = def.tool && p.carry[def.tool];
+        const tool = def.tool && onBar(p, def.tool, G);
         return spot ? { to: toward(at, spot, 0.55, 0.9), seconds: (tool ? def.toolSeconds || def.seconds : def.seconds) || 6, pose: def.pose || 'pick' } : null;
       }
       case 'mine': {
         const R = G.mining || {}, what = task.what, rule = R[what], i = task.idx;
-        if ((what !== 'rock' && what !== 'boulder') || !rule || i == null || !this.isThing('rock', i) || (w.rocks || {})[i] || (R.tool && !p.carry[R.tool])) return null;
+        if ((what !== 'rock' && what !== 'boulder') || !rule || i == null || !this.isThing('rock', i) || (w.rocks || {})[i] || (R.tool && !onBar(p, R.tool, G))) return null;
         const spot = this.spotOf('rock', i) || (task.x != null ? [task.x, task.z] : null);
         return spot ? { to: toward(at, spot, what === 'boulder' ? 1.6 : 1.0), seconds: rule.seconds || 10, pose: 'chop' } : null;
       }
       case 'fish': {
         const F = (Object.values(G.sources).find((s) => s.water && s.fish) || {}).fish;
-        if (!F || !p.carry[F.tool] || !this.canCarry(p, { [F.catch]: 1 }) || this.pondFish(F) < 1) return null;
+        if (!F || !onBar(p, F.tool, G) || !this.canCarry(p, { [F.catch]: 1 }) || this.pondFish(F) < 1) return null;
         return { to: this.shoreNear(at, L), seconds: F.seconds || 8, pose: 'kneel' };
       }
       case 'place': {

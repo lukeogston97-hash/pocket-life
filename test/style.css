@@ -176,6 +176,21 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .carry-bar i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 4px; transition: width 0.3s ease; }
 .carry-bar.full i { background: var(--warn); }
 .carry-bar.wide { width: 100%; }
+/* the weight sits in the inventory's header beside Close (0.1.17, Luke's mockup), only on the Inventory tab */
+#bag > .bag-head { gap: 10px; }
+#bag > .bag-head .bag-weight { margin: 0 0 0 auto; gap: 4px; white-space: nowrap; }
+#bag > .bag-head .bag-weight[hidden] { display: none; }
+#bag > .bag-head .text-btn { padding: 0 4px 0 6px; }
+@media (max-width: 359px) { #bag > .bag-head .weight-word { display: none; } } /* (a narrow phone: just the numbers) */
+/* the tool bar (0.1.17, Luke): smaller squares above the inventory, 7 spots. Only tools on it get used, and they weigh
+   nothing. While a tool is dragged the inventory stays (dragging-tool), and where it can go is edged in green. */
+.tool-bar { list-style: none; margin: 10px 0 12px; padding: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.tool-bar li { display: flex; }
+.tool-slot { aspect-ratio: 1; border: 1.5px dashed var(--line); border-radius: 11px; }
+.tool-bar .bag-tile { border-radius: 11px; }
+.tool-bar .bag-tile .pic { width: 80%; height: 80%; margin-bottom: 2px; }
+.tool-bar .bag-tile .wear { left: 6px; right: 6px; bottom: 4px; }
+.tool-bar.drop-on .tool-slot, .tool-bar.drop-on .bag-tile, .bag-grid.drop-on .bag-slot { border-color: var(--accent); }
 /* the inventory: a grid of tiles (two rows at least), and a bar about the one you tap */
 .bag-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
 .bag-grid li { display: flex; }

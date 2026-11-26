@@ -148,6 +148,29 @@ export const ITEM_GROUPS = ['Tools', 'Food', 'Building', 'Clothes', 'Materials']
 // it: { uses, eat, places } (a tool wears out, food has eat, a placeable has places)
 export function itemGroupOf(it) { return it.uses ? 'Tools' : Object.keys(it.eat || {}).length ? 'Food' : it.places ? 'Building' : 'Materials'; }
 
+/* ---------- the tool bar (0.1.17, Luke) ----------
+   Tools sit on a bar of settings.toolSlots spots above the inventory. Only tools on the bar get used (by themselves, no
+   picking), and they weigh nothing; a tool in the inventory squares is carried like anything else and has to be equipped
+   first. A tool you make or pick up goes on the bar while there's room. carry: { kind: n }, everything carried; bar:
+   { kind: n }, the tools on the bar (they're part of carry too, the first ones in each tool's wear list). items: the item
+   rules (ITEMS in the game, G.items on the server), each with weight and uses (a tool has uses). */
+export const barUsed = (bar) => Object.values(bar || {}).reduce((s, n) => s + (n > 0 ? n : 0), 0);
+// the weight that counts toward carryCapacity: everything but the tools on the bar
+export const bagWeight = (carry, bar, items) => Object.entries(carry || {})
+  .reduce((s, [k, n]) => s + ((items[k] && items[k].weight) || 0) * Math.max(0, n - ((bar || {})[k] || 0)), 0);
+// keep a bar in step with what's carried: only tools that are carried, never more than slots in all (in items order).
+// bar null (someone from before the tool bar): their tools go on it, as many as fit
+export function tidyBar(bar, carry, items, slots) {
+  const out = {};
+  let room = slots;
+  for (const k of Object.keys(items)) {
+    const want = bar ? (bar[k] || 0) : carry[k] || 0;
+    const n = items[k].uses ? Math.min(Math.floor(want) || 0, carry[k] || 0, room) : 0;
+    if (n > 0) { out[k] = n; room -= n; }
+  }
+  return out;
+}
+
 /* ---------- claims: can a fire lit at x, z claim the land round it? ---------- */
 // o: { radius, spawnRadius, pond: { x, z }, hasClaim, claims: [{ x, z, name }] } (claims: every other claim's fire)
 // Returns null if it can, else why not: { why: 'has' | 'pond' | 'near', name }

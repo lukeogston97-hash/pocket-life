@@ -1,6 +1,6 @@
 // The real world server (server/src/index.js, bundled to build/server.mjs by lib.py) running on this computer at
 // ws://127.0.0.1:8795/world, with storage kept in memory. Env: ADMIN_CODE (default secret123456),
-// FISHKIT=1 gives a fishing spear, a campfire and 6 sticks. TESTKIT=1 gives every new person 2 sticks, 3 stones, 1 twine and a stone axe, MINEKIT=1 a stone pickaxe, CAMPKIT=1 a log, 6 sticks, 2 twigs and 2 stones (a campfire's things, plus 6 sticks of fuel), CRAFTKIT=1 3 sticks, 4 stones and 2 twine (for the craft mat), COLLAPSE=1 starts them with no Rest.
+// FISHKIT=1 gives a fishing spear, a campfire and 6 sticks (a kit's tools start on the tool bar; KIT_IN_BAG=1 puts them in the inventory). TESTKIT=1 gives every new person 2 sticks, 3 stones, 1 twine and a stone axe, MINEKIT=1 a stone pickaxe, CAMPKIT=1 a log, 6 sticks, 2 twigs and 2 stones (a campfire's things, plus 6 sticks of fuel), CRAFTKIT=1 3 sticks, 4 stones and 2 twine (for the craft mat), COLLAPSE=1 starts them with no Rest.
 import { WebSocketServer } from 'ws';
 import { World } from './build/server.mjs';
 const store = new Map(); const socks = [];
@@ -76,6 +76,7 @@ wss.on('connection', (raw) => {
       if (process.env.CRAFTKIT) p.carry = { stick: 3, stone: 4, twine: 2 };
       if (process.env.KIT) p.carry = JSON.parse(process.env.KIT); // any kit: KIT='{"campfire":1,"stick":3}'
       if (process.env.COLLAPSE) p.stats.rest = 0;
+      if (process.env.KIT_IN_BAG) p.bar = {}; else delete p.bar; // a kit's tools go on the tool bar (0.1.17), as for someone from before it; KIT_IN_BAG=1 keeps them in the inventory
       if (process.env.TESTKIT || process.env.MINEKIT || process.env.CAMPKIT || process.env.FISHKIT || process.env.CRAFTKIT || process.env.KIT || process.env.COLLAPSE) s.send(JSON.stringify(w.mine(p)));
     }
   }));

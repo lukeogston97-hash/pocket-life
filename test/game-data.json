@@ -1,10 +1,11 @@
 {
   "version": "0.1.17",
-  "build": 3,
+  "build": 4,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,
+    "toolSlots": 7,
     "craftSearchFrom": 15,
     "walkSpeed": 2.2,
     "worldSize": 100,
@@ -931,8 +932,8 @@
     }
   },
   "help": {
-    "settings": "carryCapacity is the most weight a person can carry. walkSpeed is in metres per second. worldSize is how wide the square world is in metres (100 makes it 100 m x 100 m, with the clearing in the middle); it can be 40 to 300, and the bigger it is the more your phone has to draw. needsSpeed is 1 for real time; set it higher to test, for example 60 makes an hour of hunger and thirst pass in a minute. autoName fills in a name from testNames on the Make your person screen (handy while testing; set it to false for the real game). respawnMinutes is how often (online) the world adds one stick and one stone, if there are fewer on the ground than startInWorld: sticks under trees, stones by boulders. maxPlaying is how many people can play at once (20 for now, to stay inside Cloudflare's free plan); anyone else waits in line on the main menu and joins by themselves when a spot opens. Run tools/worlds.py test-build after changing it. worldTimeZone is the one clock the whole world runs on (date, time, day and night), the same for every player: Australia/Darwin for the Oceania world. craftSearchFrom: Craft shows a search box once you know this many recipes. fadeDays: things left lying on the ground fade away after this many days (0: never). Only what people put there (dropped, chopped, mined, a dead person's things, a campfire taken apart) and what the admin adds; the sticks and stones the world tops up by itself stay. Inside a camp the days don't run. The admin can change it live.",
-    "items": "To add an item, copy one of the items above, give it a new id (lower case, no spaces) and set its name, plural, weight and look. It then shows up by itself in the Inventory, in Recipes (if a recipe makes it) and in the admin's Add list, with a picture drawn from its look. Shapes and their looks: rod (length, thickness, colour, twig, lashing: a twine colour tied round the middle, like a long stick), flake (size, colour: a sharp stone), head (head: axe or pick, colour, lashing: a stone tool head on its own, with twine round its middle), rock (size, colour), ball (size, colour, leaf: a colour or false), axe (length, thickness, colour, head, lashing), log (length, radius, colour, end), knife (length, thickness, colour, blade, lashing), coil (size, colour), campfire (size, colour, stone, ash), spear (length, thickness, colour, head, lashing), fish (length, colour, belly), box (width, height, depth, colour). An unknown shape is drawn as a rock. eat is what eating one gives (a berry gives hunger 10), which adds an Eat button in the inventory. tool: {\"uses\": 20} makes it a tool that wears out after that many uses (a wear bar in the inventory); a tool shows in your hand only while you use it (chopping, cutting). startInWorld is how many lie around when the world starts (0 for things you can only make), and startNear is how many of those start close to where you appear. After changing items, run python3 tools/worlds.py test-build so the server knows about them. about (optional) is a short line shown when you tap it in the Inventory; without it, the about of the recipe that makes it is used. startInWorld: how many lie about the world; while there are fewer, one more turns up every settings.respawnMinutes, at a spot by spawnsNear (trees or boulders). A new item with startInWorld and spawnsNear starts turning up by itself, no reset needed (run tools/worlds.py test-build).",
+    "settings": "carryCapacity is the most weight a person can carry (tools on the tool bar don't count). toolSlots is how many spots the tool bar has (above the inventory): only tools on it get used, and they weigh nothing. walkSpeed is in metres per second. worldSize is how wide the square world is in metres (100 makes it 100 m x 100 m, with the clearing in the middle); it can be 40 to 300, and the bigger it is the more your phone has to draw. needsSpeed is 1 for real time; set it higher to test, for example 60 makes an hour of hunger and thirst pass in a minute. autoName fills in a name from testNames on the Make your person screen (handy while testing; set it to false for the real game). respawnMinutes is how often (online) the world adds one stick and one stone, if there are fewer on the ground than startInWorld: sticks under trees, stones by boulders. maxPlaying is how many people can play at once (20 for now, to stay inside Cloudflare's free plan); anyone else waits in line on the main menu and joins by themselves when a spot opens. Run tools/worlds.py test-build after changing it. worldTimeZone is the one clock the whole world runs on (date, time, day and night), the same for every player: Australia/Darwin for the Oceania world. craftSearchFrom: Craft shows a search box once you know this many recipes. fadeDays: things left lying on the ground fade away after this many days (0: never). Only what people put there (dropped, chopped, mined, a dead person's things, a campfire taken apart) and what the admin adds; the sticks and stones the world tops up by itself stay. Inside a camp the days don't run. The admin can change it live.",
+    "items": "To add an item, copy one of the items above, give it a new id (lower case, no spaces) and set its name, plural, weight and look. It then shows up by itself in the Inventory, in Recipes (if a recipe makes it) and in the admin's Add list, with a picture drawn from its look. Shapes and their looks: rod (length, thickness, colour, twig, lashing: a twine colour tied round the middle, like a long stick), flake (size, colour: a sharp stone), head (head: axe or pick, colour, lashing: a stone tool head on its own, with twine round its middle), rock (size, colour), ball (size, colour, leaf: a colour or false), axe (length, thickness, colour, head, lashing), log (length, radius, colour, end), knife (length, thickness, colour, blade, lashing), coil (size, colour), campfire (size, colour, stone, ash), spear (length, thickness, colour, head, lashing), fish (length, colour, belly), box (width, height, depth, colour). An unknown shape is drawn as a rock. eat is what eating one gives (a berry gives hunger 10), which adds an Eat button in the inventory. tool: {\"uses\": 20} makes it a tool that wears out after that many uses (a wear bar in the inventory); a tool shows in your hand only while you use it (chopping, cutting), and only a tool on the tool bar (settings.toolSlots) gets used. startInWorld is how many lie around when the world starts (0 for things you can only make), and startNear is how many of those start close to where you appear. After changing items, run python3 tools/worlds.py test-build so the server knows about them. about (optional) is a short line shown when you tap it in the Inventory; without it, the about of the recipe that makes it is used. startInWorld: how many lie about the world; while there are fewer, one more turns up every settings.respawnMinutes, at a spot by spawnsNear (trees or boulders). A new item with startInWorld and spawnsNear starts turning up by itself, no reset needed (run tools/worlds.py test-build).",
     "recipes": "To add a recipe, put it in the recipes list like this: {\"id\": \"stone-axe\", \"name\": \"Stone axe\", \"needs\": {\"axe-head\": 1, \"long-stick\": 1, \"twine\": 1}, \"makes\": {\"stone-axe\": 1}, \"about\": \"Chops trees\"}. Every item in needs, keeps and makes must exist in items. Players make things on the craft mat (0.1.8), at the top of the inventory's Recipes tab (0.1.15): they tap a recipe in the list, the mat shows its things (what they don't have faded), and once they have its needs plus its keeps, Make lights up. Every craft mat recipe shows by itself in Recipes, greyed out while the player doesn't carry everything it takes (Luke, 0.1.12); tapping one puts its things on the mat, as many as it takes, and the mat shows that recipe until they change what's on it. The server keeps what each player has made (their next person keeps it too): the first make says Your first one! No mystery (Luke, 0.1.10): the mat always shows what the things on it make. Keep recipes simple: 2 or 3 things, at most 2 of each, and make big things from smaller steps (an axe head first, then the axe). No two recipes can want the same things on the mat (lint checks). keeps (optional) are tools the recipe needs on the mat but does not use up, like {\"sharp-stone\": 1} to cut a stick into a twig. about is a short line shown on the mat (optional). The server checks crafting too, so run python3 tools/worlds.py test-build after changing recipes. near (optional) is a placeable id, like campfire: the recipe can then only be made close to a built one (a fire has to be lit), and it is listed in that thing's tap menu under its craftLabel (Cook) without having to be made first. Use it for cooking. Food is only made at stations (Luke, 0.1.9): the craft mat never makes a recipe with near, it says where to make it instead (Cook this on a lit campfire), and Recipes only lists craft mat recipes. seconds (optional) is how long making it takes, like cooking at a fire (20): the things are used up when it finishes. group (optional) puts it under a button in Recipes (Tools, Food, Building, Clothes, Materials); without it tools go under Tools, food under Food, things you place under Building and the rest under Materials.",
     "looks": "Each list here is a set of choices on the Make your person screen. Add an entry to add a choice.",
     "stats": "Stats run in real time. Every stat goes from 0 to 100. perHour is how much it changes each real hour, and whileAsleep is used instead while sleeping. lowAt shows the warning (the ring pulses red, and under 10 it flashes). atZero is what happens to other stats each hour while this one is empty. Health heals (4 an hour, 8 asleep, so about a day to full) when nothing is empty, and the person dies when health reaches 0. fullLabel is shown when you try to eat or drink but don't need to. gainLabel is the word in the pop-up when eating or drinking fills it (+10 food, +15 water), since '+10 Hunger' would read like getting hungrier; without it the need's name is used. Hunger lasts about a day (a berry fills 10), thirst about 16 hours awake (a drink fills 15), Rest about 16 hours awake and 8 asleep (whileAsleepAtNight: faster at night, about 6 hours). With no water you die in about 3 days, with no food in about a week. collapseAtZero (Rest): when it runs out your person collapses asleep where they stand and can't be woken until it's back to wakeAt (25). Stamina (id energy) is not deadly. icon: heart, food, drop, moon or bolt. The server uses the same numbers (copied by tools/worlds.py).",
@@ -1061,13 +1062,17 @@
     {
       "version": "0.1.17",
       "date": "2026-11-26",
-      "fixed": [
-        "Tools are held in the right hand, and only that hand swings when you use them",
-        "Feet no longer sink into the ground when bending, kneeling or standing on a slope"
+      "added": [
+        "A tool bar above your inventory with 7 spots, and tools on it weigh nothing",
+        "Equip a tool from your inventory, or drag it onto the tool bar (onto a tool to swap them)"
       ],
       "improved": [
         "Campfires snap to a half-metre grid and turn 4 ways with the Turn button",
         "The ground under placed things is levelled so nothing sits half in a hill"
+      ],
+      "fixed": [
+        "Tools are held in the right hand, and only that hand swings when you use them",
+        "Feet no longer sink into the ground when bending, kneeling or standing on a slope"
       ]
     },
     {
@@ -1110,7 +1115,7 @@
       ],
       "improved": [
         "Greyed out in Recipes now means you don't have everything for it yet",
-      "Names are one of a kind: you can't pick a name someone in the world already has"
+        "Names are one of a kind: you can't pick a name someone in the world already has"
       ],
       "fixed": [
         "Tapping a recipe could show something else on the mat, like a sharp stone for a campfire"
@@ -1347,6 +1352,15 @@
       "unit": "people",
       "min": 1,
       "max": 100,
+      "step": 1
+    },
+    {
+      "id": "toolSlots",
+      "name": "Tool bar spots",
+      "group": "Players",
+      "unit": "spots",
+      "min": 1,
+      "max": 14,
       "step": 1
     },
     {

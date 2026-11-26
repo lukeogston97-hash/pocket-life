@@ -382,6 +382,7 @@
   },
   "berryKind": "berry",
   "carryCapacity": 30,
+  "toolSlots": 7,
   "maxPlaying": 20,
   "respawnMinutes": 5,
   "fadeDays": 7,
@@ -512,6 +513,15 @@
       "unit": "people",
       "min": 1,
       "max": 100,
+      "step": 1
+    },
+    {
+      "id": "toolSlots",
+      "name": "Tool bar spots",
+      "group": "Players",
+      "unit": "spots",
+      "min": 1,
+      "max": 14,
       "step": 1
     },
     {

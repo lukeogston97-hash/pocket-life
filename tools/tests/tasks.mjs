@@ -66,6 +66,7 @@ const w = S.w.world;
 w.items.push({ id: 10, kind: 'stick', x: 4, z: 3, rot: 0 }, { id: 11, kind: 'log', x: 18, z: 18, rot: 0 });
 w.placed.push(fire(3, -20, 20, { fuel: 5 * HOUR })); // (enough to burn for the whole test, once lit)
 Object.assign(kim.carry, { 'stone-axe': 1, 'stone-pickaxe': 1, knife: 1, 'fishing-spear': 1, campfire: 1, stick: 4, fish: 1 }); // 24 of the 30 they can carry
+kim.bar = { 'stone-axe': 1, 'stone-pickaxe': 1, knife: 1, 'fishing-spear': 1 }; // the tools on the tool bar (0.1.17): only tools there get used
 const list = [
   { type: 'pickup', id: 10 },
   { type: 'chop', what: 'tree', idx: 0, x: 10, z: 10 },
@@ -114,6 +115,7 @@ await S.ask(patS, { t: 'fire', id: 5, do: 'light' }); // Pat's camp
 S.w.world.items.push({ id: 20, kind: 'stick', x: 31, z: 31, rot: 0 });
 ({ s: kimS, p: kim } = await S.join('kim', 'Kim', [24, 30]));
 kim.carry['stone-axe'] = 1;
+kim.bar = { 'stone-axe': 1 }; // (on the tool bar, 0.1.17)
 S.w.world.trees = { 1: ['stump', Date.now()] }; // tree 1 was chopped by someone else
 await S.ask(kimS, { t: 'tasks', list: [{ type: 'pickup', id: 20 }, { type: 'chop', what: 'tree', idx: 1, x: 12, z: 14 }, { type: 'walk', x: 20, z: 20 }] });
 await leave(S, kimS);

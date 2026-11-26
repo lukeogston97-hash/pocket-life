@@ -6,7 +6,7 @@
 import { PLACEABLES, fireRule, seatAt } from './placed.js';
 import { SOC, socMax, INVITE_MS } from './societies.js';
 import { fuelRoom, placeSnap, placeClash } from './rules.js';
-import { FILTER, G, starText, badName, freshStats, addCarry, takeCarry, wearList, applyGives, eatOne, craft, spend, clean, blank, num, kindOk, START, REST, BERRY_SRC, cleanLook, REPORTS_KEEP, laidNow } from './shared.js';
+import { FILTER, G, starText, badName, freshStats, addCarry, takeCarry, wearList, applyGives, eatOne, craft, spend, clean, blank, num, kindOk, START, REST, BERRY_SRC, cleanLook, REPORTS_KEEP, laidNow, onBar, equipTool, unequipTool } from './shared.js';
 const SIT_OPEN = 365 * 24 * 3600000; // sitting has no set time: `until` is far off, and ends when they stand up, do something else, or the fire goes out
 
 export const ACTIONS = {
@@ -57,7 +57,7 @@ export const ACTIONS = {
     const a = Math.random() * Math.PI * 2, r = Math.random() * 1.5;
     const np = { who: me.who, state: 'alive', name, look: cleanLook({ ...m.look, name }), age: Math.max(G.age.min, Math.min(G.age.max, Math.round(Number(m.age) || G.age.min))),
       born: Date.now(), x: num(START.x + Math.cos(a) * r), z: num(START.z + Math.sin(a) * r), ry: 0.62,
-      stats: freshStats(G), statsAt: Date.now(), carry: {}, lastKind: null, log: { ate: 0, drank: 0, picked: 0 },
+      stats: freshStats(G), statsAt: Date.now(), carry: {}, bar: {}, lastKind: null, log: { ate: 0, drank: 0, picked: 0 },
       found: (p && Array.isArray(p.found) ? p.found : []).filter((id) => Object.hasOwn(G.recipes || {}, id)) }; // the recipes the last person found carry over (Luke, 0.1.8)
     this.persons.set(me.who, np);
     this.note('world', `New person: ${name}, ${np.age}`);
@@ -133,6 +133,19 @@ export const ACTIONS = {
     if (eatOne(p, G, m.kind)) save();
     reply(this.mine(p));
   } },
+  // the tool bar (0.1.17, Luke): equip a tool from the inventory (m.which: which one, as its place in that tool's wear list;
+  // m.out: a tool on the bar to swap it with when the bar is full), or take one off (unequip). No walking, no time.
+  equip: { when: 'alive', async run({ m, p, reply, save }) {
+    const out = m.out && typeof m.out === 'object' && kindOk(m.out.kind) ? { kind: m.out.kind, which: m.out.which } : null;
+    const why = kindOk(m.kind) ? equipTool(p, m.kind, m.which, out, G) : "That isn't in your inventory";
+    if (why) reply({ t: 'placeNo', why }); else save();
+    reply(this.mine(p));
+  } },
+  unequip: { when: 'alive', async run({ m, p, reply, save }) {
+    const why = kindOk(m.kind) ? unequipTool(p, m.kind, m.which, G) : "That isn't on your tool bar";
+    if (why) reply({ t: 'placeNo', why }); else save();
+    reply(this.mine(p));
+  } },
   // drinking at the pond
   drink: { when: 'alive', async run({ ws, me, m, p, w, reply, save }) {
     const src = G.sources[m.source];
@@ -142,7 +155,7 @@ export const ACTIONS = {
   // fishing at the pond (0.3.4): the spear wears, the pond holds a shared number of fish, and some tries catch nothing
   fish: { when: 'alive', async run({ ws, me, p, w, reply, save }) {
     const F = (Object.values(G.sources).find((s) => s.water && s.fish) || {}).fish;
-    if (!F || !p.carry[F.tool]) { reply(this.mine(p)); return; }
+    if (!F || !onBar(p, F.tool, G)) { reply(this.mine(p)); return; } // only a tool on the tool bar gets used (0.1.17)
     if (!me.admin && !this.nearWater(p)) { reply({ t: 'fished', why: 'Too far away' }); reply(this.mine(p)); return; }
     if (!this.worked(ws, me, p, F.seconds)) { reply({ t: 'fished', why: 'Slow down a little' }); reply(this.mine(p)); return; } // a try takes time (guard.js)
     spend(p, 'fish', G);
@@ -161,13 +174,12 @@ export const ACTIONS = {
     if (c) { reply({ t: 'took', id: m.id, ok: false, why: this.claimNo(c) }); return; } // inside someone else's claim
     if (i < 0) { reply({ t: 'took', id: m.id, ok: false }); return; } // someone got there first
     if (!me.admin && !this.near(p, [w.items[i].x, w.items[i].z])) { reply({ t: 'took', id: m.id, ok: false, why: 'Too far away' }); return; }
-    if (!addCarry(p, w.items[i].kind, 1, G)) { reply({ t: 'took', id: m.id, ok: false, why: 'Too heavy' }); return; }
     const got = w.items[i];
-    if (got.uses != null) { const list = wearList(p, got.kind, G); list[list.length - 1] = got.uses; p.wear = p.wear || {}; p.wear[got.kind] = list; } // a worn tool stays worn
+    if (!addCarry(p, got.kind, 1, G, got.uses)) { reply({ t: 'took', id: m.id, ok: false, why: 'Too heavy' }); return; } // (a worn tool stays worn; a tool goes on the tool bar if there's room)
     w.items.splice(i, 1);
     spend(p, 'pickup', G);
     reply({ t: 'took', id: m.id, ok: true }); // (said before saving, so the game always hears it before any other news of what they carry)
-    if (got.uses != null) reply(this.mine(p)); // a worn tool: the game shows how worn straight away
+    if (G.items[got.kind].uses) reply(this.mine(p)); // a tool: the game shows how worn it is and where it went (the tool bar or the inventory) straight away
     this.send({ t: 'gone', id: m.id }, me.id);
     await this.save();
     save();
@@ -195,7 +207,7 @@ export const ACTIONS = {
   // chopping a tree, digging out a stump, or chopping a log into sticks
   chop: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
     const C = G.chopping || {}, rule = C[m.what === 'oldStump' ? 'stump' : m.what], tool = C.tool;
-    if (!rule || (tool && !p.carry[tool])) { reply(this.mine(p)); return; }
+    if (!rule || (tool && !onBar(p, tool, G))) { reply(this.mine(p)); return; }
     // where it is: a log's own spot, a tree or stump's spot in the layout (guard.js), else what the game says if that's near them
     const laidOut = ['tree', 'stump', 'oldStump'].includes(m.what), log = !laidOut && w.items.find((it) => it.id === m.id && it.kind === m.what);
     if (!laidOut && !log) { reply(this.mine(p)); return; } // the log has gone
@@ -250,7 +262,7 @@ export const ACTIONS = {
     if ((m.what !== 'rock' && m.what !== 'boulder') || !(i >= 0 && i < 2000)) return;
     const what = this.rockKind(i, m.what), rule = R[what]; // a rock or a boulder: the layout's word once it has one, not the game's (guard.js)
     if (!rule) return;
-    if (tool && !p.carry[tool]) { reply(this.mine(p)); return; }
+    if (tool && !onBar(p, tool, G)) { reply(this.mine(p)); return; }
     if (!this.isThing('rock', i)) { reply(this.mine(p)); return; } // no such rock (guard.js)
     const rock = this.spotOf('rock', i) || [p.x, p.z]; // where it is (guard.js), else where they're standing, next to it
     if (!me.admin && !this.near(p, rock, 1)) { reply({ t: 'placeNo', why: 'Too far away' }); reply(this.mine(p)); return; }
@@ -287,7 +299,7 @@ export const ACTIONS = {
     if (cl) { reply({ t: 'picked', bush: i, ok: false, why: this.claimNo(cl) }); return; }
     if (!me.admin && !this.near(p, at)) { reply({ t: 'picked', bush: i, ok: false, why: 'Too far away' }); return; }
     // with the bush's tool (a knife) a few come off at once (toolHarvest), and the tool wears
-    const many = BERRY_SRC.tool && BERRY_SRC.toolHarvest && p.carry[BERRY_SRC.tool] ? Number(BERRY_SRC.toolHarvest[G.berryKind]) || 1 : 1;
+    const many = BERRY_SRC.tool && BERRY_SRC.toolHarvest && onBar(p, BERRY_SRC.tool, G) ? Number(BERRY_SRC.toolHarvest[G.berryKind]) || 1 : 1;
     const n = this.berriesOn(i) >= many ? many : 1;
     if (this.berriesOn(i) < 1 || !addCarry(p, G.berryKind, n, G)) { reply({ t: 'picked', bush: i, ok: false }); return; }
     this.takeBerries(i, n);
@@ -432,7 +444,7 @@ export const ACTIONS = {
     if (cl) { reply({ t: 'cutNo', plant: m.plant, i, readyAt: ps[i] || 0, why: this.claimNo(cl) }); return; }
     if (!me.admin && !this.near(p, plant)) { reply({ t: 'cutNo', plant: m.plant, i, readyAt: ps[i] || 0, why: 'Too far away' }); return; }
     if (ps[i] && ps[i] > now) { reply({ t: 'cutNo', plant: m.plant, i, readyAt: ps[i] }); return; } // someone got it first
-    if (!this.worked(ws, me, p, def.tool && p.carry[def.tool] ? def.toolSeconds || def.seconds : def.seconds)) { reply({ t: 'cutNo', plant: m.plant, i, readyAt: ps[i] || 0, why: 'Slow down a little' }); return; } // cutting takes time (guard.js)
+    if (!this.worked(ws, me, p, def.tool && onBar(p, def.tool, G) ? def.toolSeconds || def.seconds : def.seconds)) { reply({ t: 'cutNo', plant: m.plant, i, readyAt: ps[i] || 0, why: 'Slow down a little' }); return; } // cutting takes time (guard.js)
     let ok = true;
     for (const [k, c] of Object.entries(def.gives || {})) ok = addCarry(p, k, c, G) && ok;
     if (!ok) { reply(this.mine(p)); return; }
@@ -441,7 +453,7 @@ export const ACTIONS = {
     for (const [k, at] of Object.entries(ps)) if (at <= now) delete ps[k]; // grown back: nothing to remember
     this.send({ t: 'plant', plant: m.plant, i, readyAt: ps[i] }, null);
     spend(p, 'harvest', G);
-    if (def.tool && p.carry[def.tool]) this.wearTool(p, def.tool, reply);
+    if (def.tool && onBar(p, def.tool, G)) this.wearTool(p, def.tool, reply);
     await this.save();
     save();
     reply(this.mine(p));

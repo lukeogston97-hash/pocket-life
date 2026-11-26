@@ -4,7 +4,7 @@
 // regrow everything, clear loose items, restore an earlier time (restore.js), reset the world or everything), Settings (live settings, live.js). Single things in the world
 // (trees, rocks, berry bushes, campfires, loose items) are moved, regrown and removed from their tap menus.
 // These are methods of the World (index.js adds them to it), so `this` is the world.
-import { FILTER, G, starText, MINUTE, HOUR, clean, blank, num, kindOk, addCarry, takeCarry, ageOf, pickRandom, laidNow } from './shared.js';
+import { FILTER, G, starText, MINUTE, HOUR, clean, blank, num, kindOk, addCarry, takeCarry, ageOf, pickRandom, laidNow, barOf } from './shared.js';
 import { fireRule, PLACEABLES } from './placed.js';
 import { placeSnap } from './rules.js';
 import { CLAIM_KIND } from './claims.js';
@@ -67,7 +67,7 @@ export const adminMethods = {
     const reports = ((await this.ctx.storage.get('reports')) || []).filter((r) => r.about && r.about.who === who).length;
     const acc = this.accountOf(who);
     const out = { t: 'adminPlayer', id: who, linked: acc ? acc.phones : 0, muted: this.admin.muted.includes(who), banned: this.admin.banned.includes(who), reports, past, v: s ? s.p.v : '', link: s ? s.p.link : '' };
-    if (this.alive(p)) Object.assign(out, this.playerRow(p), { born: p.born || 0, stats: p.stats, carry: p.carry || {}, x: num(p.x), z: num(p.z), tasks: p.tasks || [], // tasks: their task list as the server has it (tasks.js)
+    if (this.alive(p)) Object.assign(out, this.playerRow(p), { born: p.born || 0, stats: p.stats, carry: p.carry || {}, bar: barOf(p, G), x: num(p.x), z: num(p.z), tasks: p.tasks || [], // tasks: their task list as the server has it (tasks.js)
       found: (p.found || []).filter((id) => Object.hasOwn(G.recipes || {}, id)) }); // found: the recipes they've made at least once (the craft mat's Found list)
     else Object.assign(out, { name: past[0] ? past[0].name : `Phone ${who}`, state: 'gone' });
     const soc = this.socOf(who);

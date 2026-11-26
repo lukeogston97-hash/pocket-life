@@ -46,7 +46,7 @@ expect(Object.entries(FILE.recipes).every(([k, r]) => Object.entries(r.needs).ev
 expect(!store.has('liveItems'), 'and nothing is stored');
 
 console.log('B. a change reaches the rules players are held to');
-S.person().carry = { stick: 28 }; // 28 of 30 carried: a knife (weight 1) fits
+S.person().carry = { stick: 28, 'stone-axe': 7 }; S.person().bar = { 'stone-axe': 7 }; // 28 of 30 carried and a full tool bar (0.1.17): a knife (weight 1) goes in the bag and fits
 expect((await S.tool({ t: 'a.give', id: 'abc', kind: 'knife', n: 1 })).startsWith('Gave'), 'before: a knife (weight 1) fits in a bag with 2 to spare');
 await S.tool({ t: 'a.take', id: 'abc', kind: 'knife', n: 1 });
 expect(await S.tool({ t: 'a.liveItem', at: ['items', 'knife', 'weight'], value: 4 }) === 'Changed to 4', 'the admin makes a knife weigh 4');

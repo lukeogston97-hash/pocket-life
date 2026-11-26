@@ -190,7 +190,8 @@ async def grass_and_tools():
     async with world(TESTKIT=1) as W:
         a = await W.page('grassA'); await join(a)
         n = await a.evaluate('__pl.plants.tallGrass.clumps.length')
-        expect(n == 40, f'40 tall grass clumps ({n})')
+        want = json.load(open(os.path.join(HERE, '..', '..', 'test', 'game-data.json')))['plants']['tallGrass']['count']  # (60 since an earlier update; the check said 40)
+        expect(n == want, f'{want} tall grass clumps ({n})')
         before = await a.evaluate('__pl.you.carry.twine || 0')
         await a.evaluate("""(() => { const P = __pl.plants.tallGrass, p = __pl.player.position;
           const c = [...P.clumps].sort((x, y) => Math.hypot(x.x - p.x, x.z - p.z) - Math.hypot(y.x - p.x, y.z - p.z))[0];
@@ -409,10 +410,12 @@ async def smoke():
         await a.click('#bagBtn'); expect(await shown(a, '#bag'), 'inventory opens')
         expect(await a.evaluate("document.querySelectorAll('#bagList > li').length >= 10 && document.getElementById('bagInfo').hidden"), 'inventory shows the grid, no info until a tap')
         await a.click('#bagClose')
-        tools = await a.evaluate("""(() => { __pl.you.carry.knife = 2; __pl.you.wear.knife = [5, 12]; document.getElementById('bagBtn').click();
-          const t = [...document.querySelectorAll('#bagList .bag-tile[data-kind="knife"]')].map((b) => b.getAttribute('aria-label'));
-          document.getElementById('bagClose').click(); return t; })()""")
-        expect(tools == ['Stone knife, 5 uses left', 'Stone knife, spare, 12 uses'], f'each tool gets its own tile: the one in use, then a spare ({tools})')
+        tools = await a.evaluate("""(() => { __pl.you.carry.knife = 3; __pl.you.wear.knife = [5, 12, 20]; __pl.you.bar = { knife: 2 }; document.getElementById('bagBtn').click();
+          const t = [...document.querySelectorAll('#toolBar .bag-tile[data-kind="knife"], #bagList .bag-tile[data-kind="knife"]')].map((b) => b.getAttribute('aria-label'));
+          const spots = document.querySelectorAll('#toolBar > li').length;
+          document.getElementById('bagClose').click(); return [t, spots]; })()""")
+        expect(tools == [['Stone knife, 5 uses left', 'Stone knife, spare, 12 uses', 'Stone knife, in your inventory, 20 uses left'], 7],
+               f'each tool gets its own tile: on the tool bar the one in use, then a spare; the third in the inventory; 7 spots ({tools})')
         expect(not await a.evaluate("!!document.getElementById('craftBtn')"), 'no hammer button at the bottom: crafting is in the inventory')
         await a.click('#bagBtn')
         expect(await a.evaluate("!document.getElementById('bagCraft') && document.getElementById('mat').hidden && !document.getElementById('bagPart').hidden && document.getElementById('bagTabBag').classList.contains('on')"), 'the inventory opens on its Inventory tab: the grid, no craft mat and no Craft button')
@@ -1044,6 +1047,55 @@ async def bagdrag():
         await a.mouse.click(sp[0], sp[1]); await a.wait_for_timeout(400)
         expect(await a.evaluate("document.getElementById('actMenu').hidden"), 'tapping a stick already queued opens no menu')
         # (dragging a loose item along the ground is not checked yet: the headless mouse drag did not pick the stick up)
+
+async def tool_bar():
+    """The tool bar (0.1.17): tools sit in 7 smaller squares above the inventory and weigh nothing there; Equip and Unequip
+    in the info bar; a full bar says so, and a tool dragged onto one there swaps them; dragging one off the bar puts it in
+    the inventory; a tool in the inventory isn't used (the tap menu says to equip it); the server agrees with all of it."""
+    async with world({}, KIT='{"knife":1,"stone-axe":7,"stick":2}') as W:
+        a = await W.page('toolbar'); await join(a)
+        await a.click('#bagBtn'); await a.wait_for_timeout(500)
+        look = await a.evaluate("""(() => ({ spots: document.querySelectorAll('#toolBar > li').length, bar: [...document.querySelectorAll('#toolBar .bag-tile')].map((b) => b.dataset.kind),
+          bag: [...document.querySelectorAll('#bagList .bag-tile')].map((b) => b.dataset.kind), weight: document.getElementById('bagWeight').textContent,
+          head: !!document.querySelector('#bag > .bag-head #bagHeadWeight:not([hidden])') }))()""")
+        expect(look['spots'] == 7 and look['bar'] == ['knife'] + ['stone-axe'] * 6 and sorted(look['bag']) == ['stick', 'stone-axe'],
+               f'7 spots: the knife and 6 axes on the bar, the 7th axe in the inventory ({look})')
+        expect(look['weight'] == '4 / 30' and look['head'], f'the weight is in the header and only counts the inventory: 2 sticks and 1 axe ({look["weight"]})')
+        # a full bar: Equip says so and nothing moves
+        await a.click('#bagList .bag-tile[data-kind="stone-axe"]'); await a.wait_for_timeout(200)
+        btn = await a.evaluate("(() => { const b = document.querySelector('#bagInfo button.go'); return b ? b.textContent : ''; })()")
+        expect(btn == 'Equip', f'a tool in the inventory: its green button is Equip ({btn!r})')
+        await a.click('#bagInfo button.go'); await a.wait_for_timeout(400)
+        tag = await a.evaluate("[...document.querySelectorAll('.tag3d')].map((e) => e.textContent).join(' ')")
+        expect(await a.evaluate("__pl.you.bar['stone-axe'] === 6 && __pl.you.bar.knife === 1") and 'full' in tag, f'the bar is full: it says so, nothing moves ({tag!r})')
+        # drag the axe from the inventory onto the knife on the bar: they swap
+        async def drag(src, dst):
+            b1 = await (await a.query_selector(src)).bounding_box(); b2 = await (await a.query_selector(dst)).bounding_box()
+            await a.mouse.move(b1['x'] + b1['width'] / 2, b1['y'] + b1['height'] / 2); await a.mouse.down()
+            await a.mouse.move(b2['x'] + b2['width'] / 2, b2['y'] + b2['height'] / 2, steps=10); await a.mouse.up(); await a.wait_for_timeout(900)
+        await drag('#bagList .bag-tile[data-kind="stone-axe"]', '#toolBar .bag-tile[data-kind="knife"]')
+        st = await a.evaluate("[__pl.you.bar, __pl.you.carry.knife, document.getElementById('bagWeight').textContent]")
+        expect(st[0] == {'stone-axe': 7} and st[1] == 1 and st[2] == '3 / 30', f'dropped onto the knife: they swap, the knife is in the inventory now ({st})')
+        # unequip an axe from its info bar, then equip the knife (there's room now)
+        await a.click('#toolBar .bag-tile[data-kind="stone-axe"]'); await a.wait_for_timeout(200)
+        un = await a.evaluate("[...document.querySelectorAll('#bagInfo button')].map((b) => b.textContent)")
+        await a.evaluate("[...document.querySelectorAll('#bagInfo button')].find((b) => b.textContent === 'Unequip').click()"); await a.wait_for_timeout(700)
+        expect('Unequip' in un and await a.evaluate("__pl.you.bar['stone-axe'] === 6 && __pl.you.carry['stone-axe'] === 7"), f'Unequip takes it off the bar ({un})')
+        await a.click('#bagList .bag-tile[data-kind="knife"]'); await a.wait_for_timeout(200)
+        await a.click('#bagInfo button.go'); await a.wait_for_timeout(700)
+        expect(await a.evaluate("__pl.you.bar.knife === 1 && __pl.you.bar['stone-axe'] === 6"), 'Equip puts the knife back on the bar')
+        # drag the knife off the bar onto the inventory
+        await drag('#toolBar .bag-tile[data-kind="knife"]', '#bagList > li:last-child')
+        expect(await a.evaluate("!__pl.you.bar.knife && __pl.you.carry.knife === 1 && !!document.querySelector('#bagList .bag-tile[data-kind=\"knife\"]')"), 'dragged off the bar, it is in the inventory')
+        # every axe off the bar: a tree's menu says to equip one, and chopping is off
+        for _ in range(6):
+            await a.evaluate("__pl.sendAct({ t: 'unequip', kind: 'stone-axe' })"); await a.wait_for_timeout(250)
+        await a.wait_for_timeout(600)
+        menu = await a.evaluate("(() => { const m = __pl.menuActions({ kind: 'tree', idx: 0, x: 10, z: 10 })[0]; return [__pl.you.bar['stone-axe'] || 0, m.note, !!m.disabled]; })()")
+        expect(menu == [0, 'Equip your stone axe', True], f'no axe on the bar: the tree menu says to equip one ({menu})')
+        await a.click('#bagTabRecipes'); await a.wait_for_timeout(300)
+        expect(await a.evaluate("document.getElementById('bagHeadWeight').hidden"), 'the Recipes tab has no weight in its header, as before')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
 
 async def glow():
     """A mouse over a loose item gives it a faint outline, a campfire gets none; moving away takes it off."""
@@ -2108,7 +2160,7 @@ async def server_tests():
     import subprocess
     from lib import bundle
     bundle()
-    for f in ['admin_extras.mjs', 'live_items.mjs', 'stale_admin.mjs', 'cheats.mjs', 'societies.mjs', 'tasks.mjs', 'fade.mjs', 'forget.mjs', 'accounts.mjs', 'regrow.mjs']:
+    for f in ['admin_extras.mjs', 'live_items.mjs', 'stale_admin.mjs', 'cheats.mjs', 'societies.mjs', 'tasks.mjs', 'fade.mjs', 'forget.mjs', 'accounts.mjs', 'regrow.mjs', 'toolbar.mjs']:
         r = subprocess.run(['node', f], cwd=HERE, capture_output=True, text=True, timeout=180)
         last = (r.stdout.strip().splitlines() or ['(nothing printed)'])[-1]
         if r.returncode: print(r.stdout[-4000:], r.stderr[-2000:])
@@ -2164,7 +2216,7 @@ async def leaving():
         expect(await text(a, '#playSub') == 'Make your person', 'and the old person is gone: Play says Make your person')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'tasks_away': tasks_away, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'craft_mat': craft_mat, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'loading': loading, 'sideways': sideways, 'menu_rest': menu_rest, 'tips': tips, 'placed_kinds': placed_kinds, 'placing_grid': placing_grid, 'leaving': leaving, 'server_tests': server_tests}
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'tasks_away': tasks_away, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'tool_bar': tool_bar, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'craft_mat': craft_mat, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'loading': loading, 'sideways': sideways, 'menu_rest': menu_rest, 'tips': tips, 'placed_kinds': placed_kinds, 'placing_grid': placing_grid, 'leaving': leaving, 'server_tests': server_tests}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

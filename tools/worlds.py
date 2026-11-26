@@ -144,6 +144,7 @@ def server_files(d):
                        'seconds': v.get('seconds', 6), 'toolSeconds': v.get('toolSeconds'), 'pose': v.get('pose')} for k, v in d.get('plants', {}).items()},
         'berryKind': berry,
         'carryCapacity': d['settings']['carryCapacity'],
+        'toolSlots': d['settings'].get('toolSlots', 7),  # the tool bar's spots (0.1.17); a live setting too
         'maxPlaying': d['settings'].get('maxPlaying', 20),
         'respawnMinutes': d['settings'].get('respawnMinutes', 10),
         'fadeDays': d['settings'].get('fadeDays', 7),

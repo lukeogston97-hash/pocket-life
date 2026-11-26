@@ -145,6 +145,7 @@ setTimeout(function () { if (!window.__bootStarted) window.__bootFail("This brow
         <button id="bagTabBag" class="craft-chip on" type="button" aria-pressed="true">Inventory</button>
         <button id="bagTabRecipes" class="craft-chip" type="button" aria-pressed="false">Recipes</button>
       </div>
+      <div id="bagHeadWeight" class="bag-weight"><span><span class="weight-word">Weight </span><strong id="bagWeight">0 / 30</strong></span><span class="carry-bar wide" aria-hidden="true"><i id="bagBar"></i></span></div>
       <button id="bagClose" class="text-btn" type="button">Close</button>
     </div>
     <div id="mat" class="mat" hidden>
@@ -160,8 +161,8 @@ setTimeout(function () { if (!window.__bootStarted) window.__bootFail("This brow
       </div>
     </div>
     <div id="bagPart">
-      <div class="bag-weight"><span>Weight <strong id="bagWeight">0 / 30</strong></span><span class="carry-bar wide" aria-hidden="true"><i id="bagBar"></i></span></div>
-      <ul id="bagList" class="bag-grid"></ul>
+      <ul id="toolBar" class="tool-bar" aria-label="Tool bar"></ul>
+      <ul id="bagList" class="bag-grid" aria-label="Inventory"></ul>
       <p id="bagEmpty" class="bag-empty">Nothing in your inventory yet. Tap a stick or stone to pick it up.</p>
       <div id="bagInfo" class="bag-info" hidden></div>
     </div>

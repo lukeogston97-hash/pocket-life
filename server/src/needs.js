@@ -1,7 +1,7 @@
 // People live on the server: their needs, what they carry and where they are.
 // G is server/game.json (copied from the game's game-data.json by tools/worlds.py).
 
-import { needsStep, recipeWants } from './rules.js';
+import { needsStep, recipeWants, barUsed, bagWeight, tidyBar } from './rules.js';
 
 export const HOUR = 3600000, MINUTE = 60000;
 const clampStat = (v) => Math.max(0, Math.min(100, v));
@@ -79,11 +79,79 @@ export function advanceStats(p, to, G, speed, floor = null) {
   return null;
 }
 export const weightOf = (carry, G) => Object.entries(carry || {}).reduce((sum, [k, n]) => sum + ((G.items[k] && G.items[k].weight) || 0) * n, 0);
-export function addCarry(p, kind, n, G) {
-  if (!G.items[kind] || weightOf(p.carry, G) + G.items[kind].weight * n > G.carryCapacity + 1e-6) return false;
+// The tool bar (0.1.17, rules.js): p.bar = { kind: n }, the tools on it. They're in p.carry too, and they're the first
+// p.bar[kind] of that tool's wear list. Someone from before the tool bar gets their tools put on it the first time.
+export const toolSlots = (G) => Math.max(1, Math.floor(Number(G.toolSlots) || 7));
+export function barOf(p, G) {
+  const had = p.bar && typeof p.bar === 'object' && !Array.isArray(p.bar), tidy = tidyBar(had ? p.bar : null, p.carry || {}, G.items, toolSlots(G));
+  if (!had) { p.bar = tidy; return p.bar; }
+  for (const k of Object.keys(p.bar)) if (!(k in tidy)) delete p.bar[k]; // tidied in place: code holding p.bar keeps the same one
+  return Object.assign(p.bar, tidy);
+}
+export const onBar = (p, kind, G) => barOf(p, G)[kind] || 0;
+// what counts toward carryCapacity: everything but the tools on the bar
+export const carriedWeight = (p, G) => bagWeight(p.carry, barOf(p, G), G.items);
+// putting things in what someone carries: a tool goes on the tool bar while there's room (Luke, 0.1.17), else in the
+// inventory, where it weighs. uses: how worn the new ones are (a worn tool picked up), else new. False if too heavy.
+export function addCarry(p, kind, n, G, uses) {
+  const it = Object.hasOwn(G.items, kind) ? G.items[kind] : null;
+  if (!it) return false;
+  const bar = barOf(p, G), up = it.uses ? Math.max(0, Math.min(n, toolSlots(G) - barUsed(bar))) : 0;
+  if (carriedWeight(p, G) + it.weight * (n - up) > G.carryCapacity + 1e-6) return false;
+  if (it.uses) {
+    const list = wearList(p, kind, G), b = bar[kind] || 0, left = uses ?? it.uses;
+    list.splice(b, 0, ...Array(up).fill(left)); // the bar's come first in the list
+    for (let i = up; i < n; i++) list.push(left);
+    p.wear = p.wear || {};
+    p.wear[kind] = list;
+    if (up) bar[kind] = b + up;
+  }
   p.carry[kind] = (p.carry[kind] || 0) + n;
   p.lastKind = kind;
   return true;
+}
+// moving one tool within its wear list (on or off the bar)
+function shiftWear(p, kind, from, to, G) {
+  const list = wearList(p, kind, G), [x] = list.splice(from, 1);
+  list.splice(to, 0, x);
+  p.wear = p.wear || {};
+  p.wear[kind] = list;
+}
+// Equip: a tool from the inventory onto the bar (Luke, 0.1.17). which: its place in the tool's wear list (the bar's come
+// first, so it's at least p.bar[kind]); out: { kind, which } a tool on the bar to swap it with, when the bar is full.
+// Returns '' when done, else why not, in words for the player.
+export function equipTool(p, kind, which, out, G) {
+  const it = Object.hasOwn(G.items, kind) ? G.items[kind] : null;
+  const bar = barOf(p, G), have = (it && it.uses && p.carry[kind]) || 0, b = bar[kind] || 0;
+  if (have - b < 1) return "That isn't in your inventory";
+  const w = Number.isInteger(which) && which >= b && which < have ? which : b;
+  let off = null; // the one it swaps with
+  if (barUsed(bar) >= toolSlots(G)) {
+    const ob = out && Object.hasOwn(G.items, out.kind) ? bar[out.kind] || 0 : 0;
+    if (!ob) return 'Your tool bar is full';
+    off = { kind: out.kind, which: Number.isInteger(out.which) && out.which >= 0 && out.which < ob ? out.which : ob - 1 };
+  }
+  const heavier = (off ? G.items[off.kind].weight : 0) - it.weight;
+  if (heavier > 0 && carriedWeight(p, G) + heavier > G.carryCapacity + 1e-6) return 'Too heavy to carry';
+  if (off) { // off the bar first: it goes back to the inventory (its own kind's spares come after it)
+    const ob = bar[off.kind];
+    shiftWear(p, off.kind, off.which, ob - 1, G);
+    if (ob > 1) bar[off.kind] = ob - 1; else delete bar[off.kind];
+  }
+  const b2 = bar[kind] || 0; // (one less if it swapped with one of its own kind; the one to equip hasn't moved)
+  shiftWear(p, kind, w, b2, G);
+  bar[kind] = b2 + 1;
+  return '';
+}
+// Unequip: a tool off the bar, into the inventory, where it weighs. which: its place in the wear list (under p.bar[kind])
+export function unequipTool(p, kind, which, G) {
+  const it = Object.hasOwn(G.items, kind) ? G.items[kind] : null;
+  const bar = barOf(p, G), b = (it && bar[kind]) || 0;
+  if (b < 1) return "That isn't on your tool bar";
+  if (carriedWeight(p, G) + it.weight > G.carryCapacity + 1e-6) return 'Too heavy to carry';
+  shiftWear(p, kind, Number.isInteger(which) && which >= 0 && which < b ? which : b - 1, b - 1, G);
+  if (b > 1) bar[kind] = b - 1; else delete bar[kind];
+  return '';
 }
 // A tool's wear is a list of uses left, one per tool carried, the one in use first; tools past the end of the list
 // are new (saves from before 0.2.6 kept one number, for the one in use). wearList gives the whole list.
@@ -97,13 +165,15 @@ export function wearList(p, kind, G) {
 export function takeCarry(p, kind, n, which) {
   const have = p.carry[kind] || 0, taken = Math.min(have, n);
   if (taken <= 0) return 0;
-  const w = p.wear && p.wear[kind];
+  const w = p.wear && p.wear[kind], one = taken === 1 && Number.isInteger(which) && which >= 0 && which < have;
   if (w != null) { // keep the wear list in step: the taken tool's number goes with it
     const list = (Array.isArray(w) ? w : [w]).slice(0, have);
-    if (taken === 1 && Number.isInteger(which) && which >= 0 && which < have) list.splice(which, 1);
+    if (one) list.splice(which, 1);
     list.length = Math.min(list.length, have - taken);
     if (list.length) p.wear[kind] = list; else delete p.wear[kind];
   }
+  const b = p.bar && p.bar[kind]; // the tool bar (0.1.17): that one comes off it if it was on it, else spares in the inventory go first
+  if (b > 0) { const nb = Math.min(one && which < b ? b - 1 : b, have - taken); if (nb > 0) p.bar[kind] = nb; else delete p.bar[kind]; }
   if (have - taken > 0) p.carry[kind] = have - taken; else delete p.carry[kind];
   if (!p.carry[p.lastKind]) p.lastKind = Object.keys(p.carry)[0] || null;
   return taken;
@@ -132,14 +202,11 @@ export const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
 export function craft(p, r, G) {
   if (!r) return false;
   for (const [k, n] of Object.entries(recipeWants(r))) if ((p.carry[k] || 0) < n) return false;
-  if (weightOf(p.carry, G) - weightOf(r.needs, G) + weightOf(r.makes, G) > G.carryCapacity + 1e-6) return false;
-  for (const [k, n] of Object.entries(r.needs)) takeCarry(p, k, n);
-  for (const [k, n] of Object.entries(r.makes)) {
-    p.carry[k] = (p.carry[k] || 0) + n;
-    p.lastKind = k;
-    const it = G.items[k];
-    if (it && it.uses) { p.wear = p.wear || {}; if (p.wear[k] == null) p.wear[k] = it.uses; }
-  }
+  // tried on a copy first: a tool it makes goes on the bar if there's room (addCarry), so only the rest has to fit
+  const t = { carry: { ...p.carry }, bar: { ...barOf(p, G) }, wear: structuredClone(p.wear || {}), lastKind: p.lastKind };
+  for (const [k, n] of Object.entries(r.needs)) takeCarry(t, k, n);
+  for (const [k, n] of Object.entries(r.makes)) if (!addCarry(t, k, n, G)) return false;
+  Object.assign(p, t);
   return true;
 }
 // tasks take a little energy (energyCosts in game-data.json); never below zero

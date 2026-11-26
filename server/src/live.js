@@ -12,6 +12,7 @@ const inside = (key) => (G[key] = G[key] || {});
 const drop = (id) => ({ get: () => -(need(id).perHour || 0), set: (v) => { need(id).perHour = -v; }, needs: true });
 const RULES = {
   maxPlaying: { get: () => G.maxPlaying, set: (v) => { G.maxPlaying = v; } },
+  toolSlots: { get: () => G.toolSlots ?? 7, set: (v) => { G.toolSlots = v; } }, // the tool bar's spots (needs.js barOf keeps everyone's bar inside it)
   societyMax: { get: () => inside('societies').maxMembers || 3, set: (v) => { inside('societies').maxMembers = v; } }, // (societies.js socMax)
   respawnMinutes: { get: () => G.respawnMinutes, set: (v) => { G.respawnMinutes = v; } },
   berryRegrowHours: { get: () => BERRY_SRC.regrowHours || 0, set: (v, world) => { BERRY_SRC.regrowHours = v; if (world.world) world.world.regrowMs = v * HOUR; } },

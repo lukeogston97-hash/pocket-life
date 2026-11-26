@@ -1,19 +1,22 @@
 // Nature and the shared world: berry bushes, tools wearing out, the world as players see it, laying out a new world, sticks and stones topping up.
 // These are methods of the World (index.js adds them to it), so `this` is the world.
-import { G, MINUTE, HOUR, BERRY_SRC, takeCarry, wearList, WORLD_FORMAT, num, kindOk, pickRandom, laidNow } from './shared.js';
+import { G, MINUTE, HOUR, BERRY_SRC, takeCarry, wearList, onBar, WORLD_FORMAT, num, kindOk, pickRandom, laidNow } from './shared.js';
 import { CLAIM_R } from './claims.js';
 import { berriesGrown, berryPicked } from './rules.js';
 
 export const natureMethods = {
-  // a tool wears with each use; a worn-out one breaks (and the next one you carry takes over)
+  // a tool on the tool bar wears with each use; a worn-out one breaks, and the next one on the bar takes over, with its
+  // own wear. If the bar had no other, a spare of the same tool in the inventory moves up into its spot (0.1.17)
   wearTool(p, tool, reply) {
-    if (!tool || !p.carry[tool] || !G.items[tool] || !G.items[tool].uses) return;
+    if (!tool || !G.items[tool] || !G.items[tool].uses || !onBar(p, tool, G)) return;
     const list = wearList(p, tool, G);
     list[0] -= 1;
     p.wear = p.wear || {};
     p.wear[tool] = list;
     if (list[0] <= 0) {
-      takeCarry(p, tool, 1, 0); // the next one you carry takes over, with its own wear
+      const spare = onBar(p, tool, G) === 1 && p.carry[tool] > 1;
+      takeCarry(p, tool, 1, 0);
+      if (spare) p.bar[tool] = 1;
       reply({ t: 'broke', kind: tool });
     }
   },

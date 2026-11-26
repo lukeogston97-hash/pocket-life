@@ -13,7 +13,7 @@ import WORLDS from '../worlds.json'; // minimum version for each link
 import FILTER from '../words.json'; // the chat filter, copied from game-data.json by tools/worlds.py
 import G from '../game.json'; // needs, items, berry bushes, away rules: copied from game-data.json by tools/worlds.py
 import { starText, badName } from './rules.js'; // the rules the game and the server share (a copy of test/game/rules.js)
-import { HOUR, MINUTE, freshStats, advanceStats, addCarry, takeCarry, wearList, applyGives, eatOne, posAt, dist, craft, sleepMs, spend, useTimeZone, isNight, morningAfter, ageOf } from './needs.js';
+import { HOUR, MINUTE, freshStats, advanceStats, addCarry, takeCarry, wearList, applyGives, eatOne, posAt, dist, craft, sleepMs, spend, useTimeZone, isNight, morningAfter, ageOf, barOf, onBar, carriedWeight, equipTool, unequipTool, toolSlots } from './needs.js';
 
 export const PROTOCOL = 2; // bump when the game and server stop understanding each other
 export const CORS = { 'Access-Control-Allow-Origin': '*' };
@@ -46,7 +46,7 @@ export function tooOld(v, b, min, e = 0, minEra = 0) {
 export const FEEDBACK_KEEP = 300, REPORTS_KEEP = 300;
 // Spam limits: each kind of message refills at so many a second, up to a small burst. The admin is never limited.
 export const LIMITS = { place: [1, 3], build: [1, 3], unplace: [1, 3], apart: [1, 3], fire: [2, 6], sit: [1, 4], chop: [1, 3], quarry: [1, 3], cut: [1, 3], seed: [1 / 10, 2], layout: [1 / 10, 2], sleep: [1, 4], craft: [1, 3], fish: [1 / 2, 3], act: [3, 6], say: [1, 3], take: [5, 10], pick: [5, 10], drop: [2, 6], move: [12, 20], eat: [3, 6], drink: [1, 3], create: [1 / 5, 3],
-  feedback: [1 / 30, 3], forget: [1 / 30, 2], linkCode: [1 / 5, 3], linkUse: [1 / 3, 3], unlink: [1 / 10, 2], report: [1 / 30, 3], hello: [1 / 2, 4], sync: [1 / 5, 2], tasks: [1, 5],
+  feedback: [1 / 30, 3], forget: [1 / 30, 2], linkCode: [1 / 5, 3], linkUse: [1 / 3, 3], unlink: [1 / 10, 2], report: [1 / 30, 3], hello: [1 / 2, 4], sync: [1 / 5, 2], tasks: [1, 5], equip: [2, 8], unequip: [2, 8],
   socRename: [1 / 5, 3], socInvite: [1 / 3, 4], socAnswer: [1, 3], socLeave: [1 / 5, 2], socRemove: [1 / 2, 3] }; // societies (societies.js)
 export const buckets = new WeakMap(); // per connection, kept in memory only
 export const lastHeard = new WeakMap(); // per connection: when it last sent anything (the game pings every 25 seconds)
@@ -98,4 +98,4 @@ export const pickRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
 // boulders) has none and never fades.
 export const laidNow = (now = Date.now()) => Math.floor(now / HOUR);
 
-export { WORLDS, FILTER, G, starText, badName, HOUR, MINUTE, freshStats, advanceStats, addCarry, takeCarry, wearList, applyGives, eatOne, posAt, dist, craft, sleepMs, spend, isNight, morningAfter, ageOf };
+export { WORLDS, FILTER, G, starText, badName, HOUR, MINUTE, freshStats, advanceStats, addCarry, takeCarry, wearList, applyGives, eatOne, posAt, dist, craft, sleepMs, spend, isNight, morningAfter, ageOf, barOf, onBar, carriedWeight, equipTool, unequipTool, toolSlots };

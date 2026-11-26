@@ -1,6 +1,6 @@
 // People: what everyone is told about a person, what the player is told about their own, catching their needs up, collapsing, dying.
 // These are methods of the World (index.js adds them to it), so `this` is the world.
-import { G, HOUR, advanceStats, posAt, num, AWAY, REST, ageOf, wearList, laidNow } from './shared.js';
+import { G, HOUR, advanceStats, posAt, num, AWAY, REST, ageOf, wearList, laidNow, barOf } from './shared.js';
 
 // a name as it's compared with others: capitals, extra spaces and look-alike forms of the same letters don't count
 const nameKey = (s) => String(s ?? '').normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -56,7 +56,7 @@ export const personsMethods = {
     p.seen = p.seen || []; // everything they've ever carried (recipes used to show from this; kept for hints later)
     for (const k of Object.keys(p.carry || {})) if (!p.seen.includes(k)) p.seen.push(k);
     return { t: 'me', seen: p.seen, found: p.found || [], name: p.name, look: p.look, age: ageOf(p), born: p.born, x: num(p.x), z: num(p.z), ry: num(p.ry),
-      stats: p.stats, statsAt: p.statsAt, carry: p.carry, wear: p.wear || {}, lastKind: p.lastKind, sleeping: !!p.sleeping, collapsed: !!p.collapsed,
+      stats: p.stats, statsAt: p.statsAt, carry: p.carry, wear: p.wear || {}, bar: barOf(p, G), lastKind: p.lastKind, // bar: the tools on the tool bar (0.1.17) sleeping: !!p.sleeping, collapsed: !!p.collapsed,
       sit: p.sit && p.sit.until > Date.now() ? { fire: p.sit.fire, seat: p.sit.seat, ms: p.sit.until - Date.now() } : null,
       soc: this.socView(p.who) }; // their society: name, leader, members (societies.js)
   },
@@ -129,6 +129,7 @@ export const personsMethods = {
     p.hadThings = out.length > 0;
     p.carry = {};
     p.wear = {};
+    p.bar = {};
     p.lastKind = null;
     if (w && out.length) { w.items.push(...out); this.save(); this.send({ t: 'added', items: out }, null); }
   },
