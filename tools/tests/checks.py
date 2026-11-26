@@ -1769,7 +1769,9 @@ async def admin_extras():
         await a.click('[data-admin-tab="log"]'); await a.wait_for_function("document.querySelectorAll('#adminLog .admin-logline').length > 5", timeout=8000)
         lines = await a.evaluate("[...document.querySelectorAll('#adminLog .admin-logline')].map((l) => l.lastChild.textContent)")
         for want in ['Message: Sent to Robin', f'Rename: {name} is now Robin', f'Edit person: {name} changed', f"Claim (campfire at {round(spot[0])}, {round(spot[1])}): Now {name}'s claim", f"{name} lit a fire and started {name}'s camp", f'New person: {name}, ', 'Admin mode opened']:
-            expect(any(l.startswith(want) for l in lines), f'the Log has "{want}"')
+            if want.startswith('Claim (campfire at '):  # where the fire is: the server snaps it to the half-metre grid (0.1.17), and JS and Python round .5 differently
+                expect(any(l.startswith('Claim (campfire at ') and want.split('): ', 1)[1] in l for l in lines), f'the Log has "{want}" (at the snapped spot)')
+            else: expect(any(l.startswith(want) for l in lines), f'the Log has "{want}"')
         expect(lines.index('Message: Sent to Robin') < lines.index(f"{name} lit a fire and started {name}'s camp"), 'newest first')
         await shot(a, 'admin-extras-3-log-pc')
         await a.click('#adminLogShow >> text=People'); await a.wait_for_timeout(400)
