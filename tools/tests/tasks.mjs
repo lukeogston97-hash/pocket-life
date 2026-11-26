@@ -173,6 +173,33 @@ expect(page && page.tasks && page.tasks.length === 2, 'Kim\'s page shows the lis
 const ans = await S.ask(S.admin, { t: 'a.clearTasks', id: kim.who });
 expect(kim.tasks.length === 0 && kimS.got.some((m) => m.t === 'stopTasks') && ans.some((m) => m.t === 'admin' && /empty/.test(m.text)), 'Clear task list empties it, and Kim\'s game stops too');
 
+console.log('G. left sitting by a lit fire: they get up for bed and a drink, so Rest never runs out (0.2.1)');
+// Luke, 27 Nov 2026: left sitting by the fire overnight, his person sat on all night and came back collapsed, Rest 0
+const sitBy = async (at, stats) => {
+  S = await start();
+  ({ s: kimS, p: kim } = await S.join('kim', 'Kim', [4, 3]));
+  S.w.world.placed.push(fire(5, 4, 4, { fuel: 6 * 24 * HOUR, lit: true, at, by: kim.who }));
+  kim.stats = { health: 100, energy: 100, ...stats };
+  await S.ask(kimS, { t: 'sit', id: 5, seat: 0 });
+  await leave(S, kimS);
+  Object.assign(kim, { leftAt: at, simAt: at, statsAt: at, plan: { kind: 'idle', start: at, arrive: at + 15000 } });
+  kim.sit.until = at + 365 * 24 * HOUR;
+};
+night = darwinNight() - 2 * HOUR; // 9 pm
+await sitBy(night, { rest: 55, hunger: 80, thirst: 80 });
+S.w.advanceAway(kim, night + 2 * MINUTE);
+expect(!kim.sit && kim.sleeping, 'left sitting at 9 pm: they lie down for the night', `sitting ${!!kim.sit}, sleeping ${kim.sleeping}`);
+S.w.advanceAway(kim, night + 9 * HOUR);
+expect(kim.stats.rest > 90 && !kim.collapsed, 'and at 6 am Rest is full', `rest ${Math.round(kim.stats.rest)}`);
+const day = darwinNight() - 13 * HOUR; // 10 am
+await sitBy(day, { rest: 70, hunger: 90, thirst: 80 });
+S.w.advanceAway(kim, day + HOUR);
+expect(kim.sit && kim.plan.kind === 'sit', 'left sitting at 10 am: still sat by the fire an hour later');
+S.w.advanceAway(kim, day + 5 * HOUR);
+expect(!kim.sit && kim.log.drank > 0, 'thirsty: up for a drink', `sitting ${!!kim.sit}, drank ${kim.log.drank}`);
+for (let h = 6; h <= 20; h++) S.w.advanceAway(kim, day + h * HOUR);
+expect(kim.stats.rest > 25 && kim.log.slept, 'and later off to sleep, Rest never ran out', `rest ${Math.round(kim.stats.rest)}`);
+
 const bad = results.filter((r) => !r).length;
 console.log(bad ? `\n${bad} of ${results.length} FAILED` : `\nall ${results.length} ok`);
 process.exit(bad ? 1 : 0);

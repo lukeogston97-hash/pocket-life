@@ -84,6 +84,7 @@ export const personsMethods = {
   collapse(p) {
     if (!REST || !REST.collapseAtZero || p.sleeping || !(p.stats.rest <= 0)) return;
     p.sleeping = true; p.collapsed = true; p.sleptAt = Date.now();
+    this.standUp(p); // (sat by a fire: they drop asleep there, no longer sitting)
     this.touch(p);
     this.send({ t: 'state', id: p.who, state: 'sleeping', x: num(p.x), z: num(p.z) }, p.who);
     this.tell(p.who, this.mine(p));

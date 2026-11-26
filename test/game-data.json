@@ -1,6 +1,6 @@
 {
   "_generated": "Made from content/*.json by python3 tools/worlds.py test-build. Edit those files, not this one.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "build": 1,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
@@ -1151,6 +1151,13 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.2.1",
+      "date": "2026-11-27",
+      "fixed": [
+        "Left by the fire while you're away, your person gets up to sleep, drink and eat"
+      ]
+    },
     {
       "version": "0.2.0",
       "date": "2026-11-27",
