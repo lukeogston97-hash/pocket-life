@@ -7,7 +7,7 @@ A "life in your pocket" mobile game. Make your own person, then live a real-time
 (The old GitHub Pages address still works and sends you to the new one.)
 
 ## What's here
-- `test/`: the next version (index.html, style.css, game/*.js, game-data.json). The root and `releases/<version>/` hold released copies.
+- `test/`: the next version (index.html, style.css, game/*.js, game-data.json). The root holds the released copy (git keeps every release as its own commit).
 - `game/*.js`: the game's code, one file per topic (three.js, no build step; index.html joins them)
 - `game-data.json`: all the content (items, recipes, needs, plants, looks, settings), with a help section inside the file
 - `server/`: the online world (a Cloudflare Worker with one Durable Object)

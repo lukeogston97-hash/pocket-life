@@ -485,7 +485,7 @@ function openNews() {
     const entry = mk('details', 'news-entry');
     entry.open = i === 0;
     const h = mk('summary', 'news-head');
-    h.append(mk('span', 'news-ver', `v${v.version}`));
+    h.append(mk('span', 'news-ver', `v${String(v.version).replace(' to ', ' to v')}`)); // a folded range reads "v0.1.0 to v0.1.21"
     if (v.title) h.append(mk('span', 'news-title', v.title));
     h.append(mk('span', 'news-date', newsDate(v)));
     const ul = mk('ul', 'news-lines');

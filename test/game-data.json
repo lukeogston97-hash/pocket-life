@@ -1,6 +1,6 @@
 {
-  "version": "0.1.21",
-  "build": 2,
+  "version": "0.2.0",
+  "build": 1,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -1184,263 +1184,47 @@
   },
   "devlog": [
     {
-      "version": "0.1.21",
+      "version": "0.2.0",
+      "date": "2026-11-27",
+      "improved": [
+        "A big rebuild behind the scenes, to get the game ready for everything coming next"
+      ]
+    },
+    {
+      "version": "0.1.0 to 0.1.21",
+      "from": "2026-11-23",
       "date": "2026-11-26",
       "added": [
-        "Short tool handle: wrap twine round a stick for a grip"
+        "Craft mat and Recipes: every recipe under headings, simple to advanced. Tap one, then Make",
+        "Tools made in steps: sharp stones, tool handles, then stone heads for each tool",
+        "A tool bar with 7 spots above your inventory, and tools on it weigh nothing",
+        "Farming: dig fields in your camp with a stone hoe and grow berry bushes from seeds",
+        "Cooked fish: catch raw fish at the pond and cook it at a lit campfire",
+        "Camps: light your first campfire to start one, then invite people nearby to share it",
+        "Your person carries on with your task list while you're away",
+        "Drag things around the world and out of your inventory to where they should go",
+        "Play on other devices: link your phone and computer with a code",
+        "Leave the world for good, in Settings",
+        "A loading screen, an app icon, tips for your first steps, and Privacy and rules"
       ],
       "improved": [
-        "Long stick is now called long tool handle",
-        "Stone knife takes a sharp stone, a short tool handle and twine",
-        "Campfire takes a log, 2 sticks and 2 stones",
-        "Twigs are gone from the game, and any you had are sticks now",
-        "Tools, handles and tool heads now match, and the stone hoe head looks like a hoe"
-      ]
-    },
-    {
-      "version": "0.1.20",
-      "date": "2026-11-26",
-      "added": [
-        "Cooked fish in Recipes, under Food: cook it at a lit campfire"
-      ],
-      "improved": [
-        "Recipes headings: Materials, Parts, Tools, Food, Building and Misc",
-        "Recipes go from simple to advanced, with the ones you can make first"
-      ],
-      "fixed": [
-        "Sleep: you stay lying down, and drop asleep when Rest runs out (you got straight back up)"
-      ]
-    },
-    {
-      "version": "0.1.19",
-      "date": "2026-11-26",
-      "improved": [
-        "What's new shows each version by its number only"
-      ]
-    },
-    {
-      "version": "0.1.18",
-      "date": "2026-11-26",
-      "added": [
-        "Stone hoe: a hoe head (stone and twine), then a long stick and twine",
-        "Dig farm fields in your camp with the hoe, and flatten them again",
-        "Berry seeds: cut a berry on the craft mat with a sharp stone",
-        "Plant berry seeds on a field and a berry bush grows in about a day",
-        "Pick your planted bush like a wild one, and a knife picks 2 at once",
-        "Dig several farm fields at once: tap each spot, then Dig"
-      ],
-      "improved": [
-        "Walk over farm fields, and through bushes and berry bushes"
+        "Your person stays in the world for 7 days while you're away, and fires hold 7 days of fuel",
+        "Campfires snap to a half-metre grid and turn 4 ways, on levelled ground",
+        "Quicker grass cutting, mining and cooking, and trees and boulders grow back in 1 to 2 days",
+        "More stones and tall grass around the world",
+        "Clearer wording all over, and tap menus match the task list",
+        "Names are one of a kind",
+        "Things left on the ground fade after 7 days, unless they're in a camp",
+        "Making your person fits a phone held sideways",
+        "A quicker first load, and a main menu that's easier on your battery"
       ],
       "fixed": [
-        "Rocks, trees and bushes stay on the ground next to campfires and farm fields",
-        "Picking berries with a knife shows both berries straight away"
-      ]
-    },
-    {
-      "version": "0.1.17",
-      "date": "2026-11-26",
-      "added": [
-        "A tool bar above your inventory with 7 spots, and tools on it weigh nothing",
-        "Equip a tool from your inventory, or drag it onto the tool bar (onto a tool to swap them)"
-      ],
-      "improved": [
-        "Campfires snap to a half-metre grid and turn 4 ways with the Turn button",
-        "The ground under placed things is levelled so nothing sits half in a hill"
-      ],
-      "fixed": [
-        "Tools are held in the right hand, and only that hand swings when you use them",
-        "Feet no longer sink into the ground when bending, kneeling or standing on a slope"
-      ]
-    },
-    {
-      "version": "0.1.16",
-      "date": "2026-11-25",
-      "improved": [
-        "Quicker to cut grass by hand, mine a boulder and cook fish",
-        "Mined boulders come back in a day, and stumps grow back into trees in 1 to 2 days"
-      ]
-    },
-    {
-      "version": "0.1.15",
-      "date": "2026-11-25",
-      "improved": [
-        "Recipes now has its own tab at the top of your inventory, in place of the Craft button",
-        "The craft mat shows the recipe you tap, then Make. No more putting things on it by hand"
-      ]
-    },
-    {
-      "version": "0.1.14",
-      "date": "2026-11-25",
-      "improved": [
-        "Your person stays in the world for 7 days while you're away, up from 3",
-        "A campfire holds up to 7 days of fuel, up from 3",
-        "Fuel burns longer: logs 12 hours, sticks 15 minutes, twigs 5 minutes"
-      ]
-    },
-    {
-      "version": "0.1.13",
-      "date": "2026-11-25",
-      "improved": [
-        "More stones and tall grass around the world"
-      ]
-    },
-    {
-      "version": "0.1.12",
-      "date": "2026-11-25",
-      "added": [
-        "Play on other devices, in Settings: link your phone and computer with a code"
-      ],
-      "improved": [
-        "Greyed out in Recipes now means you don't have everything for it yet",
-        "Names are one of a kind: you can't pick a name someone in the world already has"
-      ],
-      "fixed": [
-        "Tapping a recipe could show something else on the mat, like a sharp stone for a campfire"
-      ]
-    },
-    {
-      "version": "0.1.11",
-      "date": "2026-11-25",
-      "added": [
-        "Leave the world for good, in Settings: your person and everything about you is removed"
-      ]
-    },
-    {
-      "version": "0.1.10",
-      "date": "2026-11-25",
-      "added": [
-        "A loading screen while the world gets ready, so Play always works when you see it",
-        "An app icon, and a picture and a few words when you share the game's link",
-        "Privacy and rules in Settings: what the game keeps, and the rules for playing",
-        "Tips for your first steps: walking, picking up, your needs, food and water, crafting"
-      ],
-      "improved": [
-        "Making your person now fits a phone held sideways",
-        "The game says when it can't reach the world, and what to check",
-        "The first load is a little quicker",
-        "The main menu is easier on your battery",
-        "Things left on the ground for 7 days fade away. Things in a camp stay",
-        "Privacy and rules says more: why things are kept, your choices, help if you're under 18",
-        "Recipes under the craft mat lists everything you can make, greyed out until made",
-        "Tap any recipe to put what it takes on the mat, so there's no guessing",
-        "Bag under the craft mat is now called Inventory"
-      ],
-      "fixed": [
-        "Tapping something another player had just picked up could cause an error",
-        "The Send button in chat slipped off the edge of very small phones",
-        "At night the main menu showed daylight for a moment before going dark"
-      ]
-    },
-    {
-      "version": "0.1.9",
-      "date": "2026-11-25",
-      "added": [
-        "New to crafting? The craft mat suggests trying two stones to start"
-      ],
-      "improved": [
-        "New recipes for the stone axe and pickaxe: a stone head, a long stick and twine",
-        "Cutting a stick with a sharp stone gives 2 twigs",
-        "A campfire weighs 9 now, the same as the things it takes",
-        "Food is only cooked at a lit campfire now, not on the craft mat"
-      ]
-    },
-    {
-      "version": "0.1.8",
-      "date": "2026-11-25",
-      "added": [
-        "Craft mat: put things from your inventory together and discover what they make",
-        "Found list: tap a recipe you've made to put its things back on the mat",
-        "New things to make: sharp stone, twig, long stick, axe head and pick head"
-      ],
-      "improved": [
-        "Craft is in your inventory now, so the hammer button at the bottom is gone",
-        "Tools are made in steps now, like a sharp stone first, then a stone knife",
-        "A campfire takes a log, 2 twigs and 2 stones, and twigs burn as quick fuel",
-        "Recipes you find stay with you when you start again as a new person"
-      ]
-    },
-    {
-      "version": "0.1.7",
-      "date": "2026-11-24",
-      "added": [
-        "Your person carries on with your task list while you're away, then looks after themselves"
-      ],
-      "improved": [
-        "Your person keeps working while the Menu, Camp or What's new is open",
-        "Welcome back says how many things on your task list got done"
-      ]
-    },
-    {
-      "version": "0.1.6",
-      "date": "2026-11-24",
-      "improved": [
-        "Your campfire's land and your group are now one thing, called your camp",
-        "Clearer wording all over, and tap menus now match the task list"
-      ],
-      "fixed": [
-        "Eating and drinking now show +10 food or +15 water, not +10 Hunger",
-        "Fish is now called raw fish, so it's clear it needs cooking",
-        "The Menu no longer says Paused, since the world keeps going"
-      ]
-    },
-    {
-      "version": "0.1.5",
-      "date": "2026-11-24",
-      "improved": [
-        "Lighting your first campfire starts your camp, and it ends when that fire goes out",
-        "The leader can rename the camp in Menu > Camp",
-        "Only the leader can put the camp's fire out",
-        "A camp's name shows under name tags once it has 2 or more people"
-      ]
-    },
-    {
-      "version": "0.1.4",
-      "date": "2026-11-24",
-      "added": [
-        "Camps: groups of players who share one campfire's land. The leader invites people nearby",
-        "A camp shares the land round its leader's lit campfire. Members can use everything there",
-        "Your camp shows under your name"
-      ],
-      "improved": [
-        "Away members stay in their camp and keep its fire going"
-      ]
-    },
-    {
-      "version": "0.1.3",
-      "date": "2026-11-24",
-      "fixed": [
-        "Tapping the feedback box no longer zooms the page in on iPhones"
-      ]
-    },
-    {
-      "version": "0.1.2",
-      "date": "2026-11-23",
-      "added": [
-        "Dragged items go in your task list, with a see-through copy where they'll land"
-      ],
-      "improved": [
-        "Smoother dragging and inventory management"
-      ],
-      "fixed": [
-        "Queued items can't be moved or tapped again until their task is done"
-      ]
-    },
-    {
-      "version": "0.1.1",
-      "date": "2026-11-23",
-      "added": [
-        "Drag a loose item on the ground to move it, or onto a campfire to burn it"
-      ],
-      "improved": [
-        "Items dragged out of the Inventory drop where you let go"
-      ]
-    },
-    {
-      "version": "0.1.0",
-      "date": "2026-11-23",
-      "improved": [
-        "Tidier version numbers: every update before this is now an early build (0.0.x)"
+        "Sleep: you stay lying down, and drop asleep when Rest runs out",
+        "Tools are held in the right hand, and feet no longer sink into slopes",
+        "Rocks, trees and bushes stay put next to campfires and farm fields",
+        "The chat Send button no longer slips off small phones",
+        "The feedback box no longer zooms the page in on iPhones",
+        "Tapping something another player had just picked up no longer causes an error"
       ]
     },
     {

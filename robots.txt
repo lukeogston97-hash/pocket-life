@@ -1,8 +1,7 @@
 # Pocket Life: search engines only need the game itself (the address players use).
-# The test build, old release copies and the project's own files stay out of search results.
+# The test build and the project's own files stay out of search results.
 User-agent: *
 Disallow: /test/
-Disallow: /releases/
 Disallow: /docs/
 Disallow: /server/
 Disallow: /tools/
