@@ -72,28 +72,40 @@ function wearList(kind) {
   while (list.length < n) list.push(ITEMS[kind].uses);
   return list;
 }
-// what the grid shows: a tile for each kind, but each tool gets its own (Luke's pick), with its own wear: the first
-// of a kind is the one in use, the rest are spares. Each can be dropped, and keeps its wear on the ground.
+// what the grid shows: a tile for each kind, but each tool gets its own (Luke's pick), with its own wear. Tools on the
+// tool bar (0.1.17) aren't in the grid: they're the first of each tool's wear list, so the grid's start after them.
+// Each can be dropped, and keeps its wear on the ground. i: the tool's place in its wear list (which one, to the server).
 function bagSlots() {
   const out = [];
   for (const kind of bagKinds()) {
     const n = you.carry[kind], it = ITEMS[kind];
     if (!it.uses) { out.push({ kind, key: `${kind}:0`, n }); continue; }
     const worn = wearList(kind);
-    for (let i = 0; i < n; i++) out.push({ kind, key: `${kind}:${i}`, n: 1, i, spare: i > 0, spares: n - 1, left: worn[i] });
+    for (let i = onBar(kind); i < n; i++) out.push({ kind, key: `${kind}:${i}`, n: 1, i, left: worn[i] });
   }
   return out;
 }
-const usesText = (s) => (s.spare ? `spare · ${s.left} uses` : `${s.spares ? 'in use · ' : ''}${s.left} ${s.left === 1 ? 'use' : 'uses'} left`);
+// the tool bar (0.1.17, Luke): the tools on it, in game-data.json order. The first of a kind is the one in use, the rest spares
+function barSlots() {
+  const out = [];
+  for (const kind of ITEM_ORDER) {
+    const b = Math.min(onBar(kind), you.carry[kind] || 0), worn = b ? wearList(kind) : [];
+    for (let i = 0; i < b; i++) out.push({ kind, key: `bar:${kind}:${i}`, n: 1, i, bar: true, spare: i > 0, spares: b - 1, left: worn[i] });
+  }
+  return out;
+}
+const usesWord = (n) => `${n} ${n === 1 ? 'use' : 'uses'} left`;
+const usesText = (s) => (s.spare ? `spare · ${s.left} uses` : `${s.spares ? 'in use · ' : ''}${usesWord(s.left)}`);
 function bagTile(s) {
   const it = ITEMS[s.kind];
   const b = document.createElement('button');
   b.type = 'button';
-  b.className = 'bag-tile' + (bagPick === s.key ? ' on' : '');
+  b.className = (s.bar ? 'bag-tile tool-tile' : 'bag-tile') + (bagPick === s.key ? ' on' : '');
   b.dataset.kind = s.kind;
   b.dataset.key = s.key;
+  if (s.bar) b.dataset.barKey = s.key;
   b.setAttribute('aria-pressed', String(bagPick === s.key));
-  b.setAttribute('aria-label', (it.uses ? `${it.name}, ${s.spare ? `spare, ${s.left} uses` : `${s.left} ${s.left === 1 ? 'use' : 'uses'} left`}` : countLabel(s.kind, s.n)));
+  b.setAttribute('aria-label', (it.uses ? `${it.name}, ${s.bar ? (s.spare ? `spare, ${s.left} uses` : usesWord(s.left)) : `in your inventory, ${usesWord(s.left)}`}` : countLabel(s.kind, s.n)));
   b.appendChild(itemPic(s.kind));
   if (s.n > 1) { const c = document.createElement('span'); c.className = 'count'; c.textContent = s.n; b.appendChild(c); }
   if (it.uses) { const w = document.createElement('span'); w.className = 'wear'; w.style.setProperty('--w', (s.left / it.uses).toFixed(2)); b.appendChild(w); }
@@ -101,11 +113,48 @@ function bagTile(s) {
     if (Date.now() - bagDragged < 400) return;
     bagPick = bagPick === s.key ? null : s.key;
     drawBag();
-    const again = $('bagList').querySelector(`[data-key="${s.key}"]`);
+    const again = $('bag').querySelector(`[data-key="${s.key}"]`);
     if (again) again.focus({ preventScroll: true });
   });
   bagDragOn(b, s);
   return b;
+}
+// equipping (0.1.17, Luke): a tool from the inventory onto the tool bar; out: a tool on the bar to swap it with (only when
+// the bar is full). Unequip: off the bar, into the inventory, where it weighs. Straight away, like the server does it.
+function shiftTool(kind, from, to) { const list = wearList(kind), [x] = list.splice(from, 1); list.splice(to, 0, x); you.wear[kind] = list; }
+function equipTool(s, out) {
+  if (ui.mode !== 'world' || !player || you.dead || !s || s.bar || !you.carry[s.kind]) return;
+  const off = barRoom() < 1 ? out : null, say = (text) => showTag(text, headTop(), 2.5);
+  if (barRoom() < 1 && !off) { say('Your tool bar is full: drag it onto a tool there to swap them'); return; }
+  const heavier = (off ? ITEMS[off.kind].weight : 0) - ITEMS[s.kind].weight;
+  if (heavier > 0 && carried() + heavier > SETTINGS.carryCapacity) { say('Too heavy to carry'); return; }
+  if (off) { const ob = onBar(off.kind); shiftTool(off.kind, off.i, ob - 1); if (ob > 1) you.bar[off.kind] = ob - 1; else delete you.bar[off.kind]; }
+  const b = onBar(s.kind); // (one less if it swapped with one of its own kind; the one to equip hasn't moved)
+  shiftTool(s.kind, s.i, b);
+  you.bar[s.kind] = b + 1;
+  sendAct({ t: 'equip', kind: s.kind, which: s.i, ...(off ? { out: { kind: off.kind, which: off.i } } : {}) });
+  bagPick = null;
+  drawCarry();
+}
+function unequipTool(s) {
+  if (ui.mode !== 'world' || !player || you.dead || !s || !s.bar || !hasTool(s.kind)) return;
+  if (carried() + ITEMS[s.kind].weight > SETTINGS.carryCapacity) { showTag('Too heavy to carry', headTop(), 2.5); return; }
+  const b = onBar(s.kind);
+  shiftTool(s.kind, s.i, b - 1);
+  if (b > 1) you.bar[s.kind] = b - 1; else delete you.bar[s.kind];
+  sendAct({ t: 'unequip', kind: s.kind, which: s.i });
+  bagPick = null;
+  drawCarry();
+}
+// a tool dragged and let go on the inventory itself: from the inventory onto the tool bar (onto a tool there to swap
+// them when it's full), or from the bar onto the inventory
+const pointIn = (el, e) => { const r = el.getBoundingClientRect(); return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; };
+function toolDropAt(s, e) {
+  const onTheBar = pointIn($('toolBar'), e);
+  if (s.bar) { if (!onTheBar) unequipTool(s); return; }
+  if (!onTheBar) return;
+  const hit = document.elementFromPoint(e.clientX, e.clientY), tile = hit && hit.closest('[data-bar-key]');
+  equipTool(s, tile ? barSlots().find((x) => x.key === tile.dataset.barKey) : null);
 }
 // dragging a tile out of the bag onto the world: your person eats it, a campfire takes fuel or cooks it, anywhere else drops
 // one. The bag fades while you drag and comes back after. Mouse: drag after a few pixels. Touch: hold a moment first (so the
@@ -115,7 +164,7 @@ function bagDragOn(b, s) {
   b.addEventListener('dragstart', (e) => e.preventDefault()); // the browser's own picture-drag would cancel ours
   b.addEventListener('pointerdown', (e) => {
     if (e.button > 0) return;
-    const x0 = e.clientX, y0 = e.clientY, touch = e.pointerType !== 'mouse';
+    const x0 = e.clientX, y0 = e.clientY, touch = e.pointerType !== 'mouse', tool = !!ITEMS[s.kind].uses;
     let ghost = null, timer = null, over = false;
     const start = () => {
       clearTimeout(timer);
@@ -123,7 +172,8 @@ function bagDragOn(b, s) {
       ghost.className = 'drag-ghost';
       ghost.appendChild(itemPic(s.kind));
       document.body.appendChild(ghost);
-      $('bag').classList.add('dragging');
+      $('bag').classList.add(tool ? 'dragging-tool' : 'dragging'); // a tool: the inventory stays, to drop it on or off the tool bar (0.1.17)
+      if (tool) $(s.bar ? 'bagList' : 'toolBar').classList.add('drop-on');
       bagDragging = true;
       dragPoint = { x: e.clientX, y: e.clientY, armed: false };
       move(e);
@@ -131,7 +181,7 @@ function bagDragOn(b, s) {
     const move = (m) => {
       if (!ghost) return;
       ghost.style.transform = `translate(${m.clientX - 28}px, ${m.clientY - 28}px)`;
-      if (dragPoint) { dragPoint.x = m.clientX; dragPoint.y = m.clientY; }
+      if (dragPoint) { dragPoint.x = m.clientX; dragPoint.y = m.clientY; dragPoint.inSheet = tool && pointIn($('bag'), m); } // (the view doesn't slide while over the inventory)
     };
     const onMove = (m) => {
       if (!ghost) {
@@ -148,11 +198,12 @@ function bagDragOn(b, s) {
       window.removeEventListener('pointercancel', cancel);
       if (!ghost) return;
       ghost.remove();
-      $('bag').classList.remove('dragging');
+      $('bag').classList.remove('dragging', 'dragging-tool');
+      $('toolBar').classList.remove('drop-on'); $('bagList').classList.remove('drop-on');
       bagDragging = false;
       dragPoint = null;
       bagDragged = Date.now();
-      if (m && !over) bagDropAt(s, m);
+      if (m && !over) { if (tool && bagOpen() && pointIn($('bag'), m)) toolDropAt(s, m); else bagDropAt(s, m); }
       if (!bagOpen()) openBag();
     };
     const up = (m) => { end(m); }, cancel = () => { over = true; end(null); };
@@ -217,13 +268,15 @@ function drawBagInfo(s) {
   const title = document.createElement('strong');
   title.textContent = it.uses ? it.name : countLabel(kind, n);
   const detail = document.createElement('small');
-  detail.textContent = `Weight ${fmt(it.weight * n)}${it.uses ? ` · ${usesText(s)}` : ''}`;
+  detail.textContent = s.bar ? `On your tool bar · ${usesText(s)}` : `Weight ${fmt(it.weight * n)}${it.uses ? ` · ${usesWord(s.left)}` : ''}`; // (on the bar it weighs nothing)
   const words = document.createElement('div');
   words.append(title, detail);
   const head = document.createElement('div');
   head.className = 'info-head';
   head.appendChild(words);
-  if (it.places) head.appendChild(smallButton('Place', () => startPlacing(kind), true)); // a campfire: choose where it goes
+  if (s.bar) head.appendChild(smallButton('Unequip', () => unequipTool(s))); // the tool bar (0.1.17): off it, into the inventory
+  else if (it.uses) head.appendChild(smallButton('Equip', () => equipTool(s), true)); // onto the tool bar: only tools there get used
+  else if (it.places) head.appendChild(smallButton('Place', () => startPlacing(kind), true)); // a campfire: choose where it goes
   else if (Object.keys(it.eat || {}).length) head.appendChild(smallButton('Eat', () => eatOne(kind), true));
   const parts = [head];
   const about = itemAbout(kind);
@@ -240,26 +293,34 @@ let bagDrawn = ''; // what the grid shows now: it's only redrawn when that chang
 // 'recipes' (Recipes: the craft mat with the list under it)
 let bagTab = 'bag';
 function drawBag() {
+  you.bar = tidyBar(you.bar, you.carry, ITEMS, toolSlots()); // (in step with what you carry, and the number of spots: a live setting)
   const w = carried(), crafting = bagTab === 'recipes';
   $('bagWeight').textContent = `${fmt(w)} / ${fmt(SETTINGS.carryCapacity)}`;
   drawWeightBar($('bagBar'), w);
   $('bag').classList.toggle('crafting', crafting);
   for (const [id, tab] of [['bagTabBag', 'bag'], ['bagTabRecipes', 'recipes']]) { $(id).classList.toggle('on', bagTab === tab); $(id).setAttribute('aria-pressed', String(bagTab === tab)); }
   $('bagPart').hidden = crafting;
+  $('bagHeadWeight').hidden = crafting; // (the weight sits in the header on the Inventory tab, 0.1.17)
   $('mat').hidden = !crafting;
   $('found').hidden = !crafting;
   if (crafting) { drawMat(); drawFound(); }
-  const slots = bagSlots();
-  const picked = slots.find((s) => s.key === bagPick) || null;
+  const slots = bagSlots(), tools = barSlots(), spots = toolSlots();
+  const picked = [...tools, ...slots].find((s) => s.key === bagPick) || null;
   if (!picked) bagPick = null;
-  const shows = JSON.stringify([slots.map((s) => [s.key, s.n, s.left || 0, s.spares || 0]), bagPick]);
+  const shows = JSON.stringify([slots.map((s) => [s.key, s.n, s.left || 0]), tools.map((s) => [s.key, s.left, s.spares]), spots, bagPick]);
   if (shows === bagDrawn) return;
   bagDrawn = shows;
-  $('bagEmpty').hidden = slots.length > 0;
+  $('bagEmpty').hidden = slots.length + tools.length > 0;
   const cells = slots.map((s) => { const li = document.createElement('li'); li.appendChild(bagTile(s)); return li; });
   const total = Math.max(BAG_MIN, Math.ceil(slots.length / BAG_COLS) * BAG_COLS);
   while (cells.length < total) { const li = document.createElement('li'); li.className = 'bag-slot'; li.setAttribute('aria-hidden', 'true'); cells.push(li); }
   $('bagList').replaceChildren(...cells);
+  // the tool bar: its tools, then empty spots (up to 7 across, more spots go on another row)
+  const bar = tools.map((s) => { const li = document.createElement('li'); li.appendChild(bagTile(s)); return li; });
+  while (bar.length < spots) { const li = document.createElement('li'); li.className = 'tool-slot'; li.setAttribute('aria-hidden', 'true'); bar.push(li); }
+  $('toolBar').style.gridTemplateColumns = `repeat(${Math.min(spots, 7)}, minmax(0, 1fr))`;
+  $('toolBar').setAttribute('aria-label', `Tool bar, ${tools.length} of ${spots}`);
+  $('toolBar').replaceChildren(...bar);
   drawBagInfo(picked);
 }
 
@@ -303,10 +364,20 @@ function fillMat(r) {
 }
 // you carry everything the recipe takes, kept tools too (Recipes greys out the ones you don't: Luke, 0.1.12)
 const hasAll = (r) => Object.entries(recipeWants(r)).every(([k, n]) => (you.carry[k] || 0) >= n);
+// what you'd carry after making it: tried on what you carry now, then put back (a tool it makes goes on the tool bar if
+// there's room, so it weighs nothing: the same as the server, needs.js craft)
+function weightAfter(r) {
+  const was = { carry: { ...you.carry }, bar: { ...you.bar }, wear: { ...you.wear }, lastKind: you.lastKind };
+  for (const [k, n] of Object.entries(r.needs)) takeFromCarry(k, n);
+  for (const [k, n] of Object.entries(r.makes)) addToCarry(k, n);
+  const w = carried();
+  Object.assign(you, was);
+  return w;
+}
 // why a recipe can't be made right now ('' if it can): things missing, too heavy, or not by what it needs
 function cantMake(r) {
   if (!hasAll(r)) return 'Need more';
-  if (carried() - weightOf(r.needs) + weightOf(r.makes) > SETTINGS.carryCapacity) return 'Too heavy';
+  if (weightAfter(r) > SETTINGS.carryCapacity) return 'Too heavy';
   if (r.near && !stationNear(r.near)) return 'Not here';
   return '';
 }

@@ -234,8 +234,14 @@ function applyMe(m, spawn = false) {
   you.statsAt = m.statsAt || Date.now();
   // what you carry: the server's word, plus anything you're picking up that it hasn't confirmed yet
   const carry = Object.fromEntries(Object.entries(m.carry || {}).filter(([k, n]) => ITEMS[k] && n > 0));
-  for (const kind of shared.taking.values()) carry[kind] = (carry[kind] || 0) + 1;
+  // the tool bar (0.1.17): the server's (a server from before it sends none: your tools go on it, as there)
+  const bar = tidyBar(m.bar && typeof m.bar === 'object' ? m.bar : null, carry, ITEMS, toolSlots());
+  for (const kind of shared.taking.values()) { // (a tool being picked up goes on the bar if there's room, as it will on the server)
+    carry[kind] = (carry[kind] || 0) + 1;
+    if (ITEMS[kind] && ITEMS[kind].uses && barUsed(bar) < toolSlots()) bar[kind] = (bar[kind] || 0) + 1;
+  }
   you.carry = carry;
+  you.bar = bar;
   you.wear = m.wear || {};
   you.seen = m.seen || you.seen || [];
   you.found = Array.isArray(m.found) ? m.found : you.found || []; // the recipes found on the craft mat (inventory.js)

@@ -1,7 +1,28 @@
 /* ---------- moving about ---------- */
 const walk = { target: null, path: null, replanned: false, onArrive: null, onFail: null, phase: 0, side: 0, best: Infinity, bestAt: 0 };
 let action = null; // what your person is doing right now: bending to pick up or put down, drinking, eating
-function setLegs(P, s) { P.legL.rotation.x = s * 0.55; P.legR.rotation.x = -s * 0.55; }
+// legs: s swings them for walking. drop (in the person's own size) is how far the hips come down for a bend or a
+// kneel: the legs step apart to make up for it, so the feet stay on the ground (before 0.1.17 they sank into it).
+// The feet stay flat whatever the legs do.
+const LEG_LEN = 0.8; // hip to ankle
+function setLegs(P, s, drop = 0) {
+  const lunge = drop > 0 ? Math.acos(Math.max(0.3, 1 - drop / LEG_LEN)) : 0;
+  P.legL.rotation.x = s * 0.55 - lunge; P.legR.rotation.x = -s * 0.55 + lunge;
+  P.legL.scale.y = P.legR.scale.y = 1;
+  P.footL.rotation.x = -P.legL.rotation.x; P.footR.rotation.x = -P.legR.rotation.x;
+}
+// on a slope the uphill foot would go into the ground: that leg bends up a little (shorter) so the foot sits on top
+const _foot = new THREE.Vector3();
+function feetOnGround(m, P) {
+  P.legL.scale.y = P.legR.scale.y = 1;
+  m.updateMatrixWorld(true);
+  const sc = m.scale.y;
+  for (const [hip, foot] of [[P.legL, P.footL], [P.legR, P.footR]]) {
+    foot.getWorldPosition(_foot);
+    const into = groundY(_foot.x, _foot.z) - (_foot.y - 0.07 * sc);
+    if (into > 0.003) hip.scale.y = Math.max(0.7, 1 - into / (LEG_LEN * Math.cos(hip.rotation.x) * sc));
+  }
+}
 function shorePointToward(from) {
   const a = Math.atan2((from.z - POND.z) * 1.22, from.x - POND.x);
   for (let k = 0.6; k < 2; k += 0.02) {
@@ -171,7 +192,7 @@ function startAction(a) {
   walk.target = null;
   action = { t0: elapsed, done: false, seconds: 0.5, pose: 'bend', ...a };
   action.seconds *= slowness(); // out of breath: it takes longer
-  const tool = a.tool && you.carry[a.tool] ? a.tool : null; // the tool comes out only while it's being used
+  const tool = a.tool && hasTool(a.tool) ? a.tool : null; // the tool comes out only while it's being used (only tools on the tool bar get used)
   if (tool !== (you.using || null)) { you.using = tool; drawHeld(); }
   if (online()) net.sock.send(JSON.stringify({ t: 'act', pose: action.pose, seconds: action.seconds }));
 }
@@ -183,12 +204,13 @@ function animateAct(m, P, ground, act, dt) {
     const sw = (Math.sin(t * 5.5) + 1) / 2, env = clamp01(Math.min(t, dur - t) / 0.3);
     P.body.rotation.x = stoop + (0.08 + 0.22 * sw) * env;
     setArm(P.armR, (-2.5 + sw * 2.0) * env);
-    setArm(P.armL, (-2.3 + sw * 1.9) * env);
+    setArm(P.armL, -0.15 * env); // chopping and mining swing the tool in the right hand only
   } else if (act.pose === 'kneel' || act.pose === 'pick') {
     const env = clamp01(Math.min(t, dur - t) / 0.3), wave = Math.sin(t * 7);
     if (act.pose === 'kneel') {
       P.body.rotation.x = stoop + 1.05 * env;
       m.position.y = ground - 0.12 * env;
+      setLegs(P, 0, (0.12 * env) / m.scale.y);
       setArm(P.armR, (-0.6 + wave * 0.3) * env);
       setArm(P.armL, (-0.6 + wave * 0.3) * env);
     } else {
@@ -200,10 +222,11 @@ function animateAct(m, P, ground, act, dt) {
     const s = Math.sin(k * Math.PI);
     P.body.rotation.x = stoop + 1.0 * s;
     m.position.y = ground - 0.14 * s;
+    setLegs(P, 0, (0.14 * s) / m.scale.y);
     setArm(P.armR, -0.55 * s);
     setArm(P.armL, -0.35 * s);
   }
-  if (k >= 1) { P.body.rotation.x = stoop; setArm(P.armR, 0); setArm(P.armL, 0); m.position.y = ground; return false; }
+  if (k >= 1) { P.body.rotation.x = stoop; setArm(P.armR, 0); setArm(P.armL, 0); setLegs(P, 0); m.position.y = ground; return false; }
   return true;
 }
 
@@ -222,11 +245,14 @@ const queuedItem = (id) => allTasks().some((q) => q.type === 'pickup' && q.id ==
 // how many of a kind in your bag aren't already queued to be dropped somewhere
 const spareInBag = (kind) => (you.carry[kind] || 0) - allTasks().reduce((n, q) => n + (q.type === 'drop' && q.kind === kind && !q.landed ? q.n : 0), 0);
 // the weight you'll be carrying once everything queued is picked up or harvested
-const plannedWeight = () => carried() + allTasks().reduce((sum, t) => {
-  if (t.type === 'pickup') { const it = getItem(t.id); return sum + (it ? ITEMS[it.kind].weight : 0); }
+// (a tool going on the tool bar weighs nothing: the first ones queued while there's room, 0.1.17)
+const plannedWeight = () => { let room = barRoom(); return carried() + allTasks().reduce((sum, t) => {
+  if (t.type === 'pickup') { const it = getItem(t.id); if (!it) return sum; if (ITEMS[it.kind].uses && room > 0) { room -= 1; return sum; } return sum + ITEMS[it.kind].weight; }
   if (t.type === 'use' && SOURCES[t.source]) return sum + weightOf(SOURCES[t.source].harvest);
   return sum;
-}, 0);
+}, 0); };
+// tools queued to be picked up that will go on the tool bar (there's room for them)
+const barRoomPlanned = () => Math.max(0, barRoom() - allTasks().filter((q) => q.type === 'pickup' && getItem(q.id) && ITEMS[getItem(q.id).kind].uses).length);
 const useHelps = (src) => Object.entries(src.gives).some(([k, v]) => (v > 0 ? you.stats[k] < 99.5 : you.stats[k] > 0.5));
 const fullLabel = (src) => { const s = STAT[Object.keys(src.gives)[0]]; return s ? s.fullLabel || `${s.name} is full` : 'Not needed'; };
 // why you can't use something right now (or null if you can)
@@ -249,7 +275,7 @@ function queueTask(t) {
     if (allTasks().some((q) => q.type === 'pickup' && q.id === t.id)) return;
     const item = getItem(t.id);
     if (!item) { showTag('Someone got there first', headTop(), 2); return; } // (it went while the menu was open: someone else picked it up)
-    const w = ITEMS[item.kind].weight;
+    const w = ITEMS[item.kind].uses && barRoomPlanned() > 0 ? 0 : ITEMS[item.kind].weight; // (a tool going on the tool bar weighs nothing)
     if (w > SETTINGS.carryCapacity) { showTag('Too heavy', headTop(), 2); return; }
     if (plannedWeight() + w > SETTINGS.carryCapacity) { showTag('Too heavy', headTop(), 2); return; }
   }
@@ -295,7 +321,7 @@ function nextTask() {
   if (t.type === 'pickup') {
     const item = getItem(t.id);
     if (!item) { nextTask(); return; }
-    if (carried() + ITEMS[item.kind].weight > SETTINGS.carryCapacity) { showTag('Too heavy', headTop(), 2); stopQueue(); return; }
+    if (carried() + addWeight(item.kind) > SETTINGS.carryCapacity) { showTag('Too heavy', headTop(), 2); stopQueue(); return; }
     approach(item.x, item.z, 0.5, 0.75, () => doPickup(item));
   } else if (t.type === 'use') {
     if (t.water) {
@@ -476,7 +502,7 @@ function applyGives(gives) {
 // With the source's tool (a knife) you cut a few at once (toolHarvest); the server works it out the same way.
 function harvestFrom(src, t) {
   const b = berryBushes[t.bush];
-  const many = src.tool && src.toolHarvest && you.carry[src.tool] && b && berriesOn(b) >= Object.values(src.toolHarvest).reduce((a, n) => a + n, 0);
+  const many = src.tool && src.toolHarvest && hasTool(src.tool) && b && berriesOn(b) >= Object.values(src.toolHarvest).reduce((a, n) => a + n, 0);
   const got = many ? src.toolHarvest : src.harvest;
   if ((b && !ripe(b)) || carried() + weightOf(got) > SETTINGS.carryCapacity) return;
   for (const [k, n] of Object.entries(got)) addToCarry(k, n);
@@ -506,7 +532,7 @@ function doCut(t) {
   if (!def || !c) { nextTask(); return; }
   if (!plantReady(c)) { showTag(`Grows back in ${growsIn(c)}`, headTop(), 2); nextTask(); return; }
   if (carried() + weightOf(def.gives) > SETTINGS.carryCapacity) { showTag('Too heavy', headTop(), 2); stopQueue(); return; }
-  const tool = def.tool && you.carry[def.tool] ? def.tool : null;
+  const tool = def.tool && hasTool(def.tool) ? def.tool : null;
   if (tool) { you.tool = tool; drawHeld(); }
   const secs = tool ? def.toolSeconds || def.seconds : def.seconds || 6;
   face(t.x, t.z);
@@ -527,7 +553,7 @@ function doCut(t) {
 function doChop(t) {
   const rule = CHOP[t.what === 'oldStump' ? 'stump' : t.what] || {};
   if (t.what === 'oldStump' && oldStumps[t.idx] && oldStumps[t.idx].gone) { nextTask(); return; }
-  if (CHOP.tool && !you.carry[CHOP.tool]) { showTag(`You need a ${ITEMS[CHOP.tool].name.toLowerCase()}`, headTop(), 2); nextTask(); return; }
+  if (CHOP.tool && !hasTool(CHOP.tool)) { showTag(toolWhy(CHOP.tool), headTop(), 2); nextTask(); return; }
   if (CHOP.tool) { you.tool = CHOP.tool; drawHeld(); }
   if ((t.what === 'tree' && trees[t.idx] && trees[t.idx].state !== 'tree') || (t.what === 'stump' && trees[t.idx] && trees[t.idx].state !== 'stump')) { nextTask(); return; }
   face(t.x, t.z);
@@ -543,7 +569,7 @@ function doMine(t) {
   const r = rocks[t.idx];
   if (!r || r.state !== 'whole') { nextTask(); return; }
   const rule = MINE[r.boulder ? 'boulder' : 'rock'] || {};
-  if (MINE.tool && !you.carry[MINE.tool]) { showTag(`You need a ${ITEMS[MINE.tool].name.toLowerCase()}`, headTop(), 2); nextTask(); return; }
+  if (MINE.tool && !hasTool(MINE.tool)) { showTag(toolWhy(MINE.tool), headTop(), 2); nextTask(); return; }
   face(r.x, r.z);
   showTag(`${taskName(t, true)}…`, headTop(), 2, (rule.seconds || 10) + 0.3);
   tagLabel.busy = true;
@@ -571,7 +597,7 @@ Object.assign(TASK_KINDS, {
     start() {
       const F = (fishSource() || {}).fish;
       if (!F) { nextTask(); return; }
-      if (!you.carry[F.tool]) { showTag(`You need a ${ITEMS[F.tool].name.toLowerCase()}`, headTop(), 2); nextTask(); return; }
+      if (!hasTool(F.tool)) { showTag(toolWhy(F.tool), headTop(), 2); nextTask(); return; }
       if (carried() + ITEMS[F.catch].weight > SETTINGS.carryCapacity) { showTag('Too heavy', headTop(), 2); nextTask(); return; }
       const go = () => {
         face(POND.x, POND.z);
@@ -602,7 +628,7 @@ function doDrop(t) {
   const go = () => {
     if (at) face(at.x, at.z);
     startAction({ pose: 'bend', mid: () => {
-      const taken = takeFromCarry(t.kind, t.n);
+      const taken = takeFromCarry(t.kind, t.n, t.which); // (a tool: that one, so the tool bar keeps up)
       const out = [];
       for (let i = 0; i < taken; i++) { const s = dropSpot(i, at); out.push({ kind: t.kind, x: s.x, z: s.z, rot: i === 0 && Number.isFinite(t.rot) ? t.rot : rand() * Math.PI, ...(i === 0 && t.which != null ? { which: t.which } : {}) }); }
       placeItems(out);

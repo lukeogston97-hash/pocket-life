@@ -99,8 +99,8 @@ const groundCells = (() => {
   for (let t = 0; t < tris; t++) span(t, (c) => { list[fill[c]++] = t; });
   return { p, N, cellOf, start, list };
 })();
-function groundY(x, z) {
-  const { p, N, cellOf, start, list } = groundCells;
+function groundY(x, z, p = groundCells.p) { // (p: the land's heights to use; landAsMade is the land before any flattening)
+  const { N, cellOf, start, list } = groundCells;
   if (Math.abs(x) >= SIZE / 2 || Math.abs(z) >= SIZE / 2) return heightAt(x, z);
   const c = cellOf(z) * N + cellOf(x);
   for (let k = start[c]; k < start[c + 1]; k++) {
@@ -113,6 +113,64 @@ function groundY(x, z) {
     if (u >= -1e-7 && v >= -1e-7 && u + v <= 1 + 1e-7) return u * p[o + 1] + v * p[o + 4] + (1 - u - v) * p[o + 7];
   }
   return heightAt(x, z);
+}
+
+/* ---------- flat ground under placed things (0.1.17) ----------
+   Each placed thing levels the land under it: fully flat out to FLAT_IN metres past its edges, blending back into the
+   land by FLAT_OUT. The land's triangles are 2 m, so the flat part reaches past the thing to keep its whole square level.
+   Worked out the same in every game from the list of placed things (oldest first, so a new thing next to an old one
+   takes the ground the old one left, and never tilts it). It goes back to the land as made when the thing is removed. */
+const FLAT_IN = 1.4, FLAT_OUT = 2.8;
+const landAsMade = groundCells.p.slice();
+const flatLock = new Float32Array(landAsMade.length / 3); // how flat each corner already is (1: under something placed)
+let flatTouched = [];
+// how far x, z is outside a placed thing's square (0 inside): f is { x, z, rot, hw, hd }
+function outsideRect(f, x, z) {
+  const dx = x - f.x, dz = z - f.z, c = Math.cos(f.rot || 0), s = Math.sin(f.rot || 0);
+  const lx = dx * c - dz * s, lz = dx * s + dz * c;
+  return Math.hypot(Math.max(0, Math.abs(lx) - f.hw), Math.max(0, Math.abs(lz) - f.hd));
+}
+const flatWeight = (f, x, z) => { const d = outsideRect(f, x, z); return d <= FLAT_IN ? 1 : 1 - smoothstep(FLAT_IN, FLAT_OUT, d); };
+const flatReach = (f) => Math.hypot(f.hw, f.hd) + FLAT_OUT;
+// the ground over a placed thing's square (and a margin): its average height, and highest minus lowest
+function groundUnder(f, margin = 0) {
+  let sum = 0, n = 0, lo = Infinity, hi = -Infinity;
+  const ex = f.hw + margin, ez = f.hd + margin, c = Math.cos(f.rot || 0), s = Math.sin(f.rot || 0);
+  const stepsX = Math.max(1, Math.ceil(ex / 0.25)), stepsZ = Math.max(1, Math.ceil(ez / 0.25));
+  for (let i = -stepsX; i <= stepsX; i++) for (let j = -stepsZ; j <= stepsZ; j++) {
+    const lx = (i / stepsX) * ex, lz = (j / stepsZ) * ez;
+    const h = groundY(f.x + lx * c + lz * s, f.z - lx * s + lz * c);
+    sum += h; n++; lo = Math.min(lo, h); hi = Math.max(hi, h);
+  }
+  return { y: sum / n, rise: hi - lo };
+}
+// every land corner near x, z (each copy of a corner, as the land's triangles don't share them)
+function landCornersNear(x, z, r, fn) {
+  const { N, cellOf, start, list } = groundCells, seen = new Set();
+  for (let cz = cellOf(z - r); cz <= cellOf(z + r); cz++) for (let cx = cellOf(x - r); cx <= cellOf(x + r); cx++) {
+    const c = cz * N + cx;
+    for (let k = start[c]; k < start[c + 1]; k++) for (let q = 0; q < 3; q++) { const v = list[k] * 3 + q; if (!seen.has(v)) { seen.add(v); fn(v); } }
+  }
+}
+// level the land under these things (all of them, every time the list changes); gives each one its height, f.y.
+// keep(x, z) says how much the land there may change (0 to 1): trees, rocks and bushes keep the ground they stand on.
+function setFlats(list, keep = () => 1) {
+  const p = groundCells.p;
+  for (const v of flatTouched) { p[v * 3 + 1] = landAsMade[v * 3 + 1]; flatLock[v] = 0; }
+  flatTouched = [];
+  for (const f of [...list].sort((a, b) => a.id - b.id)) {
+    f.y = groundUnder(f).y;
+    landCornersNear(f.x, f.z, flatReach(f), (v) => {
+      if (landAsMade[v * 3 + 1] < WATER_Y + 0.25) return; // the pond's bank and bed stay as they are
+      const w = flatWeight(f, p[v * 3], p[v * 3 + 2]) * (1 - flatLock[v]) * keep(p[v * 3], p[v * 3 + 2]);
+      if (w <= 0) return;
+      if (!flatLock[v]) flatTouched.push(v);
+      p[v * 3 + 1] += (f.y - p[v * 3 + 1]) * w;
+      flatLock[v] = Math.min(1, flatLock[v] + w);
+    });
+  }
+  tg.attributes.position.needsUpdate = true;
+  tg.computeBoundingSphere();
 }
 
 /* water */

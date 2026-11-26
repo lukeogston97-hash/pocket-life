@@ -116,9 +116,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .auto-chip[hidden] { display: none; }
 /* choosing where to put a campfire: a bar along the bottom with Cancel and Place */
 /* (width: max-content: a bar centred with left: 50% otherwise only gets half the screen, and the note squeezes to a word a line) */
-.place-bar { position: absolute; z-index: 4; left: 50%; bottom: calc(68px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: flex; align-items: center; gap: 8px;
+.place-bar { position: absolute; z-index: 4; left: 50%; bottom: calc(68px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: flex; align-items: center; gap: 6px;
   width: max-content; max-width: calc(100% - 24px); padding: 6px 6px 6px 15px; border-radius: 999px; font: 700 13px var(--font-ui); white-space: nowrap; }
 .place-bar span { overflow: hidden; text-overflow: ellipsis; margin-right: 4px; white-space: normal; line-height: 1.25; } /* a longer line (about claims) wraps onto two */
+.place-bar .small-btn { padding: 0 11px; } .place-bar .turn-btn { padding: 0 9px; } .place-bar .turn-btn svg { width: 18px; height: 18px; display: block; } /* Turn: a quarter turn (0.1.17) */
 .place-bar[hidden], .placing .queue, .is-menu .place-bar, .is-creating .place-bar { display: none; }
 
 /* things over the world: name tags, speech bubbles, little notes, "+1 Stick" */
@@ -160,7 +161,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .send-btn svg { width: 18px; height: 18px; }
 .chatting .hud-bottom, .chatting .queue, .chatting .hint { display: none; }
 
-/* the sheet that slides up: the inventory, with the craft mat in it (0.1.8) */
+/* the sheet that slides up: the inventory, with its Inventory and Recipes tabs at the top (0.1.15; Recipes has the craft mat) */
 .bag { position: absolute; left: 0; right: 0; bottom: 0; z-index: 26; max-width: 520px; margin: 0 auto; max-height: 62%; overflow-y: auto;
   padding: 6px 14px calc(14px + env(safe-area-inset-bottom)); border-bottom: 0; border-radius: 18px 18px 0 0;
   transform: translateY(105%); visibility: hidden; transition: transform 0.26s ease, visibility 0s linear 0.26s; }
@@ -168,12 +169,28 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .grab { width: 36px; height: 4px; border-radius: 4px; background: var(--line-strong); margin: 2px auto 8px; }
 .bag-head { display: flex; justify-content: space-between; align-items: center; }
 .bag-head h2 { margin: 0; font: 800 18px/1.2 var(--font-ui); }
+.bag-tabs { margin: 0; }
 .bag-weight { display: grid; gap: 6px; margin: 4px 0 10px; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
 .bag-weight strong { color: var(--ink); font-variant-numeric: tabular-nums; }
 .carry-bar { display: block; width: 54px; height: 4px; border-radius: 4px; background: rgba(255, 255, 255, 0.14); overflow: hidden; }
 .carry-bar i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 4px; transition: width 0.3s ease; }
 .carry-bar.full i { background: var(--warn); }
 .carry-bar.wide { width: 100%; }
+/* the weight sits in the inventory's header beside Close (0.1.17, Luke's mockup), only on the Inventory tab */
+#bag > .bag-head { gap: 10px; }
+#bag > .bag-head .bag-weight { margin: 0 0 0 auto; gap: 4px; white-space: nowrap; }
+#bag > .bag-head .bag-weight[hidden] { display: none; }
+#bag > .bag-head .text-btn { padding: 0 4px 0 6px; }
+@media (max-width: 359px) { #bag > .bag-head .weight-word { display: none; } } /* (a narrow phone: just the numbers) */
+/* the tool bar (0.1.17, Luke): smaller squares above the inventory, 7 spots. Only tools on it get used, and they weigh
+   nothing. While a tool is dragged the inventory stays (dragging-tool), and where it can go is edged in green. */
+.tool-bar { list-style: none; margin: 10px 0 12px; padding: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.tool-bar li { display: flex; }
+.tool-slot { aspect-ratio: 1; border: 1.5px dashed var(--line); border-radius: 11px; }
+.tool-bar .bag-tile { border-radius: 11px; }
+.tool-bar .bag-tile .pic { width: 80%; height: 80%; margin-bottom: 2px; }
+.tool-bar .bag-tile .wear { left: 6px; right: 6px; bottom: 4px; }
+.tool-bar.drop-on .tool-slot, .tool-bar.drop-on .bag-tile, .bag-grid.drop-on .bag-slot { border-color: var(--accent); }
 /* the inventory: a grid of tiles (two rows at least), and a bar about the one you tap */
 .bag-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
 .bag-grid li { display: flex; }
@@ -208,23 +225,18 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .craft-more { margin: 10px 0 2px; text-align: center; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
 .craft-more[hidden] { display: none; }
 .craft-needs { display: flex; flex-wrap: wrap; gap: 6px; }
-/* the craft mat (0.1.8): in the inventory, above your bag. Put things on it; Make lights up when they go together */
+/* the craft mat (0.1.8), at the top of the Recipes tab: it shows the recipe you tap, and Make lights up when it's all there */
 .bag.crafting { max-height: 80%; }
-.bag-head-btns { display: flex; align-items: center; gap: 2px; }
-.craft-toggle { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; }
-.craft-toggle svg { width: 15px; height: 15px; }
-.craft-toggle.on { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
 .mat { display: grid; gap: 8px; margin: 6px 0 10px; }
 .mat[hidden] { display: none; }
 .mat-spot { min-height: 84px; padding: 10px; border: 1.5px dashed var(--line-strong); border-radius: 14px; background: rgba(255, 255, 255, 0.04); display: grid; place-items: center;
   transition: border-color 0.15s ease, background 0.15s ease; }
-.mat.drop-here .mat-spot { border-color: var(--ink-soft); }
-.mat-spot.over { border-color: var(--accent); background: rgba(143, 212, 158, 0.1); }
 .mat-spot.match { border-style: solid; border-color: var(--accent); }
 .mat-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 .mat-list:empty { display: none; }
 .mat-list li { display: flex; width: 56px; }
-.mat-tile.need { opacity: 0.45; border-style: dashed; cursor: default; }
+.mat-tile { cursor: default; }
+.mat-tile.need { opacity: 0.45; border-style: dashed; }
 .mat-empty { margin: 0; max-width: 240px; text-align: center; font-size: 12.5px; font-weight: 600; line-height: 1.35; color: var(--ink-faint); }
 .mat-empty[hidden] { display: none; }
 .mat-out { display: flex; align-items: center; gap: 10px; min-height: 48px; }
@@ -244,7 +256,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .mat-out .text-btn[hidden] { display: none; }
 #matMake { flex: none; min-width: 72px; }
 #matMake:disabled { opacity: 1; background: var(--hover); color: var(--ink-faint); border-color: var(--line); } /* still a button, just not lit */
-.mat-tabs { margin: 0; }
 #bagPart[hidden], .found[hidden] { display: none; }
 .found-list { list-style: none; margin: 0; padding: 0; display: grid; }
 .found-list li + li { border-top: 1px solid var(--line); }

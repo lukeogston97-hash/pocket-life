@@ -11,6 +11,7 @@ for (const [kind, raw] of Object.entries(DATA.placeables || {})) {
   const s = raw.seats;
   PLACEABLES[kind] = {
     kind, item, name: raw.name || ITEMS[item].name, buildSeconds: Math.max(1, Number(raw.buildSeconds) || 10), buildVerb: raw.buildVerb || 'Building', solid: Number(raw.solid) || 0.5,
+    size: raw.size, keepClear: Number(raw.keepClear) || 0, // its squares on the placing grid, and room kept round it (rules.js)
     fire: fireRuleOf(raw.fire, (k) => !!ITEMS[k]), // rules.js: fuels and how long each burns, the most it holds
     seats: s ? { count: Math.max(1, Math.floor(s.count) || 6), distance: Number(s.distance) || 1.2 } : null,
     craftLabel: raw.craftLabel || 'Make', // the tap menu's list of recipes made here (Cook on a campfire)
@@ -75,13 +76,13 @@ function freeSeat(th) {
 // sitting on the ground, legs out in front, hands on the knees (anyone: you or someone else)
 function sitPose(m, P, ground) {
   m.rotation.x = 0;
-  P.legL.rotation.x = -1.38; P.legR.rotation.x = -1.5;
+  P.legL.rotation.x = -1.38; P.legR.rotation.x = -1.5; P.legL.scale.y = P.legR.scale.y = 1; P.footL.rotation.x = P.footR.rotation.x = 0;
   P.body.rotation.x = P.body.userData.stoop + 0.14;
   setArm(P.armL, -0.75); setArm(P.armR, -0.7);
   m.position.y = ground - (HIP_Y - 0.1) * m.scale.y;
 }
 function unsitPose(m, P, ground) {
-  P.legL.rotation.x = 0; P.legR.rotation.x = 0;
+  setLegs(P, 0);
   P.body.rotation.x = P.body.userData.stoop;
   setArm(P.armL, 0); setArm(P.armR, 0);
   m.position.y = ground;
@@ -188,6 +189,7 @@ function setPlaced(v) {
     placed.set(th.id, th);
     addSpot(th.x, th.z, PLACEABLES[th.kind].solid); // walked round, like a rock
     clearCellsNear(th.x, th.z, PLACEABLES[th.kind].solid + 1);
+    flatsDue = true;
   }
   const wasBuilt = th.built;
   Object.assign(th, { built: !!v.built, fuel: Math.max(0, Number(v.fuel) || 0), lit: !!v.lit, at: Date.now(), claim: v.claim && v.claim.who ? v.claim : null });
@@ -205,6 +207,7 @@ function removePlaced(id) {
   if (i >= 0) interactive.splice(i, 1);
   removeSpotNear(th.x, th.z);
   clearCellsNear(th.x, th.z, PLACEABLES[th.kind].solid + 1);
+  flatsDue = true;
   if (th.ring) { scene.remove(th.ring); th.ring.geometry.dispose(); }
   placed.delete(id);
   if (you.sit && you.sit.fire === id) endSit(false);
@@ -218,6 +221,7 @@ function usePlaced(list) {
 // every frame: flames flicker, fires that ran out go out, the light sits on the nearest lit fire
 let placedTick = 0;
 function animatePlaced(dt) {
+  if (flatsDue) levelPlaced();
   placedTick += dt;
   const second = placedTick > 1;
   if (second) placedTick = 0;
@@ -247,21 +251,64 @@ function animatePlaced(dt) {
 }
 
 /* ---------- placing: pick a spot, then your person goes and puts it down ---------- */
-const placing = { on: false, item: null, kind: null, x: 0, z: 0, rot: 0, ghost: null, ok: false };
-const placeRing = new THREE.Mesh(new THREE.RingGeometry(0.62, 0.74, 36).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#9fd88a', transparent: true, opacity: 0.8, depthWrite: false }));
+const placing = { on: false, item: null, kind: null, x: 0, z: 0, rot: 0, at: null, ghost: null, ok: false }; // at: where you last tapped
+// the square it takes on the grid, outlined on the ground (green, or red where it can't go)
+const placeRing = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 4, 1, Math.PI / 4).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#9fd88a', transparent: true, opacity: 0.8, depthWrite: false, depthTest: false }));
 placeRing.visible = false;
 placeRing.renderOrder = 2;
 scene.add(placeRing);
-// why it can't go here (or null if it can)
-function cantPlaceAt(x, z, kind) {
-  const r = PLACEABLES[kind].solid;
+const rectOf = (x, z, rot, kind) => placeRect({ x, z, rot }, PLACEABLES[kind]); // rules.js
+// why it can't go here (or null if it can). x, z, rot are already on the grid (placeSnap)
+function cantPlaceAt(x, z, kind, rot = 0) {
+  const P = PLACEABLES[kind], f = rectOf(x, z, rot, kind);
   if (Math.abs(x) > WALK_LIMIT - 1 || Math.abs(z) > WALK_LIMIT - 1) return 'Too close to the forest';
   if (pondShape(x, z) < 1.35) return 'Too close to the water';
-  if (!roomAt(x, z, r + 0.25, 0.4)) return 'Not enough room here';
-  if ([...placed.values()].some((th) => Math.hypot(th.x - x, th.z - z) < r + PLACEABLES[th.kind].solid + 1)) return 'Too close to another one';
+  if (placeClash([...placed.values()], { x, z, rot }, kind, PLACEABLES)) return 'Too close to another one';
+  if (!roomAt(x, z, Math.max(P.solid, Math.hypot(f.hw, f.hd)) + 0.25, 0.4)) return 'Not enough room here';
+  if (groundUnder(f, 0.5).rise > (SETTINGS.placeMaxRise || 0.5)) return 'Too steep here';
   const c = notMineAt(x, z);
   if (c) return `This belongs to ${c.claim.name}`; // (the server's words for it: claimNo in server/src/claims.js)
   return null;
+}
+// how much levelling may change the ground at x, z (0 to 1): none right by a tree, rock, bush or clump of grass,
+// so they never end up floating or sunk; fully a metre or so away
+function landMayChange(x, z) {
+  let k = 1;
+  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+    const a = spots.get(spotKey(x + i * 4, z + j * 4));
+    if (!a) continue;
+    for (let n = 0; n < a.length; n += 4) {
+      if (placedAt(a[n], a[n + 1])) continue; // placed things level their own ground
+      const d = Math.hypot(a[n] - x, a[n + 1] - z) - (a[n + 3] ? 0.25 : a[n + 2] * 0.8); // a tree's trunk, or the edge of a rock or bush
+      if (d < 1.4) k = Math.min(k, smoothstep(0.3, 1.4, d));
+    }
+  }
+  for (const P of Object.values(plants)) for (const c of P.clumps) { const d = Math.hypot(c.x - x, c.z - z); if (d < 1.2) k = Math.min(k, smoothstep(0.4, 1.2, d)); }
+  return k;
+}
+const placedAt = (x, z) => { for (const th of placed.values()) if (Math.abs(th.x - x) < 0.01 && Math.abs(th.z - z) < 0.01) return true; return false; };
+// level the ground under everything placed (land.js), then set things on it: placed things, loose items, the grass
+let flatsDue = false, grassMoved = [];
+function levelPlaced() {
+  flatsDue = false;
+  const rects = [...placed.values()].map((th) => Object.assign(rectOf(th.x, th.z, th.rot, th.kind), { th }));
+  const items = [...itemViews.values()].map((v) => [v, groundY(v.position.x, v.position.z)]);
+  setFlats(rects, landMayChange);
+  for (const f of rects) f.th.view.position.y = f.y;
+  for (const [v, was] of items) v.position.y += groundY(v.position.x, v.position.z) - was;
+  for (const d of DETAILS) { // grass: back where it grew, then onto the levelled ground
+    const m = d.ms;
+    if (!d.y0) d.y0 = Float32Array.from(d.xs, (_, i) => m[i * 16 + 13]);
+    for (const i of grassMoved) m[i * 16 + 13] = d.y0[i];
+    grassMoved = [];
+    for (let i = 0; i < d.xs.length; i++) {
+      const x = d.xs[i], z = d.zs[i];
+      if (!rects.some((f) => Math.abs(x - f.x) < flatReach(f) && Math.abs(z - f.z) < flatReach(f))) continue;
+      const lift = groundY(x, z) - groundY(x, z, landAsMade);
+      if (Math.abs(lift) > 0.001) { m[i * 16 + 13] = d.y0[i] + lift; grassMoved.push(i); }
+    }
+  }
+  detailAt = null; // grass is drawn again next frame
 }
 function startPlacing(item) {
   const kind = ITEMS[item] && ITEMS[item].places;
@@ -271,26 +318,39 @@ function startPlacing(item) {
   const ghost = placedModel(item).model;
   ghost.traverse((m) => { if (m.isMesh) { m.material = m.material.clone(); m.material.userData = {}; m.material.transparent = true; m.material.opacity = 0.55; m.material.depthWrite = false; } });
   scene.add(ghost);
-  Object.assign(placing, { on: true, item, kind, ghost, rot: player.rotation.y });
+  Object.assign(placing, { on: true, item, kind, ghost, rot: Math.round(player.rotation.y / (Math.PI / 2)) * (Math.PI / 2) }); // facing one of 4 ways
   const fx = Math.sin(player.rotation.y), fz = Math.cos(player.rotation.y);
   movePlacing(player.position.x + fx * 1.8, player.position.z + fz * 1.8);
   $('placeBar').hidden = false;
   app.classList.add('placing');
 }
+// a tap on the ground: the nearest spot on the grid to it
 function movePlacing(x, z) {
   if (!placing.on) return;
-  placing.x = x; placing.z = z;
-  const why = cantPlaceAt(x, z, placing.kind);
+  placing.at = [x, z];
+  const s = placeSnap(x, z, placing.rot, PLACEABLES[placing.kind]); // rules.js
+  placing.x = s.x; placing.z = s.z; placing.rot = s.rot;
+  x = s.x; z = s.z;
+  const why = cantPlaceAt(x, z, placing.kind, placing.rot);
   placing.ok = !why;
-  placing.ghost.position.set(x, groundY(x, z), z);
+  const f = rectOf(x, z, placing.rot, placing.kind), y = groundUnder(f).y; // the height it'll sit at once the ground is levelled
+  placing.ghost.position.set(x, y, z);
   placing.ghost.rotation.y = placing.rot;
-  placeRing.position.set(x, groundY(x, z) + 0.04, z);
+  placeRing.position.set(x, y + 0.04, z);
+  placeRing.scale.set(f.hw / Math.SQRT1_2, 1, f.hd / Math.SQRT1_2);
+  placeRing.rotation.y = placing.rot;
   placeRing.material.color.set(why ? '#e07a6a' : '#9fd88a');
   placeRing.visible = true;
   const claim = !why && placing.kind === CLAIMS.placeable ? claimHere(x, z) : null; // would lighting it claim the land?
   showPlaceClaim(why ? null : [x, z], claim);
   $('placeText').textContent = why || (claim ? claim.text : 'Tap the ground to move it');
   $('placeGo').disabled = !!why;
+}
+// the Turn button: a quarter turn
+function turnPlacing() {
+  if (!placing.on) return;
+  placing.rot += Math.PI / 2;
+  movePlacing(...placing.at);
 }
 function stopPlacing() {
   if (placing.ghost) { scene.remove(placing.ghost); disposeMaterials(placing.ghost); }
@@ -306,6 +366,7 @@ function finishPlacing() {
   stopPlacing();
   queueTask(t);
 }
+$('placeTurn').addEventListener('click', turnPlacing);
 $('placeGo').addEventListener('click', finishPlacing);
 $('placeCancel').addEventListener('click', stopPlacing);
 
@@ -318,7 +379,7 @@ Object.assign(TASK_KINDS, {
   place: {
     start(t) {
       if (!you.carry[t.item]) { nextTask(); return; }
-      const why = cantPlaceAt(t.x, t.z, t.kind);
+      const why = cantPlaceAt(t.x, t.z, t.kind, t.rot);
       if (why) { showTag(why, headTop(), 2); nextTask(); return; }
       approach(t.x, t.z, PLACEABLES[t.kind].solid + 0.45, PLACEABLES[t.kind].solid + 0.9, () => {
         face(t.x, t.z);

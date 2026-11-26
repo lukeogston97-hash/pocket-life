@@ -68,6 +68,7 @@ $('announce').addEventListener('click', () => { $('announce').hidden = true; });
 const BERRY_SOURCE = () => Object.values(SOURCES).find(harvests);
 const LIVE_SET = {
   maxPlaying: (v) => { SETTINGS.maxPlaying = v; },
+  toolSlots: (v) => { if (SETTINGS.toolSlots !== v) { SETTINGS.toolSlots = v; if (player && bagOpen()) drawBag(); } }, // the tool bar's spots (inventory.js)
   societyMax: (v) => { SOCIETY.maxMembers = v; }, // (society.js; members are told the number with their society too)
   respawnMinutes: (v) => { SETTINGS.respawnMinutes = v; },
   berryRegrowHours: (v) => { const s = BERRY_SOURCE(); if (s && s.regrowHours !== v) { s.regrowHours = v; for (const b of berryBushes) { b.userData.shown = -1; drawBerries(b); } } },
@@ -80,7 +81,7 @@ const LIVE_SET = {
   thirstPerHour: (v) => { if (STAT.thirst) STAT.thirst.perHour = -v; },
   restPerHour: (v) => { if (STAT.rest) STAT.rest.perHour = -v; },
 };
-const LIVE_BASE = { maxPlaying: SETTINGS.maxPlaying, societyMax: (DATA.societies || {}).maxMembers ?? 3, respawnMinutes: SETTINGS.respawnMinutes, berryRegrowHours: (BERRY_SOURCE() || {}).regrowHours,
+const LIVE_BASE = { maxPlaying: SETTINGS.maxPlaying, toolSlots: SETTINGS.toolSlots ?? 7, societyMax: (DATA.societies || {}).maxMembers ?? 3, respawnMinutes: SETTINGS.respawnMinutes, berryRegrowHours: (BERRY_SOURCE() || {}).regrowHours,
   treeRegrowDays: daysSpan(CHOP.regrowDays)[0], treeRegrowDaysMost: daysSpan(CHOP.regrowDays)[1], boulderRegrowDays: MINE.regrowDays ?? 3, rockBackHours: MINE.rockBackHours ?? 4, fadeDays: SETTINGS.fadeDays ?? 7,
   hungerPerHour: -((STAT.hunger || {}).perHour || 0), thirstPerHour: -((STAT.thirst || {}).perHour || 0), restPerHour: -((STAT.rest || {}).perHour || 0) };
 function applyLive(live) {
@@ -384,9 +385,9 @@ function drawPlayer() {
     const kinds = Object.entries(p.carry || {}).filter(([k, n]) => n > 0 && ITEMS[k]);
     const bag = entry('Bag', kinds.length ? '' : 'Empty');
     for (const [k, n] of kinds) {
-      const row = el('div', 'admin-row'), btns = el('div', 'admin-btns');
+      const row = el('div', 'admin-row'), btns = el('div', 'admin-btns'), onBar = Math.min(n, (p.bar || {})[k] || 0); // (tools on their tool bar, 0.1.17)
       btns.append(button('Take 1', () => adminSend({ t: 'a.take', id: p.id, kind: k, n: 1 })), ...(n > 1 ? [button('Take all', () => adminSend({ t: 'a.take', id: p.id, kind: k, n }))] : []));
-      row.append(el('span', 'admin-body', countLabel(k, n)), btns);
+      row.append(el('span', 'admin-body', `${countLabel(k, n)}${onBar ? ` · ${onBar === n ? (n > 1 ? 'all ' : '') : `${onBar} `}on the tool bar` : ''}`), btns);
       bag.appendChild(row);
     }
     const give = el('div', 'admin-btns');
