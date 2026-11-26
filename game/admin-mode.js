@@ -5,7 +5,36 @@
    The password is asked for every time. It is kept only in this page's memory while admin mode is open (so a dropped
    connection can rejoin by itself), never on the device, and it's forgotten on Exit admin or when the page closes. The
    real check is on the server (the Cloudflare secret ADMIN_CODE); the 5 taps only keep the box out of players' way. */
-const adminMode = { on: false, code: '', asking: false, saved: null, follow: null, wait: null }; // follow: the id of the person the camera is following; wait: the timer for no answer to the password
+import * as THREE from 'three';
+import { game, share } from './links.js';
+import { app, camera, V } from './core.js';
+import { groundY, POND, WORLD_HALF } from './land.js';
+import { berryBushes, rocks } from './nature.js';
+import { drawPlants, plantReady, plants } from './plants.js';
+import { berriesOn, bushHolds, drawBerries } from './world-build.js';
+import { $, deg, ITEMS, SOURCES } from './items.js';
+import { formatTime, hudZone, REGIONS, ring, ui, worldNow } from './you.js';
+import { applyDaylight } from './needs.js';
+import { hideHint } from './tips.js';
+import { closeBag, closeCraft } from './inventory.js';
+import { controls } from './camera.js';
+import { drawClaimRing, placed } from './placeables.js';
+import { camVel, closeMenu, closePause, keyAxis, keysDown, panVel, pickTarget, showActs } from './input.js';
+import { enterMenu, menuCam, sendHello, setFresh, toMenu } from './screens.js';
+import { renderWorld } from './loop.js';
+import { goOnline, maint, net, others } from './online.js';
+import {
+  admin, adminGroundActions, adminMoveTap, adminMoving, adminPersonActions, adminPlacedActions, adminSay, adminSend,
+  adminThingActions, closeAdminPanel, forgetAdminData,
+} from './admin.js';
+import { closeSay, online, updateOthers } from './others.js';
+// shared for files further down game/main.js, and the variables other files change (game/links.js)
+share({
+  adminFlyTo, adminFollow, adminFrame, adminLoginAnswer, get adminMode() { return adminMode; },
+  get adminNarrow() { return adminNarrow; }, adminTap,
+});
+
+export const adminMode = { on: false, code: '', asking: false, saved: null, follow: null, wait: null }; // follow: the id of the person the camera is following; wait: the timer for no answer to the password
 // 5 taps in a row: each within ADMIN_TAP_GAP of the one before (a longer pause starts the count again). It's a gap between
 // taps, not a time limit for all five, and a generous one: the main menu is when a phone is busiest (the world is loading
 // behind it), and this is the only way in. The taps only keep the box out of players' way; the password is the real lock.
@@ -29,8 +58,8 @@ fiveTaps($('menuVer'), () => ui.mode === 'menu', () => openAdminLogin());
 fiveTaps($('maintTitle'), () => maint.on && !net.stopped, () => { if (ui.mode !== 'menu') toMenu(); openAdminLogin(); });
 // A second way to the password box, for a device where five quick taps are awkward: ?admin on the end of the address
 // (start.js opens the box once the main menu is up). It only opens the box. The password is the lock, and the server checks it.
-const ADMIN_LINK = /[?&]admin(=|&|$)/.test(location.search);
-function openAdminLogin(note = 'Enter the admin password.') {
+export const ADMIN_LINK = /[?&]admin(=|&|$)/.test(location.search);
+export function openAdminLogin(note = 'Enter the admin password.') {
   $('adminLoginNote').textContent = note;
   $('adminLoginCode').value = '';
   $('adminLoginGo').disabled = false;
@@ -84,7 +113,7 @@ function enterAdmin() {
   setFresh(false); // the world as it really is
   closeMenu(); closePause(); closeBag(); closeCraft(); closeSay(); hideHint();
   keysDown.clear();
-  paused = false; // the world is always live under the admin's panels
+  game.paused = false; // the world is always live under the admin's panels
   app.classList.remove('is-menu', 'is-creating');
   app.classList.add('is-admin');
   $('mainMenu').hidden = true;
@@ -250,13 +279,17 @@ function adminTap(px, py) {
   menu.style.left = `${Math.round(Math.min(Math.max(8, px + 8), app.clientWidth - w - 8))}px`;
   menu.style.top = `${Math.round(Math.max(hudZone.top + 6, Math.min(app.clientHeight - h - 8, py + 8)))}px`;
 }
-function adminActionsFor(t) {
+export function adminActionsFor(t) {
   if (t.kind === 'person') return adminPersonActions(t.person);
   if (t.kind === 'placed') return adminPlacedActions(t.th);
   if (t.kind === 'item') return [{ label: `Remove ${ITEMS[t.item.kind].name.toLowerCase()}`, run: () => adminSend({ t: 'a.remove', id: t.item.id }) }, ...adminGroundActions({ x: t.item.x, z: t.item.z })];
   if (t.kind === 'tree') return adminThingActions('tree', t.idx, false);
   if (t.kind === 'stump') return adminThingActions('tree', t.idx, true);
   if (t.kind === 'rock') return adminThingActions('rock', t.idx, rocks[t.idx].state === 'mined');
+  if (t.kind === 'plant') { // grass, an ore vein, anything in plants (0.2.0): grown back now, if it isn't
+    const c = plants[t.plant] && plants[t.plant].clumps[t.i];
+    return [...(c && !plantReady(c) ? [{ label: 'Grow back', run: () => adminSend({ t: 'a.regrow', what: 'plant', plant: t.plant, idx: t.i }) }] : []), ...adminGroundActions({ x: t.x, z: t.z })];
+  }
   if (t.kind === 'use' && t.task.bush != null) { const b = berryBushes[t.task.bush], src = SOURCES[t.task.source]; return adminThingActions('bush', t.task.bush, !!b && berriesOn(b) < bushHolds(src)); }
   const p = t.point || (t.hit && t.hit.point) || (Number.isFinite(t.x) ? { x: t.x, z: t.z } : null);
   return p ? adminGroundActions(p) : []; // the ground, the shore, a grave, an old stump, tall grass: what can be done at that spot

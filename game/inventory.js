@@ -1,5 +1,28 @@
 /* ---------- little pictures of things, for the inventory and craft lists ----------
    Drawn once from the real 3D models with a small separate renderer, then that renderer is let go. */
+import * as THREE from 'three';
+import { game, share } from './links.js';
+import { matIs, recipeWants, tidyBar } from './rules.js';
+import { camera, canvas, renderer, SETTINGS, V } from './core.js';
+import { terrain } from './land.js';
+import { $, buildItem, countLabel, deg, fmt, groupOf, GROUPS, ITEMS, RECIPES } from './items.js';
+import { disposeMaterials } from './people.js';
+import {
+  addToCarry, barRoom, carried, drawCarry, drawHeld, drawWeightBar, hasTool, headTop, onBar, player, showGain,
+  showTag, takeFromCarry, toolSlots, ui, you,
+} from './you.js';
+import { spendEnergy } from './needs.js';
+import { hideHint, tipDid } from './tips.js';
+// shared for files further down game/main.js, and the variables other files change (game/links.js)
+share({
+  get bagDragging() { return bagDragging; }, set bagDragging(v) { bagDragging = v; },
+  get bagDrawn() { return bagDrawn; }, set bagDrawn(v) { bagDrawn = v; }, get bagOpen() { return bagOpen; },
+  get craftDrawn() { return craftDrawn; }, set craftDrawn(v) { craftDrawn = v; },
+  get craftOpen() { return craftOpen; }, get dragPoint() { return dragPoint; }, set dragPoint(v) { dragPoint = v; },
+  drawBag, get drawCraft() { return drawCraft; },
+  get foundDrawn() { return foundDrawn; }, set foundDrawn(v) { foundDrawn = v; }, wearList,
+});
+
 const itemIcons = new Map();
 function makeItemIcons() {
   if (itemIcons.size) return;
@@ -36,7 +59,7 @@ function makeItemIcons() {
   if (r) { r.dispose(); r.forceContextLoss(); }
 }
 // a picture of the thing (or its colour, if the picture couldn't be drawn)
-function itemPic(kind) {
+export function itemPic(kind) {
   makeItemIcons();
   const url = itemIcons.get(kind);
   if (url) { const img = document.createElement('img'); img.className = 'pic'; img.src = url; img.alt = ''; return img; }
@@ -47,7 +70,7 @@ function itemPic(kind) {
 }
 
 /* ---------- your inventory: a grid of what you carry; tap one to see what it is and what you can do with it ---------- */
-const bagOpen = () => $('bag').classList.contains('open');
+export const bagOpen = () => $('bag').classList.contains('open');
 const BAG_COLS = 5, BAG_MIN = 10; // at least two rows of slots, so the sheet keeps its size
 let bagPick = null; // the tile tapped in the grid (kind:number; its info shows under it), or null
 function smallButton(text, onClick, primary) {
@@ -132,7 +155,7 @@ function equipTool(s, out) {
   const b = onBar(s.kind); // (one less if it swapped with one of its own kind; the one to equip hasn't moved)
   shiftTool(s.kind, s.i, b);
   you.bar[s.kind] = b + 1;
-  sendAct({ t: 'equip', kind: s.kind, which: s.i, ...(off ? { out: { kind: off.kind, which: off.i } } : {}) });
+  game.sendAct({ t: 'equip', kind: s.kind, which: s.i, ...(off ? { out: { kind: off.kind, which: off.i } } : {}) });
   bagPick = null;
   drawCarry();
 }
@@ -142,7 +165,7 @@ function unequipTool(s) {
   const b = onBar(s.kind);
   shiftTool(s.kind, s.i, b - 1);
   if (b > 1) you.bar[s.kind] = b - 1; else delete you.bar[s.kind];
-  sendAct({ t: 'unequip', kind: s.kind, which: s.i });
+  game.sendAct({ t: 'unequip', kind: s.kind, which: s.i });
   bagPick = null;
   drawCarry();
 }
@@ -218,45 +241,45 @@ let dragPoint = null; // where a drag is now ({x, y}): near the edge of the scre
 document.addEventListener('touchmove', (e) => { if (bagDragging && e.cancelable) e.preventDefault(); }, { passive: false });
 // where a drag let go decides what happens, as a task at the end of your list. s: the tile ({kind, i}); loose: a lone item
 // lying on the ground (picked up first; what comes after only happens if that pick-up does)
-function bagDropAt(s, e, loose) {
+export function bagDropAt(s, e, loose) {
   const kind = s.kind, it = ITEMS[kind];
   if (ui.mode !== 'world' || !player || you.dead || (!loose && !you.carry[kind])) return;
   const r = canvas.getBoundingClientRect();
   if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return; // let go off the world: nothing
-  const t = pickTarget(...toCanvas(e));
+  const t = game.pickTarget(...game.toCanvas(e));
   const say = (text) => showTag(text, headTop(), 2);
   const pick = () => {
     if (!loose) return true;
-    queueTask({ type: 'pickup', id: loose.id });
-    return allTasks().some((q) => q.type === 'pickup' && q.id === loose.id);
+    game.queueTask({ type: 'pickup', id: loose.id });
+    return game.allTasks().some((q) => q.type === 'pickup' && q.id === loose.id);
   };
-  const then = (task) => { if (pick()) queueTask(loose ? { ...task, from: loose.id } : task); };
+  const then = (task) => { if (pick()) game.queueTask(loose ? { ...task, from: loose.id } : task); };
   if (t && t.kind === 'you') {
     if (loose) pick(); // (picks it up; eat it from the bag)
-    else if (it.eat) eatOne(kind); else say(`Can't eat ${it.name.toLowerCase()}`);
+    else if (it.eat) game.eatOne(kind); else say(`Can't eat ${it.name.toLowerCase()}`);
     return;
   }
   if (t && t.kind === 'placed' && t.th.built) {
-    const th = t.th, P = PLACEABLES[th.kind];
+    const th = t.th, P = game.PLACEABLES[th.kind];
     if (P.fire && P.fire.fuels[kind]) {
-      if (roomFor(th, kind) < 1) say('The fire is full'); else then({ type: 'tend', id: th.id, do: 'add', n: 1, fuel: kind });
+      if (game.roomFor(th, kind) < 1) say('The fire is full'); else then({ type: 'tend', id: th.id, do: 'add', n: 1, fuel: kind });
       return;
     }
     const r2 = RECIPES.find((q) => q.near === th.kind && q.needs[kind] && recipeKnown(q));
     if (r2) {
-      if (P.fire && !isLit(th)) { say('Light the fire first'); return; }
+      if (P.fire && !game.isLit(th)) { say('Light the fire first'); return; }
       const why = loose ? '' : cantMake(r2);
       if (why && why !== 'Not here') say(why); else then({ type: 'make', id: th.id, recipe: r2.id });
       return;
     }
     // (storage, later: a placed thing that holds items gets a "put in" task here)
   }
-  ray.setFromCamera(ndc, camera);
-  const gh = ray.intersectObject(terrain, false)[0]; // the ground under your finger (past grass, trees and the like)
+  game.ray.setFromCamera(game.ndc, camera);
+  const gh = game.ray.intersectObject(terrain, false)[0]; // the ground under your finger (past grass, trees and the like)
   const at = t && t.kind === 'item' ? { x: t.item.x + 0.3, z: t.item.z + 0.3 } : t && t.kind === 'ground' ? { x: t.point.x, z: t.point.z }
     : gh && !['shore', 'use'].includes(t && t.kind) ? { x: gh.point.x, z: gh.point.z } : null;
   if (!at) { say("Can't put it there"); return; } // the pond, a bush
-  if (!loose && spareInBag(kind) < 1) { say('Already in your task list'); return; } // every one you carry is already queued to go somewhere
+  if (!loose && game.spareInBag(kind) < 1) { say('Already in your task list'); return; } // every one you carry is already queued to go somewhere
   then({ type: 'drop', kind, n: 1, ...(!loose && it.uses ? { which: s.i } : {}), x: at.x, z: at.z });
 }
 // the bar under the grid: what it is, and what you can do with it (the main thing in green)
@@ -276,15 +299,15 @@ function drawBagInfo(s) {
   head.appendChild(words);
   if (s.bar) head.appendChild(smallButton('Unequip', () => unequipTool(s))); // the tool bar (0.1.17): off it, into the inventory
   else if (it.uses) head.appendChild(smallButton('Equip', () => equipTool(s), true)); // onto the tool bar: only tools there get used
-  else if (it.places) head.appendChild(smallButton('Place', () => startPlacing(kind), true)); // a campfire: choose where it goes
-  else if (Object.keys(it.eat || {}).length) head.appendChild(smallButton('Eat', () => eatOne(kind), true));
+  else if (it.places) head.appendChild(smallButton('Place', () => game.startPlacing(kind), true)); // a campfire: choose where it goes
+  else if (Object.keys(it.eat || {}).length) head.appendChild(smallButton('Eat', () => game.eatOne(kind), true));
   const parts = [head];
   const about = itemAbout(kind);
   if (about) { const p = document.createElement('p'); p.className = 'info-about'; p.textContent = about; parts.push(p); }
   const acts = document.createElement('div');
   acts.className = 'info-acts';
-  acts.appendChild(smallButton(n > 1 ? 'Drop 1' : 'Drop', () => dropItems(kind, 1, it.uses ? s.i : undefined))); // a tool: this one
-  if (n > 1) acts.appendChild(smallButton('Drop all', () => dropItems(kind, n)));
+  acts.appendChild(smallButton(n > 1 ? 'Drop 1' : 'Drop', () => game.dropItems(kind, 1, it.uses ? s.i : undefined))); // a tool: this one
+  if (n > 1) acts.appendChild(smallButton('Drop all', () => game.dropItems(kind, n)));
   parts.push(acts);
   box.replaceChildren(...parts);
 }
@@ -292,7 +315,7 @@ let bagDrawn = ''; // what the grid shows now: it's only redrawn when that chang
 // the inventory's two tabs at the top (Luke, 0.1.15: they replaced the Craft button): 'bag' (Inventory, your grid) or
 // 'recipes' (Recipes: the craft mat with the list under it)
 let bagTab = 'bag';
-function drawBag() {
+export function drawBag() {
   you.bar = tidyBar(you.bar, you.carry, ITEMS, toolSlots()); // (in step with what you carry, and the number of spots: a live setting)
   const w = carried(), crafting = bagTab === 'recipes';
   $('bagWeight').textContent = `${fmt(w)} / ${fmt(SETTINGS.carryCapacity)}`;
@@ -338,12 +361,12 @@ let onTheMat = {}; // what the mat shows: kind -> how many (fitMat works it out 
 let matGoal = null; // the recipe tapped in Recipes, or null (an empty mat)
 let matNew = null; // just made for the first time: { id, until } (the mat shows it for a moment)
 let foundGroup = null, foundQuery = ''; // the Recipes list's button picked (null: All) and what's typed in its search
-const craftOpen = () => bagOpen() && bagTab === 'recipes';
-const recipeName = (r) => r.name || ITEMS[Object.keys(r.makes)[0]].name;
-const madeBy = (r) => Object.keys(r.makes)[0];
+export const craftOpen = () => bagOpen() && bagTab === 'recipes';
+export const recipeName = (r) => r.name || ITEMS[Object.keys(r.makes)[0]].name;
+export const madeBy = (r) => Object.keys(r.makes)[0];
 const recipeFound = (r) => (you.found || []).includes(r.id);
 // known: found, or made at a station like a campfire (cooking: the raw food says so, and the fire's menu lists it)
-const recipeKnown = (r) => recipeFound(r) || !!r.near;
+export const recipeKnown = (r) => recipeFound(r) || !!r.near;
 const onMat = (kind) => onTheMat[kind] || 0;
 const matGoalRecipe = () => (matGoal && RECIPES.find((x) => x.id === matGoal)) || null;
 // the mat: as many of each of the tapped recipe's things as you carry. Worked out on every draw, so it keeps up as things
@@ -376,26 +399,26 @@ function weightAfter(r) {
   return w;
 }
 // why a recipe can't be made right now ('' if it can): things missing, too heavy, or not by what it needs
-function cantMake(r) {
+export function cantMake(r) {
   if (!hasAll(r)) return 'Need more';
   if (weightAfter(r) > SETTINGS.carryCapacity) return 'Too heavy';
-  if (r.near && !stationNear(r.near)) return 'Not here';
+  if (r.near && !game.stationNear(r.near)) return 'Not here';
   return '';
 }
 const canMake = (r) => !cantMake(r);
 // the mat makes everything but the ones made at a station, like cooking at a campfire (Luke, 0.1.9). Recipes lists those
 // too since 0.1.20 (Luke: Food "not hidden"), marked "At a campfire", and the mat says where to make it.
-const stationWords = (r) => { const P = PLACEABLES[r.near]; return P ? `${P.craftLabel || 'Make'} it at a${P.fire ? ' lit' : ''} ${P.name.toLowerCase()}` : ''; }; // "Cook it at a lit campfire"
+const stationWords = (r) => { const P = game.PLACEABLES[r.near]; return P ? `${P.craftLabel || 'Make'} it at a${P.fire ? ' lit' : ''} ${P.name.toLowerCase()}` : ''; }; // "Cook it at a lit campfire"
 // a recipe with "seconds" (cooking) takes that long, and uses its things up when it finishes (if it still can be made).
 // What it keeps (a sharp stone) stays. The first time you make one it's found: the mat says "Your first one!".
-function make(r) {
+export function make(r) {
   if (!canMake(r)) return;
   const finish = () => {
     if (!canMake(r)) return;
     spendEnergy('craft');
     for (const [k, n] of Object.entries(r.needs)) takeFromCarry(k, n);
     for (const [k, n] of Object.entries(r.makes)) addToCarry(k, n);
-    sendAct({ t: 'craft', id: r.id });
+    game.sendAct({ t: 'craft', id: r.id });
     const fresh = !recipeFound(r);
     if (fresh) { you.found = [...(you.found || []), r.id]; matNew = { id: r.id, until: Date.now() + 3500 }; setTimeout(() => { if (craftOpen()) drawBag(); }, 3600); }
     if (bagOpen()) drawBag();
@@ -403,8 +426,8 @@ function make(r) {
     drawCarry();
     showGain(`Made ${fresh ? 'your first ' : ''}${recipeName(r).toLowerCase()}`);
   };
-  if (r.seconds) { startAction({ pose: 'kneel', seconds: r.seconds, end: finish }); return; }
-  startAction({ pose: 'kneel', seconds: 1.6 });
+  if (r.seconds) { game.startAction({ pose: 'kneel', seconds: r.seconds, end: finish }); return; }
+  game.startAction({ pose: 'kneel', seconds: 1.6 });
   finish();
 }
 function matTile(kind, n, need) { // a thing on the mat, or one the recipe still needs (faded, +n). Just to look at
@@ -465,7 +488,7 @@ function drawMat() {
 // 0.1.20: by how many steps it is from things found lying about). Tap any one to put its things on the mat, as many as it
 // takes (what you don't have shows faded).
 const CRAFT_GROUPS = GROUPS; // items.js
-const recipeGroup = (r) => (r.group && CRAFT_GROUPS.includes(r.group) ? r.group : groupOf(ITEMS[madeBy(r)]));
+export const recipeGroup = (r) => (r.group && CRAFT_GROUPS.includes(r.group) ? r.group : groupOf(ITEMS[madeBy(r)]));
 const groupOrder = (g) => (CRAFT_GROUPS.includes(g) ? CRAFT_GROUPS.indexOf(g) : CRAFT_GROUPS.length);
 // how many steps a thing is from what's found lying about (0: no recipe makes it): a sharp stone 1, a stone axe 3
 const STEPS = {};
@@ -497,7 +520,7 @@ function foundRow(r) {
     const chip = (text, ok) => { const c = document.createElement('span'); c.className = 'need-chip' + (ok ? ' ok' : ''); c.textContent = text; needs.appendChild(c); };
     for (const [k, n] of Object.entries(r.needs)) { const have = you.carry[k] || 0; chip(`${ITEMS[k].plural} ${Math.min(have, n)}/${n}`, have >= n); }
     for (const k of Object.keys(r.keeps || {})) chip(`Keeps ${ITEMS[k].name.toLowerCase()}`, (you.carry[k] || 0) >= r.keeps[k]);
-    if (r.near && PLACEABLES[r.near]) chip(`At a ${PLACEABLES[r.near].name.toLowerCase()}`, !!stationNear(r.near)); // (made there, not on the mat)
+    if (r.near && game.PLACEABLES[r.near]) chip(`At a ${game.PLACEABLES[r.near].name.toLowerCase()}`, !!game.stationNear(r.near)); // (made there, not on the mat)
     words.appendChild(needs);
   }
   b.append(itemPic(madeBy(r)), words);
@@ -516,7 +539,7 @@ function drawFound() {
     && (!q || [recipeName(r), ...Object.keys(recipeWants(r)).map((k) => ITEMS[k].plural)].some((t) => t.toLowerCase().includes(q))));
   list.sort((a, b) => (hasAll(a) ? 0 : 1) - (hasAll(b) ? 0 : 1) || stepsOf(madeBy(a)) - stepsOf(madeBy(b)) || RECIPES.indexOf(a) - RECIPES.indexOf(b)); // the ones you have everything for first, then the greyed out ones, each simple to advanced
   const grey = list.filter((r) => !hasAll(r)).length;
-  const shows = JSON.stringify([foundGroup, q, chips, search, list.map((r) => [r.id, hasAll(r), recipeWants(r), Object.keys(recipeWants(r)).map((k) => you.carry[k] || 0), r.near ? !!stationNear(r.near) : 0])]); // (the "At a campfire" chip lights up by a lit one)
+  const shows = JSON.stringify([foundGroup, q, chips, search, list.map((r) => [r.id, hasAll(r), recipeWants(r), Object.keys(recipeWants(r)).map((k) => you.carry[k] || 0), r.near ? !!game.stationNear(r.near) : 0])]); // (the "At a campfire" chip lights up by a lit one)
   if (shows === foundDrawn) return;
   foundDrawn = shows;
   $('foundSearch').hidden = !search;
@@ -543,7 +566,7 @@ function drawFound() {
   if (q && !list.length) { const li = document.createElement('li'); li.className = 'found-none'; li.textContent = 'No recipes match'; $('foundList').replaceChildren(li); return; }
   $('foundList').replaceChildren(...list.map(foundRow));
 }
-const drawCraft = () => drawBag(); // (other parts call this when what you carry changes)
+export const drawCraft = () => drawBag(); // (other parts call this when what you carry changes)
 function showBagTab(tab) {
   bagTab = tab === 'recipes' ? 'recipes' : 'bag';
   bagPick = null; bagDrawn = ''; craftDrawn = ''; foundDrawn = '';
@@ -554,14 +577,14 @@ $('bagTabRecipes').addEventListener('click', () => showBagTab('recipes'));
 $('matClear').addEventListener('click', clearMat);
 $('matMake').addEventListener('click', () => { const r = matMakes(); if (r && canMake(r)) make(r); });
 $('foundQuery').addEventListener('input', (e) => { foundQuery = e.target.value; drawFound(); });
-function closeCraft() { if (craftOpen()) closeBag(); }
+export function closeCraft() { if (craftOpen()) closeBag(); }
 // the inventory opens on its Inventory tab, with nothing on the mat
 function openBag(tab) {
   matGoal = null; matNew = null;
   showBagTab(tab);
   $('bag').classList.add('open'); $('bagBtn').setAttribute('aria-expanded', 'true'); tipDid('bag'); hideHint();
 }
-function closeBag() {
+export function closeBag() {
   $('bag').classList.remove('open'); $('bagBtn').setAttribute('aria-expanded', 'false');
   bagTab = 'bag'; matGoal = null; matNew = null; foundQuery = ''; $('foundQuery').value = '';
 }

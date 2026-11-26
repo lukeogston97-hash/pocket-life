@@ -2,6 +2,30 @@
 // While the game is hidden (another app, the phone locked) it says goodbye, so your person goes "away"
 // and starts looking after themselves straight away; coming back reconnects. A ping every 25 seconds
 // tells the server the game is still here.
+import * as THREE from 'three';
+import { game, share } from './links.js';
+import { starText } from './rules.js';
+import { app, lerpAngle, scene, SETTINGS, V } from './core.js';
+import { groundY, heightAt, POND, WATER_Y } from './land.js';
+import { $ } from './items.js';
+import { disposeMaterials, makePerson } from './people.js';
+import { addLabel, player, removeLabel, ui, you } from './you.js';
+import { slowness } from './needs.js';
+import { hideHint } from './tips.js';
+import { closeBag, closeCraft } from './inventory.js';
+import { controls, gfx, GRAPHICS } from './camera.js';
+import {
+  animateAct, feetOnGround, findPath, onDryLand, outsideSolid, sendTasks, setLegs, solidAt, walk,
+} from './moving.js';
+import { placed, seatSpot, sitPose, unsitPose } from './placeables.js';
+import { closeMenu, typing } from './input.js';
+import { cleanLook, FILTER, goOnline, net, others } from './online.js';
+// shared for files further down game/main.js, and the variables other files change (game/links.js)
+share({
+  addChat, addOther, bubble, closeSay, heardMove, get online() { return online; }, removeOther, sendMove, setOtherSit,
+  setOtherState, get shownAt() { return shownAt; }, set shownAt(v) { shownAt = v; }, updateOthers,
+});
+
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     net.hidden = true;
@@ -15,7 +39,7 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 setInterval(() => { if (online() && !document.hidden) net.sock.send(JSON.stringify({ t: 'ping' })); }, 25000);
-const online = () => net.sock && net.sock.readyState === 1 && net.myId;
+export const online = () => net.sock && net.sock.readyState === 1 && net.myId;
 // Everyone else in the world is kept as a small marker (where they are and which way they face). Their body is only built
 // while they're one of the people being drawn (the nearest few: pickShown) and thrown away again when they aren't, so a
 // world with a thousand people costs a phone no more than a world with thirty. (Found in the 23 Nov 2026 growth check:
@@ -35,7 +59,7 @@ function addOther(p) {
   name.off = true; name.el.style.display = 'none'; // until they're picked to be drawn
   const o = { id: p.id, who: p.who || p.id, title: p.name || 'Someone', state: p.state || 'online', look: cleanLook({ ...p.look, name: p.name }), mesh, body: null,
     tx: x, tz: z, tr: mesh.rotation.y, phase: 0, name, bubble: null,
-    speed: p.speed || null, due: p.ms ? elapsed + p.ms / 1000 : null, shown: false, sit: Array.isArray(p.sit) ? p.sit : null, soc: p.soc || null };
+    speed: p.speed || null, due: p.ms ? game.elapsed + p.ms / 1000 : null, shown: false, sit: Array.isArray(p.sit) ? p.sit : null, soc: p.soc || null };
   shownAt = -1; // work out again who's drawn
   if (p.tx != null) Object.assign(o, { tx: p.tx, tz: p.tz });
   others.set(p.id, o);
@@ -43,9 +67,9 @@ function addOther(p) {
   poseOther(o);
 }
 // what someone is doing when they aren't just playing: the same words on name tags and in the Camp panel (society.js)
-const PERSON_STATE_WORDS = { away: 'away', asleep: 'away, asleep', sleeping: 'asleep' };
+export const PERSON_STATE_WORDS = { away: 'away', asleep: 'away, asleep', sleeping: 'asleep' };
 // a name tag, with their camp (0.1.4) and "away" or "asleep" under it
-function drawTag(o) {
+export function drawTag(o) {
   const el = o.name.el;
   o.name.bw = o.name.bh = 0;
   el.textContent = o.title;
@@ -125,11 +149,11 @@ function removeOther(id) {
 // Only the people nearest the middle of the view are drawn (and can be tapped), so a busy world stays smooth on a phone:
 // 30 on High graphics, 20 on Medium, 12 on Low (GRAPHICS in camera.js).
 const SHOW_PEOPLE = 30;
-const peopleDrawn = () => (GRAPHICS[gfx] || {}).people || SHOW_PEOPLE;
+export const peopleDrawn = () => (GRAPHICS[gfx] || {}).people || SHOW_PEOPLE;
 let shownAt = -1;
 function pickShown() {
   const c = controls.target, d2 = (o) => (o.mesh.position.x - c.x) ** 2 + (o.mesh.position.z - c.z) ** 2;
-  const empty = ui.mode === 'menu' && menuRegion && !menuRegion.open; // looking at a world that isn't open yet: nobody there
+  const empty = ui.mode === 'menu' && game.menuRegion && !game.menuRegion.open; // looking at a world that isn't open yet: nobody there
   [...others.values()].sort((a, b) => d2(a) - d2(b)).forEach((o, i) => {
     const on = !empty && i < peopleDrawn();
     if (o.shown === on) return;
@@ -139,8 +163,8 @@ function pickShown() {
     for (const L of [o.name, o.bubble]) if (L) { L.off = !on; L.el.style.display = on ? '' : 'none'; }
   });
 }
-function updateOthers(dt) {
-  if (elapsed - shownAt > 0.5 || elapsed < shownAt) { shownAt = elapsed; pickShown(); }
+export function updateOthers(dt) {
+  if (game.elapsed - shownAt > 0.5 || game.elapsed < shownAt) { shownAt = game.elapsed; pickShown(); }
   for (const o of others.values()) {
     const m = o.mesh;
     if (!o.shown) { m.position.set(o.tx, groundY(o.tx, o.tz), o.tz); continue; } // not drawn: just keep them where they're heading
@@ -149,15 +173,15 @@ function updateOthers(dt) {
     let gx = o.tx, gz = o.tz;
     if (o.speed) {
       const key = `${o.tx},${o.tz}`;
-      if (o.pathKey !== key || (!o.path && elapsed > (o.retryAt || 0))) {
+      if (o.pathKey !== key || (!o.path && game.elapsed > (o.retryAt || 0))) {
         o.pathKey = key;
         o.path = findPath(m.position.x, m.position.z, o.tx, o.tz);
-        o.retryAt = elapsed + 1;
+        o.retryAt = game.elapsed + 1;
       }
       while (o.path && o.path.length > 1 && Math.hypot(o.path[0][0] - m.position.x, o.path[0][1] - m.position.z) < 0.25) o.path.shift();
       if (o.path && o.path.length) [gx, gz] = o.path[0];
       // no way there at all and they should have arrived by now: they're simply there (never through a tree)
-      if (!o.path && o.due && elapsed > o.due + 2) { m.position.x = o.tx; m.position.z = o.tz; o.due = null; }
+      if (!o.path && o.due && game.elapsed > o.due + 2) { m.position.x = o.tx; m.position.z = o.tz; o.due = null; }
     }
     const dx = gx - m.position.x, dz = gz - m.position.z, d = Math.hypot(dx, dz);
     const P = m.userData.parts;
@@ -177,7 +201,7 @@ function updateOthers(dt) {
       if (o.speed && o.due) {
         let left = d;
         if (o.path) for (let k = 1; k < o.path.length; k++) left += Math.hypot(o.path[k][0] - o.path[k - 1][0], o.path[k][1] - o.path[k - 1][1]);
-        pace = Math.min(o.speed * 2.5, Math.max(o.speed, left / Math.max(0.3, o.due - elapsed)));
+        pace = Math.min(o.speed * 2.5, Math.max(o.speed, left / Math.max(0.3, o.due - game.elapsed)));
       }
       const step = Math.min(d, (o.speed ? pace : Math.max(SETTINGS.walkSpeed * 1.15, d * 3)) * dt);
       const ux = dx / d, uz = dz / d;
@@ -198,7 +222,7 @@ function updateOthers(dt) {
       if (P) setLegs(P, Math.sin(o.phase));
     } else {
       // arrived: someone away who walked to the pond or a bush drinks or picks for a moment
-      if (o.then) { o.act = { pose: o.then === 'drink' ? 'kneel' : 'pick', seconds: 4, t0: elapsed }; o.then = null; }
+      if (o.then) { o.act = { pose: o.then === 'drink' ? 'kneel' : 'pick', seconds: 4, t0: game.elapsed }; o.then = null; }
       if (!o.act) m.rotation.y = lerpAngle(m.rotation.y, o.tr, Math.min(1, dt * 6));
       if (P && !o.act) setLegs(P, 0);
     }
@@ -219,10 +243,10 @@ function sendMove() {
   const newGoal = goal && (!l || !l.goal || l.goal[0] !== goal[0] || l.goal[1] !== goal[1] || l.slow !== slowness());
   const stopped = !goal && l && l.goal;
   if (!newGoal && !stopped) {
-    if (goal) { if (elapsed - net.sentAt < 2.5) return; } // walking: now and then, where you've got to
-    else if (elapsed - net.sentAt < 0.5 || (l && Math.hypot(x - l.x, z - l.z) < 0.05 && Math.abs(ry - l.ry) < 0.15)) return; // standing: only when moved or turned
+    if (goal) { if (game.elapsed - net.sentAt < 2.5) return; } // walking: now and then, where you've got to
+    else if (game.elapsed - net.sentAt < 0.5 || (l && Math.hypot(x - l.x, z - l.z) < 0.05 && Math.abs(ry - l.ry) < 0.15)) return; // standing: only when moved or turned
   }
-  net.sentAt = elapsed;
+  net.sentAt = game.elapsed;
   net.last = { x, z, ry, goal, slow: slowness() };
   net.sock.send(JSON.stringify({ t: 'move', x, z, ry, ...(goal ? { tx: goal[0], tz: goal[1], sp: Math.round(100 / slowness()) / 100 } : {}) }));
 }
@@ -280,7 +304,7 @@ function openSay() {
   $('sayInput').value = '';
   $('sayInput').focus();
 }
-function closeSay() { $('chat').hidden = true; app.classList.remove('chatting'); $('sayInput').blur(); }
+export function closeSay() { $('chat').hidden = true; app.classList.remove('chatting'); $('sayInput').blur(); }
 $('sayBtn').addEventListener('click', () => ($('chat').hidden ? openSay() : closeSay()));
 $('sayBox').addEventListener('submit', (e) => {
   e.preventDefault();
@@ -292,5 +316,5 @@ $('sayBox').addEventListener('submit', (e) => {
   else bubble(null, starText(text, FILTER)); // offline: you still see it yourself
 });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && ui.mode === 'world' && !paused && !typing(e.target) && $('chat').hidden) { e.preventDefault(); openSay(); }
+  if (e.key === 'Enter' && ui.mode === 'world' && !game.paused && !typing(e.target) && $('chat').hidden) { e.preventDefault(); openSay(); }
 });

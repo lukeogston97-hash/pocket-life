@@ -2,10 +2,48 @@
 // The server (game-data.json "server") passes everyone's moves and speech to everyone else in the
 // same world. The test link and the release both join the one live world. If the server can't be
 // reached, the game keeps trying by itself, and says so after a couple of tries (net.fails).
+import * as THREE from 'three';
+import { game, share } from './links.js';
+import { barUsed, starText, tidyBar } from './rules.js';
+import { DATA, hash, mat, scene, SETTINGS, TEST_BUILD, V, VERSION } from './core.js';
+import { groundY, heightAt, POND, pondShape, squareDist, WALK_LIMIT, WATER_Y } from './land.js';
+import { berryBushes, interactive, oldStumps, rocks, roomAt, spots, trees } from './nature.js';
+import { PLANTS, plants, setPlant } from './plants.js';
+import {
+  bushHolds, drawBerries, moveLayoutThing, removeLayoutThing, removeOldStump, setRockState, setTreeState,
+  useWorldEdits,
+} from './world-build.js';
+import { $, DEFAULT_LOOK, harvests, ITEMS, LOOKS, pickId, SOURCES } from './items.js';
+import { addWorldItem, getItem, removeWorldItem, START_ITEMS, world } from './world-items.js';
+import {
+  drawCarry, drawHeld, drawHud, headTop, MONTHS, player, removePlayer, showGain, showTag, spawnPlayer, START,
+  takeFromCarry, toolSlots, ui, you,
+} from './you.js';
+import { drawNeeds, freshStats, setSpeed, tickStats } from './needs.js';
+import { applyGraphics } from './camera.js';
+import {
+  allTasks, drawQueue, inWorld, nextTask, onDryLand, outsideSolid, setSleeping, shorePointToward, solidAt, stopQueue,
+  takeTasksBack, tasks,
+} from './moving.js';
+import { endSit, forgetSit, removePlaced, resumeSit, setPlaced, usePlaced } from './placeables.js';
+import { closeMenu, closePause } from './input.js';
+import {
+  closeRules, die, drawLinkRow, drawMenu, dropPlayer, enterCreator, enterMenu, enterWorld, forgotten, linkAsk, linked,
+  linkGotCode, linkNo, linkNoteLater, sendHello, showGoneCard, showJoining, showWelcomeBack, unlinked,
+} from './screens.js';
+// shared for files further down game/main.js, and the variables other files change (game/links.js)
+share({
+  closeFeedback, closeNews, closeReport, get creating() { return creating; }, set creating(v) { creating = v; },
+  get FILTER() { return FILTER; }, goOnline, get maint() { return maint; }, get muted() { return muted; },
+  get net() { return net; }, openFeedback, openNews, openReport, get others() { return others; },
+  get pid() { return pid; }, get PID_KEY() { return PID_KEY; }, placeItems, reportError, sendAct, setMuted, sharePick,
+  shareTake,
+});
+
 const SERVER = typeof DATA.server === 'string' ? DATA.server : '';
-const others = new Map(); // id -> { mesh, tx, tz, tr, phase, name, bubble }
-const net = { sock: null, myId: null, wanted: false, retry: 1000, sentAt: 0, last: null, mode: 'watch', restored: false, fails: 0 }; // mode: watch (main menu) or play; fails: tries in a row the world didn't answer
-function cleanLook(look) {
+export const others = new Map(); // id -> { mesh, tx, tz, tr, phase, name, bubble }
+export const net = { sock: null, myId: null, wanted: false, retry: 1000, sentAt: 0, last: null, mode: 'watch', restored: false, fails: 0 }; // mode: watch (main menu) or play; fails: tries in a row the world didn't answer
+export function cleanLook(look) {
   const l = { ...DEFAULT_LOOK, ...(look || {}) };
   for (const k of ['sex', 'skin', 'build', 'hair', 'hairColour', 'tunic']) l[k] = pickId(LOOKS[k], l[k]);
   l.age = Math.round(Math.min(LOOKS.age.max, Math.max(LOOKS.age.min, Number(l.age) || LOOKS.age.start)));
@@ -13,7 +51,7 @@ function cleanLook(look) {
   return l;
 }
 // the chat filter itself (starText, badName) is in rules.js, shared with the server
-const FILTER = DATA.chatFilter || {};
+export const FILTER = DATA.chatFilter || {};
 // a random id for this phone, so mutes and reports stick to the same person (others only see a scrambled tag)
 const PID_KEY = 'pocket-life:pid', MUTE_KEY = 'pocket-life:muted';
 let pid = '';
@@ -24,7 +62,7 @@ function setMuted(who, on) {
   if (on) muted.add(who); else muted.delete(who);
   try { localStorage.setItem(MUTE_KEY, JSON.stringify([...muted])); } catch (err) { /* full */ }
 }
-function goOnline() {
+export function goOnline() {
   net.wanted = true;
   if (!SERVER || net.sock || net.stopped || net.hidden) return;
   let sock;
@@ -44,7 +82,7 @@ function goOnline() {
     try { m = JSON.parse(e.data); } catch (err) { return; }
     if (m.t === 'count') setNet('online', m.n);
     else if (m.t === 'update') getUpdate(m.min);
-    else if (m.t === 'maintenance') { if (adminMode.asking) adminLoginAnswer(false); showMaintenance(m.text); } // (a password on its way was refused too: never keep sending it)
+    else if (m.t === 'maintenance') { if (game.adminMode.asking) game.adminLoginAnswer(false); showMaintenance(m.text); } // (a password on its way was refused too: never keep sending it)
     else if (m.t === 'thanks') showTag('Thanks for the feedback!', headTop(), 2.5);
     else if (m.t === 'forgotten') forgotten(); // Leave the world for good went through (screens.js)
     else if (m.t === 'linkCode') linkGotCode(m); // Play on other devices (screens.js)
@@ -52,18 +90,18 @@ function goOnline() {
     else if (m.t === 'linkNo') linkNo(m);
     else if (m.t === 'linked') linked();
     else if (m.t === 'unlinked') unlinked();
-    else if (m.t === 'adminNo') adminLoginAnswer(false); // the admin password wasn't accepted (admin-mode.js)
+    else if (m.t === 'adminNo') game.adminLoginAnswer(false); // the admin password wasn't accepted (admin-mode.js)
     else if (m.t.startsWith('admin') || ['announce', 'kicked', 'banned', 'reset', 'restoring'].includes(m.t)) {
       // 'admin' is both the answer to the password and what every admin tool answers with. It only lets you in while the
       // password is being checked: a late answer arriving after Exit admin must never put the game back into admin mode.
-      if (m.t === 'admin' && adminMode.asking) adminLoginAnswer(true);
-      adminMessage(m);
+      if (m.t === 'admin' && game.adminMode.asking) game.adminLoginAnswer(true);
+      game.adminMessage(m);
     }
-    else if (m.t === 'slow') { menuJoining = false; if (ui.mode === 'menu') drawMenu(); showTag('Slow down a little', headTop(), 2); }
+    else if (m.t === 'slow') { game.menuJoining = false; if (ui.mode === 'menu') drawMenu(); showTag('Slow down a little', headTop(), 2); }
     else if (m.t === 'reported') showTag(m.ok ? 'Thanks, your report was sent' : "They've left, so it couldn't be sent", headTop(), 2.5);
     else if (m.t === 'welcome') welcome(m);
-    else if (m.t === 'line') { menuLine = m.place || 0; if (m.missed) { net.mode = 'watch'; menuJoining = false; } if (ui.mode === 'menu') drawMenu(); }
-    else if (m.t === 'turn') { if (net.mode === 'play' && ui.mode === 'menu') { menuLine = 0; menuJoining = true; drawMenu(); sendHello(); } } // a spot opened: in we go
+    else if (m.t === 'line') { game.menuLine = m.place || 0; if (m.missed) { net.mode = 'watch'; game.menuJoining = false; } if (ui.mode === 'menu') drawMenu(); }
+    else if (m.t === 'turn') { if (net.mode === 'play' && ui.mode === 'menu') { game.menuLine = 0; game.menuJoining = true; drawMenu(); sendHello(); } } // a spot opened: in we go
     else if (m.t === 'me') { const fresh = !player; applyMe(m); if (fresh) enterWorld(); }
     else if (m.t === 'died') die(m);
     else if (m.t === 'stopTasks') { if (player) stopQueue(); } // the admin cleared your task list
@@ -72,9 +110,9 @@ function goOnline() {
       $('nameErr').hidden = false; creating = false;
     }
     else if (m.t === 'elsewhere') { net.stopped = true; showMaintenance('Your person is being played in another tab or window. Reload this page to play here instead.', 'Playing somewhere else', ''); }
-    else if (m.t === 'state') setOtherState(m);
-    else if (m.t === 'stroll') { const o = others.get(m.id); if (o) Object.assign(o, { tx: m.x, tz: m.z, speed: m.speed || null, due: m.ms ? elapsed + m.ms / 1000 : null, then: m.then || null, act: null }); }
-    else if (m.t === 'act') { const o = others.get(m.id); if (o && ['bend', 'kneel', 'pick', 'chop'].includes(m.pose)) o.act = { pose: m.pose, seconds: Math.min(25, Number(m.seconds) || 0.5), t0: elapsed }; }
+    else if (m.t === 'state') game.setOtherState(m);
+    else if (m.t === 'stroll') { const o = others.get(m.id); if (o) Object.assign(o, { tx: m.x, tz: m.z, speed: m.speed || null, due: m.ms ? game.elapsed + m.ms / 1000 : null, then: m.then || null, act: null }); }
+    else if (m.t === 'act') { const o = others.get(m.id); if (o && ['bend', 'kneel', 'pick', 'chop'].includes(m.pose)) o.act = { pose: m.pose, seconds: Math.min(25, Number(m.seconds) || 0.5), t0: game.elapsed }; }
     else if (m.t === 'tree') setTreeState(m.idx, m.state || 'tree', m.at);
     else if (m.t === 'plant') setPlant(m.plant, m.i, m.readyAt);
     else if (m.t === 'cutNo') { // someone cut it first: what you got is taken back
@@ -89,33 +127,33 @@ function goOnline() {
     else if (m.t === 'broke') { showTag(`Your ${(ITEMS[m.kind] || { name: 'tool' }).name.toLowerCase()} broke`, headTop(), 3); drawHeld(); }
     else if (m.t === 'graves') drawGraves(m.graves);
     else if (m.t === 'speed') setSpeed(m.speed);
-    else if (m.t === 'live') applyLive(m.live);
-    else if (m.t === 'liveItems') applyLiveItems(m.liveItems);
+    else if (m.t === 'live') game.applyLive(m.live);
+    else if (m.t === 'liveItems') game.applyLiveItems(m.liveItems);
     else if (m.t === 'claimNote') showTag(m.text, headTop(), 3.5);
-    else if (m.t.startsWith('soc')) societyMessage(m); // societies (society.js)
+    else if (m.t.startsWith('soc')) game.societyMessage(m); // societies (society.js)
     else if (m.t === 'pos') snapTo(m.x, m.z);
     else if (m.t === 'moved') moveLayoutThing(m.what, m.idx, m.x, m.z);
     else if (m.t === 'removed') removeLayoutThing(m.what, m.idx);
     else if (m.t === 'world') useSharedWorld(m.world);
     else if (m.t === 'gone') removeWorldItem(m.id);
-    else if (m.t === 'placed') { setPlaced(m.thing); if (m.mine && m.thing && !m.thing.built) { tasks.list.unshift({ type: 'build', id: m.thing.id }); if (!tasks.current && !action) nextTask(); else drawQueue(); } } // put it down: build it next
+    else if (m.t === 'placed') { setPlaced(m.thing); if (m.mine && m.thing && !m.thing.built) { tasks.list.unshift({ type: 'build', id: m.thing.id }); if (!tasks.current && !game.action) nextTask(); else drawQueue(); } } // put it down: build it next
     else if (m.t === 'unplaced') removePlaced(m.id);
     else if (m.t === 'placeNo' || m.t === 'sitNo') { showTag(m.why || "Can't do that", headTop(), 2.5); if (m.t === 'sitNo') endSit(false); }
-    else if (m.t === 'sit') setOtherSit(m);
+    else if (m.t === 'sit') game.setOtherSit(m);
     else if (m.t === 'added') for (const it of m.items || []) { if (ITEMS[it.kind]) addWorldItem(it.kind, it.x, it.z, it.rot, it.id, it.uses); }
     else if (m.t === 'took') tookBack(m);
     else if (m.t === 'fished') { if (m.caught && ITEMS[m.caught]) showGain(`+1 ${ITEMS[m.caught].name.toLowerCase()}`); else showTag(m.why || 'Nothing bites', headTop(), 2.5); }
     else if (m.t === 'bush') { const b = berryBushes[m.bush]; if (b) { b.userData.count = m.count; b.userData.growFrom = m.growFrom; drawBerries(b); } }
     else if (m.t === 'picked' && !m.ok) {
-      if (takeFromCarry(Object.keys((BERRY_SOURCE() || {}).harvest || {})[0], you.lastPick || 1)) { drawHeld(); drawCarry(); }
+      if (takeFromCarry(Object.keys((game.BERRY_SOURCE() || {}).harvest || {})[0], you.lastPick || 1)) { drawHeld(); drawCarry(); }
       showTag(m.why || 'Someone picked it first', headTop(), 2);
     }
-    else if (m.t === 'join') addOther(m.person);
-    else if (m.t === 'leave') removeOther(m.id);
-    else if (m.t === 'move') { const o = others.get(m.id); if (o) heardMove(o, m); }
+    else if (m.t === 'join') game.addOther(m.person);
+    else if (m.t === 'leave') game.removeOther(m.id);
+    else if (m.t === 'move') { const o = others.get(m.id); if (o) game.heardMove(o, m); }
     else if (m.t === 'say') {
-      if (m.id === net.myId) { if (player) { bubble(null, m.text); addChat(you.look.name, m.text, true); } }
-      else if (others.has(m.id) && !muted.has(others.get(m.id).who)) { const o = others.get(m.id); const t = starText(m.text, FILTER); bubble(o, t); addChat(o.title, t, false); }
+      if (m.id === net.myId) { if (player) { game.bubble(null, m.text); game.addChat(you.look.name, m.text, true); } }
+      else if (others.has(m.id) && !muted.has(others.get(m.id).who)) { const o = others.get(m.id); const t = starText(m.text, FILTER); game.bubble(o, t); game.addChat(o.title, t, false); }
     }
   };
   sock.onclose = () => {
@@ -128,11 +166,11 @@ function goOnline() {
     creating = false; // (a Start my life the world never answered: the button works again once it's back)
     setNet(net.wanted ? 'connecting' : 'offline');
     if (!maint.on && !net.stopped && (ui.mode !== 'menu' || !$('joining').hidden)) showJoining(true, !!player);
-    menuJoining = false; menuLine = 0;
+    game.menuJoining = false; game.menuLine = 0;
     if (ui.mode === 'menu') drawMenu();
     shared.on = false;
-    for (const id of [...others.keys()]) removeOther(id);
-    if (net.wanted && !net.stopped) { setTimeout(goOnline, maint.on && !adminMode.asking ? 20000 : net.retry); net.retry = Math.min(30000, net.retry * 2); } // (Back soon: look in every 20 s; sooner if the admin's password is on its way)
+    for (const id of [...others.keys()]) game.removeOther(id);
+    if (net.wanted && !net.stopped) { setTimeout(goOnline, maint.on && !game.adminMode.asking ? 20000 : net.retry); net.retry = Math.min(30000, net.retry * 2); } // (Back soon: look in every 20 s; sooner if the admin's password is on its way)
   };
   sock.onerror = () => {};
 }
@@ -166,23 +204,23 @@ function welcome(m) {
   showJoining(false);
   setNet('online', m.count);
   setSpeed(m.speed);
-  applyLive(m.live);
-  applyLiveItems(m.liveItems);
-  for (const id of [...others.keys()]) removeOther(id);
-  for (const p of m.people || []) addOther(p);
+  game.applyLive(m.live);
+  game.applyLiveItems(m.liveItems);
+  for (const id of [...others.keys()]) game.removeOther(id);
+  for (const p of m.people || []) game.addOther(p);
   if (m.watch) { // watching from the main menu (or waiting in line because the world is full)
     if (m.world) { useSharedWorld(m.world); if (m.needLayout) sendLayout(); } // (the admin's game is asked for the layout once per build)
     else if (m.needSeed) seedWorld(); // admin mode and there's no world (it was just reset): the admin's game lays it out, as the first player back would
-    menuYours = m.yours || null;
-    menuLine = m.line || 0;
-    if (adminMode.on) return; // admin mode rejoined after a break in the connection: it stays as it was
+    game.menuYours = m.yours || null;
+    game.menuLine = m.line || 0;
+    if (game.adminMode.on) return; // admin mode rejoined after a break in the connection: it stays as it was
     if (ui.mode !== 'menu') { dropPlayer(); enterMenu(); }
-    menuJoining = false;
-    if (menuLine) net.mode = 'play'; // still wanting to play: the server calls us in when there's a spot
+    game.menuJoining = false;
+    if (game.menuLine) net.mode = 'play'; // still wanting to play: the server calls us in when there's a spot
     drawMenu();
     return;
   }
-  menuLine = 0;
+  game.menuLine = 0;
   if (m.world) { useSharedWorld(m.world); if (m.needLayout) sendLayout(); }
   else if (m.needSeed) seedWorld();
   if (m.me) {
@@ -197,10 +235,10 @@ function welcome(m) {
       // and whatever you were doing.
       if (restored || (m.away && !(m.away.ms < BLIP_MS))) { snapTo(m.me.x, m.me.z); if (!restored) back = m.tasks; }
     }
-    tasksSent = ''; // (the server's copy is sent again at the next change)
+    game.tasksSent = ''; // (the server's copy is sent again at the next change)
     if (m.me.sit) resumeSit(m.me.sit); // left sitting by the fire, and the time isn't up yet
     if (Array.isArray(back)) takeTasksBack(back);
-    else if (!m.me.sit && !tasks.current && tasks.list.length && !action) nextTask();
+    else if (!m.me.sit && !tasks.current && tasks.list.length && !game.action) nextTask();
     if (m.away) showWelcomeBack(m.away);
     flushOutbox(); // what you did while the connection was down
   } else if (!(player && you.dead)) {
@@ -221,8 +259,8 @@ function applyMe(m, spawn = false) {
     you.dead = false;
     spawnPlayer(look);
     const [px, pz] = onDryLand(inWorld(Number(m.x) || START.x), inWorld(Number(m.z) || START.z)); // never back in the pond or a tree
-    playerGround = groundY(px, pz);
-    player.position.set(px, playerGround, pz);
+    game.playerGround = groundY(px, pz);
+    player.position.set(px, game.playerGround, pz);
     player.rotation.y = Number(m.ry) || 0;
     creating = false;
   }
@@ -248,14 +286,14 @@ function applyMe(m, spawn = false) {
   if (!!m.sleeping !== !!you.sleeping) setSleeping(m.sleeping, true);
   you.collapsed = !!m.collapsed;
   you.lastKind = carry[you.lastKind] ? you.lastKind : (ITEMS[m.lastKind] && carry[m.lastKind] ? m.lastKind : Object.keys(carry)[0] || null);
-  setSociety(m.soc); // your society, if you're in one (society.js)
+  game.setSociety(m.soc); // your society, if you're in one (society.js)
   tickStats();
   drawNeeds();
   drawCarry();
   drawHeld();
 }
 // the starting layout of things the server needs to look after people while they're away
-function layoutData() {
+export function layoutData() {
   const shore = [];
   for (let k = 0; k < 48; k++) {
     const a = (k / 48) * Math.PI * 2;
@@ -328,10 +366,10 @@ function seedWorld() {
 // Telling the server what you did (picked up, chopped, ate...). It's told where you are first, because it checks you're
 // near enough (server/src/guard.js). If the connection is down, what you did is kept and sent once it's back (within
 // half a minute; after that the server's word stands and the game shows the world as the server has it).
-const outbox = []; // [when, message]
+export const outbox = []; // [when, message]
 const OUTBOX_MS = 30000, BLIP_MS = ((DATA.away || {}).comeBackSeconds || 0) * 1000; // BLIP_MS: your person stays put on the server this long after the connection goes
-function sendAct(msg) {
-  if (online()) { sendMove(); net.sock.send(JSON.stringify(msg)); return true; }
+export function sendAct(msg) {
+  if (game.online()) { game.sendMove(); net.sock.send(JSON.stringify(msg)); return true; }
   if (msg.t !== 'sit') { outbox.push([Date.now(), msg]); if (outbox.length > 8) outbox.shift(); }
   return false;
 }
@@ -343,9 +381,9 @@ function forgetOldTakes() {
 }
 function flushOutbox() {
   const fresh = outbox.splice(0).filter(([at]) => Date.now() - at < OUTBOX_MS);
-  if (!fresh.length || !online()) return;
+  if (!fresh.length || !game.online()) return;
   net.last = null;
-  sendMove(); // where you are now (the server checks you're near what you did)
+  game.sendMove(); // where you are now (the server checks you're near what you did)
   for (const [, msg] of fresh) net.sock.send(JSON.stringify(msg));
   net.sock.send(JSON.stringify({ t: 'sync' })); // then your person as the server has them now
 }
@@ -373,15 +411,15 @@ function snapTo(x, z) {
   let bx = inWorld(x), bz = inWorld(z);
   if (heightAt(bx, bz) < WATER_Y + 0.1) { const sp = shorePointToward(V(bx + (bx - POND.x), 0, bz + (bz - POND.z))); bx = sp.x; bz = sp.z; }
   [bx, bz] = outsideSolid(bx, bz);
-  playerGround = groundY(bx, bz);
-  player.position.set(bx, playerGround, bz);
+  game.playerGround = groundY(bx, bz);
+  player.position.set(bx, game.playerGround, bz);
   net.last = null;
 }
 // The server can close the world for maintenance, and send out-of-date games to the newest version.
 // The new version can take a minute or two to reach the link, so if a reload still gets the old one,
 // wait 20 seconds and try again rather than reloading over and over.
 const UPDATE_KEY = 'pocket-life:updating';
-const maint = { on: false };
+export const maint = { on: false };
 function getUpdate(min) {
   let last = 0;
   try { last = Number(sessionStorage.getItem(UPDATE_KEY)) || 0; } catch (err) { /* private mode */ }
@@ -394,23 +432,23 @@ function getUpdate(min) {
     location.replace(url.href);
   }, wait);
 }
-function showMaintenance(text, title = 'Back soon', note = 'Your person is safe. This page checks again by itself.') {
+export function showMaintenance(text, title = 'Back soon', note = 'Your person is safe. This page checks again by itself.') {
   maint.on = true;
   showJoining(false);
   $('maintTitle').textContent = title;
   $('maintNote').textContent = note;
   $('adminPanel').hidden = true; $('adminPick').hidden = true; // (the admin's password box stays if it's open: it's the way in while maintenance is on)
-  closeFeedback(); closeReport(); closeSay(); closeMenu(); closeRules(); $('pause').hidden = true;
-  paused = true; // needs don't drain while the world is closed
+  closeFeedback(); closeReport(); game.closeSay(); closeMenu(); closeRules(); $('pause').hidden = true;
+  game.paused = true; // needs don't drain while the world is closed
   $('maintText').textContent = text || 'Pocket Life is being updated. It will be back in a few minutes.';
   $('maint').hidden = false;
 }
-function hideMaintenance() {
+export function hideMaintenance() {
   if (!maint.on) return;
-  maint.on = false; paused = false; $('maint').hidden = true;
+  maint.on = false; game.paused = false; $('maint').hidden = true;
 }
 // the dot by the time: green online (with how many), orange connecting, grey offline
-function setNet(state, n) {
+export function setNet(state, n) {
   $('netLine').dataset.state = state;
   $('netText').textContent = state === 'online' ? `${n || 1} online` : state === 'connecting' ? (net.fails >= 2 ? "Can't connect. Trying again…" : 'Connecting…') : 'Offline';
   if (ui.mode === 'menu') drawMenu();
@@ -427,7 +465,7 @@ $('feedbackForm').addEventListener('submit', async (e) => {
   if (!text) return;
   const note = { t: 'feedback', text, v: `${VERSION}${TEST_BUILD ? ` test ${DATA.build}` : ''}`, device: navigator.userAgent.slice(0, 200),
     x: player ? Math.round(player.position.x) : null, z: player ? Math.round(player.position.z) : null, name: you.look ? you.look.name : '' };
-  if (online()) { net.sock.send(JSON.stringify(note)); return; }
+  if (game.online()) { net.sock.send(JSON.stringify(note)); return; }
   try {
     await fetch(`${HTTP_BASE}/feedback?world=live`, { method: 'POST', body: JSON.stringify(note), headers: { 'Content-Type': 'text/plain' } });
     showTag('Thanks for the feedback!', headTop(), 2.5);
@@ -444,10 +482,10 @@ function reportError(err, where) {
   errorsSeen.add(what);
   console.error(err);
   try {
-    const trace = String((err && err.stack) || '').split('\n').slice(1, 4).map((l) => l.trim().replace(/\(?(?:blob:|https?:)\S*?([\w.-]+:\d+:\d+)\)?$/, '$1')).join(' | ').slice(0, 300);
+    const trace = String((err && err.stack) || '').split('\n').slice(1, 4).map((l) => l.trim().replace(/\(?(?:blob:|https?:)\S*?([\w.-]+\.js)(?:\?[^:\s]*)?(:\d+:\d+)\)?$/, '$1$2')).join(' | ').slice(0, 300);
     const note = { t: 'feedback', auto: true, text: `Game error (${what})${trace ? `\n${trace}` : ''}`, v: `${VERSION}${TEST_BUILD ? ` test ${DATA.build}` : ''}`, device: navigator.userAgent.slice(0, 200),
       x: player ? Math.round(player.position.x) : null, z: player ? Math.round(player.position.z) : null, name: you.look ? you.look.name : '' };
-    if (online()) net.sock.send(JSON.stringify(note));
+    if (game.online()) net.sock.send(JSON.stringify(note));
     else if (HTTP_BASE) fetch(`${HTTP_BASE}/feedback?world=live`, { method: 'POST', body: JSON.stringify(note), headers: { 'Content-Type': 'text/plain' } }).catch(() => {});
     if (where === 'frame' && player) showTag('Something went wrong. If the game looks stuck, reload the page.', headTop(), 6);
   } catch (e) { /* nothing more to do */ }
@@ -468,7 +506,7 @@ function newsDate(v) { // "23 Nov 2026", or "21 to 23 Nov 2026" when the entry h
 }
 function openNews() {
   closePause();
-  paused = true;
+  game.paused = true;
   const mk = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const line = (kind, sym, word, text) => {
     const li = mk('li', `news-${kind}`);
@@ -485,12 +523,11 @@ function openNews() {
     const entry = mk('details', 'news-entry');
     entry.open = i === 0;
     const h = mk('summary', 'news-head');
-    h.append(mk('span', 'news-ver', `v${v.version}`));
+    h.append(mk('span', 'news-ver', `v${String(v.version).replace(' to ', ' to v')}`)); // a folded range reads "v0.1.0 to v0.1.21"
     if (v.title) h.append(mk('span', 'news-title', v.title));
     h.append(mk('span', 'news-date', newsDate(v)));
     const ul = mk('ul', 'news-lines');
     for (const [k, sym, word] of NEWS_KINDS) for (const t of v[k] || []) ul.appendChild(line(k, sym, word, t));
-    for (const t of v.notes || []) ul.appendChild(line('note', '•', '', t)); // an entry still in the old format
     entry.append(h, ul);
     rows.push(entry);
   });
@@ -498,7 +535,7 @@ function openNews() {
   $('news').hidden = false;
   $('newsBody').scrollTop = 0;
 }
-function closeNews() { $('news').hidden = true; paused = false; }
+function closeNews() { $('news').hidden = true; game.paused = false; }
 $('newsClose').addEventListener('click', closeNews);
 for (const b of document.querySelectorAll('[data-gfx]')) b.addEventListener('click', () => applyGraphics(b.dataset.gfx));
 // Report: pick a reason, add a note if you like. It goes to the server with what they said lately.
@@ -523,6 +560,6 @@ $('reportForm').addEventListener('submit', (e) => {
   const o = reporting;
   closeReport();
   if (!o || !pick) return;
-  if (!online()) { showTag("You're offline, so it couldn't be sent", headTop(), 2.5); return; }
+  if (!game.online()) { showTag("You're offline, so it couldn't be sent", headTop(), 2.5); return; }
   net.sock.send(JSON.stringify({ t: 'report', id: o.id, reason: pick.dataset.reason, note: $('reportNote').value.trim().slice(0, 500) }));
 });

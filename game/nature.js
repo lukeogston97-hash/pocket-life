@@ -3,18 +3,29 @@
 // Most are collected into sets first and built once the world is laid out:
 // - a set can split its copies into chunks of the map, so the parts you can't see aren't drawn
 // - a detail set (grass, flowers, pebbles) only draws the copies near you, refilled as you walk
-const dummy = new THREE.Object3D();
+import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { game } from './links.js';
+import {
+  DATA, fbm, hash, mat, pick, rand, rr, scene, smoothstep, tint, V, withOwnRand, withWorldRand,
+} from './core.js';
+import {
+  CLEAR, FOREST_END, groundY, heightAt, POND, pondShape, squareDist, WALK_LIMIT, WALL_DEPTH, water, WATER_Y,
+  WORLD_HALF,
+} from './land.js';
+
+export const dummy = new THREE.Object3D();
 // Old stumps and fallen logs were taken out of the world (0.2.8, Luke: only real stumps, from chopped trees). They're
 // still worked out the same way so nothing else in the layout moves, then their spots are freed in start.js.
-const noLongerHere = [];
+export const noLongerHere = [];
 const skipPut = () => {};
 let DRY = false; // while true, put() works a copy out but doesn't keep it (so the clearing's layout never changes)
 let recording = null; // while a tree is being placed: [set, chunk, index] of every copy it's made of (so it can be chopped down)
-const trees = []; // every tree you can walk up to: { x, z, s, parts, state }
-const oldStumps = []; // the old stumps already in the world when it was made: { x, z, parts, proxy, gone }
-const rocks = []; // every rock and boulder you can mine (0.2.9): { x, z, r, boulder, parts, proxy, state: whole | mined | gone }
-const wildBushes = []; // bushes with no berries: { x, z, r, parts }, so they can sit on levelled ground (0.1.18; nothing in the layout moves)
-function IM(geo, material, n, shadow = true) {
+export const trees = []; // every tree you can walk up to: { x, z, s, parts, state }
+export const oldStumps = []; // the old stumps already in the world when it was made: { x, z, parts, proxy, gone }
+export const rocks = []; // every rock and boulder you can mine (0.2.9): { x, z, r, boulder, parts, proxy, state: whole | mined | gone }
+export const wildBushes = []; // bushes with no berries: { x, z, r, parts }, so they can sit on levelled ground (0.1.18; nothing in the layout moves)
+export function IM(geo, material, n, shadow = true) {
   const m = new THREE.InstancedMesh(geo, material, n);
   m.count = 0;
   m.castShadow = shadow;
@@ -30,7 +41,7 @@ function makeSet(geo, material, { shadow = true, chunk = null, label = null, lod
 function makeDetail(geo, material, { cap, near, far, shadow = false }) {
   return { isDetail: true, geo, material, shadow, cap, near, far, xs: [], zs: [], ms: [], cs: [], mesh: null };
 }
-function put(m, x, y, z, rx, ry, rz, sx, sy, sz, color) {
+export function put(m, x, y, z, rx, ry, rz, sx, sy, sz, color) {
   if (DRY) return;
   if (m.isInstancedMesh && m.count >= m.instanceMatrix.count) return;
   dummy.position.set(x, y, z);
@@ -57,7 +68,7 @@ function put(m, x, y, z, rx, ry, rz, sx, sy, sz, color) {
   if (recording && m.isSet) recording.push([m, m.chunk ? m.chunk(x, z) : 0, g.cs.length / 3 - 1]);
 }
 const lodPairs = []; // { x, z, full, simple }: the detailed and simple copies of one chunk
-function buildSet(m) {
+export function buildSet(m) {
   for (const [key, g] of m.groups) {
     const make = (geo, shadow) => {
       const mesh = new THREE.InstancedMesh(geo, m.material, g.cs.length / 3);
@@ -91,14 +102,14 @@ function chunkCentre(key) {
   return [(ix + 0.5) * size, (iz + 0.5) * size];
 }
 const LOD_NEAR = 45; // chunks whose middle is closer than this to the camera's focus get full detail
-function updateLod(x, z) {
+export function updateLod(x, z) {
   for (const p of lodPairs) {
     const full = Math.hypot(p.x - x, p.z - z) < LOD_NEAR;
     p.full.visible = full;
     p.simple.visible = !full;
   }
 }
-function buildDetail(d) {
+export function buildDetail(d) {
   d.xs = Float32Array.from(d.xs);
   d.zs = Float32Array.from(d.zs);
   d.ms = Float32Array.from(d.ms);
@@ -115,12 +126,12 @@ function buildDetail(d) {
   scene.add(mesh);
   d.mesh = mesh;
 }
-function refillDetail(d, px, pz) {
+export function refillDetail(d, px, pz) {
   const M = d.mesh.instanceMatrix.array, C = d.mesh.instanceColor.array;
   const { xs, zs, us, ms, cs, near, far, cap } = d;
   let n = 0;
   for (let i = 0; i < xs.length && n < cap; i++) {
-    const dx = xs[i] - px, dz = zs[i] - pz, r = (near + (far - near) * us[i]) * detailScale;
+    const dx = xs[i] - px, dz = zs[i] - pz, r = (near + (far - near) * us[i]) * game.detailScale;
     if (dx * dx + dz * dz > r * r || (d.hide && d.hide[i])) continue; // (hide: under a farm field, levelPlaced in placeables.js)
     for (let k = 0; k < 16; k++) M[n * 16 + k] = ms[i * 16 + k];
     C[n * 3] = cs[i * 3]; C[n * 3 + 1] = cs[i * 3 + 1]; C[n * 3 + 2] = cs[i * 3 + 2];
@@ -135,16 +146,16 @@ function refillDetail(d, px, pz) {
   }
 }
 // what's already placed where, so new things don't land on top of each other or under a tree
-const spots = new Map();
-const spotKey = (x, z) => Math.floor(x / 4) * 4096 + Math.floor(z / 4);
+export const spots = new Map();
+export const spotKey = (x, z) => Math.floor(x / 4) * 4096 + Math.floor(z / 4);
 // a tree that's been cleared away (stump and all) no longer blocks the way
-function removeSpotNear(x, z) {
+export function removeSpotNear(x, z) {
   const a = spots.get(spotKey(x, z));
   if (!a) return;
   for (let k = 0; k < a.length; k += 4) if (Math.abs(a[k] - x) < 0.01 && Math.abs(a[k + 1] - z) < 0.01) { a.splice(k, 4); return; }
 }
 // take the spot at x, z off the map and say how big it was and what it is: [r, kind] (for moving something)
-function takeSpot(x, z) {
+export function takeSpot(x, z) {
   const a = spots.get(spotKey(x, z));
   if (!a) return null;
   for (let k = 0; k < a.length; k += 4) if (Math.abs(a[k] - x) < 0.01 && Math.abs(a[k + 1] - z) < 0.01) { const out = [a[k + 2], a[k + 3]]; a.splice(k, 4); return out; }
@@ -152,14 +163,14 @@ function takeSpot(x, z) {
 }
 // what a spot is (its 4th number): 0 solid (a rock, stump or log), 1 a tree (only its trunk is in the way), or WALK_THROUGH:
 // it takes room but people walk through it (bushes and farm fields, 0.1.18: Luke, "walk through")
-const WALK_THROUGH = 2;
-function addSpot(x, z, r, kind = 0) {
+export const WALK_THROUGH = 2;
+export function addSpot(x, z, r, kind = 0) {
   const k = spotKey(x, z);
   if (!spots.has(k)) spots.set(k, []);
   spots.get(k).push(x, z, r, kind === true ? 1 : Number(kind) || 0);
 }
 // is there room at x, z? gap is the space needed; a tree counts as treeScale times its crown
-function roomAt(x, z, gap, treeScale = 1, skip = null) { // skip(x, z): spots that don't count (placed things, when placing)
+export function roomAt(x, z, gap, treeScale = 1, skip = null) { // skip(x, z): spots that don't count (placed things, when placing)
   for (let i = -1; i <= 1; i++) {
     for (let j = -1; j <= 1; j++) {
       const a = spots.get(spotKey(x + i * 4, z + j * 4));
@@ -173,7 +184,7 @@ function roomAt(x, z, gap, treeScale = 1, skip = null) { // skip(x, z): spots th
   }
   return true;
 }
-function jitterGeo(g, amt, salt) {
+export function jitterGeo(g, amt, salt) {
   if (g.index) g = g.toNonIndexed();
   const p = g.attributes.position;
   for (let i = 0; i < p.count; i++) {
@@ -187,7 +198,7 @@ function jitterGeo(g, amt, salt) {
 }
 const white = () => mat('#ffffff');
 const crownGeoA = jitterGeo(new THREE.IcosahedronGeometry(1, 1), 0.34, 1);
-const crownGeoB = jitterGeo(new THREE.IcosahedronGeometry(1, 1), 0.3, 77);
+export const crownGeoB = jitterGeo(new THREE.IcosahedronGeometry(1, 1), 0.3, 77);
 const crownGeoFar = jitterGeo(new THREE.IcosahedronGeometry(1, 0), 0.25, 5);
 const trunkGeo = new THREE.CylinderGeometry(0.09, 0.15, 1, 6);
 trunkGeo.translate(0, 0.5, 0);
@@ -205,13 +216,13 @@ const leafMat = white(), barkMat = white();
 // the forest past the edge is split into 8 slices round the world
 const nearChunk = chunker(20);
 const farSlice = (x, z) => Math.floor(((Math.atan2(z, x) + Math.PI) / (Math.PI * 2)) * 8) % 8;
-const near = {
+export const near = {
   trunk: makeSet(trunkGeo, barkMat, { chunk: nearChunk, label: 'Tree', lod: trunkGeoFar }),
   crownA: makeSet(crownGeoA, leafMat, { chunk: nearChunk, label: 'Tree', lod: crownGeoFar }),
   crownB: makeSet(crownGeoB, leafMat, { chunk: nearChunk, label: 'Tree', lod: crownGeoFar }),
   cone: makeSet(coneGeoJ, leafMat, { chunk: nearChunk, label: 'Pine tree', lod: coneGeoFar }),
 };
-const far = {
+export const far = {
   trunk: makeSet(trunkGeoFar, barkMat, { shadow: false, chunk: farSlice }),
   crown: makeSet(crownGeoFar, leafMat, { shadow: false, chunk: farSlice }),
   cone: makeSet(coneGeoFar, leafMat, { shadow: false, chunk: farSlice }),
@@ -336,7 +347,7 @@ const tuftGeo = (() => {
 const TUFT_COLOURS = ['#a9b86f', '#9caf66', '#b7b873', '#8fa35c'];
 const FLOWER_COLOURS = ['#f3efe1', '#ecd36a', '#e2a8b4', '#b8a5d9', '#f3efe1'];
 // grass and flowers are only drawn near you: full grass out to 26 m, thinning out by 40 m
-const tufts = makeDetail(tuftGeo, mat('#ffffff', { roughness: 1, side: THREE.DoubleSide }), { cap: 4200, near: 26, far: 40 });
+export const tufts = makeDetail(tuftGeo, mat('#ffffff', { roughness: 1, side: THREE.DoubleSide }), { cap: 4200, near: 26, far: 40 });
 for (let i = 0; i < 2400; i++) {
   const a = rand() * Math.PI * 2, d = Math.sqrt(rand()) * 34;
   const x = CLEAR.x + Math.cos(a) * d, z = CLEAR.z + Math.sin(a) * d;
@@ -358,8 +369,8 @@ for (let i = 0; i < 320; i++) {
 /* reeds and lily pads */
 const reedGeo = new THREE.ConeGeometry(0.03, 1, 4, 1, true);
 reedGeo.translate(0, 0.5, 0);
-const reeds = IM(reedGeo, mat('#ffffff', { roughness: 1, side: THREE.DoubleSide }), 300, false);
-const cattails = IM(new THREE.CylinderGeometry(0.045, 0.045, 0.2, 5), mat('#ffffff'), 90, false);
+export const reeds = IM(reedGeo, mat('#ffffff', { roughness: 1, side: THREE.DoubleSide }), 300, false);
+export const cattails = IM(new THREE.CylinderGeometry(0.045, 0.045, 0.2, 5), mat('#ffffff'), 90, false);
 reeds.userData.label = 'Reeds';
 for (let tries = 0, placed = 0; tries < 3000 && placed < 36; tries++) {
   const a = rand() * Math.PI * 2, rad = rr(0.7, 0.98);
@@ -379,7 +390,7 @@ for (let tries = 0, placed = 0; tries < 3000 && placed < 36; tries++) {
   placed++;
 }
 const padGeo = new THREE.CylinderGeometry(0.34, 0.34, 0.03, 8, 1, false, 0.5, Math.PI * 1.8);
-const pads = IM(padGeo, mat('#ffffff', { roughness: 0.7 }), 12, false);
+export const pads = IM(padGeo, mat('#ffffff', { roughness: 0.7 }), 12, false);
 for (let tries = 0, placed = 0; tries < 400 && placed < 9; tries++) {
   const x = POND.x + rr(-4, 4), z = POND.z + rr(-3.5, 3.5);
   if (heightAt(x, z) > WATER_Y - 0.3 || pondShape(x, z) > 0.62) continue;
@@ -389,17 +400,17 @@ for (let tries = 0, placed = 0; tries < 400 && placed < 9; tries++) {
 }
 
 /* ---------- props you can tap ---------- */
-const interactive = [water, reeds]; // trees, bushes and rocks spread over the world are added once they're built
-const rockGeos = [
+export const interactive = [water, reeds]; // trees, bushes and rocks spread over the world are added once they're built
+export const rockGeos = [
   jitterGeo(new THREE.DodecahedronGeometry(1, 0), 0.45, 3),
   jitterGeo(new THREE.DodecahedronGeometry(1, 0), 0.5, 41),
   jitterGeo(new THREE.IcosahedronGeometry(1, 0), 0.4, 19),
 ];
 const flintGeo = jitterGeo(new THREE.TetrahedronGeometry(1, 0), 0.3, 5);
 const ROCK_COLOURS = ['#a9a397', '#9a948a', '#b5ae9f', '#8f8a80'];
-const BUSH_COLOURS = ['#5f8146', '#668a4b', '#58783f'];
+export const BUSH_COLOURS = ['#5f8146', '#668a4b', '#58783f'];
 const propMat = white();
-const wild = {
+export const wild = {
   bush: makeSet(crownGeoB, propMat, { label: 'Bush', chunk: chunker(40) }),
   boulders: rockGeos.map((g) => makeSet(g, propMat, { label: 'Boulder' })),
   rock: makeSet(rockGeos[0], propMat, { label: 'Rock' }),
@@ -410,7 +421,7 @@ const wild = {
 };
 // The things round the clearing keep their own invisible shapes for tapping, but are drawn
 // together with others like them (far fewer separate draws for the phone).
-const drawnTogether = {
+export const drawnTogether = {
   bushes: makeSet(crownGeoB, propMat),
   rocks: rockGeos.map((g) => makeSet(g, propMat)),
   flint: makeSet(flintGeo, mat('#ffffff', { roughness: 0.55 })),
@@ -423,8 +434,8 @@ const drawAlong = (set, m) => {
   put(set, p.x, p.y, p.z, e.x, e.y, e.z, sc.x, sc.y, sc.z, m.material.color);
   m.visible = false;
 };
-const berries = IM(new THREE.IcosahedronGeometry(0.065, 0), mat('#ffffff', { roughness: 0.5 }), 900, true);
-const berryBushes = [];
+export const berries = IM(new THREE.IcosahedronGeometry(0.065, 0), mat('#ffffff', { roughness: 0.5 }), 900, true);
+export const berryBushes = [];
 function bush(x, z, s = 1, withBerries = true) {
   const g = new THREE.Group();
   const y = groundY(x, z);

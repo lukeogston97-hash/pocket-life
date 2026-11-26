@@ -24,19 +24,19 @@
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="A low-poly forest clearing round a pond, with the words Pocket Life">
 <meta name="twitter:card" content="summary_large_image">
-<!-- three.js: named here (before anything is fetched) and fetched straight away, alongside the game's own files, so the
-     first load doesn't wait for the game's code to arrive before it even starts on three.js -->
+<!-- three.js, the library that draws the 3D world: a copy kept with the game (vendor/three-0.170.0, never changed, so
+     phones keep it for good), named here and fetched straight away so the first load starts on it at once -->
 <script type="importmap">
 {
   "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    "three": "./vendor/three-0.170.0/three.module.min.js",
+    "three/addons/": "./vendor/three-0.170.0/addons/"
   }
 }
 </script>
-<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js">
-<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/controls/OrbitControls.js">
-<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/utils/BufferGeometryUtils.js">
+<link rel="modulepreload" href="./vendor/three-0.170.0/three.module.min.js">
+<link rel="modulepreload" href="./vendor/three-0.170.0/addons/controls/OrbitControls.js">
+<link rel="modulepreload" href="./vendor/three-0.170.0/addons/utils/BufferGeometryUtils.js">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <!-- (the font never holds the page up: it's swapped in when it arrives) -->
@@ -551,23 +551,11 @@ try {
   throw err;
 }
 document.documentElement.classList.remove('booting'); // the game's page is laid out now, under the loading screen
-// The game's code is kept in small files by topic (game/*.js, in this order). They share one scope, so they're
-// joined into one module here and run together, exactly as if they were one file.
-const PARTS = ['rules', 'core', 'land', 'nature', 'plants', 'world-build', 'items', 'people', 'world-items', 'you', 'needs', 'tips',
-  'inventory', 'camera', 'moving', 'placeables', 'input', 'screens', 'loop', 'online', 'admin', 'others', 'society', 'admin-mode', 'start'];
-let code;
+// The game's code is in small files by topic (game/*.js), each a module that imports what it uses. game/main.js
+// loads them all in order. The version on its address gets past the phone's cache when the game updates; the files it
+// loads are checked against the server every time (_headers), so a phone never mixes old and new files.
 try {
-  code = await Promise.all(PARTS.map(async (p) => {
-    const r = await fetch(`game/${p}.js?v=${v}`);
-    if (!r.ok) throw new Error(`game/${p}.js: HTTP ${r.status}`);
-    return `// ===== game/${p}.js =====\n${await r.text()}`;
-  }));
-} catch (err) {
-  failed("The game couldn't be loaded. Check your connection, then try again.");
-  throw err;
-}
-try {
-  await import(URL.createObjectURL(new Blob([`${code.join('\n')}\n//# sourceURL=pocket-life-game.js`], { type: 'text/javascript' })));
+  await import(`./game/main.js?v=${v}`);
 } catch (err) {
   // three.js didn't arrive, 3D couldn't start (the game says which in #noGL), or the browser is too old for the game's code
   const noGL = document.getElementById('noGL');

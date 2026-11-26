@@ -5,26 +5,48 @@
    game's files and is never kept on the device.
    This file holds the admin's tools and what the server tells everyone (announcements, being removed, resets). */
 // Before 23 Nov 2026 the admin code was kept on the phone that typed /admin. It isn't any more: any copy left behind is deleted.
+import { game, share } from './links.js';
+import { daysSpan } from './rules.js';
+import { app, camera, DATA, SETTINGS, VERSION_LABEL } from './core.js';
+import { pondShape, terrain, WALK_LIMIT } from './land.js';
+import { berryBushes, rocks, trees } from './nature.js';
+import { berriesOn, bushHolds, CHOP, drawBerries, MINE } from './world-build.js';
+import { $, countLabel, groupOf, GROUPS, harvests, ITEMS, RECIPES, SOURCES, STAT, STATS } from './items.js';
+import { world } from './world-items.js';
+import { drawCarry, headTop, player, showTag, you } from './you.js';
+import { tickStats } from './needs.js';
+import { bagOpen, craftOpen, drawBag, drawCraft, madeBy, recipeGroup, recipeName } from './inventory.js';
+import { controls } from './camera.js';
+import { stopQueue, taskName } from './moving.js';
+import { CROPS, PLACEABLES, placed } from './placeables.js';
+import { ndc, ray } from './input.js';
+import { net, others, outbox, showMaintenance } from './online.js';
+// shared for files further down game/main.js, and the variables other files change (game/links.js)
+share({
+  get admin() { return admin; }, adminEscape, adminMessage, applyLive, applyLiveItems,
+  get BERRY_SOURCE() { return BERRY_SOURCE; }, closePicker, drawAdmin, get el() { return el; },
+});
+
 try { localStorage.removeItem('pocket-life:admin'); localStorage.removeItem('pocket-life:adminTag'); } catch (err) { /* none */ }
-const admin = { on: false, maintenance: false, message: '', live: [] }; // on: admin mode is open (adminMode.on) and the server has said yes
+export const admin = { on: false, maintenance: false, message: '', live: [] }; // on: admin mode is open (adminMode.on) and the server has said yes
 // what a tool answers, and short notes: a line under the admin's bar (a note out in the world could sit behind a panel)
 let adminToastTimer = null;
-function adminSay(text, secs = 2.8) {
-  if (!adminMode.on) { showTag(text, headTop(), 3); return; } // (a player hears some of this too, like a reset: a note in the world, as before)
+export function adminSay(text, secs = 2.8) {
+  if (!game.adminMode.on) { showTag(text, headTop(), 3); return; } // (a player hears some of this too, like a reset: a note in the world, as before)
   $('adminToast').textContent = text;
   $('adminToast').hidden = false;
   clearTimeout(adminToastTimer);
   adminToastTimer = setTimeout(() => { $('adminToast').hidden = true; }, secs * 1000);
 }
-const adminSend = (msg) => { if (online()) net.sock.send(JSON.stringify(msg)); else adminSay("You're offline"); };
+export const adminSend = (msg) => { if (game.online()) net.sock.send(JSON.stringify(msg)); else adminSay("You're offline"); };
 function adminMessage(m) {
-  if (m.t.startsWith('admin') && !adminMode.on) return; // admin news only means something while admin mode is open
+  if (m.t.startsWith('admin') && !game.adminMode.on) return; // admin news only means something while admin mode is open
   if (m.t === 'admin') { // the admin's numbers: sent on the way in, and as every tool's answer (with a few words in text)
     const was = admin.on;
     Object.assign(admin, { on: true, maintenance: m.maintenance, message: m.message || '' });
     if (m.usage) admin.usage = m.usage;
     if (m.live) admin.live = m.live;
-    if ('speed' in m) timeSpeed = m.speed && m.speed.until > Date.now() ? m.speed : null;
+    if ('speed' in m) game.timeSpeed = m.speed && m.speed.until > Date.now() ? m.speed : null;
     drawAdmin();
     if (!was) adminSend({ t: 'a.list' }); // (the list: for the Inbox count)
     if (m.text) adminSay(m.text);
@@ -69,7 +91,7 @@ const BERRY_SOURCE = () => Object.values(SOURCES).find(harvests);
 const LIVE_SET = {
   maxPlaying: (v) => { SETTINGS.maxPlaying = v; },
   toolSlots: (v) => { if (SETTINGS.toolSlots !== v) { SETTINGS.toolSlots = v; if (player && bagOpen()) drawBag(); } }, // the tool bar's spots (inventory.js)
-  societyMax: (v) => { SOCIETY.maxMembers = v; }, // (society.js; members are told the number with their society too)
+  societyMax: (v) => { game.SOCIETY.maxMembers = v; }, // (society.js; members are told the number with their society too)
   respawnMinutes: (v) => { SETTINGS.respawnMinutes = v; },
   berryRegrowHours: (v) => { const s = BERRY_SOURCE(); if (s && s.regrowHours !== v) { s.regrowHours = v; for (const b of berryBushes) { b.userData.shown = -1; drawBerries(b); } } },
   treeRegrowDays: (v) => { CHOP.regrowDays = [v, daysSpan(CHOP.regrowDays)[1]]; }, // soonest and latest (rules.js stumpBackMs)
@@ -114,36 +136,36 @@ function applyLiveItems(live) {
     for (const f of ['needs', 'makes']) for (const kind of Object.keys(base[f])) r[f][kind] = num((mine[f] || {})[kind], base[f][kind]);
   }
   // what's on screen that shows these numbers: the weight you carry, the inventory, the craft list
-  bagDrawn = ''; craftDrawn = ''; foundDrawn = '';
+  game.bagDrawn = ''; game.craftDrawn = ''; game.foundDrawn = '';
   if (player) { drawCarry(); if (bagOpen()) drawBag(); if (craftOpen()) drawCraft(); }
 }
 
 /* ---------- what the admin can do with the thing they tapped (admin-mode.js adminTap opens these as its menu) ---------- */
 const sure = (label, run, note = '') => ({ label, note, sub: [{ label: `Yes, ${label.toLowerCase()}`, run }] }); // asks once more first
-function adminPersonActions(o) {
+export function adminPersonActions(o) {
   if (!admin.on) return [];
   return [{ label: 'Open their page', run: () => openPlayerPage(o.id) },
-    { label: 'Follow them', run: () => adminFollow(o.id) },
+    { label: 'Follow them', run: () => game.adminFollow(o.id) },
     { label: 'Move them', note: 'Then tap where they go', run: () => startMove({ person: o.id, name: o.title }) },
     { label: 'Fill their needs', run: () => adminSend({ t: 'a.fill', id: o.id }) },
     { label: 'Mute for everyone', note: 'Unmute on their page', run: () => adminSend({ t: 'a.mute', id: o.id, on: true }) },
     { label: 'Kick', run: () => adminSend({ t: 'a.kick', id: o.id }) },
     sure('Ban', () => adminSend({ t: 'a.ban', id: o.id }), 'Keeps this phone out')];
 }
-function adminGroundActions(p) {
+export function adminGroundActions(p) {
   if (!admin.on || !p) return [];
   return [{ label: 'Add item', note: 'Pick from a list', run: () => openPicker('Add item', (kind, n) => adminSend({ t: 'a.add', kind, n, x: p.x, z: p.z })) },
-    { label: 'Fly here', run: () => adminFlyTo(p.x, p.z) }];
+    { label: 'Fly here', run: () => game.adminFlyTo(p.x, p.z) }];
 }
 // a tree, rock or berry bush laid out with the world (what: tree | rock | bush, i: its number); grown: there's something to grow back
-function adminThingActions(what, i, grown) {
+export function adminThingActions(what, i, grown) {
   if (!admin.on) return [];
   const regrow = { tree: 'Grow back into a tree', rock: 'Grow back', bush: 'Fill with berries' }[what];
   return [{ label: 'Move', note: 'Then tap where it goes', run: () => startMove({ what, idx: i }) },
     ...(grown ? [{ label: regrow, run: () => adminSend({ t: 'a.regrow', what, idx: i }) }] : []),
     sure('Remove', () => adminSend({ t: 'a.remove', what, idx: i }), 'Gone for good')];
 }
-function adminPlacedActions(th) {
+export function adminPlacedActions(th) {
   if (!admin.on) return [];
   const F = PLACEABLES[th.kind] && PLACEABLES[th.kind].fire;
   const fire = (what) => () => adminSend({ t: 'a.fire', id: th.id, do: what });
@@ -157,9 +179,9 @@ function adminPlacedActions(th) {
     sure('Remove', () => adminSend({ t: 'a.remove', id: th.id }))];
 }
 // Move: the next tap on the ground is where it goes (a tap anywhere else stops)
-let adminMoving = null;
-function startMove(m) { adminMoving = m; if (adminNarrow()) closeAdminPanel(); adminSay(m.person ? `Tap where ${m.name} goes` : 'Tap where it goes', 6); }
-function adminMoveTap() {
+export let adminMoving = null;
+function startMove(m) { adminMoving = m; if (game.adminNarrow()) closeAdminPanel(); adminSay(m.person ? `Tap where ${m.name} goes` : 'Tap where it goes', 6); }
+export function adminMoveTap() {
   const m = adminMoving;
   adminMoving = null;
   ray.setFromCamera(ndc, camera);
@@ -197,7 +219,7 @@ $('adminPickFind').addEventListener('input', drawPicker);
 $('adminPickClose').addEventListener('click', closePicker);
 
 /* ---------- small pieces for the panel ---------- */
-const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+export const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const button = (label, run, cls = 'small-btn') => { const b = el('button', cls, label); b.type = 'button'; b.addEventListener('click', run); return b; };
 const emptyNote = (text) => el('p', 'admin-empty', text);
 // a row of choices: options are [value, label]
@@ -218,7 +240,7 @@ function entry(head, body, buttons = [], cls = '') {
 }
 // a button that needs a second tap within a few seconds (for things that can't be undone). With wait, the second tap
 // only counts after that long, so a double tap by mistake does nothing.
-function twoTaps(btn, run, again = 'Tap again to be sure', wait = 0) {
+export function twoTaps(btn, run, again = 'Tap again to be sure', wait = 0) {
   let label = btn.textContent, armed = null, at = 0; // (label: what it said when first tapped, so a label that changes comes back right)
   const reset = () => { if (armed) btn.textContent = label; clearTimeout(armed); armed = null; };
   btn.addEventListener('click', () => {
@@ -232,9 +254,9 @@ const when = (t) => { try { return new Date(t).toLocaleString([], { day: 'numeri
 const minsLeft = (until) => Math.max(1, Math.round((until - Date.now()) / 60000));
 
 /* ---------- the panel and its tabs ---------- */
-let adminTab = 'server', playersData = null, playerData = null, inboxData = null, editStats = null; // editStats: whose needs are open as boxes to type in
+export let adminTab = 'server', playersData = null, playerData = null, inboxData = null, editStats = null; // editStats: whose needs are open as boxes to type in
 function openAdminPanel() {
-  if (!adminMode.on) return;
+  if (!game.adminMode.on) return;
   $('adminDashBtn').setAttribute('aria-expanded', 'true');
   app.classList.add('dash-open');
   adminSend({ t: 'a.state' });
@@ -242,7 +264,7 @@ function openAdminPanel() {
   $('adminPanel').hidden = false;
   showAdminTab(adminTab === 'player' ? 'players' : adminTab);
 }
-function closeAdminPanel() { $('adminPanel').hidden = true; $('adminDashBtn').setAttribute('aria-expanded', 'false'); app.classList.remove('dash-open'); resetDanger(); }
+export function closeAdminPanel() { $('adminPanel').hidden = true; $('adminDashBtn').setAttribute('aria-expanded', 'false'); app.classList.remove('dash-open'); resetDanger(); }
 function adminEscape() { if (adminTab === 'player') showAdminTab('players'); else closeAdminPanel(); }
 function showAdminTab(tab) {
   adminTab = tab;
@@ -288,14 +310,14 @@ $('adminAnnounceForm').addEventListener('submit', (e) => {
 });
 const speedPick = { x: 60, mins: 10 };
 function drawSpeed() {
-  const fast = timeSpeed && timeSpeed.until > Date.now();
-  $('adminSpeedState').textContent = fast ? `${timeSpeed.x}x for ${minsLeft(timeSpeed.until)} more min` : 'Normal';
+  const fast = game.timeSpeed && game.timeSpeed.until > Date.now();
+  $('adminSpeedState').textContent = fast ? `${game.timeSpeed.x}x for ${minsLeft(game.timeSpeed.until)} more min` : 'Normal';
   chips($('adminSpeedX'), [[10, '10x'], [60, '60x'], [600, '600x']], speedPick.x, (x) => { speedPick.x = x; drawSpeed(); });
   chips($('adminSpeedMins'), [[5, '5 min'], [10, '10 min'], [30, '30 min'], [60, '1 hour']], speedPick.mins, (m) => { speedPick.mins = m; drawSpeed(); });
   $('adminSpeedBtn').textContent = fast ? 'Back to normal' : `Start ${speedPick.x}x for ${speedPick.mins === 60 ? '1 hour' : `${speedPick.mins} min`}`;
 }
 $('adminSpeedBtn').addEventListener('click', () => {
-  const fast = timeSpeed && timeSpeed.until > Date.now();
+  const fast = game.timeSpeed && game.timeSpeed.until > Date.now();
   adminSend({ t: 'a.speed', x: fast ? 1 : speedPick.x, minutes: speedPick.mins });
 });
 
@@ -425,8 +447,8 @@ function drawPlayer() {
     bar.appendChild(out1); sec.appendChild(bar); out.push(sec);
   }
   const acts = [];
-  if (alive && p.x != null) acts.push(['Fly to', () => adminFlyTo(p.x, p.z)]);
-  if (alive && others.has(p.id)) acts.push(['Follow', () => adminFollow(p.id)]);
+  if (alive && p.x != null) acts.push(['Fly to', () => game.adminFlyTo(p.x, p.z)]);
+  if (alive && others.has(p.id)) acts.push(['Follow', () => game.adminFollow(p.id)]);
   if (alive) acts.push(['Fill needs', () => toPlayer({ t: 'a.fill', id: p.id })]);
   acts.push([p.muted ? 'Unmute' : 'Mute', () => toPlayer({ t: 'a.mute', id: p.id, on: !p.muted })]);
   if (p.state === 'online') acts.push(['Kick', () => toPlayer({ t: 'a.kick', id: p.id })]);
@@ -501,7 +523,7 @@ function resetDanger() { resetClearAll(); resetReset(); resetResetAll(); resetRe
 /* ---------- Fires and claims (World tab): every fire, its flame and fuel, and whose land it holds ----------
    The server sends the list (a.fires) when the tab opens and after each change. A fire's own tap menu has the quick ones
    (Light, Put out, End claim); here they all are, with the hours of fuel and who a claim goes to. */
-let firesData = null, openFire = null; // openFire: the fire whose fuel and claim boxes are showing
+export let firesData = null, openFire = null; // openFire: the fire whose fuel and claim boxes are showing
 const hoursText = (ms) => { const m = Math.round(ms / 60000), h = Math.floor(m / 60); return h && m % 60 ? `${h} h ${m % 60} m` : h ? `${h} h` : `${m} m`; };
 function drawFires() {
   const box = $('adminFires'), d = firesData;
@@ -516,7 +538,7 @@ function drawFires() {
     head.append(el('div', 'admin-name', f.claim ? f.claim.name : kind), el('div', 'admin-tag', [f.claim ? 'claim' : '', state, !f.claim && f.by ? `built by ${f.by}` : '', `at ${Math.round(f.x)}, ${Math.round(f.z)}`].filter(Boolean).join(' · ')));
     const e = entry(head), bar = el('div', 'admin-btns');
     e.dataset.fire = f.id;
-    bar.appendChild(button('Fly to', () => adminFlyTo(f.x, f.z)));
+    bar.appendChild(button('Fly to', () => game.adminFlyTo(f.x, f.z)));
     if (f.built && f.lit) { const b = button('Put out', () => {}); if (f.claim) twoTaps(b, () => send(f, { t: 'a.fire', do: 'out' }), `Tap again: ends ${f.claim.name}`, 500); else b.addEventListener('click', () => send(f, { t: 'a.fire', do: 'out' })); bar.appendChild(b); }
     if (f.built && !f.lit) bar.appendChild(button('Light', () => send(f, { t: 'a.fire', do: 'light' })));
     if (f.claim) { const b = button('End claim', () => {}); twoTaps(b, () => send(f, { t: 'a.claim', do: 'end' }), 'Tap again: the land is free', 500); bar.appendChild(b); }
@@ -558,7 +580,7 @@ function drawSocs() {
     const head = el('div'), claim = s.claim ? `claim burning · ${hoursText(s.claim.fuel)} left` : 'no claim';
     head.append(el('div', 'admin-name', s.name), el('div', 'admin-tag', [`led by ${s.leader}`, `${s.members.length} of ${s.max}`, claim].join(' · ')));
     const e = entry(head), bar = el('div', 'admin-btns');
-    if (s.claim) bar.appendChild(button('Fly to', () => adminFlyTo(s.claim.x, s.claim.z)));
+    if (s.claim) bar.appendChild(button('Fly to', () => game.adminFlyTo(s.claim.x, s.claim.z)));
     bar.appendChild(button(openSoc === s.id ? 'Less' : 'Members', () => { openSoc = openSoc === s.id ? null : s.id; drawSocs(); }));
     const end = button('End', () => {});
     twoTaps(end, () => adminSend({ t: 'a.socEnd', id: s.id }), s.claim ? 'Tap again: the claim goes to the leader' : 'Tap again to end it', 500);
@@ -584,7 +606,7 @@ function drawSocs() {
 }
 
 /* ---------- Log tab: what happened in the world and what the admin did, newest first (server/src/activity.js) ---------- */
-let logData = null, logShow = 'all';
+export let logData = null, logShow = 'all';
 function drawLog() {
   chips($('adminLogShow'), [['all', 'All'], ['world', 'People'], ['admin', 'Admin'], ['guard', 'Refused']], logShow, (v) => { logShow = v; drawLog(); });
   const box = $('adminLog');
@@ -682,7 +704,7 @@ drawAdmin();
    changed), so a new item or recipe shows up here by itself. A changed number wins over the game file until Reset.
    One short line per item, A to Z, with the Craft kinds as chips and a search (Luke, 25 Nov 2026: the list of every
    number was way too long). Tap a line to open its numbers, one item open at a time. */
-let itemsData = null, itemsKind = 'All', itemsOpen = null, itemsQ = ''; // itemsOpen: the heading that's open
+export let itemsData = null, itemsKind = 'All', itemsOpen = null, itemsQ = ''; // itemsOpen: the heading that's open
 // which heading a number sits under, its kind, what it's called there, and (an item's own numbers) how its line sums it up
 function itemPlace(at) {
   const [what, id, field, sub] = at, name = (k) => (ITEMS[k] ? ITEMS[k].name.toLowerCase() : k);
@@ -775,7 +797,7 @@ $('adminItemsCopy').addEventListener('click', async () => {
 });
 
 /* ---------- leaving admin mode: nothing the dashboard was showing stays on the page (names, feedback, reports, the Log) ---------- */
-function forgetAdminData() {
+export function forgetAdminData() {
   playersData = null; playerData = null; inboxData = null; itemsData = null; firesData = null; logData = null; editStats = null; openFire = null; socsData = null; openSoc = null;
   for (const id of ['adminPlayers', 'adminPlayer', 'adminInbox', 'adminItems', 'adminFires', 'adminSocs', 'adminLog']) $(id).replaceChildren();
   $('adminItemsText').value = ''; $('adminItemsText').hidden = true;

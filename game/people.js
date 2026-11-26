@@ -1,5 +1,18 @@
 /* ---------- people ---------- */
-const HIP_Y = 0.86, WAIST_Y = 1.08;
+import * as THREE from 'three';
+import { share } from './links.js';
+import { app, clamp01, HAZE, mat, pick, rand, renderer, rr } from './core.js';
+import { rockGeos } from './nature.js';
+import { $, BODY_SHAPES, DEFAULT_LOOK, find, LOOKS, shadowsOn } from './items.js';
+// shared for files further down game/main.js, and the variables other files change (game/links.js)
+share({
+  get draft() { return draft; }, set draft(v) { draft = v; },
+  get previewDrag() { return previewDrag; }, set previewDrag(v) { previewDrag = v; },
+  get previewPerson() { return previewPerson; }, set previewPerson(v) { previewPerson = v; },
+  get previewSpin() { return previewSpin; }, set previewSpin(v) { previewSpin = v; },
+});
+
+export const HIP_Y = 0.86, WAIST_Y = 1.08;
 const headGeo = new THREE.IcosahedronGeometry(0.16, 1);
 const capGeo = new THREE.SphereGeometry(0.19, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.5);
 const longHairGeo = new THREE.CylinderGeometry(0.168, 0.188, 0.34, 10, 1, true, Math.PI * 0.5, Math.PI);
@@ -18,7 +31,7 @@ function hairColourFor(look) {
   return c.lerp(greyHair, clamp01((look.age - 50) / 30) * 0.85);
 }
 const own = (geo) => { geo.userData.perPerson = true; return geo; };
-function makePerson(look) {
+export function makePerson(look) {
   const B = BODY_SHAPES[find(LOOKS.sex, look.sex).id] || Object.values(BODY_SHAPES)[0];
   const w = find(LOOKS.build, look.build).w;
   const tunic = find(LOOKS.tunic, look.tunic);
@@ -119,8 +132,8 @@ function makePerson(look) {
   return shadowsOn(g);
 }
 // arm pose: x swings forward/back, the outward spread stays the same
-function setArm(arm, x) { arm.rotation.set(x, 0, arm.userData.spread); }
-function disposeMaterials(obj) {
+export function setArm(arm, x) { arm.rotation.set(x, 0, arm.userData.spread); }
+export function disposeMaterials(obj) {
   obj.traverse((m) => {
     if (!m.isMesh) return;
     for (const x of Array.isArray(m.material) ? m.material : [m.material]) if (x && !x.userData.shared) x.dispose();
@@ -129,7 +142,7 @@ function disposeMaterials(obj) {
 }
 
 /* ---------- the little stage you see while making your person ---------- */
-const pscene = new THREE.Scene();
+export const pscene = new THREE.Scene();
 pscene.fog = new THREE.Fog(HAZE, 9, 22);
 const pcam = new THREE.PerspectiveCamera(27, 1, 0.1, 100);
 pcam.position.set(1.75, 1.75, 5.4);
@@ -176,13 +189,13 @@ pscene.add(psun);
 }
 let draft = { ...DEFAULT_LOOK };
 let previewPerson = null, previewSpin = 0.3, previewDrag = null;
-function refreshPreview() {
+export function refreshPreview() {
   if (previewPerson) { pscene.remove(previewPerson); disposeMaterials(previewPerson); }
   previewPerson = makePerson(draft);
   previewPerson.rotation.y = previewSpin;
   pscene.add(previewPerson);
 }
-function renderCreator(w, h) {
+export function renderCreator(w, h) {
   renderer.setClearColor(HAZE, 1);
   const ar = app.getBoundingClientRect(), sheet = $('sheet').getBoundingClientRect();
   const top = Math.max(0, $('creatorHead').getBoundingClientRect().bottom - ar.top);
