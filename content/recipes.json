@@ -1,0 +1,176 @@
+{
+  "_help": {
+    "recipes": "To add a recipe, put it in the recipes list like this: {\"id\": \"stone-axe\", \"name\": \"Stone axe\", \"needs\": {\"axe-head\": 1, \"long-stick\": 1, \"twine\": 1}, \"makes\": {\"stone-axe\": 1}, \"about\": \"Chops trees\"}. Every item in needs, keeps and makes must exist in items. Players make things on the craft mat (0.1.8), at the top of the inventory's Recipes tab (0.1.15): they tap a recipe in the list, the mat shows its things (what they don't have faded), and once they have its needs plus its keeps, Make lights up. Every craft mat recipe shows by itself in Recipes, greyed out while the player doesn't carry everything it takes (Luke, 0.1.12); tapping one puts its things on the mat, as many as it takes, and the mat shows that recipe until they change what's on it. The server keeps what each player has made (their next person keeps it too): the first make says Your first one! No mystery (Luke, 0.1.10): the mat always shows what the things on it make. Keep recipes simple: 2 or 3 things, at most 2 of each, and make big things from smaller steps (an axe head first, then the axe). No two recipes can want the same things on the mat (lint checks). keeps (optional) are tools the recipe needs on the mat but does not use up, like {\"sharp-stone\": 1} to cut a berry open for its seeds. about is a short line shown on the mat (optional). The server checks crafting too, so run python3 tools/worlds.py test-build after changing recipes. near (optional) is a placeable id, like campfire: the recipe can then only be made close to a built one (a fire has to be lit), and it is listed in that thing's tap menu under its craftLabel (Cook) without having to be made first. Use it for cooking. Food is only made at stations (Luke, 0.1.9): the craft mat never makes a recipe with near, it says where to make it instead (Cook it at a lit campfire). Since 0.1.20 Recipes lists them too (Luke: Food not hidden), marked At a campfire. seconds (optional) is how long making it takes, like cooking at a fire (20): the things are used up when it finishes. group (optional) puts it under a heading in Recipes (one of itemGroups); without it, it goes under the heading of the thing it makes."
+  },
+  "recipes": [
+    {
+      "id": "sharp-stone",
+      "needs": {
+        "stone": 2
+      },
+      "makes": {
+        "sharp-stone": 1
+      },
+      "about": "Knock two stones together"
+    },
+    {
+      "id": "short-handle",
+      "needs": {
+        "stick": 1,
+        "twine": 1
+      },
+      "makes": {
+        "short-handle": 1
+      },
+      "about": "Wrap twine round a stick for a grip"
+    },
+    {
+      "id": "knife",
+      "name": "Stone knife",
+      "needs": {
+        "sharp-stone": 1,
+        "short-handle": 1,
+        "twine": 1
+      },
+      "makes": {
+        "knife": 1
+      },
+      "about": "Cuts tall grass fast and picks 2 berries at a time"
+    },
+    {
+      "id": "berry-seeds",
+      "needs": {
+        "berry": 1
+      },
+      "keeps": {
+        "sharp-stone": 1
+      },
+      "makes": {
+        "berry-seeds": 1
+      },
+      "about": "Cut a berry open for its seeds with a sharp stone (you keep the stone)"
+    },
+    {
+      "id": "long-stick",
+      "needs": {
+        "stick": 2,
+        "twine": 1
+      },
+      "makes": {
+        "long-stick": 1
+      },
+      "about": "Tie two sticks together"
+    },
+    {
+      "id": "fishing-spear",
+      "name": "Fishing spear",
+      "needs": {
+        "long-stick": 1,
+        "sharp-stone": 1,
+        "twine": 1
+      },
+      "makes": {
+        "fishing-spear": 1
+      },
+      "about": "Catches fish at the pond"
+    },
+    {
+      "id": "axe-head",
+      "needs": {
+        "sharp-stone": 1,
+        "twine": 1
+      },
+      "makes": {
+        "axe-head": 1
+      },
+      "about": "Wrap a sharp stone in twine"
+    },
+    {
+      "id": "stone-axe",
+      "name": "Stone axe",
+      "needs": {
+        "axe-head": 1,
+        "long-stick": 1,
+        "twine": 1
+      },
+      "makes": {
+        "stone-axe": 1
+      },
+      "about": "Chops trees, stumps and logs"
+    },
+    {
+      "id": "pick-head",
+      "needs": {
+        "sharp-stone": 2,
+        "twine": 1
+      },
+      "makes": {
+        "pick-head": 1
+      },
+      "about": "Tie two sharp stones back to back with twine"
+    },
+    {
+      "id": "stone-pickaxe",
+      "name": "Stone pickaxe",
+      "needs": {
+        "pick-head": 1,
+        "long-stick": 1,
+        "twine": 1
+      },
+      "makes": {
+        "stone-pickaxe": 1
+      },
+      "about": "Breaks rocks and mines boulders for stones"
+    },
+    {
+      "id": "hoe-head",
+      "needs": {
+        "stone": 1,
+        "twine": 1
+      },
+      "makes": {
+        "hoe-head": 1
+      },
+      "about": "Wrap a flat stone in twine"
+    },
+    {
+      "id": "stone-hoe",
+      "name": "Stone hoe",
+      "needs": {
+        "hoe-head": 1,
+        "long-stick": 1,
+        "twine": 1
+      },
+      "makes": {
+        "stone-hoe": 1
+      },
+      "about": "Digs farm fields in your camp"
+    },
+    {
+      "id": "campfire",
+      "name": "Campfire",
+      "needs": {
+        "log": 1,
+        "stick": 2,
+        "stone": 2
+      },
+      "makes": {
+        "campfire": 1
+      },
+      "about": "Place it, build it, then light it"
+    },
+    {
+      "id": "cooked-fish",
+      "name": "Cooked fish",
+      "needs": {
+        "fish": 1
+      },
+      "makes": {
+        "cooked-fish": 1
+      },
+      "near": "campfire",
+      "seconds": 10,
+      "about": "Raw fish can't be eaten. Cook it by a lit campfire (about 10 s)"
+    }
+  ]
+}

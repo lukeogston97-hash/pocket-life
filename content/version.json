@@ -1,0 +1,77 @@
+{
+  "_help": {
+    "version": "version is the game version and build counts the test copies of that version (start build at 1 for each new version, count up for each test copy). Both only need changing here.",
+    "era": "era only goes up if the version numbers are ever reset lower (they were once, 23 Nov 2026: 0.3.8 became 0.1.0), so games from before still get moved on to the newest version.",
+    "server": "server is the address of the online world. The test link and the release both join the same live world (there's no separate test world). Leave it empty to play offline.",
+    "devlog": "What's new, shown in the Menu. Newest first, one entry per version: version, date (the release day, with from for a range), no name (Luke, 26 Nov 2026: versions only), and short lines for players in added (+ new features), improved (~ changes to what's there) and fixed (− bug fixes and removed issues). No full stop at the end."
+  },
+  "version": "0.2.0",
+  "build": 1,
+  "era": 1,
+  "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
+  "devlog": [
+    {
+      "version": "0.2.0",
+      "date": "2026-11-27",
+      "improved": [
+        "A big rebuild behind the scenes, to get the game ready for everything coming next"
+      ]
+    },
+    {
+      "version": "0.1.0 to 0.1.21",
+      "from": "2026-11-23",
+      "date": "2026-11-26",
+      "added": [
+        "Craft mat and Recipes: every recipe under headings, simple to advanced. Tap one, then Make",
+        "Tools made in steps: sharp stones, tool handles, then stone heads for each tool",
+        "A tool bar with 7 spots above your inventory, and tools on it weigh nothing",
+        "Farming: dig fields in your camp with a stone hoe and grow berry bushes from seeds",
+        "Cooked fish: catch raw fish at the pond and cook it at a lit campfire",
+        "Camps: light your first campfire to start one, then invite people nearby to share it",
+        "Your person carries on with your task list while you're away",
+        "Drag things around the world and out of your inventory to where they should go",
+        "Play on other devices: link your phone and computer with a code",
+        "Leave the world for good, in Settings",
+        "A loading screen, an app icon, tips for your first steps, and Privacy and rules"
+      ],
+      "improved": [
+        "Your person stays in the world for 7 days while you're away, and fires hold 7 days of fuel",
+        "Campfires snap to a half-metre grid and turn 4 ways, on levelled ground",
+        "Quicker grass cutting, mining and cooking, and trees and boulders grow back in 1 to 2 days",
+        "More stones and tall grass around the world",
+        "Clearer wording all over, and tap menus match the task list",
+        "Names are one of a kind",
+        "Things left on the ground fade after 7 days, unless they're in a camp",
+        "Making your person fits a phone held sideways",
+        "A quicker first load, and a main menu that's easier on your battery"
+      ],
+      "fixed": [
+        "Sleep: you stay lying down, and drop asleep when Rest runs out",
+        "Tools are held in the right hand, and feet no longer sink into slopes",
+        "Rocks, trees and bushes stay put next to campfires and farm fields",
+        "The chat Send button no longer slips off small phones",
+        "The feedback box no longer zooms the page in on iPhones",
+        "Tapping something another player had just picked up no longer causes an error"
+      ]
+    },
+    {
+      "version": "0.0.x",
+      "from": "2026-11-21",
+      "date": "2026-11-23",
+      "added": [
+        "First playable: berry bushes, tap menus, the task list and the pause menu",
+        "One shared online world, with speech bubbles, a chat filter, Mute and Report",
+        "Your person stays in the world and looks after themselves while you're away",
+        "Rest and Stamina, sleeping, and one Darwin clock for everyone",
+        "Crafting and stone tools: chop trees, break rocks and cut tall grass for twine",
+        "Campfires, recipes you find as you go, and a grid inventory",
+        "Camps: your lit campfire makes the land round it yours",
+        "Fishing with a spear at the pond, and cooking fish on a campfire",
+        "Drag items out of the Inventory, and on a computer loose items glow under the mouse"
+      ],
+      "improved": [
+        "New dark glass look with needs as rings, and nicer sticks, stones, berries and logs"
+      ]
+    }
+  ]
+}

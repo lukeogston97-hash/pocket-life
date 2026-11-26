@@ -1,0 +1,245 @@
+{
+  "_help": {
+    "sources": "Things in the world you can use, matched by name (\"Pond\", \"Berry bush\"). action is the button in the tap menu, like \"Drink\". gives adds to stats each time (one drink at the pond gives 15 thirst). harvest is what one pick puts in your inventory (1 berry), holds is how many a full bush has (up to 15), and regrowHours is how long a picked-bare bush takes to grow them all back; picked berries grow back one at a time. seconds is how long it takes. pose is kneel, pick or bend. fish (the pond has it): action and verb are the tap menu button and the busy word, seconds how long a try takes, tool what you need to carry (it wears each try), catch what a catch gives, chance the share of tries that catch one (0.5), holds how many fish the pond has for everyone and regrowMinutes how often one comes back; the server keeps the count (run tools/worlds.py test-build after changing it). tool and toolHarvest: with that tool you get toolHarvest per pick instead (a knife picks 2 berries), and the tool wears.",
+    "plants": "Plants you cut, like tall grass. Each kind is laid out by itself: count clumps (nearStart of them near the start), on its own random numbers (seed) so nothing else moves. action is the tap menu button, verb what shows while doing it. gives goes into your inventory each cut. seconds is how long by hand, toolSeconds with the tool (each use wears the tool). regrowHours [lo, hi]: a cut clump grows back at a random time in between. look: blades per clump, height, colour and tips (the seed heads). Run tools/worlds.py test-build after changing plants.",
+    "chopping": "Chopping with a tool (tool: the item you need). tree: chopping a standing tree (seconds, and what falls: gives); it leaves a stump that grows back into a tree after regrowDays real days: a number, or [soonest, latest] so each stump takes its own time in between (stumpBackMs in rules.js). stump: digging out a stump (then the tree is gone for good). log: chopping a log (an item) into sticks. Each chop wears the tool by one use, and takes energyCosts.chop energy. The server uses the same rules.",
+    "mining": "Mining with a tool (tool: the item you need, the stone pickaxe). rock: breaking a small rock (seconds, and what falls: gives); the rock is then gone, but one broken rock comes back by a boulder every rockBackHours. boulder: mining a boulder; gives can be a range like [3, 5]. A mined boulder stays (it can't be removed) and can be mined again after regrowDays real days (the same as trees). Each hit wears the tool by one use and takes energyCosts.chop energy. The server uses the same rules.",
+    "berryBushes": "extra: how many more berry bushes grow out in the wider world, besides the ones by the start. seed: their own random numbers, so they're in the same places on every phone (change it to move them all).",
+    "regions": "The worlds (regions) on the main menu, under Play. Each is its own world on its own clock (timeZone). open: false shows it as Coming soon; tapping it shows this world's view at that region's time of day. For now only one world exists, so only one region can be open, and its timeZone should match settings.worldTimeZone.",
+    "daylight": "Day and night follow the world's clock (settings.worldTimeZone), the same for every player; on the main menu a world that isn't open shows its own region's time. Each entry is how the world looks at that hour, and the game blends between them. sky is the haze colour, skyLight and groundLight light things from above and below, brightness is how strong that is, sun is the sun or moon colour, sunStrength how strong, sunHeight its angle in degrees.",
+    "night": "Night in the world's clock (settings.worldTimeZone), from the hour 'from' to the hour 'to'. Sleeping at night fills Rest at whileAsleepAtNight instead of whileAsleep. People away or on autopilot go to sleep when night starts and get up in the morning. The server uses the same numbers."
+  },
+  "sources": {
+    "pond": {
+      "name": "Pond",
+      "action": "Drink",
+      "verb": "Drinking",
+      "seconds": 2,
+      "gives": {
+        "thirst": 15
+      },
+      "pose": "kneel",
+      "water": true,
+      "fish": {
+        "action": "Fish",
+        "verb": "Fishing",
+        "seconds": 8,
+        "tool": "fishing-spear",
+        "catch": "fish",
+        "chance": 0.5,
+        "holds": 10,
+        "regrowMinutes": 60
+      }
+    },
+    "berryBush": {
+      "name": "Berry bush",
+      "action": "Pick berries",
+      "verb": "Picking berries",
+      "seconds": 2,
+      "harvest": {
+        "berry": 1
+      },
+      "holds": 5,
+      "regrowHours": 4,
+      "pose": "pick",
+      "tool": "knife",
+      "toolHarvest": {
+        "berry": 2
+      }
+    }
+  },
+  "plants": {
+    "tallGrass": {
+      "name": "Tall grass",
+      "action": "Cut grass",
+      "verb": "Cutting grass",
+      "gives": {
+        "twine": 1
+      },
+      "seconds": 5,
+      "tool": "knife",
+      "toolSeconds": 2,
+      "regrowHours": [
+        1,
+        4
+      ],
+      "count": 60,
+      "nearStart": 12,
+      "seed": 4127,
+      "pose": "pick",
+      "look": {
+        "blades": 14,
+        "height": 1.0,
+        "width": 0.035,
+        "colour": "#cbb763",
+        "tips": "#efe0a0"
+      }
+    }
+  },
+  "chopping": {
+    "tool": "stone-axe",
+    "tree": {
+      "seconds": 10,
+      "gives": {
+        "log": 1,
+        "stick": 2
+      }
+    },
+    "stump": {
+      "seconds": 10,
+      "gives": {
+        "log": 1
+      }
+    },
+    "log": {
+      "seconds": 8,
+      "gives": {
+        "stick": 5
+      }
+    },
+    "regrowDays": [
+      1,
+      2
+    ]
+  },
+  "mining": {
+    "tool": "stone-pickaxe",
+    "rock": {
+      "seconds": 10,
+      "gives": {
+        "stone": 5
+      }
+    },
+    "boulder": {
+      "seconds": 10,
+      "gives": {
+        "stone": [
+          3,
+          5
+        ]
+      }
+    },
+    "regrowDays": 1,
+    "rockBackHours": 4
+  },
+  "berryBushes": {
+    "extra": 26,
+    "seed": 7331
+  },
+  "regions": [
+    {
+      "id": "oceania",
+      "name": "Oceania",
+      "timeZone": "Australia/Darwin",
+      "open": true
+    },
+    {
+      "id": "europe",
+      "name": "Europe",
+      "timeZone": "Europe/London",
+      "open": false
+    },
+    {
+      "id": "americas",
+      "name": "Americas",
+      "timeZone": "America/New_York",
+      "open": false
+    }
+  ],
+  "daylight": [
+    {
+      "hour": 0,
+      "sky": "#3f4a63",
+      "skyLight": "#8395be",
+      "groundLight": "#333f37",
+      "brightness": 1.15,
+      "sun": "#a9b8ea",
+      "sunStrength": 0.5,
+      "sunHeight": 55
+    },
+    {
+      "hour": 4.75,
+      "sky": "#3f4a63",
+      "skyLight": "#8395be",
+      "groundLight": "#333f37",
+      "brightness": 1.15,
+      "sun": "#a9b8ea",
+      "sunStrength": 0.5,
+      "sunHeight": 55
+    },
+    {
+      "hour": 6,
+      "sky": "#c9a99a",
+      "skyLight": "#d8c2b8",
+      "groundLight": "#5e6650",
+      "brightness": 1.45,
+      "sun": "#ffb98a",
+      "sunStrength": 1.1,
+      "sunHeight": 8
+    },
+    {
+      "hour": 7.25,
+      "sky": "#e6d6b6",
+      "skyLight": "#f4e8d0",
+      "groundLight": "#758453",
+      "brightness": 1.85,
+      "sun": "#ffe2b8",
+      "sunStrength": 2.0,
+      "sunHeight": 25
+    },
+    {
+      "hour": 9,
+      "sky": "#e3e0c8",
+      "skyLight": "#f4f2e1",
+      "groundLight": "#7b8857",
+      "brightness": 2.05,
+      "sun": "#fff0d4",
+      "sunStrength": 2.35,
+      "sunHeight": 52
+    },
+    {
+      "hour": 16.5,
+      "sky": "#e3e0c8",
+      "skyLight": "#f4f2e1",
+      "groundLight": "#7b8857",
+      "brightness": 2.05,
+      "sun": "#fff0d4",
+      "sunStrength": 2.35,
+      "sunHeight": 52
+    },
+    {
+      "hour": 18,
+      "sky": "#e6cfa8",
+      "skyLight": "#f2dcbc",
+      "groundLight": "#737c50",
+      "brightness": 1.8,
+      "sun": "#ffc98f",
+      "sunStrength": 1.9,
+      "sunHeight": 18
+    },
+    {
+      "hour": 19,
+      "sky": "#d8a58f",
+      "skyLight": "#e2b9a6",
+      "groundLight": "#5f6249",
+      "brightness": 1.45,
+      "sun": "#ff9e6e",
+      "sunStrength": 1.2,
+      "sunHeight": 6
+    },
+    {
+      "hour": 20.25,
+      "sky": "#4a5470",
+      "skyLight": "#8b9ac2",
+      "groundLight": "#36423a",
+      "brightness": 1.2,
+      "sun": "#aebcec",
+      "sunStrength": 0.55,
+      "sunHeight": 55
+    }
+  ],
+  "night": {
+    "from": 20,
+    "to": 6
+  }
+}

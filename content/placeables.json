@@ -1,0 +1,63 @@
+{
+  "_help": {
+    "placeables": "Things you place in the world and build, like the campfire. An item with places (the id of an entry here) gets a Place button in the Inventory: you pick a spot, your person puts it down as an unbuilt site, then builds it (buildSeconds; buildVerb shows while building). solid is how big it is for walking round (metres). size is the squares it takes on the placing grid ([across, deep]; each square is half a metre, 2 x 2 if left out), and it can be turned 4 ways. keepClear: other placed things stay at least this many metres from its square (the campfire keeps room for its seats); without it things can go side by side. The ground under a placed thing is levelled (game/land.js); settings.placeMaxRise is the most the ground may rise and fall (metres) under a spot for something to go there. fire makes it a fire you can light and put out: fuel is the item you add (sticks), secondsEach is how long one burns (900 = 15 minutes), otherFuels are more items it burns with their seconds each (log: 43200, 12 hours), maxHours is the most it holds in hours of burning (168 = 7 days, so a claim's fire can last the 7-day away timer; without maxHours, maxFuel counts it in fuel items), lightSeconds how long lighting takes. It only burns while lit, keeps burning while players are away, and goes out by itself when the fuel runs out. seats: people can sit round it (count places, distance metres from the middle). Sitting is a task with no set time: your person sits until you stand up, do something else or the fire goes out, and keeps sitting while you're away. Run tools/worlds.py test-build after changing placeables. craftLabel names the tap menu list of recipes made there (recipes with near), like Cook. madeWith (0.1.18, the farm field) makes it something you dig with a tool instead of placing from an item: the tool (the stone hoe) has to be on your tool bar, it takes makeSeconds (makeVerb shows meanwhile) and a use of the tool, it's ready straight away (no building), and the same tool flattens it again (flattenSeconds). inCamp: it can only go in your own camp. look (only for one made with a tool) is how it's drawn: shape field is tilled soil (colour, ridge). walkOver: people walk over it instead of round it (the farm field); bushes are walked through too.",
+    "crops": "Crops (0.1.18, farming): what grows on a farm field. seed is the item you plant (it's used up), on is the placeable it grows on (field), growHours how long it takes from planting to grown (it grows by itself, a sprout, then a small bush, then a full one), plantSeconds how long planting takes, and like is the source whose rules it follows once grown (berryBush: what picking gives, how many it holds, how fast they grow back, the knife picking 2). A field takes one crop; flattening the field loses it. The admin's Settings tab has one live number for how long every crop takes (Farming, Planted crops grow in)."
+  },
+  "placeables": {
+    "campfire": {
+      "name": "Campfire",
+      "buildSeconds": 10,
+      "buildVerb": "Building the campfire",
+      "craftLabel": "Cook",
+      "solid": 0.55,
+      "size": [
+        2,
+        2
+      ],
+      "keepClear": 1.5,
+      "fire": {
+        "fuel": "stick",
+        "secondsEach": 900,
+        "maxFuel": 24,
+        "maxHours": 168,
+        "otherFuels": {
+          "log": 43200
+        },
+        "lightSeconds": 3
+      },
+      "seats": {
+        "count": 6,
+        "distance": 1.7
+      }
+    },
+    "field": {
+      "name": "Farm field",
+      "madeWith": "stone-hoe",
+      "makeSeconds": 8,
+      "makeVerb": "Digging a farm field",
+      "flattenSeconds": 4,
+      "inCamp": true,
+      "walkOver": true,
+      "solid": 0.75,
+      "size": [
+        3,
+        3
+      ],
+      "look": {
+        "shape": "field",
+        "colour": "#5a3f2b",
+        "ridge": "#7a5a3d"
+      }
+    }
+  },
+  "crops": {
+    "berry-bush": {
+      "name": "Berry bush",
+      "seed": "berry-seeds",
+      "on": "field",
+      "growHours": 24,
+      "plantSeconds": 3,
+      "like": "berryBush"
+    }
+  }
+}

@@ -1,11 +1,14 @@
-"""Builds the server's copies of the game's rules, and moves games on to a new version.
+"""Builds the game's data and the server's copies of the game's rules, and moves games on to a new version.
 
-  python3 tools/worlds.py test-build   after changing test/game-data.json or test/game/rules.js: checks the data, writes the
-                                       server's copies (server/game.json, words.json, src/rules.js) and moves older test games
-                                       on to the current test build
+The game's content is in content/*.json, one file per kind (items, recipes, placeables, world, rules, people, text, and
+version with the devlog). Each file's "_help" explains its sections. test/game-data.json is made from them: never edit it.
+
+  python3 tools/worlds.py test-build   after changing content/*.json or test/game/rules.js: checks the content, writes
+                                       test/game-data.json and the server's copies (server/game.json, words.json,
+                                       src/rules.js) and moves older test games on to the current test build
   python3 tools/worlds.py release      release-link games move to the new version (tools/release.sh runs this)
-  python3 tools/worlds.py check        changes nothing: checks game-data.json for mistakes, and that the server's copies are
-                                       up to date (tools/tests/lint.py runs this)
+  python3 tools/worlds.py check        changes nothing: checks the content for mistakes, and that test/game-data.json and
+                                       the server's copies are up to date (tools/tests/lint.py runs this)
 
 Pushed to main, Cloudflare puts the server live in about a minute. Maintenance is switched on and off by the admin in the game.
 """
@@ -13,7 +16,36 @@ import json, os, re, sys
 
 root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 SERVER = os.path.join(root, 'server')
-data = json.load(open(os.path.join(root, 'test', 'game-data.json'), encoding='utf-8'))
+CONTENT = os.path.join(root, 'content')
+GAME_DATA = os.path.join(root, 'test', 'game-data.json')
+# the order of the sections in test/game-data.json (kept as it was, so the file reads the same as before 0.2.0)
+ORDER = ['version', 'build', 'era', 'server', 'settings', 'testNames', 'defaultLook', 'stats', 'energyCosts', 'chopping', 'mining',
+         'retired', 'itemGroups', 'items', 'recipes', 'placeables', 'sources', 'away', 'night', 'berryBushes', 'daylight', 'looks',
+         'bodyShapes', 'chatFilter', 'tips', 'devlog', 'plants', 'regions', 'liveSettings', 'claims', 'societies', 'crops']
+
+
+def load_content():
+    """content/*.json joined into one: (data, help notes, where each section came from)."""
+    data, notes, home = {}, {}, {}
+    for f in sorted(os.listdir(CONTENT)):
+        if not f.endswith('.json'): continue
+        part = json.load(open(os.path.join(CONTENT, f), encoding='utf-8'))
+        notes.update(part.pop('_help', {}))
+        for k, v in part.items():
+            if k in data: sys.exit(f'content/{f}: "{k}" is already in content/{home[k]}')
+            data[k], home[k] = v, f
+    ordered = {k: data[k] for k in ORDER if k in data}
+    ordered.update({k: v for k, v in data.items() if k not in ordered})  # a new section goes at the end
+    return ordered, notes, home
+
+
+def game_data_text(d):
+    """test/game-data.json as it should be: everything the game needs, without the help notes."""
+    note = {'_generated': 'Made from content/*.json by python3 tools/worlds.py test-build. Edit those files, not this one.'}
+    return json.dumps({**note, **d}, indent=2, ensure_ascii=False) + '\n'
+
+
+data, HELP, HOME = load_content()
 rules_js = open(os.path.join(root, 'test', 'game', 'rules.js'), encoding='utf-8').read()
 
 
@@ -148,7 +180,7 @@ def problems(d):
             for t in e[k]:
                 if len(t) > 90 or t.endswith('.') or '—' in t: out.append(f'{w}.{k}: keep lines short (90 letters at most), with no full stop at the end and no em-dash: "{t[:40]}..."')
     for k in d:
-        if k not in ('version', 'build', 'server', 'help', 'devlog') and k not in d.get('help', {}): out.append(f'help: "{k}" has no help note')
+        if k not in ('version', 'build', 'server', 'devlog') and k not in HELP: out.append(f'content/{HOME.get(k, "?")}: "{k}" has no note in its "_help"')
     return out
 
 
@@ -212,15 +244,15 @@ now = f"{data['version']}.{data.get('build', 0)}"
 era = data.get('era', 0)  # version numbers were reset lower once: a newer era beats any number
 wrong = problems(data)
 if cmd in ('test-build', 'check') and wrong:
-    sys.exit('game-data.json has mistakes:\n' + '\n'.join(f'- {p}' for p in wrong))
+    sys.exit('content/*.json has mistakes:\n' + '\n'.join(f'- {p}' for p in wrong))
 if cmd == 'check':
-    stale = [os.path.relpath(p, root) for p, text in server_files(data).items() if not os.path.exists(p) or open(p, encoding='utf-8').read() != text]
+    stale = [os.path.relpath(p, root) for p, text in {GAME_DATA: game_data_text(data), **server_files(data)}.items() if not os.path.exists(p) or open(p, encoding='utf-8').read() != text]
     if w.get('era', {}).get('test', 0) != era: stale.append(f'server/worlds.json (test games should be on era {era})')
     if w['minVersion'].get('test') != now: stale.append(f'server/worlds.json (test games should be on {now})')
-    if stale: sys.exit("The server's copies are out of date: run python3 tools/worlds.py test-build\n" + '\n'.join(f'- {s}' for s in stale))
+    if stale: sys.exit("test/game-data.json or the server's copies are out of date: run python3 tools/worlds.py test-build\n" + '\n'.join(f'- {s}' for s in stale))
     sys.exit(0)
 elif cmd == 'test-build':
-    for p, text in server_files(data).items(): open(p, 'w', encoding='utf-8').write(text)
+    for p, text in {GAME_DATA: game_data_text(data), **server_files(data)}.items(): open(p, 'w', encoding='utf-8').write(text)
     w['minVersion']['test'] = now
     w.setdefault('era', {})['test'] = era
 elif cmd == 'release':

@@ -1,0 +1,103 @@
+{
+  "_help": {
+    "tips": "First-steps tips for someone new, shown one at a time in the pill above the needs, each once per phone. words: what each says, in the order they come (walk, pickup, rings, food, craft). Each goes once the player has done what it says, or after show seconds. The next waits gap seconds, or pace seconds if the last one wasn't tried. A tip for something already done is never shown. A new tip needs its rule in game/tips.js (TIP_RULES) too. Friendly full sentences, short enough for two lines on a phone. Luke picked these five (25 Nov 2026): ask him before adding another.",
+    "chatFilter": "Words kept out of speech bubbles (shown as stars) and names (pick another). anywhere: caught even inside a longer word. words: only caught as a whole word (so 'class' is fine), plus endings like s, ed, ing. phrases: caught as a run of words. Numbers and symbols standing in for letters (sh1t, @ss) are caught too. The server gets a copy: tools/worlds.py test-build copies it to server/words.json. names: extra words only kept out of names, so nobody can pretend to be the admin."
+  },
+  "tips": {
+    "show": 15,
+    "gap": 5,
+    "pace": 30,
+    "words": {
+      "walk": "Double-tap the ground to walk. Tap anything to see what you can do.",
+      "pickup": "Tap a stick or a stone on the ground, then Pick up.",
+      "rings": "The rings are your needs. Tap them to see what each one is.",
+      "food": "Pick berries from a bush and eat them from your inventory. Drink at the pond.",
+      "craft": "Open your inventory and tap Recipes to make things. Try a sharp stone first."
+    }
+  },
+  "chatFilter": {
+    "anywhere": [
+      "fuck",
+      "fuk",
+      "shit",
+      "cunt",
+      "bitch",
+      "nigger",
+      "nigga",
+      "faggot",
+      "retard",
+      "whore",
+      "slut",
+      "wank",
+      "twat",
+      "bollock",
+      "dickhead",
+      "motherf",
+      "pussy",
+      "asshole",
+      "arsehole",
+      "bastard",
+      "boong",
+      "wetback",
+      "dildo",
+      "jizz",
+      "porn",
+      "hitler"
+    ],
+    "words": [
+      "ass",
+      "arse",
+      "dick",
+      "cock",
+      "cum",
+      "piss",
+      "fag",
+      "rape",
+      "raping",
+      "rapist",
+      "spic",
+      "chink",
+      "kike",
+      "gook",
+      "coon",
+      "paki",
+      "dyke",
+      "poof",
+      "homo",
+      "abo",
+      "tranny",
+      "nazi",
+      "heil",
+      "kkk",
+      "tits",
+      "boob",
+      "nude",
+      "horny",
+      "kys",
+      "sex",
+      "penis",
+      "vagina",
+      "prick"
+    ],
+    "phrases": [
+      "kill yourself",
+      "kill urself",
+      "kill your self",
+      "go die"
+    ],
+    "names": {
+      "anywhere": [
+        "admin",
+        "moderator",
+        "official"
+      ],
+      "words": [
+        "mod",
+        "mods",
+        "dev",
+        "staff",
+        "owner"
+      ]
+    }
+  }
+}

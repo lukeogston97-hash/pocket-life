@@ -5,3 +5,4 @@ Disallow: /test/
 Disallow: /docs/
 Disallow: /server/
 Disallow: /tools/
+Disallow: /content/

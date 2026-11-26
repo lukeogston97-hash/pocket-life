@@ -1,0 +1,221 @@
+{
+  "_help": {
+    "looks": "Each list here is a set of choices on the Make your person screen. Add an entry to add a choice.",
+    "bodyShapes": "How each body is drawn, one for each choice in looks.sex (female, male): its height and how wide or long each part is. The builds on Make your person (looks.build: slim, medium, broad) then make it wider or narrower. A new looks.sex choice needs an entry here with the same id.",
+    "defaultLook": "How a new person starts on the Make your person screen.",
+    "testNames": "Only for testing: with settings.autoName on, Make your person fills in a random name from this list. autoName is off in the real game, so players type their own name (the checks in tools/tests switch it on for themselves)."
+  },
+  "looks": {
+    "sex": [
+      {
+        "id": "male",
+        "label": "Male"
+      },
+      {
+        "id": "female",
+        "label": "Female"
+      }
+    ],
+    "skin": [
+      {
+        "id": "tone1",
+        "hex": "#f1d1b8",
+        "label": "Skin tone 1"
+      },
+      {
+        "id": "tone2",
+        "hex": "#e2b496",
+        "label": "Skin tone 2"
+      },
+      {
+        "id": "tone3",
+        "hex": "#c8957a",
+        "label": "Skin tone 3"
+      },
+      {
+        "id": "tone4",
+        "hex": "#a8714f",
+        "label": "Skin tone 4"
+      },
+      {
+        "id": "tone5",
+        "hex": "#7d4f33",
+        "label": "Skin tone 5"
+      },
+      {
+        "id": "tone6",
+        "hex": "#553525",
+        "label": "Skin tone 6"
+      }
+    ],
+    "build": [
+      {
+        "id": "slim",
+        "label": "Slim",
+        "w": 0.87
+      },
+      {
+        "id": "medium",
+        "label": "Medium",
+        "w": 1
+      },
+      {
+        "id": "broad",
+        "label": "Broad",
+        "w": 1.15
+      }
+    ],
+    "hair": [
+      {
+        "id": "short",
+        "label": "Short"
+      },
+      {
+        "id": "long",
+        "label": "Long"
+      },
+      {
+        "id": "tied",
+        "label": "Tied up"
+      },
+      {
+        "id": "shaved",
+        "label": "Shaved"
+      }
+    ],
+    "hairColour": [
+      {
+        "id": "black",
+        "hex": "#1f1813",
+        "label": "Black hair"
+      },
+      {
+        "id": "darkbrown",
+        "hex": "#3a2a20",
+        "label": "Dark brown hair"
+      },
+      {
+        "id": "brown",
+        "hex": "#6b4a2e",
+        "label": "Brown hair"
+      },
+      {
+        "id": "fair",
+        "hex": "#b48751",
+        "label": "Fair hair"
+      },
+      {
+        "id": "red",
+        "hex": "#a2482c",
+        "label": "Red hair"
+      },
+      {
+        "id": "grey",
+        "hex": "#9b9690",
+        "label": "Grey hair"
+      }
+    ],
+    "tunic": [
+      {
+        "id": "rust",
+        "hex": "#a9694b",
+        "cord": "#5e4330",
+        "label": "Rust tunic"
+      },
+      {
+        "id": "moss",
+        "hex": "#6f8f4f",
+        "cord": "#41562f",
+        "label": "Moss tunic"
+      },
+      {
+        "id": "sand",
+        "hex": "#c9b27a",
+        "cord": "#7a6744",
+        "label": "Sand tunic"
+      },
+      {
+        "id": "slate",
+        "hex": "#6f8fa6",
+        "cord": "#4d6274",
+        "label": "Slate tunic"
+      }
+    ],
+    "age": {
+      "min": 13,
+      "max": 90,
+      "start": 25
+    }
+  },
+  "bodyShapes": {
+    "female": {
+      "height": 0.95,
+      "shoulder": 0.232,
+      "chest": 0.21,
+      "waist": 0.165,
+      "hem": 0.33,
+      "tunicLength": 0.56,
+      "torsoLength": 0.46,
+      "hipGap": 0.085,
+      "leg": [
+        0.068,
+        0.052
+      ],
+      "arm": [
+        0.047,
+        0.04
+      ],
+      "neck": 0.05,
+      "head": 0.97,
+      "armSpread": 0.13
+    },
+    "male": {
+      "height": 1,
+      "shoulder": 0.29,
+      "chest": 0.25,
+      "waist": 0.212,
+      "hem": 0.27,
+      "tunicLength": 0.36,
+      "torsoLength": 0.48,
+      "hipGap": 0.1,
+      "leg": [
+        0.08,
+        0.061
+      ],
+      "arm": [
+        0.056,
+        0.047
+      ],
+      "neck": 0.064,
+      "head": 1,
+      "armSpread": 0.15
+    }
+  },
+  "defaultLook": {
+    "sex": "male",
+    "hair": "short",
+    "age": 25,
+    "skin": "tone3",
+    "build": "medium",
+    "hairColour": "darkbrown",
+    "tunic": "rust"
+  },
+  "testNames": [
+    "Alex",
+    "Sam",
+    "Jordan",
+    "Riley",
+    "Casey",
+    "Jamie",
+    "Taylor",
+    "Morgan",
+    "Charlie",
+    "Quinn",
+    "Harper",
+    "Rowan",
+    "Ash",
+    "Billie",
+    "Kit",
+    "Robin"
+  ]
+}
