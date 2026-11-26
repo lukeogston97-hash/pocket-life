@@ -94,23 +94,28 @@ const pickHeadGeo = (() => {
   g.computeVertexNormals();
   return g;
 })();
-// A stone hoe head (0.1.18): a flat stone like the axe head but wider and blunter, turned so its flat faces along the
-// handle (a hoe scrapes and turns the soil; an axe cuts). Built like the axe head, then turned a quarter round the
-// handle's line: out along +z (the blade), wide in y and thin along x (the handle).
+// A stone hoe head (0.1.18; 0.1.21 reshaped so it isn't the axe head again): a flat, broad stone, wider than it is
+// long, with straight sides, a wide edge that's only a little rounded, and a short narrow neck where it's tied on.
+// Built like the axe head (along x the handle, out along +z, thin in y), then turned a quarter round so its flat faces
+// look along the handle, as a hoe's do (it scrapes and turns the soil; an axe cuts): out along +z, wide in y, thin along x.
 const hoeHeadGeo = (() => {
   const sh = new THREE.Shape();
-  sh.moveTo(-0.03, -0.03); sh.lineTo(0.03, -0.03); // behind the handle
-  sh.lineTo(0.034, 0.04);
-  sh.quadraticCurveTo(0.06, 0.1, 0.075, 0.17); // flaring out to a wide edge
-  sh.quadraticCurveTo(0, 0.185, -0.075, 0.17);
-  sh.quadraticCurveTo(-0.06, 0.1, -0.034, 0.04);
+  sh.moveTo(-0.026, -0.025); sh.lineTo(0.026, -0.025); // the neck, behind and under the lashing
+  sh.lineTo(0.03, 0.035);
+  sh.quadraticCurveTo(0.05, 0.052, 0.094, 0.06); // out to a broad shoulder
+  sh.lineTo(0.1, 0.13); // a straight side
+  sh.quadraticCurveTo(0.101, 0.15, 0.08, 0.153); // a rounded corner
+  sh.quadraticCurveTo(0, 0.163, -0.08, 0.153); // the wide edge, a little rounded
+  sh.quadraticCurveTo(-0.101, 0.15, -0.1, 0.13);
+  sh.lineTo(-0.094, 0.06);
+  sh.quadraticCurveTo(-0.05, 0.052, -0.03, 0.035);
   sh.closePath();
-  const depth = 0.032;
+  const depth = 0.026;
   const g = new THREE.ExtrudeGeometry(sh, { depth, bevelEnabled: false, curveSegments: 4 }).translate(0, 0, -depth / 2).rotateX(Math.PI / 2);
   const p = g.attributes.position;
   for (let i = 0; i < p.count; i++) { // a little thinner towards the edge (blunter than the axe)
-    const k = Math.min(1, Math.max(0, (p.getZ(i) - 0.03) / 0.15));
-    p.setY(i, p.getY(i) * (1 - 0.6 * k));
+    const k = Math.min(1, Math.max(0, (p.getZ(i) - 0.06) / 0.1));
+    p.setY(i, p.getY(i) * (1 - 0.55 * k));
   }
   g.rotateZ(Math.PI / 2);
   g.computeVertexNormals();
@@ -237,6 +242,30 @@ function logGeos(r, len) {
   }
   return logCache.get(key);
 }
+// Handles (Luke, 26 Nov 2026: the stone axe is the one to match, and every handle, part and tool should match it and
+// look right): a smooth six-sided handle, a little thicker towards the head, with a flare at the end you hold, from x0
+// (that end) to x1. look.grip: twine wrapped round where you hold it (the short tool handle). look.join: twine wrapped
+// round half way along, where the long tool handle's two sticks are tied. The handles on their own and the tools made
+// from them are drawn by this, so they look the same.
+function toolHandle(g, look, x0, x1, t) {
+  const len = x1 - x0, wood = tinted(look.colour || '#8a6847', 0.04), knobLen = t * 1.2;
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(t * 0.9, t * 1.1, len, 6).rotateZ(Math.PI / 2), wood);
+  shaft.position.x = (x0 + x1) / 2;
+  g.add(shaft);
+  const knob = new THREE.Mesh(new THREE.CylinderGeometry(t * 1.35, t * 1.1, knobLen, 6).rotateZ(Math.PI / 2), wood);
+  knob.position.x = x0 + knobLen / 2;
+  g.add(knob);
+  if (look.grip) twineWrap(g, matFor(look.grip), x0 + knobLen + t * 0.4, t * 1.2, t * 0.65, t * 0.2, 4);
+  if (look.join) twineWrap(g, matFor(look.join), (x0 + x1) / 2 - t * 1.25, t * 1.3, t * 0.7, t * 0.2, 3); // (3 turns span 2.5 t)
+}
+// n turns of twine side by side, each w wide with gap between, r round, starting at x and going along +x
+function twineWrap(g, twine, x, r, w, gap, n) {
+  for (let k = 0; k < n; k++) {
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(r, r, w, 7).rotateZ(Math.PI / 2), twine);
+    band.position.x = x + w / 2 + k * (w + gap);
+    g.add(band);
+  }
+}
 const SHAPES = {
   // the campfire you carry (and see in the Inventory): built-looking, with a full teepee
   campfire(look) {
@@ -246,11 +275,7 @@ const SHAPES = {
   axe(look) {
     const len = look.length ?? 0.55, t = look.thickness ?? 0.025;
     const g = new THREE.Group();
-    const wood = tinted(look.colour || '#8a6847', 0.04);
-    g.add(new THREE.Mesh(new THREE.CylinderGeometry(t * 0.9, t * 1.1, len, 6).rotateZ(Math.PI / 2), wood)); // the handle
-    const knob = new THREE.Mesh(new THREE.CylinderGeometry(t * 1.35, t * 1.1, 0.03, 6).rotateZ(Math.PI / 2), wood); // a little flare at the end you hold
-    knob.position.x = -len / 2 + 0.015;
-    g.add(knob);
+    toolHandle(g, look, -len / 2, len / 2, t); // the handle, with a little flare at the end you hold
     const hx = len / 2 - 0.05;
     const head = new THREE.Mesh(axeHeadGeo, tinted(look.head || '#8f8a80', 0.06));
     head.position.set(hx, 0, 0);
@@ -271,11 +296,7 @@ const SHAPES = {
   pickaxe(look) {
     const len = look.length ?? 0.6, t = look.thickness ?? 0.025;
     const g = new THREE.Group();
-    const wood = tinted(look.colour || '#8a6847', 0.04);
-    g.add(new THREE.Mesh(new THREE.CylinderGeometry(t * 0.9, t * 1.1, len, 6).rotateZ(Math.PI / 2), wood)); // the handle
-    const knob = new THREE.Mesh(new THREE.CylinderGeometry(t * 1.35, t * 1.1, 0.03, 6).rotateZ(Math.PI / 2), wood); // a little flare at the end you hold
-    knob.position.x = -len / 2 + 0.015;
-    g.add(knob);
+    toolHandle(g, look, -len / 2, len / 2, t); // the handle, with a little flare at the end you hold
     const hx = len / 2 - 0.05;
     const head = new THREE.Mesh(pickHeadGeo, tinted(look.head || '#8f8a80', 0.06));
     head.position.set(hx, 0, 0);
@@ -298,43 +319,44 @@ const SHAPES = {
   hoe(look) {
     const len = look.length ?? 0.75, t = look.thickness ?? 0.025;
     const g = new THREE.Group();
-    const wood = tinted(look.colour || '#8a6847', 0.04);
-    g.add(new THREE.Mesh(new THREE.CylinderGeometry(t * 0.9, t * 1.1, len, 6).rotateZ(Math.PI / 2), wood)); // the handle
-    const knob = new THREE.Mesh(new THREE.CylinderGeometry(t * 1.35, t * 1.1, 0.03, 6).rotateZ(Math.PI / 2), wood); // a little flare at the end you hold
-    knob.position.x = -len / 2 + 0.015;
-    g.add(knob);
-    const hx = len / 2 - 0.04;
-    const head = new THREE.Mesh(hoeHeadGeo, tinted(look.head || '#8f8a80', 0.06));
-    head.position.set(hx, 0, 0);
-    g.add(head);
-    const twine = matFor(look.lashing || '#c9b77a');
-    for (const dx of [-0.04, 0.032]) { // twine wrapped round the handle either side of the head
+    toolHandle(g, look, -len / 2, len / 2, t); // the handle, with a little flare at the end you hold
+    const hx = len / 2 - 0.04, twine = matFor(look.lashing || '#c9b77a');
+    const tilt = new THREE.Group(); // (the blade leans back a little towards the end you hold, as a hoe's does)
+    tilt.position.x = hx;
+    tilt.rotation.y = -0.3;
+    tilt.add(new THREE.Mesh(hoeHeadGeo, tinted(look.head || '#8f8a80', 0.06)));
+    const cross = new THREE.Mesh(new THREE.BoxGeometry(0.012, t * 2.6, 0.09), twine); // twine over the neck
+    cross.position.z = 0.02;
+    tilt.add(cross);
+    g.add(tilt);
+    for (const dx of [-0.042, 0.034]) { // and wrapped round the handle either side of the head
       const lash = new THREE.Mesh(new THREE.CylinderGeometry(t * 1.5, t * 1.5, 0.024, 7).rotateZ(Math.PI / 2), twine);
       lash.position.set(hx + dx, 0, 0);
       g.add(lash);
     }
-    const cross = new THREE.Mesh(new THREE.BoxGeometry(0.012, t * 2.6, 0.09), twine); // and over the neck
-    cross.position.set(hx, 0, 0.02);
-    g.add(cross);
-    return { model: g, rest: 0.04, hold: 'axe', grip: len / 2 - 0.06, hit: [len + 0.3, 0.3, 0.42] };
+    return { model: g, rest: 0.04, hold: 'axe', grip: len / 2 - 0.06, hit: [len + 0.3, 0.3, 0.42], iconY: 0.1 }; // (iconY: its picture turned a little so the blade shows)
   },
-  // a fishing spear: a long thin shaft with a flat pointed stone tip, lashed on with twine
+  // a fishing spear: the long tool handle with a sharp stone tied on its end (0.1.21: the same flake as the sharp stone,
+  // a little bigger), lashed on the way the knife's blade is
   spear(look) {
     const len = look.length ?? 1.0, t = look.thickness ?? 0.024;
     const g = new THREE.Group();
-    const wood = tinted(look.colour || '#8a6847', 0.04);
-    g.add(new THREE.Mesh(new THREE.CylinderGeometry(t * 0.85, t * 1.05, len, 6).rotateZ(Math.PI / 2), wood)); // the shaft
-    const tx = len / 2 - 0.02;
-    const tip = new THREE.Mesh(new THREE.ConeGeometry(t * 3.4, 0.24, 4).rotateZ(-Math.PI / 2), tinted(look.head || '#8f8a80', 0.06)); // the stone point
-    tip.scale.z = 0.5;
-    tip.position.set(tx + 0.1, 0, 0);
+    toolHandle(g, look, -len / 2, len / 2, t); // the shaft
+    const tx = len / 2 - 0.03, pl = 0.2; // where the point goes in, and how long it is
+    const tip = new THREE.Mesh(knifeBladeGeo, tinted(look.head || '#8f8a80', 0.06)); // the stone point
+    tip.scale.set(pl / 0.13, 2.3, 2.1);
+    tip.position.x = tx;
     g.add(tip);
     const twine = matFor(look.lashing || '#c9b77a');
-    for (const dx of [-0.04, 0.0]) { // twine wrapped round where the point is tied on
+    for (const dx of [-0.018, 0.018]) { // twine wrapped round where the point is tied on
       const lash = new THREE.Mesh(new THREE.CylinderGeometry(t * 1.5, t * 1.5, 0.02, 7).rotateZ(Math.PI / 2), twine);
-      lash.position.set(tx + dx, 0, 0);
+      lash.position.x = tx + dx;
       g.add(lash);
     }
+    const cross = new THREE.Mesh(new THREE.BoxGeometry(0.07, t * 2.6, 0.01), twine); // and across it
+    cross.position.set(tx, 0, 0.014);
+    cross.rotation.y = 0.5;
+    g.add(cross);
     return { model: g, rest: 0.03, hold: 'axe', grip: len / 2 - 0.2, hit: [len + 0.3, 0.25, 0.3] };
   },
   // a fish: a flattened oval body with a paler belly, a fin on top, a tail and a dark eye (raw is silvery, cooked is browned)
@@ -350,19 +372,13 @@ const SHAPES = {
     for (const z of [h * 0.11, -h * 0.11]) part(new THREE.SphereGeometry(h * 0.035, 6, 5), eye, len * 0.27, h * 0.05, z);
     return { model: g, rest: h * 0.2, hold: 'palm', hit: [len + 0.2, h * 0.7 + 0.2, h * 0.5 + 0.2] };
   },
-  // a stone knife: a short handle that flares at the end you hold, a leaf-shaped stone blade set into the other end,
-  // lashed on with twine (the same way as the axe)
+  // a stone knife: a short tool handle (flaring at the end you hold, twine round the grip), a leaf-shaped stone blade
+  // set into the other end, lashed on with twine (the same way as the axe)
   knife(look) {
     const len = look.length ?? 0.26, t = look.thickness ?? 0.016;
     const g = new THREE.Group();
-    const wood = tinted(look.colour || '#8a6847', 0.04);
     const hl = len * 0.55;
-    const handle = new THREE.Mesh(new THREE.CylinderGeometry(t * 1.05, t * 0.9, hl, 6).rotateZ(Math.PI / 2), wood);
-    handle.position.x = -len / 2 + hl / 2;
-    g.add(handle);
-    const knob = new THREE.Mesh(new THREE.CylinderGeometry(t * 1.3, t * 1.05, 0.02, 6).rotateZ(Math.PI / 2), wood);
-    knob.position.x = -len / 2 + 0.01;
-    g.add(knob);
+    toolHandle(g, look, -len / 2, -len / 2 + hl, t); // the short tool handle (0.1.21), its grip from the look
     const bx = -len / 2 + hl - 0.025;
     const blade = new THREE.Mesh(knifeBladeGeo, tinted(look.blade || '#8f8a80', 0.06));
     blade.scale.x = (len - hl + 0.025) / 0.13;
@@ -420,7 +436,7 @@ const SHAPES = {
     const { wood, cut } = branchGeos(len, t, look.twig), lean = new THREE.Group();
     lean.rotation.x = (Math.random() - 0.5) * 0.6;
     lean.add(new THREE.Mesh(wood, tinted(look.colour, 0.07)), new THREE.Mesh(cut, matFor(look.cut || '#d6bf92')));
-    if (look.lashing) { // a long stick: two sticks tied together in the middle with twine
+    if (look.lashing) { // twine tied round the middle (the long stick until 0.1.21, which has its own shape now)
       for (const dx of [-0.035, 0.035]) {
         const band = new THREE.Mesh(new THREE.CylinderGeometry(t * 1.3, t * 1.3, 0.026, 7).rotateZ(Math.PI / 2), matFor(look.lashing));
         band.position.x = dx;
@@ -429,6 +445,13 @@ const SHAPES = {
     }
     g.add(lean);
     return { model: g, rest: t, hold: 'rod', hit: [len + 0.3, 0.3, 0.36] };
+  },
+  // a tool handle on its own (0.1.21): the short tool handle (look.grip) and the long tool handle (look.join), drawn
+  // the way the tools made from them draw theirs (toolHandle)
+  handle(look) {
+    const len = look.length ?? 0.16, t = look.thickness ?? 0.016, g = new THREE.Group();
+    toolHandle(g, look, -len / 2, len / 2, t);
+    return { model: g, rest: t * 1.35, hold: 'rod', hit: [len + 0.3, 0.3, 0.36] };
   },
   // a sharp stone: a flake knocked off a stone, shaped like a leaf with a sharp edge all round (the knife's blade, chunkier)
   flake(look) {
