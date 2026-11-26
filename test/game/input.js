@@ -12,7 +12,8 @@ import { $, buildItem, harvests, ITEMS, SOURCES } from './items.js';
 import { disposeMaterials, setArm } from './people.js';
 import { getItem, HIT_MAT, itemViews, world } from './world-items.js';
 import {
-  hasTool, headTop, heldView, hudZone, measureHud, player, removeLabel, ring, showTag, tapMark, toolNeed, ui, you,
+  hasTool, headTop, heldView, hudZone, measureHud, player, removeLabel, ring, showTag, tapMark, toolNeed, toolWhy, ui,
+  you,
 } from './you.js';
 import { slowness, spendEnergy } from './needs.js';
 import { hideHint } from './tips.js';
@@ -346,9 +347,9 @@ function thingActions(t) {
   if (t.kind === 'grave') return [{ label: 'Walk here', run: () => walkFirst(V(t.x + 0.8, 0, t.z)) }];
   if (t.kind === 'plant') {
     const def = PLANTS[t.plant], c = plants[t.plant].clumps[t.i], fast = def.tool && hasTool(def.tool);
-    const ready = plantReady(c);
-    return [{ label: def.action || 'Cut', disabled: !ready,
-      note: !ready ? `Grows back in ${growsIn(c)}` : fast ? `${def.toolSeconds || def.seconds} s` : `${def.seconds} s${def.tool ? ` · faster with a ${ITEMS[def.tool].name.toLowerCase()}` : ''}`,
+    const ready = plantReady(c), noTool = def.toolNeeded && !fast; // (toolNeeded: it can't be done by hand, like mining an ore vein)
+    return [{ label: def.action || 'Cut', disabled: !ready || noTool,
+      note: !ready ? `Grows back in ${growsIn(c)}` : noTool ? toolWhy(def.tool) : fast ? `${def.toolSeconds || def.seconds} s` : `${def.seconds} s${def.tool ? ` · faster with a ${ITEMS[def.tool].name.toLowerCase()}` : ''}`,
       run: () => queueTask({ type: 'cut', plant: t.plant, i: t.i, x: t.x, z: t.z }) },
       { label: 'Walk here', foot: true, run: () => walkFirst(V(t.x + 0.7, 0, t.z)) }];
   }

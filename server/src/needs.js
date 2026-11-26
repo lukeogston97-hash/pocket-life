@@ -122,7 +122,8 @@ function shiftWear(p, kind, from, to, G) {
 // Returns '' when done, else why not, in words for the player.
 export function equipTool(p, kind, which, out, G) {
   const it = Object.hasOwn(G.items, kind) ? G.items[kind] : null;
-  const bar = barOf(p, G), have = (it && it.uses && p.carry[kind]) || 0, b = bar[kind] || 0;
+  if (!it || !it.uses) return "That isn't in your inventory"; // (only a real tool: a name every object has, like 'constructor', isn't one)
+  const bar = barOf(p, G), have = p.carry[kind] || 0, b = (Object.hasOwn(bar, kind) && bar[kind]) || 0;
   if (have - b < 1) return "That isn't in your inventory";
   const w = Number.isInteger(which) && which >= b && which < have ? which : b;
   let off = null; // the one it swaps with

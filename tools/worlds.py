@@ -64,6 +64,18 @@ def problems(d):
             ok = whole(n) and n > 0 or (ranges and isinstance(n, list) and len(n) == 2 and all(whole(x) and x >= 0 for x in n))
             if not ok and what is items: out.append(f'{where}: "{k}" needs a whole number above 0, not {n!r}')
 
+    def pieces(ps, where):  # a look made of pieces (items' "parts" shape, plants' look.form "parts": game/parts.js)
+        if not (isinstance(ps, list) and ps): out.append(f'{where}.parts: a list of pieces, each with form, size and at'); return
+        for j, pc in enumerate(ps):
+            pw = f'{where}.parts[{j}]'
+            if not isinstance(pc, dict) or pc.get('form') not in ('box', 'cylinder', 'cone', 'ball'): out.append(f'{pw}: form is box, cylinder, cone or ball'); continue
+            zs = pc.get('size') if isinstance(pc.get('size'), list) else [pc.get('size', 0.05)]
+            if not zs or not all(isinstance(n, (int, float)) and not isinstance(n, bool) and 0 < n <= 5 for n in zs): out.append(f'{pw}.size: metres above 0, a number or a list')
+            for k in ('at', 'turn'):
+                v = pc.get(k)
+                if v is not None and not (isinstance(v, list) and len(v) <= 3 and all(isinstance(n, (int, float)) and not isinstance(n, bool) for n in v)): out.append(f'{pw}.{k}: up to 3 numbers, [x, y, z]')
+            if pc.get('colour') is not None and not re.fullmatch(r'#[0-9a-fA-F]{6}', str(pc['colour'])): out.append(f'{pw}.colour: like "#8a6847"')
+
     if not re.fullmatch(r'\d+\.\d+\.\d+', str(d.get('version', ''))): out.append('version should look like 0.3.0')
     if not whole(d.get('build')) or d['build'] < 1: out.append('build should be a whole number, 1 or more')
     if len(stats) != len(d.get('stats', [])): out.append('stats: two needs share an id')
@@ -77,6 +89,7 @@ def problems(d):
         shape = (it.get('look') or {}).get('shape')
         if shape not in shapes: out.append(f'{w}: look.shape "{shape}" is not a shape in game/items.js ({", ".join(sorted(shapes))})')
         for s in (it.get('eat') or {}): known(s, f'{w}.eat', stats, 'need')
+        if shape == 'parts': pieces((it.get('look') or {}).get('parts'), f'{w}.look')  # a look built from pieces (0.2.0, game/parts.js)
         if 'tool' in it and not (whole((it['tool'] or {}).get('uses')) and it['tool']['uses'] > 0): out.append(f'{w}: tool.uses should be a whole number above 0')
         if it.get('places') is not None: known(it['places'], f'{w}.places', placeables, 'placeable')
         if it.get('spawnsNear') not in (None, 'trees', 'boulders'): out.append(f'{w}: spawnsNear is "trees" or "boulders"')
@@ -141,6 +154,14 @@ def problems(d):
     for k, p in d.get('plants', {}).items():
         counts(p.get('gives'), f'plants.{k}.gives')
         if p.get('tool') is not None: known(p['tool'], f'plants.{k}.tool')
+        if p.get('toolNeeded') and not (p.get('tool') and (items.get(p['tool']) or {}).get('tool')): out.append(f'plants.{k}.toolNeeded: needs "tool", the id of a tool')
+        look = p.get('look') or {}
+        if look.get('form') not in (None, 'blades', 'parts'): out.append(f'plants.{k}.look.form: "parts" (pieces), or leave it out for grass blades')
+        if look.get('form') == 'parts': pieces(look.get('parts'), f'plants.{k}.look')
+        if look.get('whenUsed') not in (None, 'hide', 'stub'): out.append(f'plants.{k}.look.whenUsed: "hide" or "stub"')
+        ar = p.get('area')
+        if ar is not None and not (isinstance(ar, dict) and all(isinstance(ar.get(c), (int, float)) and not isinstance(ar.get(c), bool) for c in ('x', 'z', 'r')) and ar['r'] > 0): out.append(f'plants.{k}.area: {{"x": metres, "z": metres, "r": metres}}, where it turns up')
+        if not (whole(p.get('count', 40)) and 0 < p.get('count', 40) <= 200): out.append(f'plants.{k}.count: a whole number, 1 to 200')
     for key in ('chopping', 'mining'):
         c = d.get(key, {})
         if c.get('tool') is not None: known(c['tool'], f'{key}.tool')
@@ -196,7 +217,8 @@ def server_files(d):
         'recipes': {r['id']: {'needs': r['needs'], 'makes': r['makes'], **({'keeps': r['keeps']} if r.get('keeps') else {}), **({'near': r['near']} if r.get('near') else {}), **({'seconds': r['seconds']} if r.get('seconds') else {})} for r in d.get('recipes', [])},
         'sources': {k: {'gives': v.get('gives'), 'harvest': v.get('harvest'), 'water': bool(v.get('water')), 'tool': v.get('tool'), 'toolHarvest': v.get('toolHarvest'), 'regrowHours': v.get('regrowHours', 0), 'holds': v.get('holds'), 'fish': v.get('fish'), 'seconds': v.get('seconds', 2), 'pose': v.get('pose')} for k, v in srcs.items()},
         'plants': {k: {'gives': v.get('gives', {}), 'count': v.get('count', 40), 'regrowHours': v.get('regrowHours', 2), 'tool': v.get('tool'),
-                       'seconds': v.get('seconds', 6), 'toolSeconds': v.get('toolSeconds'), 'pose': v.get('pose')} for k, v in d.get('plants', {}).items()},
+                       'seconds': v.get('seconds', 6), 'toolSeconds': v.get('toolSeconds'), 'pose': v.get('pose'),
+                       **({'toolNeeded': True} if v.get('toolNeeded') else {})} for k, v in d.get('plants', {}).items()},
         'berryKind': berry,
         'carryCapacity': d['settings']['carryCapacity'],
         'toolSlots': d['settings'].get('toolSlots', 7),  # the tool bar's spots (0.1.17); a live setting too
@@ -237,28 +259,33 @@ def server_files(d):
     }
 
 
-cmd = sys.argv[1] if len(sys.argv) > 1 else ''
-wpath = os.path.join(SERVER, 'worlds.json')
-w = json.load(open(wpath))
-now = f"{data['version']}.{data.get('build', 0)}"
-era = data.get('era', 0)  # version numbers were reset lower once: a newer era beats any number
-wrong = problems(data)
-if cmd in ('test-build', 'check') and wrong:
-    sys.exit('content/*.json has mistakes:\n' + '\n'.join(f'- {p}' for p in wrong))
-if cmd == 'check':
-    stale = [os.path.relpath(p, root) for p, text in {GAME_DATA: game_data_text(data), **server_files(data)}.items() if not os.path.exists(p) or open(p, encoding='utf-8').read() != text]
-    if w.get('era', {}).get('test', 0) != era: stale.append(f'server/worlds.json (test games should be on era {era})')
-    if w['minVersion'].get('test') != now: stale.append(f'server/worlds.json (test games should be on {now})')
-    if stale: sys.exit("test/game-data.json or the server's copies are out of date: run python3 tools/worlds.py test-build\n" + '\n'.join(f'- {s}' for s in stale))
-    sys.exit(0)
-elif cmd == 'test-build':
-    for p, text in {GAME_DATA: game_data_text(data), **server_files(data)}.items(): open(p, 'w', encoding='utf-8').write(text)
-    w['minVersion']['test'] = now
-    w.setdefault('era', {})['test'] = era
-elif cmd == 'release':
-    w['minVersion']['release'] = now  # a patch (new build) moves everyone on too
-    w.setdefault('era', {})['release'] = era
-else:
-    sys.exit(__doc__)
-json.dump(w, open(wpath, 'w'), indent=2); open(wpath, 'a').write('\n')
-print(json.dumps({k: v for k, v in w.items() if k != 'help'}))
+def main():
+    cmd = sys.argv[1] if len(sys.argv) > 1 else ''
+    wpath = os.path.join(SERVER, 'worlds.json')
+    w = json.load(open(wpath))
+    now = f"{data['version']}.{data.get('build', 0)}"
+    era = data.get('era', 0)  # version numbers were reset lower once: a newer era beats any number
+    wrong = problems(data)
+    if cmd in ('test-build', 'check') and wrong:
+        sys.exit('content/*.json has mistakes:\n' + '\n'.join(f'- {p}' for p in wrong))
+    if cmd == 'check':
+        stale = [os.path.relpath(p, root) for p, text in {GAME_DATA: game_data_text(data), **server_files(data)}.items() if not os.path.exists(p) or open(p, encoding='utf-8').read() != text]
+        if w.get('era', {}).get('test', 0) != era: stale.append(f'server/worlds.json (test games should be on era {era})')
+        if w['minVersion'].get('test') != now: stale.append(f'server/worlds.json (test games should be on {now})')
+        if stale: sys.exit("test/game-data.json or the server's copies are out of date: run python3 tools/worlds.py test-build\n" + '\n'.join(f'- {s}' for s in stale))
+        sys.exit(0)
+    elif cmd == 'test-build':
+        for p, text in {GAME_DATA: game_data_text(data), **server_files(data)}.items(): open(p, 'w', encoding='utf-8').write(text)
+        w['minVersion']['test'] = now
+        w.setdefault('era', {})['test'] = era
+    elif cmd == 'release':
+        w['minVersion']['release'] = now  # a patch (new build) moves everyone on too
+        w.setdefault('era', {})['release'] = era
+    else:
+        sys.exit(__doc__)
+    json.dump(w, open(wpath, 'w'), indent=2); open(wpath, 'a').write('\n')
+    print(json.dumps({k: v for k, v in w.items() if k != 'help'}))
+
+
+if __name__ == '__main__':
+    main()

@@ -395,13 +395,13 @@ export function levelPlaced() {
   liftNear(rects); // trees, rocks and bushes near them sit on the ground as it is now (world-build.js)
   for (const f of rects) f.th.view.position.y = f.y;
   for (const [v, was] of items) v.position.y += groundY(v.position.x, v.position.z) - was;
-  for (const [kind, P] of Object.entries(plants)) { // tall grass: back where it grew, then onto the levelled ground
-    if (!P.y0) P.y0 = [Float32Array.from({ length: P.bladeM.length / 16 }, (_, i) => P.bladeM[i * 16 + 13]), Float32Array.from({ length: P.headM.length / 16 }, (_, i) => P.headM[i * 16 + 13])];
+  for (const [kind, P] of Object.entries(plants)) { // tall grass and other plants: back where they grew, then onto the levelled ground
+    if (!P.y0) P.y0 = P.mats.map((M) => Float32Array.from({ length: M.length / 16 }, (_, i) => M[i * 16 + 13]));
     for (const c of P.clumps) {
       const lift = rects.some((f) => Math.hypot(c.x - f.x, c.z - f.z) < flatReach(f) + 0.5) ? groundY(c.x, c.z) - groundY(c.x, c.z, landAsMade) : 0;
       if (Math.abs(lift - (c.lift || 0)) < 0.001) continue;
       c.lift = lift;
-      for (let k = 0; k < P.per; k++) { const i = c.i * P.per + k; P.bladeM[i * 16 + 13] = P.y0[0][i] + lift; P.headM[i * 16 + 13] = P.y0[1][i] + lift; }
+      for (let k = 0; k < P.per; k++) { const i = c.i * P.per + k; P.mats.forEach((M, j) => { M[i * 16 + 13] = P.y0[j][i] + lift; }); }
       c.shown = null; drawPlant(kind, c);
     }
   }

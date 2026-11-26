@@ -2141,6 +2141,63 @@ async def placing_grid():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
+async def parts_look():
+    """A look made of pieces in the data (0.2.0): a new item needs no code. It's drawn from its pieces, one shape per colour, sits on the ground, every copy shares its shapes, and the data checker catches a bad piece."""
+    ingot = {'name': 'Test ingot', 'plural': 'Test ingots', 'weight': 2, 'startInWorld': 0, 'look': {'shape': 'parts', 'hold': 'palm', 'parts': [
+        {'form': 'box', 'size': [0.16, 0.05, 0.08], 'at': [0, 0.025, 0], 'colour': '#b87333'},
+        {'form': 'cylinder', 'size': [0.01, 0.12], 'at': [0, 0.06, 0], 'turn': [0, 0, 90], 'colour': '#8a6847'},
+        {'form': 'ball', 'size': 0.02, 'at': [0.06, 0.07, 0], 'colour': '#b87333'}]}}
+    async with world() as W:
+        a = await W.page('partsA', data={'items': {**GAME_DATA['items'], 'test-ingot': ingot}})
+        r = await a.evaluate("""() => { const one = __pl.buildItem('test-ingot'), two = __pl.buildItem('test-ingot'); const meshes = [];
+          one.model.traverse((m) => { if (m.isMesh) meshes.push(m); }); const two2 = []; two.model.traverse((m) => { if (m.isMesh) two2.push(m); });
+          return { meshes: meshes.length, shared: meshes.every((m, i) => m.geometry === two2[i].geometry && m.geometry.userData.shared), rest: one.rest, hold: one.hold, hit: one.hit,
+            colours: meshes.map((m) => '#' + m.material.color.getHexString()).sort() }; }""")
+        expect(r['meshes'] == 2 and r['colours'] == ['#8a6847', '#b87333'], f'drawn from its pieces, joined into one shape per colour ({r["meshes"]}, {r["colours"]})')
+        expect(r['shared'], 'every copy shares the same shapes, so lots on the ground stay cheap')
+        expect(0.0 <= r['rest'] < 0.01 and r['hold'] == 'palm' and r['hit'][0] > 0.3, f'it sits on the ground, is held in the palm, and is easy to tap ({r["rest"]:.3f}, {r["hit"]})')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+    # the data checker: a piece that isn't one of the forms is caught before it gets into the game
+    import sys
+    sys.path.insert(0, os.path.join(HERE, '..'))
+    import worlds
+    d = json.loads(json.dumps(worlds.data)); d['items']['x-bad'] = {'name': 'X', 'look': {'shape': 'parts', 'parts': [{'form': 'pyramid', 'size': 1}]}}
+    found = [f for f in worlds.problems(d) if 'x-bad' in f]
+    expect(any('form' in f for f in found), f'the data checker catches a piece with an unknown form ({found[:1]})')
+
+
+async def ore_vein():
+    """A new thing to work in the world, from data alone (0.2.0): an ore vein drawn from pieces, only in its area, that needs a pickaxe on the tool bar (not by hand, on the game or the server), gives what it says and hides until it grows back."""
+    game = json.load(open(os.path.join(HERE, '..', '..', 'server', 'game.json')))
+    vein = {'gives': {'stone': 2}, 'count': 3, 'regrowHours': [1, 1], 'tool': 'stone-pickaxe', 'toolNeeded': True, 'seconds': 3, 'toolSeconds': 3, 'pose': 'chop'}
+    srv = {'plants': {**game['plants'], 'testVein': vein}}
+    mine = {'plants': {**GAME_DATA['plants'], 'testVein': {**vein, 'name': 'Test vein', 'action': 'Mine the vein', 'verb': 'Mining the vein', 'seed': 9091,
+            'area': {'x': 3, 'z': 6, 'r': 6}, 'spacing': 2,
+            'look': {'form': 'parts', 'parts': [{'form': 'ball', 'size': 0.35, 'at': [0, 0.15, 0], 'colour': '#8f8a80'},
+                                                {'form': 'box', 'size': [0.12, 0.08, 0.12], 'at': [0.1, 0.32, 0.05], 'colour': '#c87533'}]}}}}
+    TARGET = "(i) => { const c = __pl.plants.testVein.clumps[i]; return { kind: 'plant', plant: 'testVein', i, x: c.x, z: c.z, name: 'Test vein' }; }"
+    async with world(srv, MINEKIT=1) as W:
+        a = await W.page('veinA', data=mine); await join(a)
+        st = await a.evaluate("""(() => { const P = __pl.plants.testVein; return { n: P.clumps.length, meshes: P.meshes.length,
+          far: Math.max(...P.clumps.map((c) => Math.hypot(c.x - 3, c.z - 6))) }; })()""")
+        expect(st['n'] == 3 and st['meshes'] == 2 and st['far'] <= 6.01, f'3 veins, drawn from 2 colours of pieces, all inside their area ({st})')
+        await a.evaluate("__pl.sendAct({ t: 'unequip', kind: 'stone-pickaxe' })"); await a.wait_for_timeout(1200)
+        m = await a.evaluate(f"(() => {{ const m = __pl.menuActions(({TARGET})(0))[0]; return [m.label, m.note, !!m.disabled]; }})()")
+        expect(m[0] == 'Mine the vein' and m[2] and 'pickaxe' in m[1], f'with the pickaxe off the tool bar, the menu says to equip it and is off ({m})')
+        await a.evaluate("window.__sock.send(JSON.stringify({ t: 'cut', plant: 'testVein', i: 1 }))"); await a.wait_for_timeout(1500)
+        got = await a.evaluate("[__pl.you.carry.stone || 0, __pl.plants.testVein.clumps[1].readyAt || 0]")
+        expect(got == [0, 0], f'the server says no to mining it by hand as well ({got})')
+        await a.evaluate("__pl.sendAct({ t: 'equip', kind: 'stone-pickaxe', which: 0 })"); await a.wait_for_timeout(1200)
+        m = await a.evaluate(f"(() => {{ const m = __pl.menuActions(({TARGET})(0))[0]; return [m.note, !!m.disabled]; }})()")
+        expect(not m[1] and m[0] == '3 s', f'with the pickaxe equipped it can be mined ({m})')
+        await a.evaluate(f"(() => {{ const t = ({TARGET})(0); __pl.queueTask({{ type: 'cut', plant: 'testVein', i: 0, x: t.x, z: t.z }}); }})()")
+        await idle(a, 90); await a.wait_for_timeout(2000)
+        got = await a.evaluate("""(() => { const P = __pl.plants.testVein, c = P.clumps[0]; return [__pl.you.carry.stone || 0, c.readyAt > Date.now(),
+          P.meshes.every((m) => m.instanceMatrix.array.slice(0, 16).every((v) => v === 0))]; })()""")
+        expect(got == [2, True, True], f'mining it gives 2 stones, and it hides until it grows back ({got})')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
 async def placed_kinds():
     """A second kind of placed thing, made from data alone (a drying rack that isn't in the game): it's drawn as its own item, not as a campfire, and can be placed and built. The campfire is put together as before."""
     game = json.load(open(os.path.join(HERE, '..', '..', 'server', 'game.json')))
@@ -2354,7 +2411,7 @@ async def leaving():
         expect(await text(a, '#playSub') == 'Make your person', 'and the old person is gone: Play says Make your person')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'tasks_away': tasks_away, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'tool_bar': tool_bar, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'craft_mat': craft_mat, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'loading': loading, 'sideways': sideways, 'menu_rest': menu_rest, 'tips': tips, 'placed_kinds': placed_kinds, 'placing_grid': placing_grid, 'farming': farming, 'leaving': leaving, 'server_tests': server_tests}
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'tasks_away': tasks_away, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'tool_bar': tool_bar, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'craft_mat': craft_mat, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'loading': loading, 'sideways': sideways, 'menu_rest': menu_rest, 'tips': tips, 'placed_kinds': placed_kinds, 'parts_look': parts_look, 'ore_vein': ore_vein, 'placing_grid': placing_grid, 'farming': farming, 'leaving': leaving, 'server_tests': server_tests}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

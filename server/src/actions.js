@@ -148,7 +148,7 @@ export const ACTIONS = {
   } },
   // drinking at the pond
   drink: { when: 'alive', async run({ ws, me, m, p, w, reply, save }) {
-    const src = G.sources[m.source];
+    const src = Object.hasOwn(G.sources || {}, String(m.source)) ? G.sources[m.source] : null;
     if (src && src.gives && src.water && (me.admin || this.nearWater(p))) { applyGives(p, src.gives); spend(p, 'drink', G); save(); }
     reply(this.mine(p));
   } },
@@ -309,7 +309,7 @@ export const ACTIONS = {
   } },
   // putting a placeable down (a campfire): it starts as an unbuilt site
   place: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
-    const item = G.items[m.kind], kind = item && item.places, rule = PLACEABLES[kind];
+    const item = Object.hasOwn(G.items, String(m.kind)) ? G.items[m.kind] : null, kind = item && item.places, rule = kind && Object.hasOwn(PLACEABLES, kind) ? PLACEABLES[kind] : null;
     const { x, z, rot } = placeSnap(num(m.x), num(m.z), num(m.rot), rule); // on the placing grid (rules.js)
     const no = (why) => { reply({ t: 'placeNo', why }); reply(this.mine(p)); };
     if (!rule || !p.carry[m.kind]) return no('You need to carry it');
@@ -523,7 +523,7 @@ export const ACTIONS = {
   } },
   // cutting tall grass: it gives twine and grows back at a random time
   cut: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
-    const def = (G.plants || {})[m.plant], i = Math.floor(m.i);
+    const def = Object.hasOwn(G.plants || {}, String(m.plant)) ? G.plants[m.plant] : null, i = Math.floor(m.i);
     if (!def || !(i >= 0 && i < (def.count || 0))) return;
     w.plants = w.plants || {};
     const ps = (w.plants[m.plant] = w.plants[m.plant] || {}), now = Date.now();
@@ -533,6 +533,7 @@ export const ACTIONS = {
     if (cl) { reply({ t: 'cutNo', plant: m.plant, i, readyAt: ps[i] || 0, why: this.claimNo(cl) }); return; }
     if (!me.admin && !this.near(p, plant)) { reply({ t: 'cutNo', plant: m.plant, i, readyAt: ps[i] || 0, why: 'Too far away' }); return; }
     if (ps[i] && ps[i] > now) { reply({ t: 'cutNo', plant: m.plant, i, readyAt: ps[i] }); return; } // someone got it first
+    if (def.toolNeeded && !(def.tool && onBar(p, def.tool, G))) { reply({ t: 'cutNo', plant: m.plant, i, readyAt: ps[i] || 0, why: `You need a ${String(((G.items || {})[def.tool] || {}).name || 'tool').toLowerCase()}` }); return; } // can't be done by hand (an ore vein, 0.2.0)
     if (!this.worked(ws, me, p, def.tool && onBar(p, def.tool, G) ? def.toolSeconds || def.seconds : def.seconds)) { reply({ t: 'cutNo', plant: m.plant, i, readyAt: ps[i] || 0, why: 'Slow down a little' }); return; } // cutting takes time (guard.js)
     let ok = true;
     for (const [k, c] of Object.entries(def.gives || {})) ok = addCarry(p, k, c, G) && ok;

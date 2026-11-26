@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { share } from './links.js';
+import { partsGeos } from './parts.js';
 import { ITEM_GROUPS, itemGroupOf } from './rules.js';
 import { DATA, hash, mat, V } from './core.js';
 import { berryBushes, interactive, jitterGeo } from './nature.js';
@@ -539,6 +540,17 @@ const SHAPES = {
       g.add(leaf);
     }
     return { model: g, rest: s * 0.8, hold: 'palm', hitR: Math.max(0.18, s * 2.4) };
+  },
+  // built from simple pieces listed in the data (0.2.0), so a new item needs no code: "parts" in content/items.json's
+  // _help says how. Each piece: form (box, cylinder, cone or ball), size, at (where, in metres) and turn (in degrees).
+  // Pieces of one colour are joined into one shape, made once and shared by every copy, so they're cheap on the ground.
+  parts(look) {
+    const g = new THREE.Group();
+    for (const { colour, geo } of partsGeos(look)) g.add(new THREE.Mesh(geo, matFor(colour)));
+    const box = new THREE.Box3().setFromObject(g), size = box.getSize(new THREE.Vector3());
+    if (box.isEmpty()) { g.add(new THREE.Mesh(sharedGeo('parts|none', () => new THREE.BoxGeometry(0.1, 0.1, 0.1)), matFor(look.colour))); return { model: g, rest: 0.05, hold: 'palm', hitR: 0.25 }; }
+    return { model: g, rest: -box.min.y, hold: ['palm', 'axe', 'rod', 'none'].includes(look.hold) ? look.hold : 'palm',
+      ...(Number.isFinite(look.grip) ? { grip: look.grip } : {}), hit: [size.x + 0.2, size.y + 0.2, size.z + 0.2] };
   },
   box(look) {
     const w = look.width ?? 0.2, h = look.height ?? 0.12, d = look.depth ?? 0.2;

@@ -5,6 +5,7 @@
 import './links.js';
 import './rules.js';
 import './core.js';
+import './parts.js';
 import './land.js';
 import './nature.js';
 import './plants.js';

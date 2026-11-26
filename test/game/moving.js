@@ -560,6 +560,7 @@ function doCut(t) {
   if (!plantReady(c)) { showTag(`Grows back in ${growsIn(c)}`, headTop(), 2); nextTask(); return; }
   if (carried() + weightOf(def.gives) > SETTINGS.carryCapacity) { showTag('Too heavy', headTop(), 2); stopQueue(); return; }
   const tool = def.tool && hasTool(def.tool) ? def.tool : null;
+  if (def.toolNeeded && !tool) { showTag(toolWhy(def.tool), headTop(), 2.5); nextTask(); return; } // can't be done by hand (an ore vein)
   if (tool) { you.tool = tool; drawHeld(); }
   const secs = tool ? def.toolSeconds || def.seconds : def.seconds || 6;
   face(t.x, t.z);

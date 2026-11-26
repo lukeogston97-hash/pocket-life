@@ -147,6 +147,7 @@ export const taskMethods = {
         if (ready && ready > Math.max(t, Date.now())) return null; // not grown back yet
         const spot = this.plantSpot(task.plant, i) || (task.x != null ? [task.x, task.z] : null);
         const tool = def.tool && onBar(p, def.tool, G);
+        if (def.toolNeeded && !tool) return null; // can't be done by hand (an ore vein, 0.2.0)
         return spot ? { to: toward(at, spot, 0.55, 0.9), seconds: (tool ? def.toolSeconds || def.seconds : def.seconds) || 6, pose: def.pose || 'pick' } : null;
       }
       case 'mine': {

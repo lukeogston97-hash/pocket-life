@@ -151,6 +151,13 @@ for (const k of ['__proto__', 'constructor', 'toString', 'valueOf', 'hasOwnPrope
   await quietly({ t: 'drop', items: [{ kind: k, x: 30, z: 30 }] }); await quietly({ t: 'place', kind: k, x: 30.5, z: 30.5 });
   await quietly({ t: 'chop', what: k, idx: 0, id: 1 }); await quietly({ t: 'quarry', what: k, idx: 0 });
   await quietly({ t: 'cut', plant: k, i: 0 }); await quietly({ t: 'take', id: k }); await quietly({ t: 'sit', id: k, seat: k }); await quietly({ t: 'report', id: k, reason: k });
+  // (0.2.0: every other message a player can send, with the same names)
+  await quietly({ t: 'plant', id: k, seed: k }); await quietly({ t: 'harvest', id: k }); await quietly({ t: 'dig', kind: k, x: 30.5, z: 30.5 }); await quietly({ t: 'flatten', id: k });
+  await quietly({ t: 'equip', kind: k, which: 0 }); await quietly({ t: 'equip', kind: 'stone-axe', which: k, out: { kind: k, which: k } }); await quietly({ t: 'unequip', kind: k, which: k });
+  await quietly({ t: 'build', id: k }); await quietly({ t: 'unplace', id: k }); await quietly({ t: 'apart', id: k }); await quietly({ t: 'fish' });
+  await quietly({ t: 'tasks', list: [{ type: k, kind: k, id: k, plant: k, source: k, what: k }] }); await quietly({ t: 'tasks', list: k });
+  await quietly({ t: 'socInvite', who: k, name: k }); await quietly({ t: 'socAnswer', id: k, yes: true }); await quietly({ t: 'socRename', name: k }); await quietly({ t: 'socRemove', who: k });
+  await quietly({ t: 'sleep', on: k }); await quietly({ t: 'move', x: k, z: k, path: k }); await quietly({ t: 'act', pose: k, seconds: k }); await quietly({ t: 'say', text: k });
 }
 console.error = hush;
 await wait(20);
