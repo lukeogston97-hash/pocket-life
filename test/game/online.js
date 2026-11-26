@@ -528,7 +528,6 @@ function openNews() {
     h.append(mk('span', 'news-date', newsDate(v)));
     const ul = mk('ul', 'news-lines');
     for (const [k, sym, word] of NEWS_KINDS) for (const t of v[k] || []) ul.appendChild(line(k, sym, word, t));
-    for (const t of v.notes || []) ul.appendChild(line('note', '•', '', t)); // an entry still in the old format
     entry.append(h, ul);
     rows.push(entry);
   });

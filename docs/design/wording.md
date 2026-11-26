@@ -23,6 +23,6 @@
 - No em-dashes. Australian spelling (colour, metres).
 
 ## Where the text is
-- Content (item names and about lines, need labels, recipes, What's new) is in test/game-data.json.
+- Content (item names and about lines, need labels, recipes, What's new) is in content/*.json (test/game-data.json is made from them).
 - The rest is in test/index.html, test/game/*.js and the server's notes to players (server/src/claims.js, societies.js, actions.js, and a few in admin.js). Check both sides when changing a word.
 - Privacy and rules (0.1.10) is in test/privacy.html, and only there: the game's Settings > Privacy and rules shows the same words. Keep it to headings, paragraphs and lists. Change its "Last updated" date when the words change. It has to stay true: when the game starts keeping something new (sign-in, say), the page changes in the same update.

@@ -269,10 +269,13 @@ def main():
     if cmd in ('test-build', 'check') and wrong:
         sys.exit('content/*.json has mistakes:\n' + '\n'.join(f'- {p}' for p in wrong))
     if cmd == 'check':
-        stale = [os.path.relpath(p, root) for p, text in {GAME_DATA: game_data_text(data), **server_files(data)}.items() if not os.path.exists(p) or open(p, encoding='utf-8').read() != text]
+        if not os.path.exists(GAME_DATA) or open(GAME_DATA, encoding='utf-8').read() != game_data_text(data):  # (made from content/: never edited by hand)
+            sys.exit("test/game-data.json doesn't match content/*.json. If you changed test/game-data.json, put that change in content/*.json\n"
+                     "instead (test-build would undo it), then run python3 tools/worlds.py test-build")
+        stale = [os.path.relpath(p, root) for p, text in server_files(data).items() if not os.path.exists(p) or open(p, encoding='utf-8').read() != text]
         if w.get('era', {}).get('test', 0) != era: stale.append(f'server/worlds.json (test games should be on era {era})')
         if w['minVersion'].get('test') != now: stale.append(f'server/worlds.json (test games should be on {now})')
-        if stale: sys.exit("test/game-data.json or the server's copies are out of date: run python3 tools/worlds.py test-build\n" + '\n'.join(f'- {s}' for s in stale))
+        if stale: sys.exit("The server's copies are out of date: run python3 tools/worlds.py test-build\n" + '\n'.join(f'- {s}' for s in stale))
         sys.exit(0)
     elif cmd == 'test-build':
         for p, text in {GAME_DATA: game_data_text(data), **server_files(data)}.items(): open(p, 'w', encoding='utf-8').write(text)
