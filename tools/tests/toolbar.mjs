@@ -112,6 +112,12 @@ expect(Object.values(me.bar).reduce((a, n) => a + n, 0) === 2 && me.bar.knife &&
 await w.setLive('toolSlots', null);
 expect((w.liveView().find((x) => x.id === 'toolSlots') || {}).value === 7, 'Reset: 7 again');
 
+console.log('I. what the game is told about them still says asleep (0.1.17 hid it behind a comment: Sleep got you straight back up)');
+me = lastMe(await ask(s, { t: 'sleep', on: true }));
+expect(me && me.sleeping === true && me.collapsed === false && me.bar, 'Sleep: the answer says asleep, with the tool bar too', JSON.stringify(me && { sleeping: me.sleeping, collapsed: me.collapsed }));
+me = lastMe(await ask(s, { t: 'sleep', on: false }));
+expect(me && me.sleeping === false, 'and awake again', JSON.stringify(me && { sleeping: me.sleeping }));
+
 const failed = results.filter((r) => !r).length;
 console.log(failed ? `\n${failed} of ${results.length} FAILED` : `\nall ${results.length} ok`);
 process.exit(failed ? 1 : 0);

@@ -56,7 +56,8 @@ export const personsMethods = {
     p.seen = p.seen || []; // everything they've ever carried (recipes used to show from this; kept for hints later)
     for (const k of Object.keys(p.carry || {})) if (!p.seen.includes(k)) p.seen.push(k);
     return { t: 'me', seen: p.seen, found: p.found || [], name: p.name, look: p.look, age: ageOf(p), born: p.born, x: num(p.x), z: num(p.z), ry: num(p.ry),
-      stats: p.stats, statsAt: p.statsAt, carry: p.carry, wear: p.wear || {}, bar: barOf(p, G), lastKind: p.lastKind, // bar: the tools on the tool bar (0.1.17) sleeping: !!p.sleeping, collapsed: !!p.collapsed,
+      stats: p.stats, statsAt: p.statsAt, carry: p.carry, wear: p.wear || {}, lastKind: p.lastKind, sleeping: !!p.sleeping, collapsed: !!p.collapsed,
+      bar: barOf(p, G), // the tools on the tool bar (0.1.17). (A comment here once hid sleeping and collapsed, 0.1.17 to 0.1.20 test 1: Sleep got you straight back up.)
       sit: p.sit && p.sit.until > Date.now() ? { fire: p.sit.fire, seat: p.sit.seat, ms: p.sit.until - Date.now() } : null,
       soc: this.socView(p.who) }; // their society: name, leader, members (societies.js)
   },

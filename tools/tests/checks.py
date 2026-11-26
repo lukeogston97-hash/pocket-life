@@ -1509,11 +1509,11 @@ async def live_items_game():
         ask = lambda m: boss.evaluate(f"ask('boss', {m})")
         weight = lambda pg: pg.evaluate("Number(document.getElementById('carryWeight').textContent)")
         w0 = await weight(p)
-        expect(w0 == 8, f'to start: 2 sticks, 3 stones, twine and a stone axe weigh 8 ({w0})')
+        expect(w0 == 6, f'to start: 2 sticks, 3 stones and twine weigh 6, the stone axe nothing on the tool bar (0.1.17) ({w0})')
         # a stick now weighs 3: the player's carried weight changes without them doing anything
         told = await ask("{ t: 'a.liveItem', at: ['items', 'stick', 'weight'], value: 3 }")
-        await p.wait_for_function("Number(document.getElementById('carryWeight').textContent) === 12", timeout=20000)
-        expect(told == 'Changed to 3' and await weight(p) == 12, f"a stick made to weigh 3: the player's game shows 12 carried ({await weight(p)})")
+        await p.wait_for_function("Number(document.getElementById('carryWeight').textContent) === 10", timeout=20000)
+        expect(told == 'Changed to 3' and await weight(p) == 10, f"a stick made to weigh 3: the player's game shows 10 carried ({await weight(p)})")
         # the knife recipe, as the player sees it in Found (0.1.8): they knock 2 stones into a sharp stone, then the admin gives them every recipe
         await mat_make(p, [('stone', 2)])
         pid = await p.evaluate('__pl.net.myId')
@@ -1532,12 +1532,12 @@ async def live_items_game():
         # back to the game file's numbers
         expect(await ask("{ t: 'a.liveItem', at: ['recipes', 'knife', 'needs', 'stick'], value: null }") == 'Back to what the game file says', 'Reset answers plainly')
         await ask("{ t: 'a.liveItem', at: ['items', 'stick', 'weight'], value: null }")
-        await p.wait_for_function(f"(() => {{ const c = {card}; return c && c.canMake; }})() && Number(document.getElementById('carryWeight').textContent) === 7", timeout=20000)
-        expect(await weight(p) == 7 and (await p.evaluate(card))['canMake'], 'Reset puts both back for the player: 7 carried (2 stones became a sharp stone), and the knife can be made again')
+        await p.wait_for_function(f"(() => {{ const c = {card}; return c && c.canMake; }})() && Number(document.getElementById('carryWeight').textContent) === 5", timeout=20000)
+        expect(await weight(p) == 5 and (await p.evaluate(card))['canMake'], 'Reset puts both back for the player: 5 carried (2 stones became a sharp stone), and the knife can be made again')
         # someone who joins later gets the admin's numbers on the way in
         await ask("{ t: 'a.liveItem', at: ['items', 'stick', 'weight'], value: 2 }")
         q = await W.page('liveQ'); await join(q)
-        expect(await weight(q) == 10, f'someone joining afterwards carries 10 (their 2 sticks weigh 2 each) ({await weight(q)})')
+        expect(await weight(q) == 8, f'someone joining afterwards carries 8 (their 2 sticks weigh 2 each) ({await weight(q)})')
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
@@ -2183,6 +2183,8 @@ async def placed_kinds():
         await a.click('#bagInfo button.go'); await a.wait_for_timeout(400)
         spot = await a.evaluate(SPOT, 'campfire')
         await a.evaluate('__pl.finishPlacing()'); await idle(a, 60); await a.wait_for_timeout(1500)
+        # (wait for it rather than a set time: in the full run on 26 Nov 2026 it wasn't down yet, and passed on its own)
+        await a.wait_for_function("[...__pl.placed.values()].some((t) => t.kind === 'campfire' && t.built)", timeout=60000)
         fid = await a.evaluate("[...__pl.placed.values()].find((t) => t.kind === 'campfire').id")
         f = await a.evaluate(PARTS, fid)
         expect(f['built'] and f['pieces'] == 13 and f['fuel'] == 5 and f['burns'] == 4 and f['flame'], f'the campfire: 13 pieces (9 stones, a log, 3 sticks), 5 fuel sticks, 4 that char, and flames ({f})')

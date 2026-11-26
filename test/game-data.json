@@ -1,6 +1,6 @@
 {
   "version": "0.1.20",
-  "build": 1,
+  "build": 2,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -1186,6 +1186,9 @@
       "improved": [
         "Recipes headings: Materials, Parts, Tools, Food, Building and Misc",
         "Recipes go from simple to advanced, with the ones you can make first"
+      ],
+      "fixed": [
+        "Sleep: you stay lying down, and drop asleep when Rest runs out (you got straight back up)"
       ]
     },
     {
