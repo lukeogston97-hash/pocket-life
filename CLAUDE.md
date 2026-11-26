@@ -2,7 +2,7 @@
 
 Luke's mobile "life in your pocket" game (SEED meets One Hour One Life): a persistent online world you check in on every couple of days. Built step by step with Claude.
 
-**How to add things: docs/adding.md.** Every decision so far is in docs/design/, one file per area (docs/design.md lists them). Read only the file for the area you're changing.
+**How to add things: docs/adding.md.** Every decision so far is in docs/design/, one file per area (docs/design.md lists them). Read only the file for the area you're changing. docs/history/ is only for looking back.
 
 ## Rules that always apply
 - Look: soft low-poly 3D like SEED, dark glass UI, icons only, as little on screen as possible. Luke is very particular about the look: don't restyle without asking.
@@ -23,7 +23,7 @@ Luke's mobile "life in your pocket" game (SEED meets One Hour One Life): a persi
 - tools/tests: checks that run the real server locally and play the game in Chrome (see its README), and quick ones that test the server's code with no browser (`cd tools/tests && python3 -c "import lib; lib.bundle()" && node admin_extras.mjs`, also live_items.mjs, stale_admin.mjs, cheats.mjs, societies.mjs, tasks.mjs, fade.mjs, forget.mjs, accounts.mjs, regrow.mjs, toolbar.mjs and farming.mjs; `run.py server_tests` runs them all). tools/release.sh releases.
 
 ## How to work
-- Small updates, a couple of things at a time. Versions are Major.Minor.Patch (see docs/design/working.md): a test build only bumps "build"; patch goes up once per release; minor only when Luke says; 1.0.0 is the full game. Add short lines to the current version's devlog entry (shown in What's new) in "added" (+), "improved" (~) or "fixed" (−); fold a finished minor version into one grouped entry.
+- Small updates, a couple of things at a time. Versions are Major.Minor.Patch (see docs/design/working.md): a test build only bumps "build"; patch goes up once per release; minor only when Luke says; 1.0.0 is the full game. Add short lines to the current version's devlog entry (shown in What's new) in "added" (+), "improved" (~) or "fixed" (−), with no name on the entry; fold a finished minor version into one grouped entry.
 - Checks, kept quick (Luke, 22 Nov 2026: they were taking too long): `python3 tools/tests/lint.py` always. Test builds: only the check for the area you touched (plus `layout` if world layout code changed). Releases (Luke, 22 Nov 2026: too slow, publish straight away): no extra checks if each test build was already checked; just release. Everything (`run.py`, which skips `screens`) only after big changes. `screens` (screenshots of every screen, admin mode included; it takes a while) only when reviewing the look. Add a check when you add a feature. Only one check run at a time.
 - Test first: push to main, Luke tries https://pocketlife.pages.dev/test/ (never give that link to players). After each change tell Luke in a few short lines what changed and what to try.
 - Release only when Luke says ("release", "publish"): `sh tools/release.sh`, commit, push. Cloudflare Pages (project pocketlife) and the server both deploy from main within a minute or two.
