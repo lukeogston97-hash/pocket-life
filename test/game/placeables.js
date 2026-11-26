@@ -18,7 +18,7 @@ for (const [kind, raw] of Object.entries(DATA.placeables || {})) {
     craftLabel: raw.craftLabel || 'Make', // the tap menu's list of recipes made here (Cook on a campfire)
     // dug with a tool (the farm field): the tool, how long digging and flattening take, only in your camp, and its look
     madeWith: tool, makeSeconds: Math.max(1, Number(raw.makeSeconds) || 8), makeVerb: raw.makeVerb || 'Digging', flattenSeconds: Math.max(1, Number(raw.flattenSeconds) || 4),
-    inCamp: !!raw.inCamp, look: raw.look || null,
+    inCamp: !!raw.inCamp, look: raw.look || null, walkOver: !!raw.walkOver, // walkOver: people walk over it (a farm field)
   };
   if (item) ITEMS[item].places = kind;
 }
@@ -80,7 +80,7 @@ function freeSeat(th) {
   let best = -1, bd = Infinity;
   for (let k = 0; k < s.count; k++) {
     const [x, z] = seatSpot(th, k);
-    if (seatTaken(th, k) || pondShape(x, z) < 1 || solidAt(x, z) || Math.abs(x) > WALK_LIMIT || Math.abs(z) > WALK_LIMIT) continue;
+    if (seatTaken(th, k) || pondShape(x, z) < 1 || solidAt(x, z, 0, true) || Math.abs(x) > WALK_LIMIT || Math.abs(z) > WALK_LIMIT) continue; // (not in a bush either)
     const d = Math.hypot(x - player.position.x, z - player.position.z);
     if (d < bd) { bd = d; best = k; }
   }
@@ -247,7 +247,7 @@ function setPlaced(v) {
     scene.add(th.view);
     interactive.push(th.view);
     placed.set(th.id, th);
-    addSpot(th.x, th.z, PLACEABLES[th.kind].solid); // walked round, like a rock
+    addSpot(th.x, th.z, PLACEABLES[th.kind].solid, PLACEABLES[th.kind].walkOver ? WALK_THROUGH : 0); // walked round, like a rock (a farm field: walked over)
     clearCellsNear(th.x, th.z, PLACEABLES[th.kind].solid + 1);
     flatsDue = true;
     if (digGhost && Math.abs(digGhost.x - th.x) < 0.01 && Math.abs(digGhost.z - th.z) < 0.01) dropDigGhost(); // the field you were digging is there
@@ -322,7 +322,7 @@ function animatePlaced(dt) {
 }
 
 /* ---------- placing: pick a spot, then your person goes and puts it down ---------- */
-const placing = { on: false, item: null, kind: null, x: 0, z: 0, rot: 0, at: null, ghost: null, ok: false }; // at: where you last tapped
+const placing = { on: false, item: null, kind: null, x: 0, z: 0, rot: 0, at: null, ghost: null, ok: false, dig: false, picks: [], why: '' }; // at: where you last tapped; dig: choosing farm fields (picks)
 // the square it takes on the grid, outlined on the ground (green, or red where it can't go)
 const placeRing = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 4, 1, Math.PI / 4).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#9fd88a', transparent: true, opacity: 0.8, depthWrite: false, depthTest: false }));
 placeRing.visible = false;
@@ -342,37 +342,34 @@ function cantPlaceAt(x, z, kind, rot = 0) {
   if (c) return `This belongs to ${c.claim.name}`; // (the server's words for it: claimNo in server/src/claims.js)
   return null;
 }
-// how much levelling may change the ground at x, z (0 to 1): none right by a tree, rock, bush or clump of grass,
-// so they never end up floating or sunk; fully a metre or so away
-function landMayChange(x, z) {
-  let k = 1;
-  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
-    const a = spots.get(spotKey(x + i * 4, z + j * 4));
-    if (!a) continue;
-    for (let n = 0; n < a.length; n += 4) {
-      if (placedAt(a[n], a[n + 1])) continue; // placed things level their own ground
-      const d = Math.hypot(a[n] - x, a[n + 1] - z) - (a[n + 3] ? 0.25 : a[n + 2] * 0.8); // a tree's trunk, or the edge of a rock or bush
-      if (d < 1.4) k = Math.min(k, smoothstep(0.3, 1.4, d));
-    }
-  }
-  for (const P of Object.values(plants)) for (const c of P.clumps) { const d = Math.hypot(c.x - x, c.z - z); if (d < 1.2) k = Math.min(k, smoothstep(0.4, 1.2, d)); }
-  return k;
-}
 const placedAt = (x, z) => { for (const th of placed.values()) if (Math.abs(th.x - x) < 0.01 && Math.abs(th.z - z) < 0.01) return true; return false; };
 // is x, z on a placed thing's square (turned with it), or within `margin` of it?
 function inRect(f, x, z, margin = 0) {
   const c = Math.cos(f.rot || 0), s = Math.sin(f.rot || 0), dx = x - f.x, dz = z - f.z;
   return Math.abs(dx * c - dz * s) < f.hw + margin && Math.abs(dx * s + dz * c) < f.hd + margin;
 }
-// level the ground under everything placed (land.js), then set things on it: placed things, loose items, the grass
+// level the ground under everything placed (land.js), then set things on it: placed things, trees, rocks and bushes
+// (0.1.18: they used to keep their ground, but the land's 2 m triangles still tipped it, and rocks floated), loose items
+// and the grass
 let flatsDue = false, grassMoved = [];
 function levelPlaced() {
   flatsDue = false;
   const rects = [...placed.values()].map((th) => Object.assign(rectOf(th.x, th.z, th.rot, th.kind), { th }));
   const items = [...itemViews.values()].map((v) => [v, groundY(v.position.x, v.position.z)]);
-  setFlats(rects, landMayChange);
+  setFlats(rects);
+  liftNear(rects); // trees, rocks and bushes near them sit on the ground as it is now (world-build.js)
   for (const f of rects) f.th.view.position.y = f.y;
   for (const [v, was] of items) v.position.y += groundY(v.position.x, v.position.z) - was;
+  for (const [kind, P] of Object.entries(plants)) { // tall grass: back where it grew, then onto the levelled ground
+    if (!P.y0) P.y0 = [Float32Array.from({ length: P.bladeM.length / 16 }, (_, i) => P.bladeM[i * 16 + 13]), Float32Array.from({ length: P.headM.length / 16 }, (_, i) => P.headM[i * 16 + 13])];
+    for (const c of P.clumps) {
+      const lift = rects.some((f) => Math.hypot(c.x - f.x, c.z - f.z) < flatReach(f) + 0.5) ? groundY(c.x, c.z) - groundY(c.x, c.z, landAsMade) : 0;
+      if (Math.abs(lift - (c.lift || 0)) < 0.001) continue;
+      c.lift = lift;
+      for (let k = 0; k < P.per; k++) { const i = c.i * P.per + k; P.bladeM[i * 16 + 13] = P.y0[0][i] + lift; P.headM[i * 16 + 13] = P.y0[1][i] + lift; }
+      c.shown = null; drawPlant(kind, c);
+    }
+  }
   const bare = rects.filter((f) => PLACEABLES[f.th.kind].madeWith); // dug soil (a farm field): no grass grows through it
   for (const d of DETAILS) { // grass: back where it grew, then onto the levelled ground
     const m = d.ms;
@@ -396,7 +393,7 @@ function startPlacing(item) {
   closeBag(); closeCraft(); closeMenu();
   stopPlacing();
   const ghost = placingGhost(placedModel(item).model);
-  Object.assign(placing, { on: true, item, kind, ghost, rot: Math.round(player.rotation.y / (Math.PI / 2)) * (Math.PI / 2) }); // facing one of 4 ways
+  Object.assign(placing, { on: true, item, kind, ghost, dig: false, picks: [], rot: Math.round(player.rotation.y / (Math.PI / 2)) * (Math.PI / 2) }); // facing one of 4 ways
   const fx = Math.sin(player.rotation.y), fz = Math.cos(player.rotation.y);
   $('placeGo').textContent = 'Place';
   movePlacing(player.position.x + fx * 1.8, player.position.z + fz * 1.8);
@@ -409,21 +406,69 @@ function placingGhost(model) {
   scene.add(model);
   return model;
 }
-// digging a farm field (0.1.18): choose the spot the same way (the tapped spot first), then your person digs it with the tool
+// Digging farm fields (0.1.18): the spot you tapped is the first one. Then (test 2, Luke: "build multiple at once") every
+// tap on the ground adds another field (a see-through one on its square), a tap on one already chosen takes it off, and
+// Dig digs them all, one after another, with the tool on your tool bar.
+const MAX_DIGS = 20;
 function startDigging(kind, at) {
   const P = PLACEABLES[kind];
   if (!P || !P.madeWith || !player || you.dead || !at) return;
   closeBag(); closeCraft(); closeMenu();
   stopPlacing();
-  Object.assign(placing, { on: true, item: null, kind, ghost: placingGhost(placedModelOf(kind).model), rot: 0 });
-  $('placeGo').textContent = 'Dig';
-  movePlacing(at.x, at.z);
+  Object.assign(placing, { on: true, item: null, kind, ghost: null, dig: true, picks: [], why: '', rot: 0, ok: false });
   $('placeBar').hidden = false;
   app.classList.add('placing');
+  pickDig(at.x, at.z);
+}
+function pickDig(x, z) {
+  const kind = placing.kind, s = placeSnap(x, z, placing.rot, PLACEABLES[kind]); // rules.js
+  const i = placing.picks.findIndex((k) => inRect(rectOf(k.x, k.z, k.rot, kind), x, z)); // a tap on one already chosen takes it off
+  if (i >= 0) { dropPick(placing.picks.splice(i, 1)[0]); placing.why = ''; drawDigging(); return; }
+  const why = placing.picks.length >= MAX_DIGS ? `Up to ${MAX_DIGS} at a time` : cantPlaceAt(s.x, s.z, kind, s.rot) || (placeClash(placing.picks, s, kind, PLACEABLES) ? 'Too close to another one' : null);
+  const f = rectOf(s.x, s.z, s.rot, kind), y = groundUnder(f).y; // the height it'll sit at once the ground is levelled
+  if (why) { // where it can't go: the square flashes red for a moment, and the bar says why
+    placing.why = why;
+    placeRing.position.set(s.x, y + 0.04, s.z);
+    placeRing.scale.set(f.hw / Math.SQRT1_2, 1, f.hd / Math.SQRT1_2);
+    placeRing.rotation.y = s.rot;
+    placeRing.material.color.set('#e07a6a');
+    placeRing.visible = true;
+    const flash = (placing.flash = (placing.flash || 0) + 1);
+    setTimeout(() => { if (placing.flash === flash && placing.dig) placeRing.visible = false; }, 1500);
+    drawDigging();
+    return;
+  }
+  const ghost = placingGhost(placedModelOf(kind).model), ring = new THREE.Mesh(placeRing.geometry, placeRing.material.clone());
+  ghost.position.set(s.x, y, s.z);
+  ghost.rotation.y = s.rot;
+  ring.material.color.set('#9fd88a');
+  ring.renderOrder = 2;
+  ring.position.set(s.x, y + 0.04, s.z);
+  ring.scale.set(f.hw / Math.SQRT1_2, 1, f.hd / Math.SQRT1_2);
+  ring.rotation.y = s.rot;
+  scene.add(ring);
+  placing.picks.push({ kind, x: s.x, z: s.z, rot: s.rot, ghost, ring });
+  placing.why = '';
+  placeRing.visible = false;
+  drawDigging();
+}
+function dropPick(k) {
+  scene.remove(k.ghost);
+  disposeMaterials(k.ghost);
+  scene.remove(k.ring);
+  k.ring.material.dispose();
+}
+// the bar while choosing: why the last tap couldn't go there, or what to do; Dig says how many
+function drawDigging() {
+  const n = placing.picks.length;
+  $('placeText').textContent = placing.why || (n ? 'Tap to add more or take one off' : 'Tap the ground to choose where');
+  $('placeGo').textContent = n > 1 ? `Dig ${n}` : 'Dig';
+  $('placeGo').disabled = !n;
 }
 // a tap on the ground: the nearest spot on the grid to it
 function movePlacing(x, z) {
   if (!placing.on) return;
+  if (placing.dig) { pickDig(x, z); return; }
   placing.at = [x, z];
   const s = placeSnap(x, z, placing.rot, PLACEABLES[placing.kind]); // rules.js
   placing.x = s.x; placing.z = s.z; placing.rot = s.rot;
@@ -443,24 +488,35 @@ function movePlacing(x, z) {
   $('placeText').textContent = why || (claim ? claim.text : 'Tap the ground to move it');
   $('placeGo').disabled = !!why;
 }
-// the Turn button: a quarter turn
+// the Turn button: a quarter turn (farm fields: all the ones chosen, so their rows run the other way)
 function turnPlacing() {
   if (!placing.on) return;
   placing.rot += Math.PI / 2;
-  movePlacing(...placing.at);
+  if (!placing.dig) { movePlacing(...placing.at); return; }
+  for (const k of placing.picks) {
+    k.rot = placeSnap(k.x, k.z, placing.rot, PLACEABLES[k.kind]).rot; // (a farm field is square: it stays on the same spot)
+    k.ghost.rotation.y = k.ring.rotation.y = k.rot;
+  }
 }
 function stopPlacing() {
   if (placing.ghost) { scene.remove(placing.ghost); disposeMaterials(placing.ghost); }
-  placing.on = false; placing.ghost = null;
+  for (const k of placing.picks || []) dropPick(k);
+  placing.on = false; placing.ghost = null; placing.dig = false; placing.picks = []; placing.why = '';
   placeRing.visible = false;
   showPlaceClaim(null);
   $('placeBar').hidden = true;
   app.classList.remove('placing');
 }
 function finishPlacing() {
+  if (placing.on && placing.dig) { // farm fields: dig every one chosen, in the order they were chosen
+    const list = placing.picks.map((k) => ({ type: 'dig', kind: k.kind, x: k.x, z: k.z, rot: k.rot }));
+    if (!list.length) return;
+    stopPlacing();
+    for (const t of list) queueTask(t);
+    return;
+  }
   if (!placing.on || !placing.ok) return;
-  const t = placing.item ? { type: 'place', item: placing.item, kind: placing.kind, x: placing.x, z: placing.z, rot: placing.rot }
-    : { type: 'dig', kind: placing.kind, x: placing.x, z: placing.z, rot: placing.rot }; // (a farm field: dug with the hoe)
+  const t = { type: 'place', item: placing.item, kind: placing.kind, x: placing.x, z: placing.z, rot: placing.rot };
   stopPlacing();
   queueTask(t);
 }
@@ -982,7 +1038,7 @@ function fieldActions(th) {
   out.push({ label: 'Flatten field', note: !has ? toolNeed(P.madeWith) : def ? `The ${def.name.toLowerCase()} is lost` : `${P.flattenSeconds} s`, disabled: !has,
     run: () => queueTask({ type: 'flatten', id: th.id }) });
   out.push({ label: 'Inspect', foot: true, run: () => showTag(fieldState(th), V(th.x, groundY(th.x, th.z) + 1.1, th.z), 2, 5) },
-    { label: 'Walk here', foot: true, run: () => walkFirst(V(th.x + P.solid + 0.8, 0, th.z)) });
+    { label: 'Walk here', foot: true, run: () => walkFirst(P.walkOver ? V(th.x, 0, th.z) : V(th.x + P.solid + 0.8, 0, th.z)) }); // (onto it: it's walked over)
   return out;
 }
 // Dig farm field, on the ground's tap menu (input.js): carrying a hoe, in your own camp

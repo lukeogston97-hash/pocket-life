@@ -311,7 +311,7 @@ async def new_home():
 
 
 async def strolling():
-    """Someone away strolls about on another phone's screen without walking through trees or rocks, and doesn't get stuck."""
+    """Someone away strolls about on another phone's screen without walking through trees or rocks (bushes they may walk through), and doesn't get stuck."""
     # This world has no night. At night people away lie down and sleep instead of strolling, and the world's clock is the
     # real Darwin clock, so this check used to fail whenever it was run between 8 pm and 6 am Darwin time (found 24 Nov 2026).
     DAY = {'night': {'from': 0, 'to': 0}}
@@ -332,7 +332,7 @@ async def strolling():
             last = pos
         print(f'    walked {moved:.1f} m in 45 s')
         expect(moved > 5, f'the away person strolls about ({moved:.1f} m)')
-        expect(inside == 0, f'never inside a tree, rock or bush ({inside} of 90 looks)')
+        expect(inside == 0, f'never inside a tree or rock ({inside} of 90 looks; bushes are walked through since 0.1.18)')
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
@@ -2068,7 +2068,7 @@ async def tips():
 
 async def placing_grid():
     """The placing grid (0.1.17): spots snap to half-metre squares, Turn turns a quarter, the ground under it is levelled
-    (the same on every phone), a second campfire keeps its room, and nothing nearby floats."""
+    (the same on every phone), a second campfire keeps its room, and nothing nearby floats (trees move with the ground, 0.1.18)."""
     async with world(CAMPKIT=1) as W:
         a = await W.page('gridA'); await join(a)
         b = await W.page('gridB'); await join(b)
@@ -2099,10 +2099,11 @@ async def placing_grid():
         expect(abs(fa[0] - fb[0]) < 1e-4 and fb[1] < 0.06, f'and the same on the other phone ({fa[0]:.3f}, {fb[0]:.3f})')
         why = await a.evaluate(f"[__pl.cantPlaceAt({spot[0]} + 1, {spot[1]}, 'campfire'), __pl.cantPlaceAt({spot[0]} + 2.5, {spot[1]}, 'campfire')]")
         expect(why[0] == 'Too close to another one' and why[1] is None, f'a second campfire keeps room for the seats: 1 m away no, 2.5 m away yes ({why})')
-        floats = await a.evaluate("""(() => { let worst = 0; const t = [...__pl.placed.values()][0];
-          for (const tr of __pl.trees) if (Math.hypot(tr.x - t.x, tr.z - t.z) < 6) worst = Math.max(worst, Math.abs(__pl.groundY(tr.x, tr.z) - __pl.groundY(tr.x, tr.z, __pl.landAsMade)));
+        floats = await a.evaluate("""(() => { let worst = -1; const t = [...__pl.placed.values()][0];
+          for (const tr of __pl.trees) if (Math.hypot(tr.x - t.x, tr.z - t.z) < 8) for (let k = 0; k <= 16; k++) { const g = k / 8 * 6.283, d = k === 16 ? 0 : k < 8 ? 0.35 : 0.19, px = tr.x + Math.cos(g) * d, pz = tr.z + Math.sin(g) * d;
+            worst = Math.max(worst, (tr.lift || 0) - (__pl.groundY(px, pz) - __pl.groundY(px, pz, __pl.landAsMade))); }
           return worst; })()""")
-        expect(floats < 0.02, f'trees nearby keep their ground ({floats:.3f} m)')
+        expect(floats < 0.002, f'trees nearby sit on the levelled ground, never above it ({floats:.4f} m; 0.1.18: they move with it)')
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
@@ -2157,8 +2158,9 @@ async def placed_kinds():
 
 
 async def farming():
-    """Farming (0.1.18): Dig farm field on the ground's tap menu (with the stone hoe, only in your own camp), the field
-    with no grass through it, planting berry seeds, the crop growing (a sprout, a young bush, then grown with berries),
+    """Farming (0.1.18): Dig farm field on the ground's tap menu (with the stone hoe, only in your own camp), digging two
+    at once side by side, walking over fields and through bushes, nothing near the camp left in the air, the field with
+    no grass through it, planting berry seeds, the crop growing (a sprout, a young bush, then grown with berries),
     picking it with the knife (2 at once), the other phone seeing each step, the admin's Grow now, and Flatten field."""
     kit = {'campfire': 1, 'stick': 6, 'stone-hoe': 1, 'berry-seeds': 2, 'knife': 1}
     send = "(m) => window.__sock.send(JSON.stringify(m))"
@@ -2180,16 +2182,38 @@ async def farming():
         expect(inside[0] == ['Dig farm field', '8 s', False] and inside[-1][0] == 'Walk here', f'the ground in their camp: Dig farm field, then Walk here ({inside})')
         far = await a.evaluate(f"(() => {{ const f = __pl.placed.get({fid}), x = f.x - 16, z = f.z; return [!!__pl.claimAt(x, z), __pl.digActions({{ x, z }}).map((x) => [x.label, x.note, !!x.disabled])]; }})()")
         expect(not far[0] and far[1] == [['Dig farm field', 'Only in your camp', True]], f'outside it: Dig farm field greyed out, Only in your camp ({far})')
+        # Dig mode: every tap adds another field, a tap on one chosen takes it off, Dig digs them all (0.1.18 test 2)
         place = await a.evaluate(f"""(() => {{ const f = __pl.placed.get({fid});
           __pl.startDigging('field', {{ x: f.x + 3, z: f.z }});
-          for (let r = 3; r < 8; r += 0.5) for (let k = 0; k < 24; k++) {{ const g = k / 24 * 6.283; __pl.movePlacing(f.x + Math.cos(g) * r, f.z + Math.sin(g) * r); if (__pl.placing.ok) return [__pl.placing.x, __pl.placing.z, document.getElementById('placeGo').textContent]; }}
+          for (let r = 3; r < 8; r += 0.5) for (let k = 0; k < 24; k++) {{
+            const g = k / 24 * 6.283; __pl.movePlacing(f.x + Math.cos(g) * r, f.z + Math.sin(g) * r);
+            if (__pl.placing.picks.length !== 1) continue;
+            const p = __pl.placing.picks[0];
+            for (const [dx, dz] of [[1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5]]) {{ __pl.movePlacing(p.x + dx, p.z + dz); if (__pl.placing.picks.length === 2) return [p.x, p.z, __pl.placing.picks[1].x, __pl.placing.picks[1].z, document.getElementById('placeGo').textContent]; }}
+            __pl.movePlacing(p.x, p.z); // (no room beside it: take it off and look on)
+          }}
           return null; }})()""")
-        expect(place is not None and place[2] == 'Dig', f'choosing the spot like placing, with a Dig button ({place})')
+        expect(place is not None and place[4] == 'Dig 2', f'choosing spots like placing: two side by side, and the button says Dig 2 ({place})')
+        toggled = await a.evaluate(f"(() => {{ __pl.movePlacing({place[2]}, {place[3]}); const off = [__pl.placing.picks.length, document.getElementById('placeGo').textContent]; __pl.movePlacing({place[2]}, {place[3]}); return [...off, __pl.placing.picks.length]; }})()")
+        expect(toggled == [1, 'Dig', 2], f'a tap on one chosen takes it off, and another tap puts it back ({toggled})')
         await shot(a, 'farming_choose')
-        await a.evaluate("__pl.finishPlacing()"); await idle(a, 60); await a.wait_for_timeout(1500)
-        fld = await a.evaluate(f"(() => {{ const t = {FIELD}; return t ? [t.x, t.z, t.built, __pl.placedName(t)] : null; }})()")
-        expect(fld is not None and abs(fld[0] - place[0]) < 1e-6 and abs(fld[1] - place[1]) < 1e-6 and fld[2] and fld[3] == 'Farm field', f'dug: a farm field where they chose ({fld})')
-        expect(await a.evaluate("__pl.you.wear['stone-hoe'][0]") == 29, 'digging took a use of the hoe')
+        await a.evaluate("__pl.finishPlacing()"); await idle(a, 90); await a.wait_for_timeout(1500)
+        got = await a.evaluate("[...__pl.placed.values()].filter((t) => t.kind === 'field').map((t) => [t.x, t.z, t.built, __pl.placedName(t), t.id])")
+        expect(len(got) == 2 and all(g[2] and g[3] == 'Farm field' for g in got) and sorted([g[0], g[1]] for g in got) == sorted([[place[0], place[1]], [place[2], place[3]]]), f'Dig dug them both, side by side ({got})')
+        expect(await a.evaluate("__pl.you.wear['stone-hoe'][0]") == 28, 'each one took a use of the hoe')
+        fid2 = next(g[4] for g in got if abs(g[0] - place[0]) < 1e-6 and abs(g[1] - place[1]) < 1e-6)
+        FIELD = f"__pl.placed.get({fid2})"
+        walk = await a.evaluate(f"(() => {{ const t = {FIELD}, b = __pl.berryBushes[0]; return [__pl.freeAt(t.x, t.z), !__pl.solidAt(t.x, t.z), !!__pl.solidAt(t.x, t.z, 0, true), __pl.freeAt(b.position.x, b.position.z)]; }})()")
+        expect(walk == [True, True, True, True], f'people walk over farm fields and through berry bushes, which still take room ({walk})')
+        floats = await a.evaluate("""(() => { let worst = -1, n = 0, lifted = 0; const fs = [...__pl.placed.values()], near = (x, z) => fs.some((t) => Math.hypot(t.x - x, t.z - z) < 9);
+          const look = (x, z, r, lift) => { n++; if (lift) lifted++; for (let k = 0; k <= 16; k++) { const g = k / 8 * 6.283, d = k === 16 ? 0 : k < 8 ? r : r * 0.55, px = x + Math.cos(g) * d, pz = z + Math.sin(g) * d;
+            worst = Math.max(worst, lift - (__pl.groundY(px, pz) - __pl.groundY(px, pz, __pl.landAsMade))); } };
+          for (const r of __pl.rocks) if (r.state !== 'gone' && near(r.x, r.z)) look(r.x, r.z, r.r, r.lift || 0);
+          for (const t of __pl.trees) if (near(t.x, t.z)) look(t.x, t.z, 0.35, t.lift || 0);
+          for (const b of __pl.wildBushes) if (near(b.x, b.z)) look(b.x, b.z, b.r, b.lift || 0);
+          for (const b of __pl.berryBushes) if (near(b.position.x, b.position.z)) look(b.position.x, b.position.z, b.userData.r, b.userData.lift || 0);
+          return [n, lifted, worst]; })()""")
+        expect(floats[0] > 0 and floats[2] < 0.002, f'trees, rocks and bushes by the camp sit on the levelled ground, none in the air ({floats[0]} near, {floats[1]} moved with the ground, {floats[2]:.4f} m at most above it)')
         grass = await a.evaluate(f"""(() => {{ const t = {FIELD}, d = __pl.DETAILS[0], f = __pl.rectOf(t.x, t.z, t.rot, 'field'); let inside = 0, shown = 0;
           for (let i = 0; i < d.xs.length; i++) if (Math.abs(d.xs[i] - f.x) < f.hw && Math.abs(d.zs[i] - f.z) < f.hd) {{ inside++; if (!(d.hide && d.hide[i])) shown++; }}
           return [inside, shown]; }})()""")
@@ -2201,7 +2225,6 @@ async def farming():
         # planting: a sprout
         acts = await a.evaluate(f"__pl.fieldActions({FIELD}).map((x) => [x.label, x.note || '', !!x.disabled])")
         expect([x[0] for x in acts] == ['Plant berry seeds', 'Flatten field', 'Inspect', 'Walk here'] and acts[1][1] == '4 s', f'its tap menu: Plant berry seeds, Flatten field ({acts})')
-        fid2 = await a.evaluate(f"{FIELD}.id")
         await a.evaluate(f"__pl.queueTask({{ type: 'plant', id: {fid2}, seed: 'berry-seeds' }})"); await idle(a, 40); await a.wait_for_timeout(1200)
         crop = await a.evaluate(f"(() => {{ const t = {FIELD}, c = t.view.userData.parts.cropParts; return [t.crop && t.crop.kind, __pl.you.carry['berry-seeds'], !!c && c.sprout.visible, !!c && c.bush.visible, __pl.placedName(t), __pl.fieldState(t)]; }})()")
         expect(crop[0] == 'berry-bush' and crop[1] == 1 and crop[2] and not crop[3], f'planted: a sprout, and one packet of seeds left ({crop})')
@@ -2230,7 +2253,7 @@ async def farming():
         # Flatten field: gone, crop and all, for both phones
         await a.evaluate(f"__pl.queueTask({{ type: 'flatten', id: {fid2} }})"); await idle(a, 40); await a.wait_for_timeout(1500)
         expect(await a.evaluate(f"!{FIELD}") and await b.evaluate(f"!{FIELD}"), 'Flatten field: it is gone for both phones')
-        expect(await a.evaluate("__pl.you.wear['stone-hoe'][0]") == 28, 'flattening took a use of the hoe too')
+        expect(await a.evaluate("__pl.you.wear['stone-hoe'][0]") == 27, 'flattening took a use of the hoe too')
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 

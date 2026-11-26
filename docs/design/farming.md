@@ -14,6 +14,13 @@ Decided with Luke 26 Nov 2026 (0.1.18, built in one test build: "Build it all in
 - Camps: other people can't dig, plant, pick or flatten inside your camp (the tap menu only says whose camp it is, and the server says no). If the camp's fire goes out, its fields stay and anyone can use them, the same as a campfire.
 - Away: dig, flatten, plant and harvest carry on from the task list while you're away (server/src/tasks.js).
 
+## Test 2 (Luke 26 Nov 2026, after trying test 1)
+- Walk over farm fields (Luke: "no worries"), grown berry bushes on them too. He asked for bushes and berry bushes in the wild to be walked through as well, so they are (they still take room for putting things down).
+- Dig several at once (Luke picked "Tap spots, then Dig"): in Dig mode each tap on the ground adds another field (a see-through field on its square), a tap on one already chosen takes it off, Turn turns them all, and Dig digs them one after another (the button says "Dig 3"). Up to 20 at a time. Each one takes a use of the hoe.
+- Planting stays one field at a time (Luke).
+- The ground's Dig menu stays as it is: Dig farm field, with Walk here small under it (Luke looked at 4 options on the Dig menu page of the design canvas and kept Walk here).
+- Fixed: rocks floated next to camps where the ground was levelled. Trees, rocks and bushes now move up or down with the levelled ground (docs/design/placeables.md, Flat ground).
+
 ## How it's built
 - Data (game-data.json): items hoe-head, stone-hoe (tool, 30 uses) and berry-seeds; their recipes; placeables.field with madeWith (the tool that digs it, instead of an item that places it), makeSeconds, makeVerb, flattenSeconds, inCamp, size and look (shape field, soil and row colours); crops (berry-bush: seed, on, growHours, plantSeconds, like: the source whose picking rules it follows); energyCosts dig and plant.
 - Server: a field is a placed thing (world.placed) that is built from the start; its crop is th.crop = { kind, at, berries } (berries as a wild bush's [count, from] once some are picked). How grown it is comes from `at` (rules.js cropGrowth and cropStage, shared with the game), so nothing ticks and nothing is saved while it grows. Actions dig, flatten, plant and harvest (server/src/actions.js), each with a LIMITS entry, the time guard (worked) and the camp check. The view sends ages, not times (crop.age, berries' age), so phone clocks don't matter.

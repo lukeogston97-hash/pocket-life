@@ -260,7 +260,7 @@ function layoutData() {
   for (let k = 0; k < 48; k++) {
     const a = (k / 48) * Math.PI * 2;
     const p = shorePointToward(V(POND.x + Math.cos(a) * 20, 0, POND.z + Math.sin(a) * 20));
-    if (!solidAt(p.x, p.z)) shore.push([+p.x.toFixed(2), +p.z.toFixed(2)]);
+    if (!solidAt(p.x, p.z, 0, true)) shore.push([+p.x.toFixed(2), +p.z.toFixed(2)]); // (bushes too, as always: the layout stays the same)
   }
   const open = [];
   for (let t = 0; t < 6000 && open.length < 600; t++) {
@@ -309,12 +309,12 @@ function seedWorld() {
   let n = 0;
   for (const a of spots.values()) {
     for (let k = 0; k < a.length; k += 4, n++) {
-      const tree = a[k + 3], r = a[k + 2];
+      const tree = a[k + 3] === 1, r = a[k + 2];
       const kinds = near(tree ? 'trees' : r > 0.45 ? 'boulders' : '').filter((kind) => spotsFor[kind].length < 400); // sticks fall under trees, stones turn up by boulders
       if (!kinds.length) continue;
       const ang = hash(n, 77) * Math.PI * 2, d = tree ? r + 0.4 : r + 0.35;
       const x = a[k] + Math.cos(ang) * d, z = a[k + 1] + Math.sin(ang) * d;
-      if (squareDist(x, z) > WALK_LIMIT - 1 || pondShape(x, z) < 1.3 || solidAt(x, z)) continue;
+      if (squareDist(x, z) > WALK_LIMIT - 1 || pondShape(x, z) < 1.3 || solidAt(x, z, 0, true)) continue;
       for (const kind of kinds) spotsFor[kind].push([x, z]);
     }
   }
