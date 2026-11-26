@@ -10,7 +10,7 @@ import { $, buildItem, countLabel, harvests, ITEMS, SOURCES, STAT, STATS } from 
 import { disposeMaterials, setArm } from './people.js';
 import { getItem, itemViews, removeWorldItem, seeThrough } from './world-items.js';
 import {
-  addLabel, addToCarry, addWeight, barRoom, carried, drawCarry, drawHeld, hasTool, headTop, player, removeLabel,
+  addLabel, addToCarry, barRoom, carried, carryNo, drawCarry, drawHeld, FULL, hasTool, headTop, player, removeLabel,
   showGain, showTag, takeFromCarry, tapMark, toolWhy, ui, weightOf, you,
 } from './you.js';
 import { clampStat, drawNeeds, nightNow, slowness, spendEnergy } from './needs.js';
@@ -291,7 +291,8 @@ function cantUse(t, planning) {
     // berries you've already queued to pick count as gone
     const queued = planning && b ? allTasks().filter((q) => q.type === 'use' && q.bush === t.bush).length : 0;
     if (b && berriesOn(b) - queued < 1) return queued ? 'No more berries' : `Next ${ITEMS[Object.keys(src.harvest)[0]].name.toLowerCase()} in ${readyIn(b)}`;
-    if ((planning ? plannedWeight() : carried()) + weightOf(src.harvest) > SETTINGS.carryCapacity) return 'Too heavy';
+    const no = carryNo(src.harvest, planning ? plannedWeight() - carried() : 0); // too heavy, or no square for it (0.2.1)
+    if (no) return no;
     return null;
   }
   return useHelps(src) ? null : fullLabel(src);
@@ -305,6 +306,7 @@ export function queueTask(t) {
     const w = ITEMS[item.kind].uses && barRoomPlanned() > 0 ? 0 : ITEMS[item.kind].weight; // (a tool going on the tool bar weighs nothing)
     if (w > SETTINGS.carryCapacity) { showTag('Too heavy', headTop(), 2); return; }
     if (plannedWeight() + w > SETTINGS.carryCapacity) { showTag('Too heavy', headTop(), 2); return; }
+    if (carryNo({ [item.kind]: 1 }) === FULL) { showTag(FULL, headTop(), 2); return; } // no square for it (0.2.1)
   }
   if (t.type === 'use') {
     const why = cantUse(t, true);
@@ -348,7 +350,8 @@ export function nextTask() {
   if (t.type === 'pickup') {
     const item = getItem(t.id);
     if (!item) { nextTask(); return; }
-    if (carried() + addWeight(item.kind) > SETTINGS.carryCapacity) { showTag('Too heavy', headTop(), 2); stopQueue(); return; }
+    const no = carryNo({ [item.kind]: 1 });
+    if (no) { showTag(no, headTop(), 2); stopQueue(); return; }
     approach(item.x, item.z, 0.5, 0.75, () => doPickup(item));
   } else if (t.type === 'use') {
     if (t.water) {
@@ -415,7 +418,7 @@ function autopilot() {
   const hasFood = Object.keys(you.carry).some((k) => ITEMS[k] && ITEMS[k].eat);
   if (!hasFood && st.hunger < AWAY.eatBelow + 20) { // getting peckish with nothing to eat: go and pick some
     const near = berryBushes.filter((b) => ripe(b) && !b.userData.removed && !game.notMineAt(b.position.x, b.position.z)).sort((a, b) => a.position.distanceTo(player.position) - b.position.distanceTo(player.position))[0];
-    if (near) { queueTask(bushTask(near)); return; }
+    if (near && !carryNo((SOURCES[near.userData.source] || {}).harvest)) { queueTask(bushTask(near)); return; } // (no room for them: no asking every 2 seconds)
   }
   // rest a little, then stroll somewhere near where you left off
   if (!auto.rested) { auto.rested = true; auto.nextAt = now + 15000 + Math.random() * 45000; return; }
@@ -531,7 +534,7 @@ function harvestFrom(src, t) {
   const b = berryBushes[t.bush];
   const many = src.tool && src.toolHarvest && hasTool(src.tool) && b && berriesOn(b) >= Object.values(src.toolHarvest).reduce((a, n) => a + n, 0);
   const got = many ? src.toolHarvest : src.harvest;
-  if ((b && !ripe(b)) || carried() + weightOf(got) > SETTINGS.carryCapacity) return;
+  if ((b && !ripe(b)) || carryNo(got)) return;
   for (const [k, n] of Object.entries(got)) addToCarry(k, n);
   you.lastPick = Object.values(got).reduce((a, n) => a + n, 0);
   if (many) you.tool = src.tool;
@@ -558,7 +561,8 @@ function doCut(t) {
   const def = PLANTS[t.plant], c = plants[t.plant] && plants[t.plant].clumps[t.i];
   if (!def || !c) { nextTask(); return; }
   if (!plantReady(c)) { showTag(`Grows back in ${growsIn(c)}`, headTop(), 2); nextTask(); return; }
-  if (carried() + weightOf(def.gives) > SETTINGS.carryCapacity) { showTag('Too heavy', headTop(), 2); stopQueue(); return; }
+  const no = carryNo(def.gives);
+  if (no) { showTag(no, headTop(), 2); stopQueue(); return; }
   const tool = def.tool && hasTool(def.tool) ? def.tool : null;
   if (def.toolNeeded && !tool) { showTag(toolWhy(def.tool), headTop(), 2.5); nextTask(); return; } // can't be done by hand (an ore vein)
   if (tool) { you.tool = tool; drawHeld(); }
@@ -626,7 +630,8 @@ Object.assign(TASK_KINDS, {
       const F = (fishSource() || {}).fish;
       if (!F) { nextTask(); return; }
       if (!hasTool(F.tool)) { showTag(toolWhy(F.tool), headTop(), 2); nextTask(); return; }
-      if (carried() + ITEMS[F.catch].weight > SETTINGS.carryCapacity) { showTag('Too heavy', headTop(), 2); nextTask(); return; }
+      const no = carryNo({ [F.catch]: 1 });
+      if (no) { showTag(no, headTop(), 2); nextTask(); return; }
       const go = () => {
         face(POND.x, POND.z);
         showTag(`${F.verb}…`, headTop(), 2, F.seconds + 0.3);

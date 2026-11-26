@@ -8,8 +8,8 @@ import { terrain } from './land.js';
 import { $, buildItem, countLabel, deg, fmt, groupOf, GROUPS, ITEMS, RECIPES } from './items.js';
 import { disposeMaterials } from './people.js';
 import {
-  addToCarry, barRoom, carried, drawCarry, drawHeld, drawWeightBar, hasTool, headTop, onBar, player, showGain,
-  showTag, takeFromCarry, toolSlots, ui, you,
+  addToCarry, barRoom, carried, drawCarry, drawHeld, drawWeightBar, FULL, hasTool, headTop, invSquares, onBar, player, showGain,
+  showTag, squaresTaken, stackOfKind, takeFromCarry, toolSlots, ui, you,
 } from './you.js';
 import { spendEnergy } from './needs.js';
 import { hideHint, tipDid } from './tips.js';
@@ -71,7 +71,6 @@ export function itemPic(kind) {
 
 /* ---------- your inventory: a grid of what you carry; tap one to see what it is and what you can do with it ---------- */
 export const bagOpen = () => $('bag').classList.contains('open');
-const BAG_COLS = 5, BAG_MIN = 10; // at least two rows of slots, so the sheet keeps its size
 let bagPick = null; // the tile tapped in the grid (kind:number; its info shows under it), or null
 function smallButton(text, onClick, primary) {
   const b = document.createElement('button');
@@ -95,14 +94,15 @@ function wearList(kind) {
   while (list.length < n) list.push(ITEMS[kind].uses);
   return list;
 }
-// what the grid shows: a tile for each kind, but each tool gets its own (Luke's pick), with its own wear. Tools on the
+// what the grid shows: a square for each stack (0.2.1, Luke: up to settings.stackSize of one thing, so 15 sticks are a
+// square of 10 and a square of 5), and each tool gets its own (Luke's pick), with its own wear. Tools on the
 // tool bar (0.1.17) aren't in the grid: they're the first of each tool's wear list, so the grid's start after them.
 // Each can be dropped, and keeps its wear on the ground. i: the tool's place in its wear list (which one, to the server).
 function bagSlots() {
   const out = [];
   for (const kind of bagKinds()) {
     const n = you.carry[kind], it = ITEMS[kind];
-    if (!it.uses) { out.push({ kind, key: `${kind}:0`, n }); continue; }
+    if (!it.uses) { const size = stackOfKind(kind); for (let j = 0, left = n; left > 0; j++, left -= size) out.push({ kind, key: `${kind}:${j}`, n: Math.min(size, left) }); continue; }
     const worn = wearList(kind);
     for (let i = onBar(kind); i < n; i++) out.push({ kind, key: `${kind}:${i}`, n: 1, i, left: worn[i] });
   }
@@ -162,6 +162,7 @@ function equipTool(s, out) {
 function unequipTool(s) {
   if (ui.mode !== 'world' || !player || you.dead || !s || !s.bar || !hasTool(s.kind)) return;
   if (carried() + ITEMS[s.kind].weight > SETTINGS.carryCapacity) { showTag('Too heavy to carry', headTop(), 2.5); return; }
+  if (squaresTaken() + 1 > invSquares()) { showTag(FULL, headTop(), 2.5); return; } // a tool takes a square of its own (0.2.1)
   const b = onBar(s.kind);
   shiftTool(s.kind, s.i, b - 1);
   if (b > 1) you.bar[s.kind] = b - 1; else delete you.bar[s.kind];
@@ -335,7 +336,7 @@ export function drawBag() {
   bagDrawn = shows;
   $('bagEmpty').hidden = slots.length + tools.length > 0;
   const cells = slots.map((s) => { const li = document.createElement('li'); li.appendChild(bagTile(s)); return li; });
-  const total = Math.max(BAG_MIN, Math.ceil(slots.length / BAG_COLS) * BAG_COLS);
+  const total = Math.max(invSquares(), slots.length); // the inventory's squares (0.2.1: locked, a live setting); empty ones dashed
   while (cells.length < total) { const li = document.createElement('li'); li.className = 'bag-slot'; li.setAttribute('aria-hidden', 'true'); cells.push(li); }
   $('bagList').replaceChildren(...cells);
   // the tool bar: its tools, then empty spots (up to 7 across, more spots go on another row)
@@ -389,19 +390,21 @@ function fillMat(r) {
 // you carry everything the recipe takes, kept tools too (Recipes greys out the ones you don't: Luke, 0.1.12)
 const hasAll = (r) => Object.entries(recipeWants(r)).every(([k, n]) => (you.carry[k] || 0) >= n);
 // what you'd carry after making it: tried on what you carry now, then put back (a tool it makes goes on the tool bar if
-// there's room, so it weighs nothing: the same as the server, needs.js craft)
-function weightAfter(r) {
-  const was = { carry: { ...you.carry }, bar: { ...you.bar }, wear: { ...you.wear }, lastKind: you.lastKind };
+// there's room, so it weighs nothing: the same as the server, needs.js craft). w: the weight, sq: the squares (0.2.1)
+function afterMaking(r) {
+  const was = { carry: { ...you.carry }, bar: { ...you.bar }, wear: { ...you.wear }, lastKind: you.lastKind }, sq0 = squaresTaken();
   for (const [k, n] of Object.entries(r.needs)) takeFromCarry(k, n);
   for (const [k, n] of Object.entries(r.makes)) addToCarry(k, n);
-  const w = carried();
+  const out = { w: carried(), sq: squaresTaken(), sq0 };
   Object.assign(you, was);
-  return w;
+  return out;
 }
-// why a recipe can't be made right now ('' if it can): things missing, too heavy, or not by what it needs
+// why a recipe can't be made right now ('' if it can): things missing, too heavy, no square for it, or not by what it needs
 export function cantMake(r) {
   if (!hasAll(r)) return 'Need more';
-  if (weightAfter(r) > SETTINGS.carryCapacity) return 'Too heavy';
+  const a = afterMaking(r);
+  if (a.w > SETTINGS.carryCapacity) return 'Too heavy';
+  if (a.sq > invSquares() && a.sq > a.sq0) return FULL; // (0.2.1: someone over already can still make what fits)
   if (r.near && !game.stationNear(r.near)) return 'Not here';
   return '';
 }
@@ -455,7 +458,7 @@ function drawMat() {
   else if (r) { // all there: what it makes, made before or not (no mystery: Luke, 0.1.10)
     const cant = cantMake(r);
     pic = madeBy(r); name = recipeName(r);
-    why = cant === 'Too heavy' ? 'Too heavy to carry' : r.about || '';
+    why = cant === 'Too heavy' ? 'Too heavy to carry' : cant === FULL ? FULL : r.about || '';
     go = !cant; state = 'match';
   } else if (goal) { // the things it takes, and what's still missing; made at a station: where (the mat can't make it)
     pic = madeBy(goal); name = recipeName(goal); state = 'goal';

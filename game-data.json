@@ -1,12 +1,14 @@
 {
   "_generated": "Made from content/*.json by python3 tools/worlds.py test-build. Edit those files, not this one.",
-  "version": "0.2.0",
-  "build": 1,
+  "version": "0.2.1",
+  "build": 2,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
     "carryCapacity": 30,
     "toolSlots": 7,
+    "inventorySquares": 10,
+    "stackSize": 10,
     "craftSearchFrom": 15,
     "walkSpeed": 2.2,
     "worldSize": 100,
@@ -1152,6 +1154,16 @@
   },
   "devlog": [
     {
+      "version": "0.2.1",
+      "date": "2026-11-27",
+      "improved": [
+        "Your inventory has 10 squares, with up to 10 of a thing in each (tools and campfires 1)"
+      ],
+      "fixed": [
+        "Left by the fire while you're away, your person gets up to sleep, drink and eat"
+      ]
+    },
+    {
       "version": "0.2.0",
       "date": "2026-11-27",
       "improved": [
@@ -1282,6 +1294,24 @@
       "unit": "people",
       "min": 1,
       "max": 100,
+      "step": 1
+    },
+    {
+      "id": "inventorySquares",
+      "name": "Inventory squares",
+      "group": "Players",
+      "unit": "squares",
+      "min": 5,
+      "max": 30,
+      "step": 1
+    },
+    {
+      "id": "stackSize",
+      "name": "Stack size",
+      "group": "Players",
+      "unit": "a square",
+      "min": 1,
+      "max": 99,
       "step": 1
     },
     {
