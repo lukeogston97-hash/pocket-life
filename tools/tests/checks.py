@@ -428,9 +428,10 @@ async def smoke():
         expect(await shown(a, '#bag') and await a.evaluate("!document.getElementById('mat').hidden && !document.getElementById('matEmpty').hidden && document.getElementById('bagPart').hidden && !!document.querySelector('#foundList .found-row')"), 'its Recipes tab shows the craft mat, empty, with the recipe list under it')
         await a.click('#bagClose')
         # greyed out means you don't carry everything it takes, made before or not (Luke, 0.1.12): nothing carried, every
-        # recipe made: all greyed; 2 stones, nothing made: the sharp stone first and not greyed; 9 of everything: none greyed
+        # recipe made: all greyed; 2 stones, nothing made: the sharp stone first and not greyed; 20 of everything: none greyed
+        # (it was 9 until the basic shelter, 0.2.5, which takes 10 sticks)
         found = await a.evaluate("""(async () => { const out = [], data = await (await fetch('game-data.json')).json(), every = {}, keep = [__pl.you.carry, __pl.you.found];
-          for (const k of Object.keys(data.items)) every[k] = 9;
+          for (const k of Object.keys(data.items)) every[k] = 20;
           for (const [carry, f] of [[{}, data.recipes.map((r) => r.id)], [{ stone: 2 }, []], [every, []]]) {
             __pl.you.carry = carry; __pl.you.found = f; document.getElementById('bagBtn').click(); document.getElementById('bagTabRecipes').click();
             const rows = [...document.querySelectorAll('#foundList .found-row')], grey = (r) => r.classList.contains('missing');
@@ -2415,7 +2416,7 @@ async def server_tests():
     import subprocess
     from lib import bundle
     bundle()
-    for f in ['admin_extras.mjs', 'live_items.mjs', 'stale_admin.mjs', 'cheats.mjs', 'societies.mjs', 'tasks.mjs', 'fade.mjs', 'forget.mjs', 'accounts.mjs', 'regrow.mjs', 'toolbar.mjs', 'farming.mjs', 'storage.mjs', 'retire.mjs', 'upgrades.mjs']:
+    for f in ['admin_extras.mjs', 'live_items.mjs', 'stale_admin.mjs', 'cheats.mjs', 'societies.mjs', 'tasks.mjs', 'fade.mjs', 'forget.mjs', 'accounts.mjs', 'regrow.mjs', 'toolbar.mjs', 'farming.mjs', 'storage.mjs', 'shelter.mjs', 'retire.mjs', 'upgrades.mjs']:
         r = subprocess.run(['node', f], cwd=HERE, capture_output=True, text=True, timeout=180)
         last = (r.stdout.strip().splitlines() or ['(nothing printed)'])[-1]
         if r.returncode: print(r.stdout[-4000:], r.stderr[-2000:])
@@ -2609,7 +2610,68 @@ async def storage():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'tasks_away': tasks_away, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'tool_bar': tool_bar, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'craft_mat': craft_mat, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'loading': loading, 'sideways': sideways, 'menu_rest': menu_rest, 'tips': tips, 'placed_kinds': placed_kinds, 'parts_look': parts_look, 'ore_vein': ore_vein, 'stress': stress, 'placing_grid': placing_grid, 'farming': farming, 'leaving': leaving, 'squares': squares, 'storage': storage, 'server_tests': server_tests}
+async def shelter():
+    """The basic shelter (0.2.5): made on the craft mat from 3 logs, 10 sticks and 4 twine, placed in your camp facing you
+    (2 x 2 squares), its tap menu (Sleep in shelter: twice as good as the ground), Sleep in shelter walking to its front
+    and lying down inside it along its width, someone else seeing you lying inside it (and no Sleep in shelter for them:
+    it's your camp's), Pack up and Take apart waiting till you're up, and Wake up putting you back out at its front."""
+    kit = {'campfire': 1, 'log': 3, 'stick': 14, 'twine': 4}  # (29 to carry once the fire and its 4 sticks are down)
+    send = "(m) => window.__sock.send(JSON.stringify(m))"
+    SH = "[...__pl.placed.values()].find((t) => t.kind === 'basic-shelter')"
+    async with world(KIT=json.dumps(kit)) as W:
+        a = await W.page('shelterA'); await join(a)
+        await a.evaluate("__pl.queueTask({ type: 'walk', x: 28, z: 6 })"); await idle(a, 50); await a.wait_for_timeout(1500)
+        spot = await a.evaluate("(() => { const p = __pl.player.position; for (let k = 0; k < 16; k++) { const ang = k / 16 * Math.PI * 2, x = p.x + Math.cos(ang) * 1.8, z = p.z + Math.sin(ang) * 1.8; if (!__pl.cantPlaceAt(x, z, 'campfire')) return [x, z]; } return null; })()")
+        await a.evaluate(f"({send})({{ t: 'place', kind: 'campfire', x: {spot[0]:.2f}, z: {spot[1]:.2f}, rot: 0 }})"); await a.wait_for_timeout(800)
+        fid = await a.evaluate("[...__pl.placed.keys()][0]")
+        for m in [f"{{ t: 'build', id: {fid} }}", f"{{ t: 'fire', id: {fid}, do: 'add', n: 4, fuel: 'stick' }}", f"{{ t: 'fire', id: {fid}, do: 'light' }}"]:
+            await a.evaluate(f"({send})({m})"); await a.wait_for_timeout(700)
+        await idle(a, 40)
+        expect(await a.evaluate(f"__pl.claimMine(__pl.placed.get({fid})) && __pl.isLit(__pl.placed.get({fid}))"), 'a lit campfire: their camp')
+        said = await mat_make(a, [('log', 3), ('stick', 10), ('twine', 4)])
+        expect(said == 'Basic shelter' and await a.evaluate("__pl.you.carry['basic-shelter'] === 1 && !__pl.you.carry.log"), f'made on the craft mat from 3 logs, 10 sticks and 4 twine ({said})')
+        # placed in the camp from the inventory, the way a player does
+        await a.click('#bagBtn'); await a.wait_for_timeout(400)
+        await a.click('#bagList .bag-tile[data-kind="basic-shelter"]'); await a.wait_for_timeout(200)
+        await a.click('#bagInfo button.go'); await a.wait_for_timeout(400)
+        put = await a.evaluate(f"""(() => {{ const f = __pl.placed.get({fid});
+          for (let r = 3.5; r < 8; r += 0.5) for (let k = 0; k < 16; k++) {{ const x = f.x + Math.cos(k / 16 * 6.28) * r, z = f.z + Math.sin(k / 16 * 6.28) * r;
+            __pl.movePlacing(x, z); if (__pl.placing.ok) return [__pl.placing.x, __pl.placing.z]; }} return null; }})()""")
+        expect(put is not None and await a.evaluate("__pl.placeSpotsShown().length") == 1, f'a spot for it in the camp, with its front shown ({put})')
+        await a.evaluate('__pl.finishPlacing()'); await idle(a, 90); await a.wait_for_timeout(1500)
+        sid = await a.evaluate(f"({SH} || {{}}).id")
+        expect(await a.evaluate(f"!!{SH} && {SH}.built"), 'put down and built')
+        acts = await a.evaluate(f"__pl.placedActions({SH}).map((x) => [x.label, x.note || '', !!x.disabled])")
+        expect(acts[0] == ['Sleep in shelter', 'Twice as good as the ground', False] and [x[0] for x in acts[1:]] == ['Pack up', 'Take apart', 'Inspect', 'Walk here'], f'its tap menu: Sleep in shelter, twice as good as the ground ({acts})')
+        # Sleep in shelter: walks to its front and lies down inside, along its width
+        await a.evaluate(f"__pl.queueTask({{ type: 'bed', id: {sid} }})"); await idle(a, 30); await a.wait_for_timeout(1500)
+        lying = await a.evaluate(f"""(() => {{ const t = {SH}, p = __pl.player, c = Math.cos(t.rot), s = Math.sin(t.rot);
+          const lx = (p.position.x - t.x) * c - (p.position.z - t.z) * s, lz = (p.position.x - t.x) * s + (p.position.z - t.z) * c; // (where it is in the shelter's own x, z)
+          return {{ sleeping: __pl.you.sleeping, bed: __pl.you.bed, order: p.rotation.order, lx: Math.round(lx * 100) / 100, lz: Math.round(lz * 100) / 100 }}; }})()""")
+        expect(lying['sleeping'] and lying['bed'] == sid and lying['order'] == 'YXZ' and abs(lying['lz']) < 0.5 and 0.5 < abs(lying['lx']) < 1.1, f'asleep inside it, lying along it ({lying})')
+        await shot(a, 'shelter_asleep')
+        acts = await a.evaluate(f"__pl.placedActions({SH}).map((x) => [x.label, x.note || '', !!x.disabled])")
+        expect(acts[0] == ['Pack up', 'Get up first', True] and acts[1] == ['Take apart', 'Get up first', True] and 'Sleep in shelter' not in [x[0] for x in acts], f'asleep in it: Pack up and Take apart wait till you are up ({acts[:2]})')
+        expect(await a.evaluate(f"[__pl.placedName({SH}), __pl.menuActions({{ kind: 'self' }})[0].label]") == ["Basic shelter · someone's asleep in it", 'Wake up'], 'its title says someone is asleep in it, and tapping yourself says Wake up')
+        # someone else (not in the camp) sees them lying inside it, and has no Sleep in shelter
+        b = await W.page('shelterB'); await join(b); await b.wait_for_timeout(1000)
+        seen = await b.evaluate(f"""(() => {{ const o = [...__pl.others.values()].find((x) => x.bed === {sid}), t = {SH};
+          return o ? {{ state: o.state, order: o.mesh.rotation.order, d: Math.round(Math.hypot(o.mesh.position.x - t.x, o.mesh.position.z - t.z) * 100) / 100,
+            menu: __pl.menuActions({{ kind: 'placed', th: t, name: '' }}).map((x) => x.label) }} : null; }})()""")
+        expect(seen and seen['state'] == 'sleeping' and seen['order'] == 'YXZ' and seen['d'] < 1.1 and 'Sleep in shelter' not in seen['menu'], f"someone else sees them lying inside it, and can't sleep in it ({seen})")
+        await b.evaluate(f"({send})({{ t: 'sleep', on: true, bed: {sid} }})"); await b.wait_for_timeout(700)
+        expect(not await b.evaluate('__pl.you.sleeping'), 'and the server says no to them')
+        # Wake up: back out at its front, facing out
+        await a.evaluate("__pl.menuActions({ kind: 'self' })[0].run()"); await a.wait_for_timeout(1500)
+        up = await a.evaluate(f"""(() => {{ const t = {SH}, p = __pl.player.position, f = [t.x + Math.sin(t.rot) * 1.25, t.z + Math.cos(t.rot) * 1.25];
+          return [__pl.you.sleeping, __pl.you.bed, __pl.player.rotation.order, Math.round(Math.hypot(p.x - f[0], p.z - f[1]) * 100) / 100]; }})()""")
+        expect(up[0] is False and up[1] is None and up[2] == 'XYZ' and up[3] < 0.3, f'Wake up: out at its front ({up})')
+        await b.wait_for_timeout(1500)
+        expect(await b.evaluate(f"(() => {{ const o = [...__pl.others.values()].find((x) => x.title === {json.dumps(await a.evaluate('__pl.you.look.name'))}); return !!o && o.bed == null && o.state === 'online' && o.mesh.rotation.order === 'XYZ'; }})()"), 'and everyone else sees them up')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'tasks_away': tasks_away, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'tool_bar': tool_bar, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'craft_mat': craft_mat, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'loading': loading, 'sideways': sideways, 'menu_rest': menu_rest, 'tips': tips, 'placed_kinds': placed_kinds, 'parts_look': parts_look, 'ore_vein': ore_vein, 'stress': stress, 'placing_grid': placing_grid, 'farming': farming, 'leaving': leaving, 'squares': squares, 'storage': storage, 'shelter': shelter, 'server_tests': server_tests}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

@@ -16,7 +16,7 @@ share({
 });
 
 export const START = { x: 0.6, z: 1.9 };
-export const you = { look: null, carry: {}, wear: {}, bar: {}, seen: [], found: [], lastKind: null, lifeStart: 0, stats: null, statsAt: 0, dead: false }; // carry: item id -> how many; bar: the tools on the tool bar (0.1.17); stats: need -> 0 to 100
+export const you = { look: null, carry: {}, wear: {}, bar: {}, seen: [], found: [], lastKind: null, lifeStart: 0, stats: null, statsAt: 0, dead: false, bed: null }; // carry: item id -> how many; bar: the tools on the tool bar (0.1.17); stats: need -> 0 to 100; bed: the bed you're asleep in (0.2.5)
 export const ui = { mode: 'menu' }; // menu (the main menu), creator (making your person) or world (playing)
 export let player = null, playerGround = 0, heldView = null;
 export const ring = new THREE.Mesh(new THREE.RingGeometry(0.44, 0.54, 40).rotateX(-Math.PI / 2),

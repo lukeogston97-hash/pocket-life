@@ -2,7 +2,7 @@
 // eats, drinks, picks berries, sleeps), played forward to now.
 // These are methods of the World (index.js adds them to it), so `this` is the world.
 import { G, HOUR, MINUTE, advanceStats, addCarry, takeCarry, applyGives, eatOne, posAt, dist, sleepMs, spend, num, AWAY, pickRandom, isNight, morningAfter } from './shared.js';
-import { fireRule } from './placed.js';
+import { fireRule, bedFront } from './placed.js';
 import { CLAIM_R } from './claims.js';
 
 const SIT_CHECK = 15 * MINUTE; // sitting by a fire while away: how often they see whether they need anything
@@ -15,15 +15,23 @@ export const awayMethods = {
     const L = this.world && this.world.layout;
     const sleepAt = p.leftAt + AWAY.sleepAfterHours * HOUR;
     for (let guard = 0; guard < 400; guard++) {
-      const until = Math.min(now, sleepAt, p.plan ? p.plan.arrive : now);
-      const d = advanceStats(p, until, G, this.speed);
+      const home = !!(p.plan && p.plan.long); // walking over to their camp's shelter for the long sleep (0.2.5): that can run past sleepAt
+      const until = Math.min(now, home ? Infinity : sleepAt, p.plan ? p.plan.arrive : now);
+      const d = advanceStats(p, until, G, this.speed, null, this.bedBetter(p));
       [p.x, p.z] = posAt(p, until);
       p.simAt = until;
       if (d) { this.die(p, d.cause, true); return; }
-      if (until >= sleepAt) { // a day away: lie down and sleep (hunger and thirst drop slowly to a floor)
+      if (home ? until >= p.plan.arrive : until >= sleepAt) { // a day away: lie down and sleep (hunger and thirst drop slowly to a floor)
+        // in their camp's shelter if there's room in one (0.2.5), walking over to it first; else where they are
+        if (home) { const th = this.placedById(p.plan.bed); if (th && this.bedFree(th, p.who)) p.bed = th.id; }
+        else if (!p.bed && !p.sleeping) { // (already asleep on the ground: they sleep on there)
+          const th = this.freeBedFor(p), to = th && bedFront(th);
+          if (th && dist([p.x, p.z], to) > 0.6) { p.sit = null; this.strollTo(p, [p.x, p.z], to, until, now, { then: 'bed', bed: th.id, long: true }); continue; }
+          if (th) p.bed = th.id; // right by it already
+        }
         p.plan = null; p.sit = null; p.asleep = true; p.sleepAt = sleepAt; p.log.slept = true;
         this.touch(p);
-        this.send({ t: 'state', id: p.who, state: 'asleep', x: num(p.x), z: num(p.z) }, null);
+        this.send({ t: 'state', id: p.who, state: 'asleep', x: num(p.x), z: num(p.z), ...(p.bed ? { bed: p.bed } : {}) }, null);
         return;
       }
       if (p.plan && until < p.plan.arrive) return; // still on the way
@@ -38,8 +46,9 @@ export const awayMethods = {
   arrive(p, plan, t) {
     if (plan.then === 'task') { if (plan.kind === 'work') this.finishTask(p, t); return; } // a task on their list: done now (tasks.js); walked over: decide starts it
     if (plan.kind === 'sit') return; // a while by the fire: decide() sees if they stay sat there (still lit, nothing needed) or get up
-    if (plan.kind === 'sleep') { // rested: up again
+    if (plan.kind === 'sleep') { // rested: up again (and out of their bed, if they were in one: 0.2.5)
       p.sleeping = false;
+      this.outOfBed(p);
       if (plan.arrive > Date.now() - 30000) this.send({ t: 'state', id: p.who, state: 'away', x: num(p.x), z: num(p.z) }, null);
       this.touch(p);
       return;
@@ -58,6 +67,13 @@ export const awayMethods = {
       if (got) { this.takeBerries(plan.bush, got, t); this.touch(p); } // the bush changed with their bag: saved soon, together
     }
     // (a plain walk or a drink: nothing lasting, so no save is asked for here; the tick asks for one now and then)
+  },
+  // a stroll from `at` to `to` starting at t (anyone watching sees them walk there); extra rides along on the plan
+  strollTo(p, at, to, t, now, extra) {
+    const ms = (dist(at, to) / AWAY.strollSpeed) * 1000 + 500;
+    p.plan = { kind: 'walk', from: at, to: [num(to[0]), num(to[1])], start: t, arrive: t + ms, ...extra };
+    spend(p, 'walkPerMetre', G, dist(at, to));
+    if (p.plan.arrive > now) this.send({ t: 'stroll', id: p.who, x: p.plan.to[0], z: p.plan.to[1], speed: AWAY.strollSpeed, ms: Math.round(p.plan.arrive - now), then: extra && extra.then }, null);
   },
   // their claim's fire, and whether there's room in it for something they carry (biggest fuel first): [fire, kind] or null.
   // least: the room there has to be before it's worth walking over (so they don't go back and forth for every stick)
@@ -108,22 +124,23 @@ export const awayMethods = {
     const out = p.sit ? this.fireOutAt(p.sit.fire, t) : 0;
     if (p.sit && p.sit.until > t && out > t && !bed && !thirsty && !hungry) { p.plan = { kind: 'sit', start: t, arrive: Math.min(p.sit.until, out, t + SIT_CHECK) }; return; }
     if (p.sit) this.standUp(p, now - t < 30000);
-    // night: off to bed until morning, once their task list is done. Tired (or already lying down): sleep where they are until rest is full
+    const walk = (to, extra) => this.strollTo(p, at, to, t, now, extra);
+    // night: off to bed until morning, once their task list is done. Tired (or already lying down): sleep until rest is
+    // full. In their camp's shelter if there's room in one (0.2.5: they walk over first), else where they are
     if (bed) {
+      if (!p.sleeping && !p.bed) {
+        const th = this.freeBedFor(p), to = th && bedFront(th);
+        if (th && dist(at, to) > 0.6) { walk(to, { then: 'bed', bed: th.id }); return; }
+        if (th) p.bed = th.id; // there: in they get
+      }
       const was = p.sleeping;
       p.sleeping = true;
       const fast = this.speed && t < this.speed.until ? this.speed.x : 1;
-      p.plan = { kind: 'sleep', start: t, arrive: night ? t + (morningAfter(t, G) - t) / fast : t + sleepMs(p, G) / fast };
+      p.plan = { kind: 'sleep', start: t, arrive: night ? t + (morningAfter(t, G) - t) / fast : t + sleepMs(p, G, this.bedBetter(p)) / fast };
       if (!was) p.log.slept = true;
-      if (!was && p.plan.arrive > now) this.send({ t: 'state', id: p.who, state: 'sleeping', x: num(p.x), z: num(p.z) }, null);
+      if (!was && p.plan.arrive > now) this.send({ t: 'state', id: p.who, state: 'sleeping', x: num(p.x), z: num(p.z), ...(p.bed ? { bed: p.bed } : {}) }, null);
       return;
     }
-    const walk = (to, extra) => {
-      const ms = (dist(at, to) / AWAY.strollSpeed) * 1000 + 500;
-      p.plan = { kind: 'walk', from: at, to: [num(to[0]), num(to[1])], start: t, arrive: t + ms, ...extra };
-      spend(p, 'walkPerMetre', G, dist(at, to));
-      if (p.plan.arrive > now) this.send({ t: 'stroll', id: p.who, x: p.plan.to[0], z: p.plan.to[1], speed: AWAY.strollSpeed, ms: Math.round(p.plan.arrive - now), then: extra && extra.then }, null);
-    };
     const idle = (ms) => { p.plan = { kind: 'idle', start: t, arrive: t + ms }; };
     if (thirsty) {
       const to = L.shore.reduce((a, b) => (dist(at, a) < dist(at, b) ? a : b));

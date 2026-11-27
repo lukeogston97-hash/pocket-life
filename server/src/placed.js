@@ -4,7 +4,7 @@
 // `at`, so nothing has to tick. It goes out by itself when that runs out, whether or not anyone is watching.
 // These are methods of the World (index.js adds them to it), so `this` is the world.
 import { G, num, HOUR, laidNow } from './shared.js';
-import { fireRuleOf, seatSpotOf, cropGrowth, berriesGrown } from './rules.js';
+import { fireRuleOf, seatSpotOf, cropGrowth, berriesGrown, frontSpotOf } from './rules.js';
 
 export const PLACEABLES = G.placeables || {};
 // Farming (0.1.18): a farm field is a placed thing dug with a tool (PLACEABLES.field.madeWith, the stone hoe) instead
@@ -38,6 +38,12 @@ export function storeWear(th, kind) {
   while (list.length < n) list.push(full);
   return list;
 }
+// Beds (0.2.5, the basic shelter): a placed thing with bed { sleepers, better } is somewhere to sleep. Its sleeper has
+// p.bed = its id while sleeping (p.sleeping, or p.asleep for the long sleep while away), and their p.x, p.z stay at its
+// front, where they got in (every game draws them lying inside). Sleep there is `better` times as good (needs.js).
+export const bedOf = (kind) => { const b = (PLACEABLES[kind] || {}).bed; return b && b.better >= 1 ? b : null; };
+// where you stand to get in (its front)
+export const bedFront = (th) => { const P = PLACEABLES[th.kind] || {}; return frontSpotOf(th, P.front || (P.solid || 0.5) + 0.3); };
 // the fire's rules in ms: each fuel it takes, and the most it holds (rules.js, the same as in the game)
 export const fireRule = (kind) => fireRuleOf((PLACEABLES[kind] || {}).fire, (k) => !!G.items[k]);
 // where seat k round a placed thing is (rules.js, the same as in the game)
@@ -81,8 +87,32 @@ export const placedMethods = {
     if (this.burn(th).lit) return 'Put the fire out first';
     const now = Date.now();
     for (const o of this.persons.values()) if (o.who !== p.who && this.alive(o) && o.sit && o.sit.fire === th.id && o.sit.until > now) return 'Someone is sitting by it';
+    if (this.sleepersIn(th.id).length) return "Someone's asleep in it"; // a bed (0.2.5)
     return '';
   },
+  // Beds (0.2.5): who's asleep in this one right now (except: leave that person out)
+  sleepersIn(id, except = null) {
+    const out = [];
+    for (const o of this.persons.values()) if (o.who !== except && o.bed === id && this.alive(o) && (o.sleeping || o.asleep)) out.push(o);
+    return out;
+  },
+  // is there room in it for one more? (sleepers at a time)
+  bedFree(th, except = null) { const b = th && bedOf(th.kind); return !!b && !!th.built && this.sleepersIn(th.id, except).length < (b.sleepers || 1); },
+  // how much better their sleep is right now: their bed's `better` while they're asleep in it, else 1 (needs.js advanceStats)
+  bedBetter(p) {
+    if (!p || !p.bed || !(p.sleeping || p.asleep)) return 1;
+    const th = this.placedById(p.bed), b = th && th.built && bedOf(th.kind);
+    return b ? b.better : 1;
+  },
+  // a bed in their own camp with room in it (the nearest), for someone away going to sleep (away.js), or null
+  freeBedFor(p) {
+    const home = this.claimOf(p.who);
+    if (!home) return null;
+    const mine = this.placedList().filter((th) => bedOf(th.kind) && th.built && this.claimAt(th.x, th.z) === home && this.bedFree(th, p.who));
+    return mine.sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z))[0] || null;
+  },
+  // out of their bed (they woke up, or it's gone): it's free again. p.x, p.z are already at its front
+  outOfBed(p) { if (p && p.bed) p.bed = null; },
   // why this person can't put things in or take them out of it now ('' if they can): it has to hold things and be built,
   // they have to be by it, and it can't be in someone else's camp (0.2.2; anyone's once the camp ends, Luke)
   storeNo(th, p, me) {

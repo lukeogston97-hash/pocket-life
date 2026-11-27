@@ -312,6 +312,7 @@ export class World extends DurableObject {
           tasks = p.tasks = this.tasksBack(p); p.took = []; // what's left of their task list goes back to their game (tasks.js)
           if (away.ms >= BACK_AFTER) this.note('world', `${p.name} came back after ${longText(away.ms)}`);
           p.plan = null; p.asleep = false; p.sleeping = false; p.collapsed = false; p.leftAt = 0; p.log = { ate: 0, drank: 0, picked: 0 }; // back: awake
+          this.outOfBed(p); // (out of their bed, standing at its front: 0.2.5)
           this.touch(p);
         }
       }

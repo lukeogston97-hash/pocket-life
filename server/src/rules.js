@@ -9,15 +9,19 @@
 // One slice of time: every need moves by perHour, an empty need (atZero) drags others down, and needs marked
 // onlyWhenFine (health) only recover while nothing is empty. Asleep: whileAsleep instead (whileAsleepAtNight at
 // night, so Rest fills faster at night). Sitting by a fire: whileSitting. floor (asleep while away): needs that
-// can empty stop at the floor (or where they were, if lower), and nothing hurts.
-// st: { id: 0..100 }, needs: the stats from game-data.json, o: { asleep, night, sitting, floor }
+// can empty stop at the floor (or where they were, if lower), and nothing hurts. better (asleep in a bed, like the
+// basic shelter, 0.2.5): sleep is that many times as good, so what it fills (Rest, Health) fills that many times
+// faster and what it drains (Hunger, Thirst) drains that many times slower.
+// st: { id: 0..100 }, needs: the stats from game-data.json, o: { asleep, night, sitting, floor, better }
 export function needsStep(st, hours, needs, o = {}) {
   const floor = o.floor ?? null, clamp = (v) => Math.max(0, Math.min(100, v));
   const empty = floor != null ? [] : needs.filter((s) => s.atZero && st[s.id] <= 0);
   const change = {}, before = floor != null ? { ...st } : null;
+  const better = o.asleep && Number(o.better) > 1 ? Number(o.better) : 1;
   for (const s of needs) {
     const sleepRate = o.night && Number.isFinite(s.whileAsleepAtNight) ? s.whileAsleepAtNight : s.whileAsleep;
-    change[s.id] = s.onlyWhenFine && empty.length ? 0 : o.asleep && Number.isFinite(sleepRate) ? sleepRate : o.sitting && Number.isFinite(s.whileSitting) ? s.whileSitting : s.perHour || 0;
+    const asleep = Number.isFinite(sleepRate) ? (sleepRate > 0 ? sleepRate * better : sleepRate / better) : sleepRate;
+    change[s.id] = s.onlyWhenFine && empty.length ? 0 : o.asleep && Number.isFinite(asleep) ? asleep : o.sitting && Number.isFinite(s.whileSitting) ? s.whileSitting : s.perHour || 0;
   }
   for (const s of empty) for (const [k, v] of Object.entries(s.atZero)) if (k in change) change[k] += v;
   for (const s of needs) {

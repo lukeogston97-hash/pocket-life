@@ -297,6 +297,16 @@
       "places": "small-crate",
       "startInWorld": 0,
       "spawnsNear": null
+    },
+    "basic-shelter": {
+      "name": "Basic shelter",
+      "plural": "Basic shelters",
+      "weight": 29,
+      "eat": null,
+      "uses": 0,
+      "places": "basic-shelter",
+      "startInWorld": 0,
+      "spawnsNear": null
     }
   },
   "recipes": {
@@ -454,6 +464,16 @@
       },
       "near": "campfire",
       "seconds": 10
+    },
+    "basic-shelter": {
+      "needs": {
+        "log": 3,
+        "stick": 10,
+        "twine": 4
+      },
+      "makes": {
+        "basic-shelter": 1
+      }
     }
   },
   "sources": {
@@ -663,6 +683,24 @@
       "front": 0.75,
       "storage": {
         "squares": 5
+      }
+    },
+    "basic-shelter": {
+      "item": "basic-shelter",
+      "buildSeconds": 20,
+      "solid": 1.0,
+      "size": [
+        2,
+        2
+      ],
+      "keepClear": null,
+      "fire": null,
+      "seats": null,
+      "inCamp": true,
+      "front": 1.25,
+      "bed": {
+        "sleepers": 1,
+        "better": 2
       }
     }
   },

@@ -198,6 +198,19 @@
       "near": "campfire",
       "seconds": 10,
       "about": "Raw fish can't be eaten. Cook it by a lit campfire (about 10 s)"
+    },
+    {
+      "id": "basic-shelter",
+      "name": "Basic shelter",
+      "needs": {
+        "log": 3,
+        "stick": 10,
+        "twine": 4
+      },
+      "makes": {
+        "basic-shelter": 1
+      },
+      "about": "Three logs for the frame, sticks leaned on for a roof, tied with twine"
     }
   ]
 }

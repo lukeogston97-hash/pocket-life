@@ -71,6 +71,7 @@ export const adminMethods = {
     if (this.alive(p)) Object.assign(out, this.playerRow(p), { born: p.born || 0, stats: p.stats, carry: p.carry || {}, bar: barOf(p, G), x: num(p.x), z: num(p.z), tasks: p.tasks || [], // tasks: their task list as the server has it (tasks.js)
       found: (p.found || []).filter((id) => Object.hasOwn(G.recipes || {}, id)) }); // found: the recipes they've made at least once (the craft mat's Found list)
     else Object.assign(out, { name: past[0] ? past[0].name : `Phone ${who}`, state: 'gone' });
+    if (this.alive(p) && p.bed && (p.sleeping || p.asleep)) { const th = this.placedById(p.bed); if (th) out.bed = (G.items[(PLACEABLES[th.kind] || {}).item] || {}).name || 'bed'; } // asleep in a bed (0.2.5)
     const soc = this.socOf(who);
     if (soc) out.soc = { id: soc.id, name: soc.name, lead: soc.leader === who, n: soc.members.length }; // their society (societies.js)
     return out;
@@ -252,7 +253,8 @@ export const adminMethods = {
       }
       case 'a.wake': // a sleeper gets up and starts another day away
         if (!this.alive(them) || !them.asleep) return done("They're not asleep");
-        Object.assign(them, { asleep: false, leftAt: Date.now(), simAt: Date.now(), statsAt: Date.now(), plan: null, home: [them.x, them.z] });
+        Object.assign(them, { asleep: false, sleeping: false, leftAt: Date.now(), simAt: Date.now(), statsAt: Date.now(), plan: null, home: [them.x, them.z] });
+        this.outOfBed(them); // (up and out of their bed, if they were in one: 0.2.5)
         this.touch(them); await this.flush(them.who);
         this.send({ t: 'state', id: them.who, state: 'away', x: num(them.x), z: num(them.z) }, null);
         return done(`${them.name} woke up`);
@@ -260,7 +262,8 @@ export const adminMethods = {
         if (!this.alive(them) || sock) return done('Only for people who are away');
         Object.assign(them, { asleep: true, sleepAt: Date.now(), plan: null });
         this.touch(them); await this.flush(them.who);
-        this.send({ t: 'state', id: them.who, state: 'asleep', x: num(them.x), z: num(them.z) }, null);
+        if (them.bed && !them.sleeping) this.outOfBed(them);
+        this.send({ t: 'state', id: them.who, state: 'asleep', x: num(them.x), z: num(them.z), ...(them.bed ? { bed: them.bed } : {}) }, null);
         return done(`${them.name} is asleep`);
       case 'a.movePerson': { // put someone somewhere else (admin mode has no person of its own to teleport)
         if (!this.alive(them)) return done("They've gone");
@@ -270,6 +273,7 @@ export const adminMethods = {
         this.catchUp(them); // needs and any stroll up to now, at the old spot
         if (!this.alive(them)) return done("They've gone");
         this.standUp(them); // a seat belongs to a fire
+        this.outOfBed(them); // and a bed to its shelter (0.2.5): they lie on the ground where they're put
         // Someone away isn't pinned there: what they were doing is dropped and they decide again from the new spot on the next
         // tick (away.js decide). At night, or if tired, they lie down and sleep where they were put; otherwise they go for
         // water or berries if they need them, or stroll back toward their claim's fire or the pond. Their away clock isn't
@@ -384,6 +388,7 @@ export const adminMethods = {
           if (!th) return done("It's gone");
           const now = Date.now();
           if ([...this.persons.values()].some((o) => this.alive(o) && o.sit && o.sit.fire === th.id && o.sit.until > now)) return done('Someone is sitting by it');
+          if (this.sleepersIn(th.id).length) return done("Someone's asleep in it"); // a bed (0.2.5)
           Object.assign(th, placeSnap(x, z, th.rot, PLACEABLES[th.kind])); // onto the placing grid (rules.js)
           await this.save();
           this.send({ t: 'unplaced', id: th.id }, null);
@@ -464,6 +469,11 @@ export const adminMethods = {
           const list = this.placedList(), j = list.findIndex((th) => th.id === m.id);
           if (j < 0) return;
           for (const o of this.persons.values()) if (o.sit && o.sit.fire === m.id) this.standUp(o);
+          for (const o of this.sleepersIn(m.id)) { // a bed (0.2.5): its sleeper stays asleep, on the ground at its front
+            this.outOfBed(o); this.touch(o);
+            this.send({ t: 'state', id: o.who, state: this.stateOf(o), x: num(o.x), z: num(o.z) }, null);
+            this.tell(o.who, this.mine(o));
+          }
           this.note('admin', `Remove: ${list[j].kind} at ${Math.round(list[j].x)}, ${Math.round(list[j].z)}`);
           const spilt = this.spillStore(list[j]); // storage (0.2.2): what's in it lands on the ground round it
           list.splice(j, 1);

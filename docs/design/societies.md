@@ -16,4 +16,5 @@
 - Claims from before 0.1.5 (a player's id) became their owner's society when the server started; a 0.1.4 society with no burning fire ended (socTidy).
 - Checks: tools/tests/societies.mjs (the server, no browser, part of server_tests) and the societies check (the game in Chrome, with the admin's list).
 - A camp's members share its small wooden crates (0.2.2, storage.md): every member can open them.
-- Not built yet: shelter shared by a society, trading, a claim that grows with the society.
+- A camp's members share its basic shelters (0.2.5, shelter.md): any member can sleep in one, one at a time.
+- Not built yet: trading, a claim that grows with the society.

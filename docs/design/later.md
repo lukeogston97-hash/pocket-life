@@ -5,7 +5,7 @@ Only what isn't built. Once something is built, its notes move to the file for i
 ## Coming later (Luke's ideas, in no set order)
 - Buildings: use the placeables system (placeables.md).
 - Small placeables like stools (Luke, 27 Nov 2026: "I do want to add stool, ect later, maybe a snap to grid button?"). Suggested: each placeable can have its own grid in the data, so a stool snaps to half-metre spots inside the 1 m squares and still lines up, with no extra button; a Snap on/off button on the place bar could come later for decorations. Not decided: settle it with the first small placeable.
-- Storage and shelter. The small wooden crate is built (0.2.2, storage.md). Still to come: the woven basket, a bigger crate, shelter, and trading between camps.
+- Storage and shelter. The small wooden crate (0.2.2, storage.md) and the basic shelter (0.2.5, shelter.md) are built. Still to come: the woven basket, a bigger crate, bigger shelters, and trading between camps.
 - Keeping food, as one update with storage: food going off (raw about a day, cooked about 3 days, dried a couple of weeks) and a drying rack.
 - Farming next steps (farming.md, Later): watering, more crops.
 - Stone: better pickaxes, ore, quarries; maybe slow the loose-stone top-up once mining is the main source.

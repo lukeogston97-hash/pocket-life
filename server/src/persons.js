@@ -45,6 +45,7 @@ export const personsMethods = {
     const [x, z] = state === 'away' ? posAt(p, now) : [p.x, p.z];
     const out = { id: p.who, name: p.name, look: { ...p.look, age: ageOf(p, now) }, x: num(x), z: num(z), ry: num(p.ry), state };
     if (p.sit && p.sit.until > now) out.sit = [p.sit.fire, p.sit.seat]; // sitting by a fire
+    if (p.bed && (state === 'sleeping' || state === 'asleep')) out.bed = p.bed; // asleep in a bed, like the basic shelter (0.2.5): drawn lying inside it
     const soc = this.socTagName(p.who);
     if (soc) out.soc = soc; // their society, shown under their name tag once it has 2 or more people (societies.js)
     if (state === 'away' && p.plan && p.plan.kind === 'walk' && p.plan.arrive > now) Object.assign(out, { tx: p.plan.to[0], tz: p.plan.to[1], speed: AWAY.strollSpeed, ms: Math.round(p.plan.arrive - now) });
@@ -57,6 +58,7 @@ export const personsMethods = {
     for (const k of Object.keys(p.carry || {})) if (!p.seen.includes(k)) p.seen.push(k);
     return { t: 'me', seen: p.seen, found: p.found || [], name: p.name, look: p.look, age: ageOf(p), born: p.born, x: num(p.x), z: num(p.z), ry: num(p.ry),
       stats: p.stats, statsAt: p.statsAt, carry: p.carry, wear: p.wear || {}, lastKind: p.lastKind, sleeping: !!p.sleeping, collapsed: !!p.collapsed,
+      bed: p.sleeping && p.bed ? p.bed : null, // asleep in a bed (0.2.5, the basic shelter)
       bar: barOf(p, G), // the tools on the tool bar (0.1.17). (A comment here once hid sleeping and collapsed, 0.1.17 to 0.1.20 test 1: Sleep got you straight back up.)
       sit: p.sit && p.sit.until > Date.now() ? { fire: p.sit.fire, seat: p.sit.seat, ms: p.sit.until - Date.now() } : null,
       soc: this.socView(p.who) }; // their society: name, leader, members (societies.js)
@@ -76,14 +78,15 @@ export const personsMethods = {
   },
   catchUp(p, now = Date.now()) {
     if (!this.alive(p) || this.paused(p)) return;
-    if (p.asleep && !this.isOnline(p.who)) { advanceStats(p, now, G, this.speed, AWAY.asleepFloor); return; } // asleep away: slowly down to the floor, can't die
-    if (this.isOnline(p.who) || !p.leftAt) { const d = advanceStats(p, now, G, this.speed); if (d) this.die(p, d.cause, false); else this.collapse(p); }
+    if (p.asleep && !this.isOnline(p.who)) { advanceStats(p, now, G, this.speed, AWAY.asleepFloor, this.bedBetter(p)); return; } // asleep away: slowly down to the floor, can't die
+    if (this.isOnline(p.who) || !p.leftAt) { const d = advanceStats(p, now, G, this.speed, null, this.bedBetter(p)); if (d) this.die(p, d.cause, false); else this.collapse(p); }
     else this.advanceAway(p, now);
   },
   // Rest ran out (collapseAtZero): they drop asleep where they stand, and can't get up until it's back to wakeAt
   collapse(p) {
     if (!REST || !REST.collapseAtZero || p.sleeping || !(p.stats.rest <= 0)) return;
     p.sleeping = true; p.collapsed = true; p.sleptAt = Date.now();
+    this.outOfBed(p); // (where they stand, not in a bed)
     this.standUp(p); // (sat by a fire: they drop asleep there, no longer sitting)
     this.touch(p);
     this.send({ t: 'state', id: p.who, state: 'sleeping', x: num(p.x), z: num(p.z) }, p.who);

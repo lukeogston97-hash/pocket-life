@@ -7,18 +7,19 @@
 // Kept apart from the away routine so other things (a schedule, later) can hand the server tasks to run too.
 // These are methods of the World (index.js adds them to it), so `this` is the world.
 import { ACTIONS } from './actions.js';
-import { PLACEABLES, fireRule, seatAt, CROPS, cropSource, cropGrown, cropBerries } from './placed.js';
+import { PLACEABLES, fireRule, seatAt, CROPS, cropSource, cropGrown, cropBerries, bedOf, bedFront } from './placed.js';
 import { fuelRoom, recipeWants, frontSpotOf } from './rules.js';
 import { onBar, barOf, addCarry } from './needs.js';
 import { G, num, dist, spend } from './shared.js';
 
 export const MAX_TASKS = 30; // the same as the game's list (MAX_QUEUE in game/moving.js)
-const TYPES = ['pickup', 'use', 'drop', 'chop', 'cut', 'walk', 'mine', 'fish', 'place', 'build', 'unplace', 'apart', 'tend', 'sit', 'make', 'dig', 'flatten', 'plant', 'harvest'];
+const TYPES = ['pickup', 'use', 'drop', 'chop', 'cut', 'walk', 'mine', 'fish', 'place', 'build', 'unplace', 'apart', 'tend', 'sit', 'make', 'dig', 'flatten', 'plant', 'harvest', 'bed'];
 const WHATS = ['tree', 'stump', 'oldStump', 'rock', 'boulder'];
 // what each kind of task can't do without (one missing: the task is dropped)
 const NEEDS = { pickup: ['id'], use: ['source'], drop: ['kind', 'n'], chop: ['what'], cut: ['plant', 'i'], walk: ['x', 'z'], mine: ['idx'], fish: [],
   place: ['item', 'kind', 'x', 'z'], build: ['id'], unplace: ['id'], apart: ['id'], tend: ['id', 'do'], sit: ['id'], make: ['id', 'recipe'],
-  dig: ['kind', 'x', 'z'], flatten: ['id'], plant: ['id', 'seed'], harvest: ['id'] }; // farming (0.1.18)
+  dig: ['kind', 'x', 'z'], flatten: ['id'], plant: ['id', 'seed'], harvest: ['id'], // farming (0.1.18)
+  bed: ['id'] }; // sleeping in a bed, like the basic shelter (0.2.5)
 const int = (v, most) => (Number.isInteger(v) && v >= 0 && v < most ? v : undefined);
 const has = (obj, k) => typeof k === 'string' && !!obj && Object.hasOwn(obj, k);
 // replies that mean "no" (someone got there first, too far, in someone else's camp, too heavy...)
@@ -231,6 +232,12 @@ export const taskMethods = {
         if (!src || !src.harvest || !cropGrown(th.crop) || cropBerries(th.crop) < 1 || !this.canCarry(p, src.harvest)) return null;
         return { to: nearThing(th), seconds: src.seconds || 2, pose: src.pose || 'pick' };
       }
+      // sleeping in a bed (0.2.5, the basic shelter): walk to its front, then lie down in it (the away routine wakes them)
+      case 'bed': {
+        const th = this.placedById(task.id);
+        if (!th || !bedOf(th.kind) || !th.built || this.notYours(p, th.x, th.z) || !this.bedFree(th, p.who)) return null;
+        return { to: bedFront(th), seconds: 0.5, pose: 'kneel' };
+      }
       default: return null;
     }
   },
@@ -263,6 +270,7 @@ export const taskMethods = {
       case 'flatten': return { t: 'flatten', id: task.id };
       case 'plant': return { t: 'plant', id: task.id, seed: task.seed };
       case 'harvest': return { t: 'harvest', id: task.id };
+      case 'bed': return { t: 'sleep', on: true, bed: task.id };
       default: return null;
     }
   },
@@ -277,6 +285,7 @@ export const taskMethods = {
     if (!got || got.some(refused)) return; // someone got there first, or it isn't theirs: on to the next, as in the game
     this.taskDone(p);
     if (task.type === 'pickup') p.took = [...(p.took || []), task.id].slice(-MAX_TASKS); // for moving a loose item (task.from)
+    if (task.type === 'bed') p.tasks = []; // lying down ends the list, as it does in their game (0.2.5)
     if (task.type === 'place') { // put down: build it next, as their game does (online.js "placed")
       const th = this.placedList().filter((x) => x.by === p.who && !x.built && Math.hypot(x.x - task.x, x.z - task.z) < 0.05).pop();
       if (th) p.tasks.unshift({ type: 'build', id: th.id });

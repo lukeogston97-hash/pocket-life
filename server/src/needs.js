@@ -7,10 +7,10 @@ export const HOUR = 3600000, MINUTE = 60000;
 const clampStat = (v) => Math.max(0, Math.min(100, v));
 
 // how long a sleep takes to fill rest, in ms (at normal speed)
-export function sleepMs(p, G) {
+export function sleepMs(p, G, better = 1) { // better: asleep in a bed (the basic shelter, 0.2.5) fills Rest that many times faster
   const r = G.needs.find((s) => s.id === 'rest');
   if (!r || !r.whileAsleep) return 0;
-  return Math.max(60000, ((100 - (p.stats.rest ?? 0)) / r.whileAsleep) * HOUR);
+  return Math.max(60000, ((100 - (p.stats.rest ?? 0)) / (r.whileAsleep * Math.max(1, Number(better) || 1))) * HOUR);
 }
 export function freshStats(G) {
   const st = {};
@@ -64,14 +64,15 @@ function causeOf(st, G) {
   return c ? c.name.toLowerCase() : 'weakness';
 }
 // Move a person's needs on to time `to`, a minute at a time. speed: the admin's "speed up time" ({ x, until }).
-// floor: asleep while away (needs stop at the floor and they can't die). Returns { at, cause } if they died on the way.
-export function advanceStats(p, to, G, speed, floor = null) {
+// floor: asleep while away (needs stop at the floor and they can't die). better: asleep in a bed (the basic shelter, 0.2.5:
+// the world's bedBetter). Returns { at, cause } if they died on the way.
+export function advanceStats(p, to, G, speed, floor = null, better = 1) {
   let t = p.statsAt || to;
   const asleep = floor != null || !!p.sleeping;
   while (t < to) {
     const next = Math.min(to, t + MINUTE);
     const fast = speed && t < speed.until ? speed.x : 1;
-    needsStep(p.stats, ((next - t) / HOUR) * fast, G.needs, { asleep, night: asleep && isNight(t, G), floor, sitting: !asleep && !!p.sit && t < p.sit.until }); // rules.js, the same as in the game
+    needsStep(p.stats, ((next - t) / HOUR) * fast, G.needs, { asleep, night: asleep && isNight(t, G), floor, sitting: !asleep && !!p.sit && t < p.sit.until, better }); // rules.js, the same as in the game
     t = next;
     if (floor == null && G.needs.some((s) => s.deadAtZero && p.stats[s.id] <= 0)) { p.statsAt = t; return { at: t, cause: causeOf(p.stats, G) }; }
   }

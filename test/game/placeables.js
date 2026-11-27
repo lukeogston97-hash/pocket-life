@@ -29,7 +29,7 @@ import { slowness, spendEnergy } from './needs.js';
 import { cantMake, closeBag, closeCraft, drawBag, make, openStore, recipeKnown, recipeName, storeCheck, storeShowing } from './inventory.js';
 import { controls } from './camera.js';
 import {
-  allTasks, approach, clearCellsNear, drawQueue, face, nextTask, queueTask, setLegs, solidAt, startAction, TASK_KINDS,
+  allTasks, approach, clearCellsNear, drawQueue, face, nextTask, queueTask, setLegs, setSleeping, solidAt, startAction, TASK_KINDS,
   tasks, walkFirst, walkTo,
 } from './moving.js';
 // shared for files further down game/main.js, and the variables other files change (game/links.js)
@@ -37,6 +37,7 @@ share({
   get claimCheckAt() { return claimCheckAt; }, set claimCheckAt(v) { claimCheckAt = v; }, endSit,
   get isLit() { return isLit; }, get notMineAt() { return notMineAt; }, get PLACEABLES() { return PLACEABLES; },
   get placed() { return placed; }, get placing() { return placing; }, get roomFor() { return roomFor; }, startPlacing, stationNear,
+  bedBetterOf, lieInBed, myFreeBed, outOfBed, // beds (0.2.5, the basic shelter): moving.js and needs.js use these
 });
 
 export const PLACEABLES = {};
@@ -58,6 +59,9 @@ for (const [kind, raw] of Object.entries(DATA.placeables || {})) {
     store: !tool && raw.storage && raw.storage.squares >= 1 ? { squares: Math.floor(raw.storage.squares) } : null,
     noun: String(raw.name || (item ? ITEMS[item].name : kind)).split(' ').pop().toLowerCase(),
     front: Number(raw.front) > 0 ? Number(raw.front) : 0, // where you stand to use it, out from its middle the way it faces (0.2.3, a crate's front)
+    // somewhere to sleep (0.2.5, the basic shelter): how many at once, how many times better than the ground, where you lie
+    bed: !tool && raw.bed && Number(raw.bed.better) >= 1 ? { sleepers: Math.max(1, Math.floor(raw.bed.sleepers) || 1), better: Number(raw.bed.better),
+      at: Array.isArray(raw.bed.at) ? [Number(raw.bed.at[0]) || 0, Number(raw.bed.at[1]) || 0] : [0, 0] } : null,
   };
   if (item) ITEMS[item].places = kind;
 }
@@ -86,6 +90,55 @@ export function storeWords(th) {
 }
 const storeNote = (th) => (storedIn(th) ? `${storeUsed(th)} of ${PLACEABLES[th.kind].store.squares} squares` : 'Empty');
 
+/* ---------- beds (0.2.5, the basic shelter) ----------
+   A placed thing with bed { sleepers, better, at } is somewhere to sleep. Sleep in it (its tap menu) walks to its front,
+   then you lie down inside along its width, your middle at `at` ([x, z] from its middle, z out the way it faces). Sleep
+   there is `better` times as good as on the ground (rules.js needsStep). Only your camp's, while the camp lasts (anyone's
+   once it ends), and only `sleepers` at a time. The server keeps who's in which (p.bed) and tells everyone (o.bed);
+   while you sleep you're at its front as far as it knows, and every game draws you lying inside. */
+// who's asleep in it now: 'you' and the others whose state says so
+export function bedSleepers(th) {
+  const out = you.sleeping && you.bed === th.id ? ['you'] : [];
+  for (const o of game.others.values()) if (o.bed === th.id && (o.state === 'sleeping' || o.state === 'asleep')) out.push(o);
+  return out;
+}
+const bedFull = (th) => bedSleepers(th).filter((x) => x !== 'you').length >= (PLACEABLES[th.kind].bed || {}).sleepers;
+// how much better your sleep is in it (1 if it's gone or not built)
+export function bedBetterOf(id) { const th = placed.get(id), b = th && th.built && PLACEABLES[th.kind].bed; return b ? b.better : 1; }
+// "Twice as good as the ground"
+const betterWords = (b) => `${b.better === 2 ? 'Twice' : b.better === 3 ? 'Three times' : `${b.better} times`} as good as the ground`;
+// someone (you or another person's marker) lying in it: along its width, face up, their middle at its spot
+export function lieInBed(obj, th, body = obj) {
+  const b = PLACEABLES[th.kind].bed, r = th.rot || 0, c = Math.cos(r), s = Math.sin(r);
+  const cx = th.x + b.at[0] * c + b.at[1] * s, cz = th.z - b.at[0] * s + b.at[1] * c; // its spot, turned with it
+  const half = ((body && body.userData.headTop) || 1.7) / 2;
+  obj.rotation.order = 'YXZ'; // (turned last, so the head can point along it: lying on the ground keeps the usual order)
+  obj.rotation.set(-Math.PI / 2, Math.atan2(-c, s), 0); // head toward its +x
+  obj.position.set(cx - c * half, groundY(cx, cz) + 0.2, cz + s * half);
+}
+// getting up out of it: standing at its front, facing out (null: the usual order, where they are)
+export function outOfBed(obj, th) {
+  obj.rotation.order = 'XYZ';
+  obj.rotation.x = 0;
+  if (!th) return;
+  const f = frontSpot(th) || [th.x, th.z];
+  obj.rotation.y = th.rot || 0;
+  obj.position.set(f[0], groundY(f[0], f[1]), f[1]);
+}
+// your camp's nearest built bed with room in it (autopilot goes to bed there, 0.2.5), or null
+export function myFreeBed() {
+  if (!player) return null;
+  let best = null, bd = Infinity;
+  for (const th of placed.values()) {
+    if (!PLACEABLES[th.kind].bed || !th.built || bedFull(th)) continue;
+    const c = claimAt(th.x, th.z);
+    if (!c || !claimMine(c)) continue;
+    const d = Math.hypot(th.x - player.position.x, th.z - player.position.z);
+    if (d < bd) { bd = d; best = th; }
+  }
+  return best;
+}
+
 /* ---------- fire and fuel ---------- */
 export const fuelLeft = (th, now = Date.now()) => fuelLeftAt(th, now); // ms of burning left (rules.js)
 export const isLit = (th) => !!th.lit && fuelLeft(th) > 0;
@@ -110,6 +163,7 @@ function fireState(th) {
   const f = PLACEABLES[th.kind].fire;
   if (!th.built) return 'Not built yet';
   if (PLACEABLES[th.kind].store) return notMineAt(th.x, th.z) ? '' : storeWords(th); // what's in it (not for others: their camp's things are theirs)
+  if (PLACEABLES[th.kind].bed) return bedSleepers(th).length ? "Someone's asleep in it" : betterWords(PLACEABLES[th.kind].bed); // a bed (0.2.5)
   if (!f) return '';
   const left = fuelLeft(th);
   return `${isLit(th) ? 'Burning' : 'Out'} · ${left > 0 ? `${timeLeft(left)} of fuel (holds ${timeLeft(f.max)})` : 'no fuel'}`;
@@ -120,6 +174,7 @@ export const placedName = (th) => {
   if (P.madeWith) { const def = th.crop && CROPS[th.crop.kind]; return def ? `${P.name} · ${def.name.toLowerCase()}` : P.name; } // a farm field: what grows on it
   if (!th.built) return `${P.name} (not built)`;
   if (P.store) return notMineAt(th.x, th.z) ? P.name : `${P.name} · ${storeNote(th).toLowerCase()}`; // how full it is (0.2.2)
+  if (P.bed && bedSleepers(th).length) return `${P.name} · someone's asleep in it`; // a bed in use (0.2.5)
   if (!P.fire) return P.name;
   const left = fuelLeft(th);
   if (claimOn(th)) return `${claimName(th)} · ${timeLeft(left)} left`;
@@ -303,6 +358,20 @@ function drawPlaced(th) {
   th.shown = { lit, show };
 }
 const tmpV = V();
+// where it's solid to walk round, [x, z, r] each: one spot in its middle, or one for each of its squares when it's bigger
+// than 1 x 1 (the basic shelter's 2 x 2, 0.2.5), so people go round its corners too
+function solidSpotsOf(th) {
+  const P = PLACEABLES[th.kind], f = placeRect(th, P), across = Math.round((f.hw * 2) / PLACE_GRID), deep = Math.round((f.hd * 2) / PLACE_GRID);
+  if (across * deep <= 1) return [[th.x, th.z, P.solid]];
+  const c = Math.cos(f.rot), s = Math.sin(f.rot), out = [];
+  for (let i = 0; i < across; i++) {
+    for (let j = 0; j < deep; j++) {
+      const lx = (i - (across - 1) / 2) * PLACE_GRID, lz = (j - (deep - 1) / 2) * PLACE_GRID;
+      out.push([th.x + lx * c + lz * s, th.z - lx * s + lz * c, PLACE_GRID * 0.62]);
+    }
+  }
+  return out;
+}
 export function setPlaced(v) {
   if (!v || !PLACEABLES[v.kind]) return;
   let th = placed.get(v.id);
@@ -313,7 +382,7 @@ export function setPlaced(v) {
     scene.add(th.view);
     interactive.push(th.view);
     placed.set(th.id, th);
-    addSpot(th.x, th.z, PLACEABLES[th.kind].solid, PLACEABLES[th.kind].walkOver ? WALK_THROUGH : 0); // walked round, like a rock (a farm field: walked over)
+    for (const [x, z, r] of solidSpotsOf(th)) addSpot(x, z, r, PLACEABLES[th.kind].walkOver ? WALK_THROUGH : 0); // walked round, like a rock (a farm field: walked over)
     clearCellsNear(th.x, th.z, PLACEABLES[th.kind].solid + 1);
     flatsDue = true;
     if (digGhost && Math.abs(digGhost.x - th.x) < 0.01 && Math.abs(digGhost.z - th.z) < 0.01) dropDigGhost(); // the field you were digging is there
@@ -343,7 +412,7 @@ export function removePlaced(id) {
   disposeMaterials(th.view);
   const i = interactive.indexOf(th.view);
   if (i >= 0) interactive.splice(i, 1);
-  removeSpotNear(th.x, th.z);
+  for (const [x, z] of solidSpotsOf(th)) removeSpotNear(x, z);
   clearCellsNear(th.x, th.z, PLACEABLES[th.kind].solid + 1);
   flatsDue = true;
   if (th.ring) { scene.remove(th.ring); th.ring.geometry.dispose(); }
@@ -806,6 +875,23 @@ Object.assign(TASK_KINDS, {
     name: (t, now) => { const th = placed.get(t.id), n = th ? PLACEABLES[th.kind].noun : 'it'; return now ? `Opening the ${n}` : `Open ${n}`; },
     spot: placedSpot,
   },
+  // sleeping in a bed (0.2.5, the basic shelter): walk to its front, then lie down inside it (moving.js setSleeping).
+  // Lying down ends your task list, as Sleep does. It carries on while you're away (server/src/tasks.js).
+  bed: {
+    start(t) {
+      const th = placed.get(t.id), P = th && PLACEABLES[th.kind];
+      if (!th || !th.built || !P.bed) { nextTask(); return; }
+      const c = notMineAt(th.x, th.z);
+      if (c) { showTag(`This belongs to ${c.claim.name}`, headTop(), 2); nextTask(); return; } // (someone else's camp; the server checks too)
+      if (bedFull(th)) { showTag("Someone's asleep in it", headTop(), 2); nextTask(); return; }
+      goNear(th, () => {
+        if (!placed.has(th.id) || bedFull(th)) { showTag("Someone's asleep in it", headTop(), 2); nextTask(); return; }
+        setSleeping(true, false, th.id);
+      });
+    },
+    name: (t, now) => { const th = placed.get(t.id), n = th ? PLACEABLES[th.kind].noun : 'shelter'; return now ? `Getting into the ${n}` : `Sleep in ${n}`; },
+    spot: placedSpot,
+  },
   // sitting by the fire: walk to a free seat and sit until you stand up, do something else or the fire goes out (it carries on while you're away)
   sit: {
     start(t) {
@@ -905,6 +991,10 @@ export function placedActions(th) {
   }
   if (P.seats && (!F || lit)) out.push({ label: F ? 'Sit by the fire' : `Sit by the ${name}`, run: () => queueTask({ type: 'sit', id: th.id }) });
   if (P.store) out.push({ label: `Open ${P.noun}`, note: storeNote(th), run: () => queueTask({ type: 'open', id: th.id }) }); // its squares at the top of your inventory (0.2.2)
+  const inIt = P.bed && bedSleepers(th).length > 0; // a bed someone's asleep in (0.2.5), you or another
+  if (P.bed && !(you.sleeping && you.bed === th.id)) {
+    out.push({ label: `Sleep in ${P.noun}`, note: bedFull(th) ? "Someone's asleep in it" : betterWords(P.bed), disabled: bedFull(th), run: () => queueTask({ type: 'bed', id: th.id }) });
+  }
   if (lit) { // a society's fire (0.1.5): putting it out ends the society, so only its leader can (the server checks too)
     const lead = you.soc && th.claim && th.claim.who === `s:${you.soc.id}` ? you.soc.members.find((x) => x.lead) : null, notLeader = lead && lead.id !== game.net.myId;
     out.push({ label: 'Put out fire', note: notLeader ? `Only ${lead.name} can put it out` : th.claim && claimMine(th) ? `Ends ${you.soc ? you.soc.name : 'your camp'}` : '', disabled: !!notLeader,
@@ -912,9 +1002,10 @@ export function placedActions(th) {
   }
   else { // once it's out: pack it into your inventory, or take it apart for what it's made of (only who built it; the server checks)
     const full = !!P.store && storedIn(th) > 0; // something in it: empty it first (0.2.2; the server says the same)
-    const no = full ? 'Empty it first' : carryNo({ [P.item]: 1 }); // too heavy, or no square for it (0.2.1)
+    const busy = inIt ? (you.sleeping && you.bed === th.id ? 'Get up first' : "Someone's asleep in it") : ''; // a bed (0.2.5)
+    const no = full ? 'Empty it first' : busy || carryNo({ [P.item]: 1 }); // too heavy, or no square for it (0.2.1)
     out.push({ label: 'Pack up', disabled: !!no, note: no || (F && fuelLeft(th) > 0 ? 'Fuel left is lost' : 'Into your inventory'), run: () => queueTask({ type: 'unplace', id: th.id }) });
-    out.push({ label: 'Take apart', disabled: full, note: full ? 'Empty it first' : takeApartNote(th), run: () => queueTask({ type: 'apart', id: th.id }) });
+    out.push({ label: 'Take apart', disabled: full || !!busy, note: full ? 'Empty it first' : busy || takeApartNote(th), run: () => queueTask({ type: 'apart', id: th.id }) });
   }
   out.push({ label: 'Inspect', foot: true, run: () => showTag(fireState(th) || P.name, V(th.x, groundY(th.x, th.z) + 1.1, th.z), 2, 5) }, walkHere);
   return out;

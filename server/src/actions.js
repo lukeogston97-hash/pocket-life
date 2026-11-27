@@ -3,7 +3,7 @@
 // person, with their needs caught up to now) or 'world' (also needs the shared world). run gets the message (m), your
 // person (p), the world (w), reply() to answer just you, and save() to save your person straight away; `this` is the
 // world (index.js), so this.send() tells everyone. Remember a spam limit in LIMITS (shared.js) for anything new.
-import { PLACEABLES, fireRule, seatAt, CROPS, cropSource, cropGrown, cropBerries, storageOf, storeNoun, storable, storeWear } from './placed.js';
+import { PLACEABLES, fireRule, seatAt, CROPS, cropSource, cropGrown, cropBerries, storageOf, storeNoun, storable, storeWear, bedOf, bedFront } from './placed.js';
 import { SOC, socMax, INVITE_MS } from './societies.js';
 import { fuelRoom, placeSnap, placeClash, berryPicked, storeRoom } from './rules.js';
 import { FILTER, G, starText, badName, freshStats, addCarry, carryNo, takeCarry, wearList, applyGives, eatOne, craft, spend, clean, blank, num, kindOk, START, REST, BERRY_SRC, cleanLook, REPORTS_KEEP, laidNow, onBar, equipTool, unequipTool, HOUR } from './shared.js';
@@ -105,15 +105,30 @@ export const ACTIONS = {
     const go = Number.isFinite(m.tx) && Number.isFinite(m.tz) ? { tx: num(m.tx), tz: num(m.tz), sp: Number.isFinite(m.sp) ? Math.min(1, Math.max(0.3, m.sp)) : 1 } : {};
     this.send({ t: 'move', id: me.id, x: p.x, z: p.z, ry: p.ry, ...go }, me.id);
   } },
-  // lie down to rest, or get up
+  // lie down to rest, or get up. m.bed: lie down in a bed, like the basic shelter (0.2.5): it has to be built, you by
+  // it, not in someone else's camp, and with room in it. You get in from its front, and that's where you are while
+  // you sleep (every game draws you lying inside); getting up, you're back out there.
   sleep: { when: 'alive', async run({ ws, me, m, p, w, reply, save }) {
     if (!m.on && p.collapsed && p.stats.rest < (REST.wakeAt || 0)) { reply(this.mine(p)); return; } // too tired to get up yet
+    let bed = null;
+    if (m.on && m.bed != null) {
+      const th = this.placedById(m.bed), no = (why) => { reply({ t: 'placeNo', why }); reply(this.mine(p)); };
+      if (!th || !bedOf(th.kind)) return no("You can't sleep there");
+      if (!th.built) return no('Build it first');
+      const c = this.notYours(p, th.x, th.z, me.admin);
+      if (c) return no(this.claimNo(c));
+      if (!this.near(p, bedFront(th), 1)) return no('Too far away');
+      if (!this.bedFree(th, p.who)) return no("Someone's asleep in it");
+      bed = th;
+    }
+    if (m.on && !bed && p.sleeping && p.bed) { reply(this.mine(p)); return; } // already asleep in a bed: stay there
     p.sleeping = !!m.on;
     if (p.sleeping) { this.standUp(p); p.sleptAt = Date.now(); }
-    if (!p.sleeping) p.collapsed = false;
+    if (bed) { p.bed = bed.id; [p.x, p.z] = bedFront(bed).map(num); }
+    if (!p.sleeping) { p.collapsed = false; this.outOfBed(p); }
     save();
     reply(this.mine(p));
-    this.send({ t: 'state', id: me.id, state: p.sleeping ? 'sleeping' : 'online', x: num(p.x), z: num(p.z) }, me.id);
+    this.send({ t: 'state', id: me.id, state: p.sleeping ? 'sleeping' : 'online', x: num(p.x), z: num(p.z), ...(p.sleeping && p.bed ? { bed: p.bed } : {}) }, me.id);
   } },
   // making something from a recipe; one with "near" (cooking) needs a built one of that close by, a fire lit.
   // The first time someone makes one, it goes in their found recipes (p.found: the Found list on the craft mat, 0.1.8)
@@ -570,7 +585,7 @@ export const ACTIONS = {
     const at = seatAt(th, k);
     if (Math.hypot(at[0] - p.x, at[1] - p.z) > 3) return no('Too far away');
     [p.x, p.z] = at;
-    p.sleeping = false;
+    p.sleeping = false; this.outOfBed(p);
     p.sit = { fire: th.id, seat: k, until: Date.now() + SIT_OPEN };
     save();
     this.send({ t: 'sit', id: me.id, fire: th.id, seat: k }, me.id);

@@ -137,6 +137,17 @@ def problems(d):
         if s is not None and not (isinstance(s, dict) and isinstance(s.get('squares'), int) and not isinstance(s.get('squares'), bool) and 1 <= s['squares'] <= 40):
             out.append(f'{w}.storage: needs "squares", a whole number from 1 to 40 (how many squares it holds)')
         if s is not None and p.get('madeWith') is not None: out.append(f'{w}.storage: something dug with a tool (like a farm field) can\'t hold things')
+        b = p.get('bed')  # people sleep in it (0.2.5, the basic shelter): how many at once, how much better than the ground, where they lie
+        if b is not None:
+            num = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool)
+            if not (isinstance(b, dict) and isinstance(b.get('sleepers'), int) and not isinstance(b.get('sleepers'), bool) and 1 <= b['sleepers'] <= 6):
+                out.append(f'{w}.bed: needs "sleepers", a whole number from 1 to 6 (how many can sleep in it at once)')
+            if not (isinstance(b, dict) and num(b.get('better')) and 1 <= b['better'] <= 5):
+                out.append(f'{w}.bed: needs "better", a number from 1 to 5 (how many times better than sleeping on the ground)')
+            at = b.get('at') if isinstance(b, dict) else None
+            if at is not None and not (isinstance(at, list) and len(at) == 2 and all(num(v) and abs(v) <= 3 for v in at)):
+                out.append(f'{w}.bed.at: needs [x, z], metres from its middle (where the sleeper lies)')
+            if not p.get('front'): out.append(f'{w}.bed: needs a "front" too (where people stand to get in)')
         f = p.get('fire')
         if f:
             known(f.get('fuel'), f'{w}.fire.fuel')
@@ -249,6 +260,8 @@ def server_files(d):
                            **({'front': v['front']} if v.get('front') else {}),  # where you stand to use it (0.2.3, the crate's front)
                            # it holds things in squares, like the inventory (0.2.2, the small wooden crate)
                            **({'storage': {'squares': v['storage']['squares']}} if v.get('storage') else {}),
+                           # people sleep in it (0.2.5, the basic shelter)
+                           **({'bed': {'sleepers': v['bed']['sleepers'], 'better': v['bed']['better']}} if v.get('bed') else {}),
                            # dug with a tool instead of placed from an item (0.1.18, the farm field)
                            **({'madeWith': v['madeWith'], 'makeSeconds': v.get('makeSeconds', 8), 'flattenSeconds': v.get('flattenSeconds', 4)} if v.get('madeWith') else {})}
                        for k, v in d.get('placeables', {}).items()},
