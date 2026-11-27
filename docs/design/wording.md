@@ -7,7 +7,7 @@
 - Camp: a claim and its society are one thing (0.1.5), and players only ever see "camp": "Your camp", "<name>'s camp" (the starting name), Menu > Camp, Invite to camp, End camp, "Light it to start your camp here". The code, the server's internals and the admin still say claim and society.
 - Hunger and Thirst: the rings' names (a full ring means fed). What fills them says what you got, not the ring: "+10 food", "+15 water" (gainLabel in stats). Low: Hungry, Thirsty. Full: Not hungry, Not thirsty.
 - Raw fish and cooked fish: food that has to be cooked first says raw in its name.
-- Task list: what your person will do next ("Your task list is full"), never queue.
+- Task list: what your person will do next ("Your task list is full"), never queue. With nothing to do it says "Waiting for a command" (Luke's words, 27 Nov 2026; was "Waiting for something to do"), and "Autopilot" in place of "Now" once autopilot takes over.
 - Inventory (never bag: Luke, 0.1.10), Recipes (the list under the craft mat), person ("your person"), left the world (gone after too long away).
 - Away words, the same on name tags and in the Camp panel: away (player away), away, asleep (player away, person asleep), asleep (playing, person asleep), not in the world.
 

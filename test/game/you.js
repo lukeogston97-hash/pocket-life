@@ -189,8 +189,7 @@ export function measureHud() {
   hudZone.top = Math.max(who ? who.getBoundingClientRect().bottom : 0, menuBtn.getBoundingClientRect().bottom) - ar.top;
   const bars = [...document.querySelectorAll('.hud-bottom > *')].map((e) => e.getBoundingClientRect()).filter((r) => r.height > 0);
   hudZone.bottom = (bars.length ? Math.min(...bars.map((r) => r.top)) : ar.bottom) - ar.top;
-  const q = $('queue');
-  hudZone.menuBottom = q.hidden ? hudZone.bottom : Math.min(hudZone.bottom, q.getBoundingClientRect().top - ar.top);
+  hudZone.menuBottom = hudZone.bottom; // (the task list was above the bottom bar till 0.2.7; it's top left now, under the info card)
   document.documentElement.style.setProperty('--below-hud', `${Math.round(hudZone.top + 8)}px`);
 }
 addEventListener('resize', () => setTimeout(measureHud, 50));

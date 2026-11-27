@@ -95,9 +95,25 @@ setTimeout(function () { if (!window.__bootStarted) window.__bootFail("This brow
   <div id="labels" aria-live="polite"></div>
 
   <header class="hud-top">
-    <div class="who glass">
-      <div class="who-line"><span class="name" id="hudName"></span><span class="age-tag">&nbsp;·&nbsp;<span id="hudAge">25</span></span></div>
-      <div class="meta"><span id="hudTime">9:00 am</span><span class="net-line" id="netLine" data-state="offline"><i class="net-dot" aria-hidden="true"></i><span id="netText">Offline</span></span></div>
+    <div class="hud-left">
+      <div class="who glass">
+        <div class="who-line"><span class="name" id="hudName"></span><span class="age-tag">&nbsp;·&nbsp;<span id="hudAge">25</span></span></div>
+        <div class="meta"><span id="hudTime">9:00 am</span><span class="net-line" id="netLine" data-state="offline"><i class="net-dot" aria-hidden="true"></i><span id="netText">Offline</span></span></div>
+      </div>
+      <div id="queue" class="queue" hidden>
+        <div class="seg q-tabs" role="group" aria-label="Tasks or Schedule">
+          <button id="qTabTasks" class="seg-btn" type="button" aria-pressed="true">Tasks</button>
+          <button id="qTabSchedule" class="seg-btn" type="button" aria-pressed="false">Schedule</button>
+        </div>
+        <div id="qTasks" aria-live="polite">
+          <div class="q-in">
+            <div id="queueNowRow" class="q-now"><small id="queueNowLabel">Now</small><span class="q-cur"><span id="queueNowNum" class="n" hidden>1.</span><span id="queueNow">Waiting for a command</span></span></div>
+            <ol id="queueList" class="q-list" hidden></ol>
+          </div>
+          <button id="queueStop" class="small-btn q-stop" type="button" hidden>Stop all</button>
+        </div>
+        <div id="qSchedule" class="q-soon" hidden><strong>Coming soon</strong><small>Plan your person's day</small></div>
+      </div>
     </div>
     <div class="top-btns">
       <button id="menuBtn" class="icon-btn glass" type="button" aria-controls="pause" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
@@ -115,14 +131,8 @@ setTimeout(function () { if (!window.__bootStarted) window.__bootFail("This brow
 
   <p id="hint" class="hint" hidden>Double-tap the ground to walk. Tap anything to see what you can do.</p>
 
-  <div id="autoChip" class="auto-chip" hidden>On autopilot · tap to take over</div>
   <div id="placeBar" class="place-bar glass" hidden aria-live="polite"><span id="placeText">Tap the ground to move it</span><button id="placeCancel" class="small-btn" type="button">Cancel</button><button id="placeTurn" class="small-btn turn-btn" type="button" aria-label="Turn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/></svg></button><button id="placeGo" class="small-btn go" type="button">Place</button></div>
 
-  <div id="queue" class="queue" hidden aria-live="polite">
-    <div id="queueNowRow" class="q-now"><small>Now</small><span id="queueNow">Waiting for something to do</span></div>
-    <ol id="queueList" class="q-list" hidden></ol>
-    <button id="queueStop" class="small-btn q-stop" type="button" hidden>Stop all</button>
-  </div>
 
   <div id="actMenu" class="act-menu" role="menu" aria-labelledby="actTitle" hidden>
     <div id="actTitle" class="act-title"></div>

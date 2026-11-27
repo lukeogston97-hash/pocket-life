@@ -12,7 +12,7 @@ Only what isn't built. Once something is built, its notes move to the file for i
 - Stone: better pickaxes, ore, quarries; maybe slow the loose-stone top-up once mining is the main source.
 - A bigger world (Luke, 23 Nov 2026, eventually): 1 km square. Needs the game to draw only what's near you (its own update). The current 100 m stays exactly as it is; new land gets its own random seed. Claims maybe about 50 m then.
 - More worlds: Europe and Americas, each its own world on its own time (the main menu already shows them as coming soon; basics.md). The worlds stay run by the admin (no player-run worlds).
-- Also mentioned: a day planner, skills, more stats, an app store wrapper.
+- Also mentioned: a day planner, skills, more stats, an app store wrapper. The day planner is the schedule: its Schedule tab is in the task list (0.2.7) and says Coming soon (away.md).
 - Sound: not yet (Luke, 25 Nov 2026: "just don't do sound yet").
 - Google sign-in, optional, so a person works on any device without a link code (link codes are built: online.md). Luke found Google's setup too much for now. If it comes back: Luke makes the web client ID himself (never the secret; Claude never handles his passwords or keys), Google refuses sign-in inside most apps' built-in browsers, and the server's whoFor is where it plugs in. The full plan: docs/history/later.md.
 - Not built in admin mode: switching worlds, a panel for the selected thing, a map, camera modes (admin.md).
