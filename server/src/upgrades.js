@@ -10,10 +10,26 @@
 // start). A restore (restore.js) goes back to data with its own format number, so the steps from there run again by themselves.
 //
 // Also here: tidy(), which runs every start and makes broken records safe (it never invents game state).
-export const FORMAT = 1;
+// (Only rules.js is imported here, which is plain: the steps keep the sizes of their own time, not today's content.)
+import { placeSnap } from './rules.js';
+
+export const FORMAT = 2;
 
 export const STEPS = [
   // { to: 2, what: 'what changed and why', run(w) { for (const p of w.persons.values()) { ... } } },
+  { to: 2, what: 'farm fields onto the 1 m placing grid (0.2.2)', run(w) {
+    // The placing grid went from half-metre squares to 1 m (0.2.2, Luke), and farm fields from 1.5 m to 1 m. Each field
+    // moves to the nearest 1 m square (a quarter of a metre each way), crop and all. Its edges only ever move in, so it
+    // can't come closer to a campfire, and fields side by side stay side by side; one that would still land on another
+    // field stays where it was. Campfires stay where they are.
+    const list = (w.world && Array.isArray(w.world.placed)) ? w.world.placed : [];
+    const fields = list.filter((th) => th && th.kind === 'field').sort((a, b) => (a.id || 0) - (b.id || 0));
+    const onAnother = (th, s) => fields.some((o) => o !== th && Math.abs((Number(o.x) || 0) - s.x) < 0.999 && Math.abs((Number(o.z) || 0) - s.z) < 0.999);
+    for (const th of fields) {
+      const s = placeSnap(th.x, th.z, th.rot, { size: [1, 1] });
+      if (!onAnother(th, s)) Object.assign(th, s);
+    }
+  } },
 ];
 
 export const upgradeMethods = {

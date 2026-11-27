@@ -1,6 +1,6 @@
 // Farming (0.1.18, Luke), tried against the server's own code with no browser.
 // Run: cd tools/tests && python3 -c "import lib; lib.bundle()" && node farming.mjs   (exit 0: all as it should be)
-// What it checks: a farm field is dug with the stone hoe on the tool bar, only in your own camp, on the placing grid,
+// What it checks: a farm field is dug with the stone hoe on the tool bar, only in your own camp, on the placing grid (1 m squares since 0.2.2),
 // and wears the hoe; it can't be packed up or taken apart, only flattened with the hoe (whatever grew is lost); berry
 // seeds are planted on an empty field and used up; the crop grows by itself in about a day (worked out from when it was
 // planted); once grown it's picked like a wild berry bush (2 at a time with the knife); someone else's camp is off
@@ -52,12 +52,12 @@ expect(said(got).includes('tool bar') && !fields().length, 'no hoe on the tool b
 kim.bar = { 'stone-hoe': 1 };
 await fresh(); got = await ask(kimS, { t: 'dig', kind: 'field', x: 24.13, z: 20.31, rot: 0 });
 const f1 = fields()[0];
-expect(f1 && f1.built && f1.x === 24.25 && Math.abs(f1.z - 20.25) < 1e-9 && !said(got), 'dug: on the half-metre grid, ready straight away', f1 && `${f1.x}, ${f1.z}`);
+expect(f1 && f1.built && f1.x === 24.5 && f1.z === 20.5 && !said(got), 'dug: on the 1 m grid, ready straight away', f1 && `${f1.x}, ${f1.z}`);
 expect([].concat(kim.wear['stone-hoe'])[0] === DATA.items['stone-hoe'].tool.uses - 1, 'the hoe wore by a use', JSON.stringify(kim.wear));
 await fresh(); got = await ask(kimS, { t: 'dig', kind: 'field', x: 24.5, z: 20.5, rot: 0 });
 expect(said(got) === 'Too close to something else' && fields().length === 1, 'not on top of another field', said(got));
-await fresh(); got = await ask(kimS, { t: 'dig', kind: 'field', x: 25.75, z: 20.25, rot: 0 });
-expect(fields().length === 2, 'but right beside one is fine (1.5 m squares side by side)');
+await fresh(); got = await ask(kimS, { t: 'dig', kind: 'field', x: 25.5, z: 20.5, rot: 0 });
+expect(fields().length === 2, 'but right beside one is fine (1 m squares side by side)');
 Object.assign(kim, { x: 33, z: 20 });
 await fresh(); got = await ask(kimS, { t: 'dig', kind: 'field', x: 34, z: 20, rot: 0 });
 expect(said(got) === 'Farm fields only go in your camp' && fields().length === 2, 'outside their camp: no', said(got));
@@ -114,13 +114,13 @@ expect(said(got).startsWith('This belongs to') && fields().length === 1, "or fla
 console.log('E. while away: a task list digs, plants and picks');
 Object.assign(kim, { x: 22, z: 22, carry: { 'stone-hoe': 1, 'berry-seeds': 1 }, bar: { 'stone-hoe': 1 }, wear: {} });
 const before = fields().length;
-const tasks = w.cleanTasks([{ type: 'dig', kind: 'field', x: 22.25, z: 23.75, rot: 0 }, { type: 'harvest', id: f1.id }, { type: 'bogus' }, { type: 'plant', id: 999, seed: 'berry-seeds' }]);
+const tasks = w.cleanTasks([{ type: 'dig', kind: 'field', x: 22.5, z: 23.5, rot: 0 }, { type: 'harvest', id: f1.id }, { type: 'bogus' }, { type: 'plant', id: 999, seed: 'berry-seeds' }]);
 expect(tasks.length === 3 && tasks[0].type === 'dig' && tasks[2].seed === 'berry-seeds', 'the list is tidied (a kind of task that does not exist goes)', tasks.map((t) => t.type).join());
 kim.tasks = tasks;
 const how = w.taskHow(kim, kim.tasks[0], null, Date.now());
 expect(how && how.pose === 'chop' && how.seconds === DATA.placeables.field.makeSeconds, 'digging: walk over, then 8 s with the hoe', JSON.stringify(how));
 w.finishTask(kim);
-const dug = fields().find((th) => th.x === 22.25 && th.z === 23.75);
+const dug = fields().find((th) => th.x === 22.5 && th.z === 23.5);
 expect(fields().length === before + 1 && !!dug, 'they dug it', fields().length);
 w.finishTask(kim);
 expect(kim.carry.berry >= 1, 'picked the grown bush while away', JSON.stringify(kim.carry));

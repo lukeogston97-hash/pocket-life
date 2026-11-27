@@ -27,8 +27,8 @@ console.log('A. a world saved before 0.2.0 (no format number), on this server');
 let store = new Map([['world', worldOf()], ['p:amy', person('amy')]]);
 writes = 0;
 let w = await start(store);
-expect(FORMAT >= 1, `this server writes save format ${FORMAT}`);
-expect(!store.has('format') || store.get('format') === FORMAT, 'with no steps to run, nothing is rewritten', `format ${store.get('format')}`);
+expect(FORMAT >= 2, `this server writes save format ${FORMAT}`);
+expect(store.get('format') === FORMAT, `brought up to format ${FORMAT}`, `format ${store.get('format')}`);
 expect(w.persons.get('amy').carry.stick === 2 && w.world.items.length === 1, "Amy's inventory and the stone on the ground are just as they were");
 
 console.log('B. two steps to run, from format 1 to 3');
@@ -36,6 +36,7 @@ const steps = [
   { to: 3, what: 'carry becomes bag', run(x) { for (const p of x.persons.values()) { if (p.bag == null && p.carry) { p.bag = p.carry; delete p.carry; } } } },
   { to: 2, what: 'items get a made time', run(x) { for (const it of x.world.items) if (it.made == null) it.made = 1; } },
 ];
+store.set('format', 1); // (as if A's world were still format 1: the real steps have run on it by now)
 let out = await w.upgradeSaved(steps, 3);
 expect(JSON.stringify(out.ran) === '[2,3]', 'both steps ran, oldest first', JSON.stringify(out));
 expect(store.get('format') === 3, 'storage now says format 3');
@@ -66,6 +67,27 @@ expect(w.persons.get('dan').carry.stick === 2, 'Dan is untouched');
 expect(Array.isArray(w.world.items) && Array.isArray(w.world.bushes) && Array.isArray(w.world.graves), 'a world missing its lists gets empty ones');
 const fb = store.get('feedback') || [];
 expect(JSON.stringify(fb).includes('reading saved data'), 'and the admin is told in the Inbox');
+
+console.log('G. format 2 (0.2.2): farm fields move onto the 1 m placing grid');
+const field = (id, x, z, more = {}) => ({ id, kind: 'field', x, z, rot: 0, built: true, at: now, ...more });
+const oldWorld = { ...worldOf(), placed: [
+  { id: 1, kind: 'campfire', x: 10, z: 10, rot: 0, built: true, fuel: 0, lit: false, at: now },
+  field(2, 14.25, 10.25, { crop: { kind: 'berry-bush', at: now - 1000 } }), field(3, 15.75, 10.25), field(4, 17.25, 10.25), field(5, 14.25, 11.75),
+  field(6, -3.25, -7.75), field(7, 20.25, 10.25), field(8, 20.75, 10.25), // (7 and 8 on top of each other: the game never allows it)
+] };
+store = new Map([['world', oldWorld]]);
+w = await start(store);
+const at = (id) => { const th = w.world.placed.find((t) => t.id === id); return [th.x, th.z]; };
+expect(store.get('format') === 2, 'storage says format 2', store.get('format'));
+expect(JSON.stringify([at(2), at(3), at(4), at(5)]) === JSON.stringify([[14.5, 10.5], [15.5, 10.5], [17.5, 10.5], [14.5, 11.5]]), 'each field is on the nearest 1 m square, still side by side', JSON.stringify([at(2), at(3), at(4), at(5)]));
+expect(JSON.stringify(at(6)) === '[-3.5,-7.5]', 'below zero too', JSON.stringify(at(6)));
+expect(w.world.placed.find((t) => t.id === 2).crop.kind === 'berry-bush', 'what grows on it comes with it');
+expect(JSON.stringify(at(1)) === '[10,10]', 'the campfire stays where it was', JSON.stringify(at(1)));
+expect(JSON.stringify(at(7)) === '[20.25,10.25]' && JSON.stringify(at(8)) === '[20.75,10.25]', 'fields that would land on another one stay where they were', JSON.stringify([at(7), at(8)]));
+expect(store.get('world').placed.find((t) => t.id === 3).x === 15.5, 'and the world was saved like that');
+const again = structuredClone(w.world.placed);
+(await import('../../server/src/upgrades.js')).STEPS.find((x) => x.to === 2).run(w);
+expect(JSON.stringify(w.world.placed) === JSON.stringify(again), 'running it again changes nothing');
 
 const failed = results.filter((x) => !x).length;
 console.log(failed ? `${failed} of ${results.length} FAILED` : `all ${results.length} as they should be`);

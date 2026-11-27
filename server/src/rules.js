@@ -100,12 +100,12 @@ export function seatSpotOf(th, seats, k) {
   return [th.x + Math.sin(a) * d, th.z + Math.cos(a) * d];
 }
 
-/* ---------- the placing grid (0.1.17) ----------
+/* ---------- the placing grid (0.1.17; 1 m squares since 0.2.2, Luke: half a metre was too fiddly to line up) ----------
    Placed things go on an invisible grid of PLACE_GRID metre squares and face one of 4 ways. Each placeable's size is
-   in squares ([across, deep], from game-data.json; 2 x 2 if it doesn't say). Things can sit side by side, but nothing
-   comes within keepClear metres of one that has it (a campfire keeps room round it for its seats). */
-export const PLACE_GRID = 0.5;
-const placeSizeOf = (rule) => (Array.isArray(rule && rule.size) && rule.size.length === 2 ? rule.size.map((n) => Math.max(1, Math.round(Number(n) || 1))) : [2, 2]);
+   in squares ([across, deep], from game-data.json; 1 x 1 if it doesn't say), so its size is in metres too. Things can
+   sit side by side, but nothing comes within keepClear metres of one that has it (a campfire keeps room for its seats). */
+export const PLACE_GRID = 1;
+const placeSizeOf = (rule) => (Array.isArray(rule && rule.size) && rule.size.length === 2 ? rule.size.map((n) => Math.max(1, Math.round(Number(n) || 1))) : [1, 1]);
 // the nearest spot on the grid, and the nearest of the 4 ways to face
 export function placeSnap(x, z, rot, rule) {
   const q = ((Math.round((Number(rot) || 0) / (Math.PI / 2)) % 4) + 4) % 4;

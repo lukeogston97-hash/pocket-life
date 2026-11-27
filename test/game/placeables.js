@@ -193,7 +193,7 @@ function fieldGeo(sx, sz) {
   return out;
 }
 function fieldModel(look, rule) {
-  const size = (rule && rule.size) || [3, 3], sx = PLACE_GRID * size[0] - 0.06, sz = PLACE_GRID * size[1] - 0.06, geo = fieldGeo(sx, sz);
+  const size = (rule && rule.size) || [1, 1], sx = PLACE_GRID * size[0] - 0.06, sz = PLACE_GRID * size[1] - 0.06, geo = fieldGeo(sx, sz);
   const model = new THREE.Group();
   model.add(new THREE.Mesh(geo.bed, mat(look.colour || '#5a3f2b')), new THREE.Mesh(geo.earth, mat(look.ridge || '#7a5a3d')));
   const crop = new THREE.Group(); // what grows on it, on the middle row
@@ -363,6 +363,42 @@ const placeRing = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 4, 1, Math.PI / 
 placeRing.visible = false;
 placeRing.renderOrder = 2;
 scene.add(placeRing);
+// the placing grid's squares, faint on the ground round the spot while you choose where to place or dig (0.2.2, Luke),
+// fading out a few metres away, so you can see what lines up. Hidden the rest of the time. The lines bend with the land.
+const GRID_FADE = 3.5, GRID_BEND = 0.25; // how far out they show (m); a bend every quarter metre
+const gridMost = 4 * (2 * Math.ceil(GRID_FADE / PLACE_GRID) + 1) * Math.ceil((2 * GRID_FADE) / GRID_BEND + 1); // line ends it can need
+const gridGeo = new THREE.BufferGeometry();
+gridGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(gridMost * 3), 3).setUsage(THREE.DynamicDrawUsage));
+gridGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(gridMost * 4), 4).setUsage(THREE.DynamicDrawUsage)); // (white, see-through as they fade)
+export const placeGrid = new THREE.LineSegments(gridGeo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false }));
+placeGrid.frustumCulled = false;
+placeGrid.visible = false;
+placeGrid.renderOrder = 1;
+scene.add(placeGrid);
+function showGrid(cx, cz) {
+  const pos = gridGeo.attributes.position.array, col = gridGeo.attributes.color.array;
+  let n = 0;
+  const end = (x, z) => {
+    const a = 0.32 * (1 - smoothstep(GRID_FADE * 0.4, GRID_FADE, Math.hypot(x - cx, z - cz)));
+    pos.set([x, groundY(x, z) + 0.03, z], n * 3);
+    col.set([1, 1, 1, a], n * 4);
+    n++;
+  };
+  const lo = (v) => Math.ceil((v - GRID_FADE) / PLACE_GRID) * PLACE_GRID, hi = (v) => Math.floor((v + GRID_FADE) / PLACE_GRID) * PLACE_GRID;
+  for (const across of [true, false]) { // lines along z at each x on the grid, then along x at each z
+    const [c, o] = across ? [cx, cz] : [cz, cx];
+    for (let g = lo(c); g <= hi(c) + 1e-6; g += PLACE_GRID) {
+      const half = Math.sqrt(Math.max(0, GRID_FADE * GRID_FADE - (g - c) * (g - c))); // (only as far as they show)
+      for (let t = o - half; t < o + half - 1e-6 && n < gridMost - 1; t += GRID_BEND) {
+        const t2 = Math.min(o + half, t + GRID_BEND);
+        if (across) { end(g, t); end(g, t2); } else { end(t, g); end(t2, g); }
+      }
+    }
+  }
+  gridGeo.setDrawRange(0, n);
+  gridGeo.attributes.position.needsUpdate = gridGeo.attributes.color.needsUpdate = true;
+  placeGrid.visible = true;
+}
 export const rectOf = (x, z, rot, kind) => placeRect({ x, z, rot }, PLACEABLES[kind]); // rules.js
 // why it can't go here (or null if it can). x, z, rot are already on the grid (placeSnap)
 export function cantPlaceAt(x, z, kind, rot = 0) {
@@ -457,6 +493,7 @@ export function startDigging(kind, at) {
 }
 function pickDig(x, z) {
   const kind = placing.kind, s = placeSnap(x, z, placing.rot, PLACEABLES[kind]); // rules.js
+  showGrid(s.x, s.z);
   const i = placing.picks.findIndex((k) => inRect(rectOf(k.x, k.z, k.rot, kind), x, z)); // a tap on one already chosen takes it off
   if (i >= 0) { dropPick(placing.picks.splice(i, 1)[0]); placing.why = ''; drawDigging(); return; }
   const why = placing.picks.length >= MAX_DIGS ? `Up to ${MAX_DIGS} at a time` : cantPlaceAt(s.x, s.z, kind, s.rot) || (placeClash(placing.picks, s, kind, PLACEABLES) ? 'Too close to another one' : null);
@@ -513,6 +550,7 @@ export function movePlacing(x, z) {
   const f = rectOf(x, z, placing.rot, placing.kind), y = groundUnder(f).y; // the height it'll sit at once the ground is levelled
   placing.ghost.position.set(x, y, z);
   placing.ghost.rotation.y = placing.rot;
+  showGrid(x, z);
   placeRing.position.set(x, y + 0.04, z);
   placeRing.scale.set(f.hw / Math.SQRT1_2, 1, f.hd / Math.SQRT1_2);
   placeRing.rotation.y = placing.rot;
@@ -538,6 +576,7 @@ export function stopPlacing() {
   for (const k of placing.picks || []) dropPick(k);
   placing.on = false; placing.ghost = null; placing.dig = false; placing.picks = []; placing.why = '';
   placeRing.visible = false;
+  placeGrid.visible = false;
   showPlaceClaim(null);
   $('placeBar').hidden = true;
   app.classList.remove('placing');
@@ -882,9 +921,11 @@ function cropParts(th) {
       leaf.rotation.set(0, a, 0.45); // out from the stem and a little up
       out.sprout.add(leaf);
     }
-    const blobs = []; // the bush: three blobs, like a wild berry bush
+    // the bush: three blobs, like a wild berry bush. Since 0.2.2 (1 m fields; Luke worried smaller bushes would look
+    // odd) they're the same size as before on average, just less spread out sideways, so the bush sits on its bed
+    const blobs = [];
     for (let i = 0; i < 3; i++) {
-      const r = rr(0.48, 0.7) * (i ? 0.85 : 1), ox = i ? rr(-0.3, 0.3) : 0, oz = i ? rr(-0.3, 0.3) : 0;
+      const r = rr(0.52, 0.64) * (i ? 0.85 : 1), ox = i ? rr(-0.17, 0.17) : 0, oz = i ? rr(-0.17, 0.17) : 0;
       const m = new THREE.Mesh(crownGeoB, pick(CROP_MATS.leaves));
       m.position.set(ox, r * 0.6, oz);
       m.scale.set(r, r * 0.8, r);

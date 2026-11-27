@@ -2109,8 +2109,9 @@ async def tips():
 
 
 async def placing_grid():
-    """The placing grid (0.1.17): spots snap to half-metre squares, Turn turns a quarter, the ground under it is levelled
-    (the same on every phone), a second campfire keeps its room, and nothing nearby floats (trees move with the ground, 0.1.18)."""
+    """The placing grid (0.1.17): spots snap to 1 m squares (half a metre until 0.2.2), faint squares show on the ground
+    while choosing (0.2.2), Turn turns a quarter, the ground under it is levelled (the same on every phone), a second
+    campfire keeps its room, and nothing nearby floats (trees move with the ground, 0.1.18)."""
     async with world(CAMPKIT=1) as W:
         a = await W.page('gridA'); await join(a)
         b = await W.page('gridB'); await join(b)
@@ -2118,19 +2119,23 @@ async def placing_grid():
         await a.evaluate(f"({send})({{ t: 'craft', id: 'campfire' }})"); await a.wait_for_timeout(800)
         expect(await a.evaluate('__pl.you.carry.campfire') == 1, 'made a campfire')
         spot = await a.evaluate("""(() => { const p = __pl.player.position;
-          for (let r = 2.5; r < 9; r += 0.5) for (let k = 0; k < 16; k++) { const x = Math.round((p.x + Math.cos(k / 16 * 6.28) * r) * 2) / 2, z = Math.round((p.z + Math.sin(k / 16 * 6.28) * r) * 2) / 2;
-            if (!__pl.cantPlaceAt(x, z, 'campfire') && !__pl.cantPlaceAt(x + 2.5, z, 'campfire')) return [x, z]; } return null; })()""")
+          for (let r = 2.5; r < 9; r += 0.5) for (let k = 0; k < 16; k++) { const x = Math.floor(p.x + Math.cos(k / 16 * 6.28) * r) + 0.5, z = Math.floor(p.z + Math.sin(k / 16 * 6.28) * r) + 0.5;
+            if (!__pl.cantPlaceAt(x, z, 'campfire') && !__pl.cantPlaceAt(x + 3, z, 'campfire')) return [x, z]; } return null; })()""")
         expect(spot is not None, f'an open spot with room for two ({spot})')
         await a.evaluate("__pl.startPlacing('campfire')")
         await a.evaluate(f"__pl.movePlacing({spot[0]} + 0.13, {spot[1]} - 0.11)")
         got = await a.evaluate("[__pl.placing.x, __pl.placing.z, __pl.placing.rot]")
-        expect(abs(got[0] - spot[0]) < 1e-6 and abs(got[1] - spot[1]) < 1e-6, f'a tap just off a grid point snaps onto it ({got} for {spot})')
+        expect(abs(got[0] - spot[0]) < 1e-6 and abs(got[1] - spot[1]) < 1e-6, f'a tap just off the middle of a square snaps onto it ({got} for {spot})')
+        grid = await a.evaluate("[__pl.placeGrid.visible, __pl.placeGrid.geometry.drawRange.count]")
+        expect(grid[0] and grid[1] > 100, f'the squares show on the ground round it while choosing ({grid})')
         expect(abs(round(got[2] / 1.5708) * 1.5708 - got[2]) < 0.01, f'it faces one of 4 ways ({got[2]})')
         await a.evaluate("__pl.turnPlacing()")
         turned = await a.evaluate("__pl.placing.rot")
         expect(abs(((turned - got[2]) % 6.2832) - 1.5708) < 0.01, f'Turn turns it a quarter ({got[2]} to {turned})')
         expect(await shown(a, '#placeTurn'), 'the place bar has a Turn button')
-        await a.evaluate("__pl.finishPlacing()"); await idle(a, 40); await a.wait_for_timeout(1500)
+        await a.evaluate("__pl.finishPlacing()")
+        expect(not await a.evaluate("__pl.placeGrid.visible"), 'and go once it is chosen')
+        await idle(a, 40); await a.wait_for_timeout(1500)
         th = await a.evaluate("[...__pl.placed.values()].map((t) => [t.x, t.z, t.rot, t.built])")
         expect(len(th) == 1 and abs(th[0][0] - spot[0]) < 1e-6 and abs(th[0][1] - spot[1]) < 1e-6 and th[0][3], f'put down and built on the grid ({th})')
         flat = """(() => { const t = [...__pl.placed.values()][0], y = t.view.position.y; let most = 0;
@@ -2139,8 +2144,8 @@ async def placing_grid():
         fa, fb = await a.evaluate(flat), await b.evaluate(flat)
         expect(fa[1] < 0.06, f'the ground under it is level (off by {fa[1]:.3f} m at most)')
         expect(abs(fa[0] - fb[0]) < 1e-4 and fb[1] < 0.06, f'and the same on the other phone ({fa[0]:.3f}, {fb[0]:.3f})')
-        why = await a.evaluate(f"[__pl.cantPlaceAt({spot[0]} + 1, {spot[1]}, 'campfire'), __pl.cantPlaceAt({spot[0]} + 2.5, {spot[1]}, 'campfire')]")
-        expect(why[0] == 'Too close to another one' and why[1] is None, f'a second campfire keeps room for the seats: 1 m away no, 2.5 m away yes ({why})')
+        why = await a.evaluate(f"[__pl.cantPlaceAt({spot[0]} + 2, {spot[1]}, 'campfire'), __pl.cantPlaceAt({spot[0]} + 3, {spot[1]}, 'campfire')]")
+        expect(why[0] == 'Too close to another one' and why[1] is None, f'a second campfire keeps room for the seats: 2 m away no, 3 m away yes ({why})')
         floats = await a.evaluate("""(() => { let worst = -1; const t = [...__pl.placed.values()][0];
           for (const tr of __pl.trees) if (Math.hypot(tr.x - t.x, tr.z - t.z) < 8) for (let k = 0; k <= 16; k++) { const g = k / 8 * 6.283, d = k === 16 ? 0 : k < 8 ? 0.35 : 0.19, px = tr.x + Math.cos(g) * d, pz = tr.z + Math.sin(g) * d;
             worst = Math.max(worst, (tr.lift || 0) - (__pl.groundY(px, pz) - __pl.groundY(px, pz, __pl.landAsMade))); }
@@ -2261,9 +2266,9 @@ async def placed_kinds():
             'placeables': {'rack': {'name': 'Drying rack', 'buildSeconds': 2, 'buildVerb': 'Building the drying rack', 'solid': 0.5}}}
     PARTS = """(id) => { const th = __pl.placed.get(id), p = th.view.userData.parts; let meshes = 0; th.view.traverse((m) => { if (m.isMesh) meshes++; });
       return { kind: th.kind, built: th.built, pieces: p.pieces.length, fuel: p.fuel.length, burns: p.burns.length, flame: !!p.flame, meshes, label: th.view.userData.label }; }"""
-    SPOT = """(kind) => { const p = __pl.player.position;
+    SPOT = """(kind) => { const p = __pl.player.position; // (a tap, then the spot it snaps to on the grid has to be green, as for a player)
       for (let r = 2; r < 8; r += 0.5) for (let k = 0; k < 16; k++) { const x = p.x + Math.cos(k / 16 * 6.28) * r, z = p.z + Math.sin(k / 16 * 6.28) * r;
-        if (!__pl.cantPlaceAt(x, z, kind)) { __pl.movePlacing(x, z); return [x, z]; } } return null; }"""
+        __pl.movePlacing(x, z); if (__pl.placing.ok) return [__pl.placing.x, __pl.placing.z]; } return null; }"""
     async with world(srv, KIT=json.dumps({'rack': 1, 'campfire': 1})) as W:
         a = await W.page('rackA', data=mine); await join(a)
         b = await W.page('rackB', data=mine); await join(b)
@@ -2335,7 +2340,7 @@ async def farming():
             const g = k / 24 * 6.283; __pl.movePlacing(f.x + Math.cos(g) * r, f.z + Math.sin(g) * r);
             if (__pl.placing.picks.length !== 1) continue;
             const p = __pl.placing.picks[0];
-            for (const [dx, dz] of [[1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5]]) {{ __pl.movePlacing(p.x + dx, p.z + dz); if (__pl.placing.picks.length === 2) return [p.x, p.z, __pl.placing.picks[1].x, __pl.placing.picks[1].z, document.getElementById('placeGo').textContent]; }}
+            for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {{ __pl.movePlacing(p.x + dx, p.z + dz); if (__pl.placing.picks.length === 2) return [p.x, p.z, __pl.placing.picks[1].x, __pl.placing.picks[1].z, document.getElementById('placeGo').textContent]; }}
             __pl.movePlacing(p.x, p.z); // (no room beside it: take it off and look on)
           }}
           return null; }})()""")

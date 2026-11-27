@@ -5,11 +5,22 @@
     "server": "server is the address of the online world. The test link and the release both join the same live world (there's no separate test world). Leave it empty to play offline.",
     "devlog": "What's new, shown in the Menu. Newest first, one entry per version: version, date (the release day, with from for a range), no name (Luke, 26 Nov 2026: versions only), and short lines for players in added (+ new features), improved (~ changes to what's there) and fixed (− bug fixes and removed issues). No full stop at the end."
   },
-  "version": "0.2.1",
-  "build": 2,
+  "version": "0.2.2",
+  "build": 1,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "devlog": [
+    {
+      "version": "0.2.2",
+      "date": "2026-11-27",
+      "added": [
+        "Faint squares show on the ground while you choose where to place or dig"
+      ],
+      "improved": [
+        "Campfires and farm fields go on 1 metre squares, so things line up easily",
+        "Farm fields are 1 metre (were 1.5), and ones already dug moved onto the new squares"
+      ]
+    },
     {
       "version": "0.2.1",
       "date": "2026-11-27",

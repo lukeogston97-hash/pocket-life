@@ -76,7 +76,7 @@ const list = [
   { type: 'mine', idx: 0, what: 'rock', x: 15, z: 5 },
   { type: 'chop', what: 'log', id: 11, x: 18, z: 18 },
   { type: 'walk', x: 20, z: 20 },
-  { type: 'place', item: 'campfire', kind: 'campfire', x: 22, z: 22, rot: 0 },
+  { type: 'place', item: 'campfire', kind: 'campfire', x: 22.5, z: 22.5, rot: 0 }, // (the middle of a 1 m square on the placing grid)
   { type: 'fish' },
   { type: 'tend', id: 3, do: 'add', n: 2, fuel: 'stick' },
   { type: 'tend', id: 3, do: 'light' },
@@ -99,7 +99,7 @@ expect((kim.carry.berry || 0) >= 1, 'picked berries off the bush', kim.carry.ber
 expect(w.rocks && w.rocks[0] && w.rocks[0][0] === 'gone' && w.items.filter((it) => it.kind === 'stone').length >= 5, 'broke rock 0 into stones');
 expect(!item(S, 11) && w.items.filter((it) => it.kind === 'stick' && Math.hypot(it.x - 18, it.z - 18) < 2).length >= 5, 'chopped the log into sticks');
 const mine = w.placed.find((th) => th.by === kim.who);
-expect(mine && mine.built && Math.hypot(mine.x - 22, mine.z - 22) < 0.05 && !kim.carry.campfire, 'placed the campfire where the list said, then built it (as the game does)');
+expect(mine && mine.built && Math.hypot(mine.x - 22.5, mine.z - 22.5) < 0.05 && !kim.carry.campfire, 'placed the campfire where the list said, then built it (as the game does)');
 expect(kim.wear && kim.wear['fishing-spear'] && kim.wear['fishing-spear'][0] < spear, 'went fishing (the spear wore)', `${spear} then ${kim.wear && kim.wear['fishing-spear']}`);
 const f3 = w.placed.find((th) => th.id === 3);
 expect(f3.lit && f3.fuel > 5 * HOUR, 'put sticks on fire 3 and lit it', `${Math.round(f3.fuel / MINUTE)} min of fuel`);

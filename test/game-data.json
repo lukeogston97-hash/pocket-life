@@ -1,7 +1,7 @@
 {
   "_generated": "Made from content/*.json by python3 tools/worlds.py test-build. Edit those files, not this one.",
-  "version": "0.2.1",
-  "build": 2,
+  "version": "0.2.2",
+  "build": 1,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -676,8 +676,8 @@
       "craftLabel": "Cook",
       "solid": 0.55,
       "size": [
-        2,
-        2
+        1,
+        1
       ],
       "keepClear": 1.5,
       "fire": {
@@ -703,10 +703,10 @@
       "flattenSeconds": 4,
       "inCamp": true,
       "walkOver": true,
-      "solid": 0.75,
+      "solid": 0.5,
       "size": [
-        3,
-        3
+        1,
+        1
       ],
       "look": {
         "shape": "field",
@@ -1153,6 +1153,17 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.2.2",
+      "date": "2026-11-27",
+      "added": [
+        "Faint squares show on the ground while you choose where to place or dig"
+      ],
+      "improved": [
+        "Campfires and farm fields go on 1 metre squares, so things line up easily",
+        "Farm fields are 1 metre (were 1.5), and ones already dug moved onto the new squares"
+      ]
+    },
     {
       "version": "0.2.1",
       "date": "2026-11-27",
