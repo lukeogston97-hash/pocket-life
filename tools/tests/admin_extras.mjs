@@ -232,8 +232,8 @@ expect(patP().carry['berry-seeds'] === 1 && patP().carry['sharp-stone'] === 1 &&
 // Luke's tool recipes (0.1.9 test 2): every tool is a blade, a handle and twine, made the player's way from scratch
 // (0.1.21: the knife's handle is a short tool handle, a stick and twine; twigs are gone)
 patP().carry = { stone: 8, stick: 5, twine: 8 }; patP().wear = {};
-for (const id of ['sharp-stone', 'sharp-stone', 'sharp-stone', 'sharp-stone', 'axe-head', 'long-stick', 'long-stick', 'stone-axe', 'pick-head', 'stone-pickaxe', 'short-handle', 'knife']) await S.ask(S.playing('pat'), { t: 'craft', id }); // (a fresh connection each: crafting is limited to a few in a row)
-expect(JSON.stringify(patP().carry) === JSON.stringify({ 'stone-axe': 1, 'stone-pickaxe': 1, knife: 1 }), 'from 8 stones, 5 sticks and 8 twine: sharp stones, a stone axe head, 2 long tool handles, a stone pick head, a stone axe, a stone pickaxe, a short tool handle and a stone knife, with nothing left over', JSON.stringify(patP().carry));
+for (const id of ['sharp-stone', 'sharp-stone', 'sharp-stone', 'sharp-stone', 'axe-head', 'medium-handle', 'medium-handle', 'stone-axe', 'pick-head', 'stone-pickaxe', 'short-handle', 'knife']) await S.ask(S.playing('pat'), { t: 'craft', id }); // (a fresh connection each: crafting is limited to a few in a row)
+expect(JSON.stringify(patP().carry) === JSON.stringify({ 'stone-axe': 1, 'stone-pickaxe': 1, knife: 1 }), 'from 8 stones, 5 sticks and 8 twine: sharp stones, a stone axe head, 2 medium tool handles (0.2.7), a stone pick head, a stone axe, a stone pickaxe, a short tool handle and a stone knife, with nothing left over', JSON.stringify(patP().carry));
 patP().found = ['sharp-stone', 'knife']; patP().carry = {}; patP().wear = {};
 await S.ask(pat3, { t: 'a.found', id: 'pat', all: true });
 expect(patP().found.length === 2, 'a player sending the admin\'s Found tool gets nothing', JSON.stringify(patP().found));

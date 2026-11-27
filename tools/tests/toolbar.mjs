@@ -143,13 +143,13 @@ r = await take('stone');
 expect(r.ok === true && p.carry.stone === 2, 'can still top up a stack', JSON.stringify(r));
 r = await take('hoe-head');
 expect(r.ok === false && /full/.test(r.why), 'but nothing new', r.why);
-const longStick = Object.values(DATA.recipes).find((x) => x.makes && x.makes['long-stick']);
+const handle = Object.values(DATA.recipes).find((x) => x.makes && x.makes['medium-handle']); // (2 sticks and a twine: the long tool handle till 0.2.7)
 Object.assign(p, { carry: { ...TEN, stick: 4, twine: 2 }, wear: {}, bar: {}, found: [] });
-me = lastMe(await ask(s, { t: 'craft', id: longStick.id }));
-expect(!me.carry['long-stick'] && me.carry.stick === 4, 'making something new with no square for it: not made', JSON.stringify(me.carry));
+me = lastMe(await ask(s, { t: 'craft', id: handle.id }));
+expect(!me.carry['medium-handle'] && me.carry.stick === 4, 'making something new with no square for it: not made', JSON.stringify(me.carry));
 Object.assign(p, { carry: { ...TEN, stick: 2, twine: 1 }, wear: {}, bar: {} });
-me = lastMe(await ask(s, { t: 'craft', id: longStick.id }));
-expect(me.carry['long-stick'] === 1 && !me.carry.stick, 'its things used up free the square it needs: made', JSON.stringify(me.carry));
+me = lastMe(await ask(s, { t: 'craft', id: handle.id }));
+expect(me.carry['medium-handle'] === 1 && !me.carry.stick, 'its things used up free the square it needs: made', JSON.stringify(me.carry));
 Object.assign(p, { carry: { ...TEN }, wear: {}, bar: {} });
 await w.setLive('inventorySquares', 11);
 r = await take('hoe-head');

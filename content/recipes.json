@@ -51,15 +51,26 @@
       "about": "Cut a berry open for its seeds with a sharp stone (you keep the stone)"
     },
     {
-      "id": "long-stick",
+      "id": "medium-handle",
       "needs": {
         "stick": 2,
         "twine": 1
       },
       "makes": {
-        "long-stick": 1
+        "medium-handle": 1
       },
       "about": "Tie two sticks together"
+    },
+    {
+      "id": "long-stick",
+      "needs": {
+        "stick": 3,
+        "twine": 2
+      },
+      "makes": {
+        "long-stick": 1
+      },
+      "about": "Tie three sticks together"
     },
     {
       "id": "fishing-spear",
@@ -90,7 +101,7 @@
       "name": "Stone axe",
       "needs": {
         "axe-head": 1,
-        "long-stick": 1,
+        "medium-handle": 1,
         "twine": 1
       },
       "makes": {
@@ -114,7 +125,7 @@
       "name": "Stone pickaxe",
       "needs": {
         "pick-head": 1,
-        "long-stick": 1,
+        "medium-handle": 1,
         "twine": 1
       },
       "makes": {

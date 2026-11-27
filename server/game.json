@@ -124,10 +124,20 @@
       "startInWorld": 0,
       "spawnsNear": null
     },
+    "medium-handle": {
+      "name": "Medium tool handle",
+      "plural": "Medium tool handles",
+      "weight": 4,
+      "eat": null,
+      "uses": 0,
+      "places": null,
+      "startInWorld": 0,
+      "spawnsNear": null
+    },
     "long-stick": {
       "name": "Long tool handle",
       "plural": "Long tool handles",
-      "weight": 4,
+      "weight": 6,
       "eat": null,
       "uses": 0,
       "places": null,
@@ -348,10 +358,19 @@
         "sharp-stone": 1
       }
     },
-    "long-stick": {
+    "medium-handle": {
       "needs": {
         "stick": 2,
         "twine": 1
+      },
+      "makes": {
+        "medium-handle": 1
+      }
+    },
+    "long-stick": {
+      "needs": {
+        "stick": 3,
+        "twine": 2
       },
       "makes": {
         "long-stick": 1
@@ -379,7 +398,7 @@
     "stone-axe": {
       "needs": {
         "axe-head": 1,
-        "long-stick": 1,
+        "medium-handle": 1,
         "twine": 1
       },
       "makes": {
@@ -398,7 +417,7 @@
     "stone-pickaxe": {
       "needs": {
         "pick-head": 1,
-        "long-stick": 1,
+        "medium-handle": 1,
         "twine": 1
       },
       "makes": {

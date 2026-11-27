@@ -75,7 +75,7 @@ const rose2 = S.person().stats.hunger - 20;
 expect(Math.abs(rose1 - FILE.items.berry.eat.hunger) < 0.5 && Math.abs(rose2 - 25) < 0.5, 'a berry fills what the file says, then what the admin says', `${rose1.toFixed(1)} then ${rose2.toFixed(1)}`);
 await S.tool({ t: 'a.liveItem', at: ['items', 'berry', 'eat', 'hunger'], value: null });
 await S.tool({ t: 'a.liveItem', at: ['items', 'stone-axe', 'uses'], value: 3 });
-S.person().carry = { 'axe-head': 1, 'long-stick': 1, twine: 1 }; S.person().wear = {};
+S.person().carry = { 'axe-head': 1, 'medium-handle': 1, twine: 1 }; // (0.2.7: the axe's handle is a medium tool handle) S.person().wear = {};
 await S.ask(S.player, { t: 'craft', id: 'stone-axe' });
 const me = S.player.got.filter((m) => m.t === 'me').pop();
 expect(S.person().carry['stone-axe'] === 1 && [].concat((me.wear || {})['stone-axe'] ?? [])[0] === 3, 'a stone axe made now has the admin\'s 3 uses, not the file\'s', `wear ${JSON.stringify((me.wear || {})['stone-axe'])}, file says ${FILE.items['stone-axe'].uses}`);

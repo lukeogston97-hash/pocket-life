@@ -1,7 +1,7 @@
 {
   "_generated": "Made from content/*.json by python3 tools/worlds.py test-build. Edit those files, not this one.",
   "version": "0.2.7",
-  "build": 1,
+  "build": 2,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -256,17 +256,32 @@
       },
       "startInWorld": 0
     },
+    "medium-handle": {
+      "name": "Medium tool handle",
+      "about": "Two sticks tied together. The handle for an axe or pickaxe.",
+      "plural": "Medium tool handles",
+      "weight": 4,
+      "look": {
+        "shape": "handle",
+        "length": 0.55,
+        "thickness": 0.025,
+        "colour": "#8a6847",
+        "join": "#c9b77a"
+      },
+      "startInWorld": 0
+    },
     "long-stick": {
       "name": "Long tool handle",
-      "about": "Two sticks tied together. The handle for an axe, pickaxe, hoe or spear.",
+      "about": "Three sticks tied together. The handle for a hoe or spear.",
       "plural": "Long tool handles",
-      "weight": 4,
+      "weight": 6,
       "look": {
         "shape": "handle",
         "length": 1.0,
         "thickness": 0.025,
         "colour": "#8a6847",
-        "join": "#c9b77a"
+        "join": "#c9b77a",
+        "joins": 2
       },
       "startInWorld": 0
     },
@@ -436,7 +451,8 @@
         "colour": "#8a6847",
         "head": "#8f8a80",
         "lashing": "#c9b77a",
-        "join": "#c9b77a"
+        "join": "#c9b77a",
+        "joins": 2
       },
       "tool": {
         "uses": 30
@@ -455,7 +471,8 @@
         "colour": "#8a6847",
         "head": "#8f8a80",
         "lashing": "#c9b77a",
-        "join": "#c9b77a"
+        "join": "#c9b77a",
+        "joins": 2
       },
       "tool": {
         "uses": 20
@@ -1843,15 +1860,26 @@
       "about": "Cut a berry open for its seeds with a sharp stone (you keep the stone)"
     },
     {
-      "id": "long-stick",
+      "id": "medium-handle",
       "needs": {
         "stick": 2,
         "twine": 1
       },
       "makes": {
-        "long-stick": 1
+        "medium-handle": 1
       },
       "about": "Tie two sticks together"
+    },
+    {
+      "id": "long-stick",
+      "needs": {
+        "stick": 3,
+        "twine": 2
+      },
+      "makes": {
+        "long-stick": 1
+      },
+      "about": "Tie three sticks together"
     },
     {
       "id": "fishing-spear",
@@ -1882,7 +1910,7 @@
       "name": "Stone axe",
       "needs": {
         "axe-head": 1,
-        "long-stick": 1,
+        "medium-handle": 1,
         "twine": 1
       },
       "makes": {
@@ -1906,7 +1934,7 @@
       "name": "Stone pickaxe",
       "needs": {
         "pick-head": 1,
-        "long-stick": 1,
+        "medium-handle": 1,
         "twine": 1
       },
       "makes": {
@@ -2543,11 +2571,13 @@
       "version": "0.2.7",
       "date": "2026-11-27",
       "added": [
-        "A Schedule tab next to your task list (coming soon)"
+        "A Schedule tab next to your task list (coming soon)",
+        "A medium tool handle (2 sticks and 1 twine) for the stone axe and stone pickaxe"
       ],
       "improved": [
         "Your task list sits top left under your name, with Tasks and Schedule to switch between",
-        "With nothing to do it says Waiting for a command, then shows what autopilot is doing"
+        "With nothing to do it says Waiting for a command, then shows what autopilot is doing",
+        "The long tool handle takes 3 sticks and 2 twine, for the fishing spear and stone hoe"
       ],
       "fixed": [
         "The numbers over things now match the numbers in your task list"

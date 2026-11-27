@@ -1877,7 +1877,7 @@ async def craft_mat():
         # shows its things (what's missing shows faded)
         rows = await a.evaluate("[...document.querySelectorAll('#foundList .found-row')].map((r) => [r.dataset.recipe, r.classList.contains('missing')])")
         chips = await a.evaluate("[...document.querySelectorAll('#foundChips .craft-chip')].map((c) => c.textContent)")
-        can = sum(1 for _, grey in rows if not grey)  # (2 sticks, 2 stones and a twine left: the sharp stone, the hoe head and both tool handles)
+        can = sum(1 for _, grey in rows if not grey)  # (2 sticks, 2 stones and a twine left: the sharp stone, the hoe head, and the short and medium tool handles)
         D = json.load(open(os.path.join(HERE, '..', '..', 'test', 'game-data.json')))
         rec, made = {r['id']: r for r in D['recipes']}, {k: r for r in D['recipes'] for k in r['makes']}
         def steps(k, seen=()):
