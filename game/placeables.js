@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { game, share } from './links.js';
 import {
-  berriesGrown, berryPicked, claimProblem, cropGrowth, cropStage, fireRuleOf, fuelLeftAt, fuelRoom, PLACE_GRID,
+  berriesGrown, berryPicked, claimProblem, cropGrowth, cropStage, fireRuleOf, frontSpotOf, fuelLeftAt, fuelRoom, PLACE_GRID,
   placeClash, placeRect, placeSnap, seatSpotOf, squaresUsed,
 } from './rules.js';
 import {
@@ -57,6 +57,7 @@ for (const [kind, raw] of Object.entries(DATA.placeables || {})) {
     // it holds things (0.2.2, the small wooden crate): how many squares. noun: the short word for it ("Open crate")
     store: !tool && raw.storage && raw.storage.squares >= 1 ? { squares: Math.floor(raw.storage.squares) } : null,
     noun: String(raw.name || (item ? ITEMS[item].name : kind)).split(' ').pop().toLowerCase(),
+    front: Number(raw.front) > 0 ? Number(raw.front) : 0, // where you stand to use it, out from its middle the way it faces (0.2.3, a crate's front)
   };
   if (item) ITEMS[item].places = kind;
 }
@@ -125,8 +126,18 @@ export const placedName = (th) => {
   return isLit(th) ? `${P.name} · lit · ${timeLeft(left)} left` : `${P.name} · ${left > 0 ? `${timeLeft(left)} of fuel` : 'no fuel'}`;
 };
 
-/* ---------- seats round it ---------- */
+/* ---------- seats round it, and where you stand to use it ---------- */
 export const seatSpot = (th, k) => seatSpotOf(th, PLACEABLES[th.kind].seats, k); // rules.js, the same on the server
+// a thing with a front (0.2.3, Luke: the small wooden crate): where your person stands to use it, out from its middle the
+// way it faces (rules.js, the same on the server); null for one without (you walk to its nearest side, as before)
+export const frontSpot = (th) => (PLACEABLES[th.kind].front ? frontSpotOf(th, PLACEABLES[th.kind].front) : null);
+// the spots a circle shows while you choose where to put it: every seat round a campfire, a crate's front
+function useSpots(kind, x, z, rot) {
+  const P = PLACEABLES[kind], th = { x, z, rot }, out = [];
+  if (P.seats) for (let k = 0; k < P.seats.count; k++) out.push(seatSpotOf(th, P.seats, k));
+  if (P.front) out.push(frontSpotOf(th, P.front));
+  return out;
+}
 const seatTaken = (th, k) => [...game.others.values()].some((o) => o.sit && o.sit[0] === th.id && o.sit[1] === k);
 // the nearest free seat you can stand at, or -1
 function freeSeat(th) {
@@ -384,6 +395,25 @@ export function animatePlaced(dt) {
 }
 
 /* ---------- placing: pick a spot, then your person goes and puts it down ---------- */
+// while choosing (0.2.3, Luke: "to help know where front is"): a circle on the ground at each spot people use it from, the
+// seats round a campfire and a crate's front, in the outline's colour (green, or red where it can't go). Only while placing.
+const SPOT_GEO = new THREE.RingGeometry(0.2, 0.28, 28).rotateX(-Math.PI / 2), spotRings = [];
+function showSpots(list, colour) {
+  list.forEach(([x, z], i) => {
+    if (!spotRings[i]) {
+      const r = new THREE.Mesh(SPOT_GEO, new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.8, depthWrite: false, depthTest: false }));
+      r.renderOrder = 2;
+      scene.add(r);
+      spotRings.push(r);
+    }
+    const r = spotRings[i];
+    r.position.set(x, groundY(x, z) + 0.04, z);
+    r.material.color.set(colour);
+    r.visible = true;
+  });
+  for (let i = list.length; i < spotRings.length; i++) spotRings[i].visible = false;
+}
+export const placeSpotsShown = () => spotRings.filter((r) => r.visible).map((r) => [r.position.x, r.position.z]); // (for checks)
 export const placing = { on: false, item: null, kind: null, x: 0, z: 0, rot: 0, at: null, ghost: null, ok: false, dig: false, picks: [], why: '' }; // at: where you last tapped; dig: choosing farm fields (picks)
 // the square it takes on the grid, outlined on the ground (green, or red where it can't go)
 const placeRing = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 4, 1, Math.PI / 4).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#9fd88a', transparent: true, opacity: 0.8, depthWrite: false, depthTest: false }));
@@ -491,7 +521,7 @@ export function startPlacing(item) {
   closeBag(); closeCraft(); game.closeMenu();
   stopPlacing();
   const ghost = placingGhost(placedModel(item).model);
-  Object.assign(placing, { on: true, item, kind, ghost, dig: false, picks: [], rot: Math.round(player.rotation.y / (Math.PI / 2)) * (Math.PI / 2) }); // facing one of 4 ways
+  Object.assign(placing, { on: true, item, kind, ghost, dig: false, picks: [], rot: Math.round(player.rotation.y / (Math.PI / 2)) * (Math.PI / 2) + Math.PI }); // facing one of 4 ways: towards you (0.2.3, so a crate's front is yours)
   const fx = Math.sin(player.rotation.y), fz = Math.cos(player.rotation.y);
   $('placeGo').textContent = 'Place';
   movePlacing(player.position.x + fx * 1.8, player.position.z + fz * 1.8);
@@ -583,6 +613,7 @@ export function movePlacing(x, z) {
   placeRing.rotation.y = placing.rot;
   placeRing.material.color.set(why ? '#e07a6a' : '#9fd88a');
   placeRing.visible = true;
+  showSpots(useSpots(placing.kind, x, z, placing.rot), why ? '#e07a6a' : '#9fd88a'); // where people sit round it, or stand at its front
   const claim = !why && placing.kind === CLAIMS.placeable ? claimHere(x, z) : null; // would lighting it claim the land?
   showPlaceClaim(why ? null : [x, z], claim);
   $('placeText').textContent = why || (claim ? claim.text : 'Tap the ground to move it');
@@ -604,6 +635,7 @@ export function stopPlacing() {
   placing.on = false; placing.ghost = null; placing.dig = false; placing.picks = []; placing.why = '';
   placeRing.visible = false;
   placeGrid.visible = false;
+  showSpots([]);
   showPlaceClaim(null);
   $('placeBar').hidden = true;
   app.classList.remove('placing');
@@ -627,7 +659,13 @@ $('placeCancel').addEventListener('click', stopPlacing);
 
 /* ---------- doing things with them: tasks in your queue ---------- */
 const sendNow = (msg) => game.sendAct(msg); // where you are first (the server checks you're close); kept for when the connection comes back (online.js)
-const goNear = (th, then) => approach(th.x, th.z, PLACEABLES[th.kind].solid + 0.35, PLACEABLES[th.kind].solid + 0.75, then);
+// walking over to use it: to its front if it has one (a crate, 0.2.3), else to its nearest side
+function goNear(th, then) {
+  const f = frontSpot(th);
+  if (!f) { approach(th.x, th.z, PLACEABLES[th.kind].solid + 0.35, PLACEABLES[th.kind].solid + 0.75, then); return; }
+  if (Math.hypot(f[0] - player.position.x, f[1] - player.position.z) < 0.35) then();
+  else walkTo(V(f[0], 0, f[1]), then, nextTask);
+}
 const placedSpot = (t) => { const th = placed.get(t.id); return th ? V(th.x, groundY(th.x, th.z) + 0.8, th.z) : null; };
 Object.assign(TASK_KINDS, {
   // putting it down where you chose: then building it straight after (the server says when it's there)
@@ -636,7 +674,7 @@ Object.assign(TASK_KINDS, {
       if (!you.carry[t.item]) { nextTask(); return; }
       const why = cantPlaceAt(t.x, t.z, t.kind, t.rot);
       if (why) { showTag(why, headTop(), 2); nextTask(); return; }
-      approach(t.x, t.z, PLACEABLES[t.kind].solid + 0.45, PLACEABLES[t.kind].solid + 0.9, () => {
+      const putDown = () => {
         face(t.x, t.z);
         startAction({ pose: 'bend', seconds: 0.9, mid: () => {
           if (!you.carry[t.item]) return;
@@ -644,7 +682,11 @@ Object.assign(TASK_KINDS, {
           drawHeld(); drawCarry();
           sendNow({ t: 'place', kind: t.item, x: Math.round(t.x * 100) / 100, z: Math.round(t.z * 100) / 100, rot: Math.round(t.rot * 100) / 100 });
         } });
-      });
+      };
+      const P = PLACEABLES[t.kind], f = P.front ? frontSpotOf(t, P.front) : null; // a crate: put down from in front of it (0.2.3)
+      if (!f) approach(t.x, t.z, P.solid + 0.45, P.solid + 0.9, putDown);
+      else if (Math.hypot(f[0] - player.position.x, f[1] - player.position.z) < 0.35) putDown();
+      else walkTo(V(f[0], 0, f[1]), putDown, nextTask);
     },
     name: (t, now) => (now ? `Putting down the ${PLACEABLES[t.kind].name.toLowerCase()}` : `Place ${PLACEABLES[t.kind].name.toLowerCase()}`),
     spot: (t) => V(t.x, groundY(t.x, t.z) + 0.5, t.z),
