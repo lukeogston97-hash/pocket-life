@@ -12,7 +12,7 @@ Decided with Luke 27 Nov 2026, built as 0.2.5 test 1.
 - Who: your camp, one at a time (Luke's pick). Like the crate: only goes in your camp, and anyone can use it once the camp ends.
 
 ## What players do
-- Make it on the craft mat (Building): 3 logs, 8 sticks, 4 twine. Weight 27, its parts.
+- Make it on the craft mat (Building): 3 logs, 8 sticks, 4 twine. Weight 50, its parts (27 until the 0.2.6 weights, when carrying went to 60: it leaves 10 to spare).
 - Place it in your camp (inCamp): 2 x 2 squares on the placing grid, turned 4 ways, its front (the open side) shown by a circle while placing and starting off facing you. Built in 20 seconds. It's solid on all 4 squares, so people walk round its corners.
 - Its tap menu: Sleep in shelter ("Twice as good as the ground", or greyed out "Someone's asleep in it"), Pack up, Take apart, Inspect, Walk here. Someone else's camp: only its name and Walk here, as for every placed thing.
 - Sleep in shelter walks to its front, then your person lies down inside it, along its width, face up. Lying down ends your task list, as Sleep does. Tap yourself for Wake up: you're back out at its front, facing out. Any task wakes you, as before.

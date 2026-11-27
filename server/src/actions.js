@@ -176,11 +176,14 @@ export const ACTIONS = {
     const F = (Object.values(G.sources).find((s) => s.water && s.fish) || {}).fish;
     if (!F || !onBar(p, F.tool, G)) { reply(this.mine(p)); return; } // only a tool on the tool bar gets used (0.1.17)
     if (!me.admin && !this.nearWater(p)) { reply({ t: 'fished', why: 'Too far away' }); reply(this.mine(p)); return; }
+    // an empty pond, or no room for a catch, takes no try: no use of the spear and no stamina (0.2.6, Luke)
+    if (this.pondFish(F) < 1) { reply({ t: 'fished', why: 'No fish left. Try again later' }); reply(this.mine(p)); return; }
+    const full = carryNo(p, F.catch, 1, G);
+    if (full) { reply({ t: 'fished', why: full }); reply(this.mine(p)); return; }
     if (!this.worked(ws, me, p, F.seconds)) { reply({ t: 'fished', why: 'Slow down a little' }); reply(this.mine(p)); return; } // a try takes time (guard.js)
     spend(p, 'fish', G);
     this.wearTool(p, F.tool, reply);
-    if (this.pondFish(F) < 1) reply({ t: 'fished', why: 'No fish left. Try again later' });
-    else if (Math.random() >= F.chance) reply({ t: 'fished', why: 'Nothing bites' });
+    if (Math.random() >= F.chance) reply({ t: 'fished', why: 'Nothing bites' });
     else if (!addCarry(p, F.catch, 1, G)) reply({ t: 'fished', why: carryNo(p, F.catch, 1, G) || 'Too heavy to carry' });
     else { w.pond.fish -= 1; reply({ t: 'fished', caught: F.catch }); await this.save(); }
     save();
@@ -223,7 +226,8 @@ export const ACTIONS = {
     await this.save();
     this.send({ t: 'added', items: added }, null);
   } },
-  // chopping a tree, digging out a stump, or chopping a log into sticks
+  // chopping a tree, digging out a stump, or chopping an item that has a chopping rule (logs had one until 0.2.6: Luke moved
+  // cutting them into sticks onto the craft mat, with the stone knife)
   chop: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
     const C = G.chopping || {}, rule = C[m.what === 'oldStump' ? 'stump' : m.what], tool = C.tool;
     if (!rule || (tool && !onBar(p, tool, G))) { reply(this.mine(p)); return; }

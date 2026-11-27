@@ -1066,7 +1066,7 @@ async def tool_bar():
           head: !!document.querySelector('#bag > .bag-head #bagHeadWeight:not([hidden])') }))()""")
         expect(look['spots'] == 7 and look['bar'] == ['knife'] + ['stone-axe'] * 6 and sorted(look['bag']) == ['stick', 'stone-axe'],
                f'7 spots: the knife and 6 axes on the bar, the 7th axe in the inventory ({look})')
-        expect(look['weight'] == '4 / 30' and look['head'], f'the weight is in the header and only counts the inventory: 2 sticks and 1 axe ({look["weight"]})')
+        expect(look['weight'] == '8 / 60' and look['head'], f'the weight is in the header and only counts the inventory: 2 sticks and 1 axe ({look["weight"]})')
         # a full bar: Equip says so and nothing moves
         await a.click('#bagList .bag-tile[data-kind="stone-axe"]'); await a.wait_for_timeout(200)
         btn = await a.evaluate("(() => { const b = document.querySelector('#bagInfo button.go'); return b ? b.textContent : ''; })()")
@@ -1081,7 +1081,7 @@ async def tool_bar():
             await a.mouse.move(b2['x'] + b2['width'] / 2, b2['y'] + b2['height'] / 2, steps=10); await a.mouse.up(); await a.wait_for_timeout(900)
         await drag('#bagList .bag-tile[data-kind="stone-axe"]', '#toolBar .bag-tile[data-kind="knife"]')
         st = await a.evaluate("[__pl.you.bar, __pl.you.carry.knife, document.getElementById('bagWeight').textContent]")
-        expect(st[0] == {'stone-axe': 7} and st[1] == 1 and st[2] == '3 / 30', f'dropped onto the knife: they swap, the knife is in the inventory now ({st})')
+        expect(st[0] == {'stone-axe': 7} and st[1] == 1 and st[2] == '6 / 60', f'dropped onto the knife: they swap, the knife is in the inventory now ({st})')
         # unequip an axe from its info bar, then equip the knife (there's room now)
         await a.click('#toolBar .bag-tile[data-kind="stone-axe"]'); await a.wait_for_timeout(200)
         un = await a.evaluate("[...document.querySelectorAll('#bagInfo button')].map((b) => b.textContent)")
@@ -1160,7 +1160,7 @@ async def fishing():
         for _ in range(3): await a.evaluate("__pl.queueTask({ type: 'fish' })")
         await idle(a, 90); await a.wait_for_timeout(800)
         got = await a.evaluate("[__pl.you.carry.fish || 0, (__pl.you.wear['fishing-spear'] || [])[0]]")
-        expect(got == [2, 17], f'2 fish caught, the third try finds none, and the spear wore 3 uses ({got})')
+        expect(got == [2, 18], f'2 fish caught, the third try finds the pond empty and takes no use (0.2.6): the spear wore 2 uses ({got})')
         b = await W.page('fishB'); await join(b)
         for _ in range(2): await b.evaluate("__pl.queueTask({ type: 'fish' })")
         await idle(b, 60); await b.wait_for_timeout(800)
@@ -1515,11 +1515,11 @@ async def live_items_game():
         ask = lambda m: boss.evaluate(f"ask('boss', {m})")
         weight = lambda pg: pg.evaluate("Number(document.getElementById('carryWeight').textContent)")
         w0 = await weight(p)
-        expect(w0 == 6, f'to start: 2 sticks, 3 stones and twine weigh 6, the stone axe nothing on the tool bar (0.1.17) ({w0})')
+        expect(w0 == 11, f'to start: 2 sticks, 3 stones and twine weigh 11, the stone axe nothing on the tool bar (0.1.17) ({w0})')
         # a stick now weighs 3: the player's carried weight changes without them doing anything
         told = await ask("{ t: 'a.liveItem', at: ['items', 'stick', 'weight'], value: 3 }")
-        await p.wait_for_function("Number(document.getElementById('carryWeight').textContent) === 10", timeout=20000)
-        expect(told == 'Changed to 3' and await weight(p) == 10, f"a stick made to weigh 3: the player's game shows 10 carried ({await weight(p)})")
+        await p.wait_for_function("Number(document.getElementById('carryWeight').textContent) === 13", timeout=20000)
+        expect(told == 'Changed to 3' and await weight(p) == 13, f"a stick made to weigh 3: the player's game shows 13 carried ({await weight(p)})")
         # the short tool handle recipe (a stick and twine, 0.1.21; the knife until then), as the player sees it in Recipes: they knock 2 stones into a sharp stone, then the admin gives them every recipe
         await mat_make(p, [('stone', 2)])
         pid = await p.evaluate('__pl.net.myId')
@@ -1538,12 +1538,12 @@ async def live_items_game():
         # back to the game file's numbers
         expect(await ask("{ t: 'a.liveItem', at: ['recipes', 'short-handle', 'needs', 'stick'], value: null }") == 'Back to what the game file says', 'Reset answers plainly')
         await ask("{ t: 'a.liveItem', at: ['items', 'stick', 'weight'], value: null }")
-        await p.wait_for_function(f"(() => {{ const c = {card}; return c && c.canMake; }})() && Number(document.getElementById('carryWeight').textContent) === 5", timeout=20000)
-        expect(await weight(p) == 5 and (await p.evaluate(card))['canMake'], 'Reset puts both back for the player: 5 carried (2 stones became a sharp stone), and the short tool handle can be made again')
+        await p.wait_for_function(f"(() => {{ const c = {card}; return c && c.canMake; }})() && Number(document.getElementById('carryWeight').textContent) === 9", timeout=20000)
+        expect(await weight(p) == 9 and (await p.evaluate(card))['canMake'], 'Reset puts both back for the player: 9 carried (2 stones became a sharp stone), and the short tool handle can be made again')
         # someone who joins later gets the admin's numbers on the way in
-        await ask("{ t: 'a.liveItem', at: ['items', 'stick', 'weight'], value: 2 }")
+        await ask("{ t: 'a.liveItem', at: ['items', 'stick', 'weight'], value: 3 }")
         q = await W.page('liveQ'); await join(q)
-        expect(await weight(q) == 8, f'someone joining afterwards carries 8 (their 2 sticks weigh 2 each) ({await weight(q)})')
+        expect(await weight(q) == 13, f'someone joining afterwards carries 13 (their 2 sticks weigh 3 each) ({await weight(q)})')
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
@@ -1588,7 +1588,7 @@ async def admin_items():
         row = (await a.evaluate(rows))[0]
         expect(row['btns'] == ['Save'], f'Save shows once the box is changed ({row})')
         await a.click('#adminItems .admin-num >> nth=0 >> text=Save')
-        await a.wait_for_function(f"(({rows})[0] || {{}}).was === 'was 1'", timeout=20000)
+        await a.wait_for_function(f"(({rows})[0] || {{}}).was === 'was {D['items']['knife']['weight']}'", timeout=20000)
         row, line = (await a.evaluate(rows))[0], (await a.evaluate(folds))[0]
         expect(row['value'] == '4' and row['btns'] == ['Reset'] and line['changed'] and line['open'] and line['sum'].startswith('weighs 4'), f'Save marks it changed with what it was, offers Reset, and its line says Changed ({row}, {line})')
         expect('1 changed' in await text(a, '#adminItemsState'), f"the tab says how many are changed ({await text(a, '#adminItemsState')})")
@@ -1605,14 +1605,14 @@ async def admin_items():
         # Copy my changes
         await a.click('#adminItemsCopy'); await a.wait_for_timeout(600)
         copied = await a.evaluate("document.getElementById('adminItemsText').hidden ? '' : document.getElementById('adminItemsText').value")
-        expect('items.knife.weight: 1 -> 4' in copied and copied.count('->') == 1, f'Copy my changes lists exactly that change ({copied!r})')
+        expect(f"items.knife.weight: {D['items']['knife']['weight']} -> 4" in copied and copied.count('->') == 1, f'Copy my changes lists exactly that change ({copied!r})')
         # Reset
         await a.click('#adminItems .admin-num >> nth=0 >> text=Reset')
-        await a.wait_for_function(f"(({rows})[0] || {{}}).value === '1' && !(({rows})[0] || {{}}).was", timeout=20000)
+        await a.wait_for_function(f"(({rows})[0] || {{}}).value === '{D['items']['knife']['weight']}' && !(({rows})[0] || {{}}).was", timeout=20000)
         row, line = (await a.evaluate(rows))[0], (await a.evaluate(folds))[0]
         expect(row['btns'] == [] and not line['changed'], f"Reset puts the game file's number back ({row}, {line})")
-        await p.wait_for_function(f"Number(document.getElementById('carryWeight').textContent) === {w0 + 1}", timeout=20000)
-        expect('All as the game file has them' in await text(a, '#adminItemsState'), "and the player's knife weighs 1 again; nothing is marked changed")
+        await p.wait_for_function(f"Number(document.getElementById('carryWeight').textContent) === {w0 + D['items']['knife']['weight']}", timeout=20000)
+        expect('All as the game file has them' in await text(a, '#adminItemsState'), "and the player's knife weighs what the game file says again; nothing is marked changed")
         # a tap on the line closes it
         await a.click('#adminItems .admin-fold >> nth=0'); await a.wait_for_timeout(300)
         expect(await a.evaluate(opened) == 0 and not (await a.evaluate(folds))[0]['open'], 'a tap on its line closes it')
@@ -1882,8 +1882,8 @@ async def craft_mat():
         rec, made = {r['id']: r for r in D['recipes']}, {k: r for r in D['recipes'] for k in r['makes']}
         def steps(k, seen=()):
             r = made.get(k)
-            return 0 if not r or k in seen else 1 + max([0] + [steps(x, seen + (k,)) for x in {**r['needs'], **r.get('keeps', {})}])
-        st = [steps(next(iter(rec[r]['makes']))) for r, _ in rows]
+            return 0 if not r or k in seen or D['items'].get(k, {}).get('startInWorld', 0) > 0 else 1 + max([0] + [steps(x, seen + (k,)) for x in {**r['needs'], **r.get('keeps', {})}])  # (found lying about: 0, even with a recipe, like sticks)
+        st = [1 + max([0] + [steps(x) for x in {**rec[r]['needs'], **rec[r].get('keeps', {})}]) for r, _ in rows]  # (a recipe's own steps: what it takes, plus one)
         heads = [c.rsplit(' ', 1)[0] for c in chips]
         expect(rows[0] == ['sharp-stone', False] and len(rows) == len(D['recipes']) and not any(grey for _, grey in rows[:can]) and all(grey for _, grey in rows[can:]) and ['knife', True] in rows and chips[0] == f'All {len(rows)}',
                f'Recipes lists what they have everything for first (the sharp stone), then the rest greyed out, the knife they made too, and cooked fish ({rows}, {chips})')
@@ -2335,7 +2335,7 @@ async def farming():
         inside = await a.evaluate(f"(() => {{ const f = __pl.placed.get({fid}); return __pl.menuActions({{ kind: 'ground', point: new __pl.THREE.Vector3(f.x + 3, 0, f.z), name: '' }}).map((x) => [x.label, x.note || '', !!x.disabled]); }})()")
         expect(inside[0] == ['Dig farm field', '8 s', False] and inside[-1][0] == 'Walk here', f'the ground in their camp: Dig farm field, then Walk here ({inside})')
         far = await a.evaluate(f"(() => {{ const f = __pl.placed.get({fid}), x = f.x - 16, z = f.z; return [!!__pl.claimAt(x, z), __pl.digActions({{ x, z }}).map((x) => [x.label, x.note, !!x.disabled])]; }})()")
-        expect(not far[0] and far[1] == [['Dig farm field', 'Only in your camp', True]], f'outside it: Dig farm field greyed out, Only in your camp ({far})')
+        expect(not far[0] and far[1] == [], f'outside it: no Dig farm field at all (Luke, 0.2.6: it only shows in your camp) ({far})')
         # Dig mode: every tap adds another field, a tap on one chosen takes it off, Dig digs them all (0.1.18 test 2)
         place = await a.evaluate(f"""(() => {{ const f = __pl.placed.get({fid});
           __pl.startDigging('field', {{ x: f.x + 3, z: f.z }});
@@ -2375,7 +2375,7 @@ async def farming():
         b = await W.page('farmB'); await join(b); await b.wait_for_timeout(800)
         expect(await b.evaluate(f"!!{FIELD}"), 'the other phone sees the field')
         their = await b.evaluate(f"(() => {{ const t = {FIELD}; return [__pl.digActions({{ x: t.x, z: t.z }}).map((x) => x.note), __pl.menuActions({{ kind: 'placed', th: t, name: '' }}).map((x) => x.label)]; }})()")
-        expect(their[0] == ['Only in your camp'] and 'Plant berry seeds' not in their[1] and 'Flatten field' not in their[1], f"someone else can't dig, plant or flatten in the camp ({their})")
+        expect(their[0] == [] and 'Plant berry seeds' not in their[1] and 'Flatten field' not in their[1], f"someone else can't dig, plant or flatten in the camp ({their})")
         # planting: a sprout
         acts = await a.evaluate(f"__pl.fieldActions({FIELD}).map((x) => [x.label, x.note || '', !!x.disabled])")
         expect([x[0] for x in acts] == ['Plant berry seeds', 'Flatten field', 'Inspect', 'Walk here'] and acts[1][1] == '4 s', f'its tap menu: Plant berry seeds, Flatten field ({acts})')
@@ -2503,7 +2503,7 @@ async def storage():
     squares at the top of the inventory, Put in all and Put in 1, Take and Take 1, dragging a square in and out, Pack up
     and Take apart greyed out until it's empty, someone not in the camp seeing nothing inside and being refused, the
     squares going when you walk away, and the admin's Empty it putting what's in it on the ground."""
-    kit = {'campfire': 1, 'stick': 16, 'log': 2, 'stone-axe': 1, 'twine': 2, 'berry': 4}  # (8 sticks left once the fire and the crate have theirs; under the 30 weight)
+    kit = {'campfire': 1, 'stick': 16, 'log': 2, 'stone-axe': 1, 'twine': 2, 'berry': 4}  # (8 sticks left once the fire and the crate have theirs; under the 60 weight)
     send = "(m) => window.__sock.send(JSON.stringify(m))"
     CRATE = "[...__pl.placed.values()].find((t) => t.kind === 'small-crate')"
     async with world(KIT=json.dumps(kit)) as W:
@@ -2615,7 +2615,7 @@ async def shelter():
     (2 x 2 squares), its tap menu (Sleep in shelter: twice as good as the ground), Sleep in shelter walking to its front
     and lying down inside it along its width, someone else seeing you lying inside it (and no Sleep in shelter for them:
     it's your camp's), Pack up and Take apart waiting till you're up, and Wake up putting you back out at its front."""
-    kit = {'campfire': 1, 'log': 3, 'stick': 12, 'twine': 4}  # (27 to carry once the fire and its 4 sticks are down)
+    kit = {'campfire': 1, 'log': 3, 'stick': 12, 'twine': 4}  # (50 to carry once the fire and its 4 sticks are down)
     send = "(m) => window.__sock.send(JSON.stringify(m))"
     SH = "[...__pl.placed.values()].find((t) => t.kind === 'basic-shelter')"
     async with world(KIT=json.dumps(kit)) as W:

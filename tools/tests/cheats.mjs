@@ -281,6 +281,15 @@ drained();
 S.p.x = POND.x + 6; S.p.z = POND.z;
 got = await S.ask({ t: 'fish' });
 expect(got.some((m) => m.t === 'fished' && m.why === 'Slow down a little') && (S.p.wear['fishing-spear'] || []).length === 0, 'fishing with no wait: no try, and the spear isn\'t worn');
+// an empty pond takes no try (0.2.6, Luke): no use of the spear and no stamina
+const pondWas = S.w.world.pond;
+S.w.world.pond = { fish: 0, at: Date.now() };
+earned(8);
+const staminaWas = S.p.stats.energy;
+got = await S.ask({ t: 'fish' });
+expect(got.some((m) => m.t === 'fished' && /No fish left/.test(m.why || '')) && (S.p.wear['fishing-spear'] || []).length === 0 && S.p.stats.energy >= staminaWas, 'an empty pond: no try, the spear isn\'t worn and no stamina goes (it only fills while the message is handled)', JSON.stringify({ wear: S.p.wear['fishing-spear'], e: [staminaWas, S.p.stats.energy] }));
+S.w.world.pond = pondWas;
+drained();
 // what takes no time is never held up
 S.w.world.items.push({ id: 900, kind: 'stick', x: S.p.x, z: S.p.z, rot: 0 });
 await S.ask({ t: 'take', id: 900 }); await S.ask({ t: 'drop', items: [{ kind: 'stick' }] }); await S.ask({ t: 'eat', kind: 'cooked-fish' });

@@ -5,11 +5,29 @@
     "server": "server is the address of the online world. The test link and the release both join the same live world (there's no separate test world). Leave it empty to play offline.",
     "devlog": "What's new, shown in the Menu. Newest first, one entry per version: version, date (the release day, with from for a range), no name (Luke, 26 Nov 2026: versions only), and short lines for players in added (+ new features), improved (~ changes to what's there) and fixed (− bug fixes and removed issues). No full stop at the end."
   },
-  "version": "0.2.5",
-  "build": 2,
+  "version": "0.2.6",
+  "build": 1,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "devlog": [
+    {
+      "version": "0.2.6",
+      "date": "2026-11-27",
+      "added": [
+        "Cut a log into 5 sticks with a stone knife on the craft mat (it was the log's tap menu)"
+      ],
+      "improved": [
+        "Cooked fish gives 50 food (was 35), and fishing catches something 7 times in 10",
+        "Crafting takes 2 stamina (was 5), and picking things up takes 1 (was 2)",
+        "You can carry 60 (was 30): sticks and stones weigh 2, logs 10, twine and berries 1",
+        "The stone knife lasts 30 uses (was 20), now it cuts sticks as well",
+        "The small wooden crate takes 10 seconds to build, like a campfire",
+        "Dig farm field only shows when you tap the ground in your camp"
+      ],
+      "fixed": [
+        "Fishing at an empty pond no longer wears your spear or uses stamina"
+      ]
+    },
     {
       "version": "0.2.5",
       "date": "2026-11-27",

@@ -55,7 +55,7 @@ w.work = new Map();
 console.log('A. made on the craft mat, and only in your own camp');
 const R = DATA.recipes.find((r) => r.id === 'basic-shelter'), P = DATA.placeables['basic-shelter'];
 expect(R && JSON.stringify(R.needs) === '{"log":3,"stick":8,"twine":4}' && R.makes['basic-shelter'] === 1, 'the recipe: 3 logs, 8 sticks and 4 twine', JSON.stringify(R && R.needs));
-expect(DATA.items['basic-shelter'].weight === 27 && DATA.items['basic-shelter'].places === 'basic-shelter', 'it weighs 27, the same as its parts, and is placed');
+expect(DATA.items['basic-shelter'].weight === 50 && DATA.items['basic-shelter'].places === 'basic-shelter', 'it weighs 50, the same as its parts (0.2.6 weights), and is placed');
 expect(P.inCamp && P.bed && P.bed.sleepers === 1 && P.bed.better === 2 && JSON.stringify(P.size) === '[2,2]' && P.front > 1, 'only in your camp, 2 x 2 squares, one sleeper, twice as good', JSON.stringify(P));
 Object.assign(kim, { carry: { log: 3, stick: 8, twine: 4 }, bar: {} });
 await fresh(); await ask(kimS, { t: 'craft', id: 'basic-shelter' });

@@ -14,7 +14,7 @@
 ## How to write it
 - Buttons, labels and titles capitalise only their first word: What's new, Walk here, Dig farm field, Coming soon (Luke, 26 Nov 2026: kept "What's new" over "What's New").
 - Item names start with a capital only at the start of a line or a title ("Stone knife" on a tile). Anywhere else they're lower case: "Pick up stick", "Drop 2 sticks", "Made stone knife", "+1 stick".
-- The tap menu and the task list use the same words for the same task: "Pack up", "Take apart", "Sit by the fire", "Chop into sticks", "Add 1 stick". The tag over your person while doing it uses the task list's words ("Chopping a tree…").
+- The tap menu and the task list use the same words for the same task: "Pack up", "Take apart", "Sit by the fire", "Chop tree", "Add 1 stick". The tag over your person while doing it uses the task list's words ("Chopping a tree…").
 - Times in labels and notes are short: "10 s", "40 min", "5 h", "7 h 30 min", "2 d 5 h". In a full sentence use words: "You were away for 5 hours".
 - Needs as numbers: "Rest 12", or "Rest 12 of 25" when it has to reach a number. No %.
 - Say what happened and what to do next, in a few friendly words: "Fire lit, but it's too close to the pond to start your camp", "Only Luke can put it out", "You'll join automatically". No clipped bits like "Lit." or "Just a fire:".

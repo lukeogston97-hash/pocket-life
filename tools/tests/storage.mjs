@@ -64,6 +64,16 @@ expect(kim.carry['small-crate'] === 1 && !kim.carry.plank && !kim.carry.stick &&
 Object.assign(kim, { carry: { 'small-crate': 1, log: 1, 'stone-axe': 1 }, wear: { 'stone-axe': [1] }, bar: { 'stone-axe': 1 } });
 await fresh(); got = await ask(kimS, { t: 'craft', id: 'plank' });
 expect(kim.carry.plank === 2 && !kim.carry['stone-axe'] && got.some((m) => m.t === 'broke' && m.kind === 'stone-axe'), "the axe's last use: the planks are made and the axe breaks", JSON.stringify(kim.carry));
+// sticks (0.2.6, Luke): a log is cut into 5 sticks on the craft mat with the stone knife (kept, takes a use), not chopped where it lies
+const sticksR = DATA.recipes.find((r) => r.id === 'stick'), had = structuredClone({ carry: kim.carry, wear: kim.wear, bar: kim.bar });
+expect(sticksR && JSON.stringify(sticksR.needs) === '{"log":1}' && JSON.stringify(sticksR.keeps) === '{"knife":1}' && sticksR.makes.stick === 5 && !DATA.chopping.log, 'sticks: 1 log cut with the stone knife (kept) makes 5, and logs are no longer chopped where they lie', JSON.stringify(sticksR));
+Object.assign(kim, { carry: { log: 1, knife: 1 }, wear: {}, bar: {} });
+await fresh(); got = await ask(kimS, { t: 'craft', id: 'stick' });
+expect(said(got) === 'Equip your stone knife first' && !kim.carry.stick && kim.carry.log === 1, 'the knife only in the inventory: Equip your stone knife first', said(got));
+kim.bar = { knife: 1 };
+await fresh(); await ask(kimS, { t: 'craft', id: 'stick' });
+expect(kim.carry.stick === 5 && !kim.carry.log && kim.carry.knife === 1 && [].concat(kim.wear.knife)[0] === KNIFE - 1, 'on the tool bar: 5 sticks, no log, and the knife kept with a use gone', `${JSON.stringify(kim.carry)} ${JSON.stringify(kim.wear)}`);
+Object.assign(kim, had); // (back to the crate they made, for what's next)
 
 console.log('B. it only goes in your own camp');
 Object.assign(kim, { x: 34, z: 20 });
@@ -108,10 +118,10 @@ expect(box.store.stick === 16 && kim.carry.stick === 7, '4 sticks out', `${box.s
 Object.assign(kim, { bar: {}, wear: {}, carry: { stick: 7, log: 1 } }); // (the knife on the bar put down)
 got = await ask(kimS, { t: 'takeOut', id: box.id, kind: 'knife' });
 expect(!box.store.knife && !box.wear && kim.bar.knife === 1 && JSON.stringify(kim.wear.knife) === '[7]', 'the knife comes out still worn (7 uses), straight onto the tool bar', `${JSON.stringify(kim.wear)} ${JSON.stringify(kim.bar)}`);
-Object.assign(kim, { carry: { ...kim.carry, log: 5 } }); // 25 weight + 7 sticks: 32, over the 30
+Object.assign(kim, { carry: { ...kim.carry, log: 5 } }); // 5 logs (50) + 7 sticks (14): 64, over the 60
 got = await ask(kimS, { t: 'takeOut', id: box.id, kind: 'stone', n: 10 });
 expect(said(got) === 'Too heavy to carry' && box.store.stone === 10, 'too heavy: nothing comes out', said(got));
-Object.assign(kim, { carry: { stick: 7, log: 4 } }); // 27 of 30
+Object.assign(kim, { carry: { stick: 7, log: 4 } }); // 54 of 60: room for 3 stones (2 each)
 await fresh(); got = await ask(kimS, { t: 'takeOut', id: box.id, kind: 'stone', n: 10 });
 expect(box.store.stone === 7 && kim.carry.stone === 3, 'Take all stops at what you can carry: 3 of the 10 stones', `${box.store.stone} in, ${kim.carry.stone} carried`);
 Object.assign(kim, { x: 30, z: 22 });

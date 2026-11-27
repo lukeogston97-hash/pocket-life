@@ -46,8 +46,8 @@ expect(Object.entries(FILE.recipes).every(([k, r]) => Object.entries(r.needs).ev
 expect(!store.has('liveItems'), 'and nothing is stored');
 
 console.log('B. a change reaches the rules players are held to');
-S.person().carry = { stick: 28, 'stone-axe': 7 }; S.person().bar = { 'stone-axe': 7 }; // 28 of 30 carried and a full tool bar (0.1.17): a knife (weight 1) goes in the bag and fits
-expect((await S.tool({ t: 'a.give', id: 'abc', kind: 'knife', n: 1 })).startsWith('Gave'), 'before: a knife (weight 1) fits in a bag with 2 to spare');
+S.person().carry = { stick: 29, 'stone-axe': 7 }; S.person().bar = { 'stone-axe': 7 }; // 58 of 60 carried and a full tool bar (0.1.17): a knife (weight 2) goes in the bag and just fits
+expect((await S.tool({ t: 'a.give', id: 'abc', kind: 'knife', n: 1 })).startsWith('Gave'), 'before: a knife (weight 2) just fits in the bag');
 await S.tool({ t: 'a.take', id: 'abc', kind: 'knife', n: 1 });
 expect(await S.tool({ t: 'a.liveItem', at: ['items', 'knife', 'weight'], value: 4 }) === 'Changed to 4', 'the admin makes a knife weigh 4');
 expect(await S.tool({ t: 'a.give', id: 'abc', kind: 'knife', n: 1 }) === 'Too heavy for them to carry', 'now the same bag has no room for it');
@@ -61,7 +61,7 @@ expect(S.person().carry.knife === 1 && !S.person().carry['short-handle'], 'with 
 expect(S.player.got.some((m) => m.t === 'liveItems') && S.admin.got.some((m) => m.t === 'liveItems'), 'every game is told the new numbers');
 list = await view();
 const kw = list.find((e) => same(e.at, ['items', 'knife', 'weight']));
-expect(kw.value === 4 && kw.base === 1 && kw.changed, 'the admin sees it as changed, with what it was', `value ${kw.value}, was ${kw.base}`);
+expect(kw.value === 4 && kw.base === FILE.items.knife.weight && kw.changed, 'the admin sees it as changed, with what it was', `value ${kw.value}, was ${kw.base}`);
 expect(list.filter((e) => e.changed).length === 2, 'and only those two are marked changed');
 
 // a food's filling and a tool's uses, through the game's own eating and crafting

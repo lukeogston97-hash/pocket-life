@@ -73,10 +73,10 @@ me = lastMe(await ask(s, { t: 'equip', kind: 'stone-axe' }));
 expect(me.bar['stone-axe'] === 1, 'equip puts it on the bar');
 me = lastMe(await ask(s, { t: 'unequip', kind: 'stone-axe' }));
 expect(!me.bar['stone-axe'] && me.carry['stone-axe'] === 1, 'unequip takes it off, into the inventory');
-Object.assign(p, { carry: { 'stone-axe': 1, stone: 30 - W('stone-axe') }, wear: {}, bar: { 'stone-axe': 1 } });
+Object.assign(p, { carry: { 'stone-axe': 1, stone: (DATA.settings.carryCapacity - W('stone-axe')) / W('stone') }, wear: {}, bar: { 'stone-axe': 1 } }); // (full once the axe is back in)
 let got = await ask(s, { t: 'unequip', kind: 'stone-axe' });
 expect(!lastMe(got).bar['stone-axe'] && said(got) === '', 'an axe fits back in an inventory with room for it');
-Object.assign(p, { carry: { 'stone-axe': 1, stone: 30 }, wear: {}, bar: { 'stone-axe': 1 } });
+Object.assign(p, { carry: { 'stone-axe': 1, stone: DATA.settings.carryCapacity / W('stone') }, wear: {}, bar: { 'stone-axe': 1 } }); // (already full)
 got = await ask(s, { t: 'unequip', kind: 'stone-axe' });
 expect(said(got) === 'Too heavy to carry' && lastMe(got).bar['stone-axe'] === 1, 'a full inventory: it stays on the bar', said(got));
 Object.assign(p, { carry: { knife: 1, 'stone-axe': 6, 'fishing-spear': 1 }, wear: { 'stone-axe': [30, 30, 30, 30, 30, 30], 'fishing-spear': [3] }, bar: { knife: 1, 'stone-axe': 6 } });

@@ -9,7 +9,7 @@
     "liveSettings": "Numbers the admin can change live from the Admin panel (Settings tab) without a new build. Each one's id is wired up in code (server/src/live.js and test/game/admin.js); name, group, unit, min, max and step are just how it shows. The normal value still comes from the rest of this file (settings, chopping, mining, sources, stats); a live change wins until the admin taps Reset."
   },
   "settings": {
-    "carryCapacity": 30,
+    "carryCapacity": 60,
     "toolSlots": 7,
     "inventorySquares": 10,
     "stackSize": 10,
@@ -99,10 +99,10 @@
     }
   ],
   "energyCosts": {
-    "pickup": 2,
+    "pickup": 1,
     "harvest": 2,
     "drink": 1,
-    "craft": 5,
+    "craft": 2,
     "chop": 10,
     "walkPerMetre": 0.15,
     "build": 8,

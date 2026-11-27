@@ -35,7 +35,7 @@
       "makes": {
         "knife": 1
       },
-      "about": "Cuts tall grass fast and picks 2 berries at a time"
+      "about": "Cuts tall grass fast, picks 2 berries at a time and cuts logs into sticks"
     },
     {
       "id": "berry-seeds",
@@ -96,7 +96,7 @@
       "makes": {
         "stone-axe": 1
       },
-      "about": "Chops trees, stumps and logs"
+      "about": "Chops trees and stumps, and splits logs into planks"
     },
     {
       "id": "pick-head",
@@ -159,6 +159,20 @@
         "plank": 2
       },
       "about": "Split a log with the stone axe on your tool bar. It takes a use"
+    },
+    {
+      "id": "stick",
+      "name": "Sticks",
+      "needs": {
+        "log": 1
+      },
+      "keeps": {
+        "knife": 1
+      },
+      "makes": {
+        "stick": 5
+      },
+      "about": "Cut a log into sticks with the stone knife on your tool bar. It takes a use"
     },
     {
       "id": "campfire",

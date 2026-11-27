@@ -51,7 +51,7 @@
     },
     "small-crate": {
       "name": "Small wooden crate",
-      "buildSeconds": 6,
+      "buildSeconds": 10,
       "buildVerb": "Building the small wooden crate",
       "solid": 0.4,
       "size": [

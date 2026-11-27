@@ -1,11 +1,11 @@
 {
   "_generated": "Made from content/*.json by python3 tools/worlds.py test-build. Edit those files, not this one.",
-  "version": "0.2.5",
-  "build": 2,
+  "version": "0.2.6",
+  "build": 1,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
-    "carryCapacity": 30,
+    "carryCapacity": 60,
     "toolSlots": 7,
     "inventorySquares": 10,
     "stackSize": 10,
@@ -122,10 +122,10 @@
     }
   ],
   "energyCosts": {
-    "pickup": 2,
+    "pickup": 1,
     "harvest": 2,
     "drink": 1,
-    "craft": 5,
+    "craft": 2,
     "chop": 10,
     "walkPerMetre": 0.15,
     "build": 8,
@@ -147,12 +147,6 @@
       "seconds": 10,
       "gives": {
         "log": 1
-      }
-    },
-    "log": {
-      "seconds": 8,
-      "gives": {
-        "stick": 5
       }
     },
     "regrowDays": [
@@ -198,7 +192,7 @@
       "name": "Stick",
       "about": "For crafting, and fuel for a campfire.",
       "plural": "Sticks",
-      "weight": 1,
+      "weight": 2,
       "look": {
         "shape": "rod",
         "length": 0.62,
@@ -214,7 +208,7 @@
       "name": "Stone",
       "about": "For tools and campfires. Try knocking two together.",
       "plural": "Stones",
-      "weight": 1,
+      "weight": 2,
       "look": {
         "shape": "rock",
         "size": 0.15,
@@ -240,7 +234,7 @@
       "name": "Sharp stone",
       "about": "Knocked off a stone. Cuts and shapes things, and you keep it when you do.",
       "plural": "Sharp stones",
-      "weight": 1,
+      "weight": 2,
       "look": {
         "shape": "flake",
         "size": 0.11,
@@ -252,7 +246,7 @@
       "name": "Short tool handle",
       "about": "A stick with twine wrapped round for a grip. Tie a sharp stone to it to make a knife.",
       "plural": "Short tool handles",
-      "weight": 1,
+      "weight": 2,
       "look": {
         "shape": "handle",
         "length": 0.18,
@@ -266,7 +260,7 @@
       "name": "Long tool handle",
       "about": "Two sticks tied together. The handle for an axe, pickaxe, hoe or spear.",
       "plural": "Long tool handles",
-      "weight": 2,
+      "weight": 4,
       "look": {
         "shape": "handle",
         "length": 1.0,
@@ -280,7 +274,7 @@
       "name": "Stone axe head",
       "about": "A sharp stone wrapped in twine. Tie it to a long tool handle to make an axe.",
       "plural": "Stone axe heads",
-      "weight": 1,
+      "weight": 2,
       "group": "Parts",
       "look": {
         "shape": "head",
@@ -294,7 +288,7 @@
       "name": "Stone pick head",
       "about": "Two sharp stones tied back to back. Tie it to a long tool handle to make a pickaxe.",
       "plural": "Stone pick heads",
-      "weight": 1,
+      "weight": 2,
       "group": "Parts",
       "look": {
         "shape": "head",
@@ -308,7 +302,7 @@
       "name": "Stone hoe head",
       "about": "A flat stone wrapped in twine. Tie it to a long tool handle to make a hoe.",
       "plural": "Stone hoe heads",
-      "weight": 1,
+      "weight": 2,
       "group": "Parts",
       "look": {
         "shape": "head",
@@ -350,7 +344,7 @@
       "name": "Raw fish",
       "about": "Caught at the pond with a fishing spear. Cook it on a lit campfire before you eat it.",
       "plural": "Raw fish",
-      "weight": 1,
+      "weight": 2,
       "group": "Food",
       "look": {
         "shape": "fish",
@@ -364,7 +358,7 @@
       "name": "Cooked fish",
       "about": "Cooked on a campfire. Fills you up.",
       "plural": "Cooked fish",
-      "weight": 1,
+      "weight": 2,
       "look": {
         "shape": "fish",
         "length": 0.3,
@@ -372,14 +366,14 @@
         "belly": "#e0bd8e"
       },
       "eat": {
-        "hunger": 35
+        "hunger": 50
       },
       "startInWorld": 0
     },
     "knife": {
       "name": "Stone knife",
       "plural": "Stone knives",
-      "weight": 1,
+      "weight": 2,
       "look": {
         "shape": "knife",
         "length": 0.26,
@@ -390,14 +384,14 @@
         "grip": "#c9b77a"
       },
       "tool": {
-        "uses": 20
+        "uses": 30
       },
       "startInWorld": 0
     },
     "stone-axe": {
       "name": "Stone axe",
       "plural": "Stone axes",
-      "weight": 2,
+      "weight": 4,
       "look": {
         "shape": "axe",
         "length": 0.55,
@@ -415,7 +409,7 @@
     "stone-pickaxe": {
       "name": "Stone pickaxe",
       "plural": "Stone pickaxes",
-      "weight": 2,
+      "weight": 4,
       "look": {
         "shape": "pickaxe",
         "length": 0.6,
@@ -434,7 +428,7 @@
       "name": "Stone hoe",
       "about": "Digs farm fields in your camp, and flattens them again. Tap the ground in your camp to dig one.",
       "plural": "Stone hoes",
-      "weight": 2,
+      "weight": 4,
       "look": {
         "shape": "hoe",
         "length": 0.75,
@@ -453,7 +447,7 @@
       "name": "Fishing spear",
       "about": "For fishing. Tap the pond, then Fish.",
       "plural": "Fishing spears",
-      "weight": 2,
+      "weight": 4,
       "look": {
         "shape": "spear",
         "length": 1.0,
@@ -470,9 +464,9 @@
     },
     "log": {
       "name": "Log",
-      "about": "Chop it into sticks with an axe, or burn it on a campfire.",
+      "about": "On the craft mat, cut it into sticks with a stone knife or split it into planks with a stone axe. Or burn it on a campfire.",
       "plural": "Logs",
-      "weight": 5,
+      "weight": 10,
       "look": {
         "shape": "log",
         "length": 0.9,
@@ -486,7 +480,7 @@
       "name": "Plank",
       "about": "Split from a log with a stone axe. For building things like crates.",
       "plural": "Planks",
-      "weight": 2,
+      "weight": 4,
       "look": {
         "shape": "parts",
         "colour": "#9c7650",
@@ -567,7 +561,7 @@
     "campfire": {
       "name": "Campfire",
       "plural": "Campfires",
-      "weight": 9,
+      "weight": 18,
       "look": {
         "shape": "campfire",
         "size": 0.36,
@@ -582,7 +576,7 @@
       "name": "Small wooden crate",
       "about": "Put it in your camp to keep things in. It holds 5 squares, and only your camp can open it.",
       "plural": "Small wooden crates",
-      "weight": 14,
+      "weight": 26,
       "look": {
         "shape": "parts",
         "colour": "#8d6b48",
@@ -876,7 +870,7 @@
       "name": "Basic shelter",
       "about": "A lean-to for your camp. Sleeping in it is twice as good as sleeping on the ground.",
       "plural": "Basic shelters",
-      "weight": 27,
+      "weight": 50,
       "look": {
         "shape": "parts",
         "colour": "#8a6847",
@@ -1833,7 +1827,7 @@
       "makes": {
         "knife": 1
       },
-      "about": "Cuts tall grass fast and picks 2 berries at a time"
+      "about": "Cuts tall grass fast, picks 2 berries at a time and cuts logs into sticks"
     },
     {
       "id": "berry-seeds",
@@ -1894,7 +1888,7 @@
       "makes": {
         "stone-axe": 1
       },
-      "about": "Chops trees, stumps and logs"
+      "about": "Chops trees and stumps, and splits logs into planks"
     },
     {
       "id": "pick-head",
@@ -1957,6 +1951,20 @@
         "plank": 2
       },
       "about": "Split a log with the stone axe on your tool bar. It takes a use"
+    },
+    {
+      "id": "stick",
+      "name": "Sticks",
+      "needs": {
+        "log": 1
+      },
+      "keeps": {
+        "knife": 1
+      },
+      "makes": {
+        "stick": 5
+      },
+      "about": "Cut a log into sticks with the stone knife on your tool bar. It takes a use"
     },
     {
       "id": "campfire",
@@ -2059,7 +2067,7 @@
     },
     "small-crate": {
       "name": "Small wooden crate",
-      "buildSeconds": 6,
+      "buildSeconds": 10,
       "buildVerb": "Building the small wooden crate",
       "solid": 0.4,
       "size": [
@@ -2110,7 +2118,7 @@
         "seconds": 8,
         "tool": "fishing-spear",
         "catch": "fish",
-        "chance": 0.5,
+        "chance": 0.7,
         "holds": 10,
         "regrowMinutes": 60
       }
@@ -2531,6 +2539,24 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.2.6",
+      "date": "2026-11-27",
+      "added": [
+        "Cut a log into 5 sticks with a stone knife on the craft mat (it was the log's tap menu)"
+      ],
+      "improved": [
+        "Cooked fish gives 50 food (was 35), and fishing catches something 7 times in 10",
+        "Crafting takes 2 stamina (was 5), and picking things up takes 1 (was 2)",
+        "You can carry 60 (was 30): sticks and stones weigh 2, logs 10, twine and berries 1",
+        "The stone knife lasts 30 uses (was 20), now it cuts sticks as well",
+        "The small wooden crate takes 10 seconds to build, like a campfire",
+        "Dig farm field only shows when you tap the ground in your camp"
+      ],
+      "fixed": [
+        "Fishing at an empty pond no longer wears your spear or uses stamina"
+      ]
+    },
     {
       "version": "0.2.5",
       "date": "2026-11-27",

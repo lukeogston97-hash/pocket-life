@@ -65,7 +65,7 @@ S = await start();
 const w = S.w.world;
 w.items.push({ id: 10, kind: 'stick', x: 4, z: 3, rot: 0 }, { id: 11, kind: 'log', x: 18, z: 18, rot: 0 });
 w.placed.push(fire(3, -20, 20, { fuel: 5 * HOUR })); // (enough to burn for the whole test, once lit)
-Object.assign(kim.carry, { 'stone-axe': 1, 'stone-pickaxe': 1, knife: 1, 'fishing-spear': 1, campfire: 1, stick: 4, fish: 1 }); // 24 of the 30 they can carry
+Object.assign(kim.carry, { 'stone-axe': 1, 'stone-pickaxe': 1, knife: 1, 'fishing-spear': 1, campfire: 1, stick: 4, fish: 1 }); // 28 of the 60 they can carry
 kim.bar = { 'stone-axe': 1, 'stone-pickaxe': 1, knife: 1, 'fishing-spear': 1 }; // the tools on the tool bar (0.1.17): only tools there get used
 const list = [
   { type: 'pickup', id: 10 },
@@ -74,7 +74,7 @@ const list = [
   { type: 'cut', plant: 'tallGrass', i: 0, x: 5, z: -5 },
   { type: 'use', source: 'berryBush', bush: 0, x: 8, z: -8, top: 1.2, stop: 1 },
   { type: 'mine', idx: 0, what: 'rock', x: 15, z: 5 },
-  { type: 'chop', what: 'log', id: 11, x: 18, z: 18 },
+  { type: 'chop', what: 'log', id: 11, x: 18, z: 18 }, // (from a list saved before 0.2.6: logs are cut on the craft mat now, so it's skipped)
   { type: 'walk', x: 20, z: 20 },
   { type: 'place', item: 'campfire', kind: 'campfire', x: 22.5, z: 22.5, rot: 0 }, // (the middle of a 1 m square on the placing grid)
   { type: 'fish' },
@@ -97,7 +97,7 @@ expect(near(6, 7, 'stick'), 'put a stick down where the list said');
 expect(w.plants && w.plants.tallGrass && w.plants.tallGrass[0] > Date.now() && kim.carry.twine >= 1, 'cut the tall grass: it grows back later, twine in the bag');
 expect((kim.carry.berry || 0) >= 1, 'picked berries off the bush', kim.carry.berry);
 expect(w.rocks && w.rocks[0] && w.rocks[0][0] === 'gone' && w.items.filter((it) => it.kind === 'stone').length >= 5, 'broke rock 0 into stones');
-expect(!item(S, 11) && w.items.filter((it) => it.kind === 'stick' && Math.hypot(it.x - 18, it.z - 18) < 2).length >= 5, 'chopped the log into sticks');
+expect(item(S, 11) && !w.items.some((it) => it.kind === 'stick' && Math.hypot(it.x - 18, it.z - 18) < 2), "an old Chop into sticks task is skipped: the log stays (0.2.6, Luke: sticks are cut from a log on the craft mat)");
 const mine = w.placed.find((th) => th.by === kim.who);
 expect(mine && mine.built && Math.hypot(mine.x - 22.5, mine.z - 22.5) < 0.05 && !kim.carry.campfire, 'placed the campfire where the list said, then built it (as the game does)');
 expect(kim.wear && kim.wear['fishing-spear'] && kim.wear['fishing-spear'][0] < spear, 'went fishing (the spear wore)', `${spear} then ${kim.wear && kim.wear['fishing-spear']}`);
@@ -105,7 +105,7 @@ const f3 = w.placed.find((th) => th.id === 3);
 expect(f3.lit && f3.fuel > 5 * HOUR, 'put sticks on fire 3 and lit it', `${Math.round(f3.fuel / MINUTE)} min of fuel`);
 expect((kim.carry['cooked-fish'] || 0) === 1 && (kim.carry.fish || 0) <= 1, 'cooked the fish on it', `${kim.carry['cooked-fish']} cooked, ${kim.carry.fish || 0} raw (a catch may have added one)`);
 expect(kim.sit && kim.sit.fire === 3 && kim.plan && kim.plan.kind === 'sit', 'and sat down by it (sitting until the fire goes out, as in the game)');
-expect(kim.tasks.length === 0 && kim.log.tasks === list.length + 1, 'the whole list done, the build it added too', `${kim.log.tasks} done, ${kim.tasks.length} left`);
+expect(kim.tasks.length === 0 && kim.log.tasks === list.length, 'the whole list done (but the old log task), the build it added too', `${kim.log.tasks} done, ${kim.tasks.length} left`);
 
 console.log('C. the same rules as playing: someone else\'s camp, things that have gone');
 S = await start();

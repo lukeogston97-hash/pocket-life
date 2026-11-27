@@ -632,12 +632,16 @@ const groupOrder = (g) => (CRAFT_GROUPS.includes(g) ? CRAFT_GROUPS.indexOf(g) : 
 const STEPS = {};
 function stepsOf(kind, seen = new Set()) {
   if (kind in STEPS) return STEPS[kind];
+  if ((ITEMS[kind] || {}).startInWorld > 0) return (STEPS[kind] = 0); // found lying about, even if a recipe makes it too (sticks from a log, 0.2.6)
   if (seen.has(kind)) return 0;
   seen.add(kind);
   const r = RECIPES.find((x) => madeBy(x) === kind);
   STEPS[kind] = r ? 1 + Math.max(0, ...Object.keys(recipeWants(r)).map((k) => stepsOf(k, seen))) : 0;
   return STEPS[kind];
 }
+// a recipe's own steps: one more than what it takes (the same as what it makes, but for sticks, which lie about too but
+// need a knife to cut from a log: 3, not 0)
+const recipeSteps = (r) => 1 + Math.max(0, ...Object.keys(recipeWants(r)).map((k) => stepsOf(k)));
 let foundDrawn = '';
 function foundRow(r) {
   const has = hasAll(r);
@@ -677,7 +681,7 @@ function drawFound() {
   const q = foundQuery.trim().toLowerCase();
   const list = all.filter((r) => (!foundGroup || recipeGroup(r) === foundGroup)
     && (!q || [recipeName(r), ...Object.keys(recipeWants(r)).map((k) => ITEMS[k].plural)].some((t) => t.toLowerCase().includes(q))));
-  list.sort((a, b) => (hasAll(a) ? 0 : 1) - (hasAll(b) ? 0 : 1) || stepsOf(madeBy(a)) - stepsOf(madeBy(b)) || RECIPES.indexOf(a) - RECIPES.indexOf(b)); // the ones you have everything for first, then the greyed out ones, each simple to advanced
+  list.sort((a, b) => (hasAll(a) ? 0 : 1) - (hasAll(b) ? 0 : 1) || recipeSteps(a) - recipeSteps(b) || RECIPES.indexOf(a) - RECIPES.indexOf(b)); // the ones you have everything for first, then the greyed out ones, each simple to advanced
   const grey = list.filter((r) => !hasAll(r)).length;
   const shows = JSON.stringify([foundGroup, q, chips, search, list.map((r) => [r.id, hasAll(r), recipeWants(r), Object.keys(recipeWants(r)).map((k) => you.carry[k] || 0), r.near ? !!game.stationNear(r.near) : 0])]); // (the "At a campfire" chip lights up by a lit one)
   if (shows === foundDrawn) return;

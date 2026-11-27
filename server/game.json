@@ -77,7 +77,7 @@
     "stick": {
       "name": "Stick",
       "plural": "Sticks",
-      "weight": 1,
+      "weight": 2,
       "eat": null,
       "uses": 0,
       "places": null,
@@ -87,7 +87,7 @@
     "stone": {
       "name": "Stone",
       "plural": "Stones",
-      "weight": 1,
+      "weight": 2,
       "eat": null,
       "uses": 0,
       "places": null,
@@ -107,7 +107,7 @@
     "sharp-stone": {
       "name": "Sharp stone",
       "plural": "Sharp stones",
-      "weight": 1,
+      "weight": 2,
       "eat": null,
       "uses": 0,
       "places": null,
@@ -117,7 +117,7 @@
     "short-handle": {
       "name": "Short tool handle",
       "plural": "Short tool handles",
-      "weight": 1,
+      "weight": 2,
       "eat": null,
       "uses": 0,
       "places": null,
@@ -127,7 +127,7 @@
     "long-stick": {
       "name": "Long tool handle",
       "plural": "Long tool handles",
-      "weight": 2,
+      "weight": 4,
       "eat": null,
       "uses": 0,
       "places": null,
@@ -137,7 +137,7 @@
     "axe-head": {
       "name": "Stone axe head",
       "plural": "Stone axe heads",
-      "weight": 1,
+      "weight": 2,
       "eat": null,
       "uses": 0,
       "places": null,
@@ -147,7 +147,7 @@
     "pick-head": {
       "name": "Stone pick head",
       "plural": "Stone pick heads",
-      "weight": 1,
+      "weight": 2,
       "eat": null,
       "uses": 0,
       "places": null,
@@ -157,7 +157,7 @@
     "hoe-head": {
       "name": "Stone hoe head",
       "plural": "Stone hoe heads",
-      "weight": 1,
+      "weight": 2,
       "eat": null,
       "uses": 0,
       "places": null,
@@ -189,7 +189,7 @@
     "fish": {
       "name": "Raw fish",
       "plural": "Raw fish",
-      "weight": 1,
+      "weight": 2,
       "eat": null,
       "uses": 0,
       "places": null,
@@ -199,9 +199,9 @@
     "cooked-fish": {
       "name": "Cooked fish",
       "plural": "Cooked fish",
-      "weight": 1,
+      "weight": 2,
       "eat": {
-        "hunger": 35
+        "hunger": 50
       },
       "uses": 0,
       "places": null,
@@ -211,9 +211,9 @@
     "knife": {
       "name": "Stone knife",
       "plural": "Stone knives",
-      "weight": 1,
+      "weight": 2,
       "eat": null,
-      "uses": 20,
+      "uses": 30,
       "places": null,
       "startInWorld": 0,
       "spawnsNear": null
@@ -221,7 +221,7 @@
     "stone-axe": {
       "name": "Stone axe",
       "plural": "Stone axes",
-      "weight": 2,
+      "weight": 4,
       "eat": null,
       "uses": 30,
       "places": null,
@@ -231,7 +231,7 @@
     "stone-pickaxe": {
       "name": "Stone pickaxe",
       "plural": "Stone pickaxes",
-      "weight": 2,
+      "weight": 4,
       "eat": null,
       "uses": 30,
       "places": null,
@@ -241,7 +241,7 @@
     "stone-hoe": {
       "name": "Stone hoe",
       "plural": "Stone hoes",
-      "weight": 2,
+      "weight": 4,
       "eat": null,
       "uses": 30,
       "places": null,
@@ -251,7 +251,7 @@
     "fishing-spear": {
       "name": "Fishing spear",
       "plural": "Fishing spears",
-      "weight": 2,
+      "weight": 4,
       "eat": null,
       "uses": 20,
       "places": null,
@@ -261,7 +261,7 @@
     "log": {
       "name": "Log",
       "plural": "Logs",
-      "weight": 5,
+      "weight": 10,
       "eat": null,
       "uses": 0,
       "places": null,
@@ -271,7 +271,7 @@
     "plank": {
       "name": "Plank",
       "plural": "Planks",
-      "weight": 2,
+      "weight": 4,
       "eat": null,
       "uses": 0,
       "places": null,
@@ -281,7 +281,7 @@
     "campfire": {
       "name": "Campfire",
       "plural": "Campfires",
-      "weight": 9,
+      "weight": 18,
       "eat": null,
       "uses": 0,
       "places": "campfire",
@@ -291,7 +291,7 @@
     "small-crate": {
       "name": "Small wooden crate",
       "plural": "Small wooden crates",
-      "weight": 14,
+      "weight": 26,
       "eat": null,
       "uses": 0,
       "places": "small-crate",
@@ -301,7 +301,7 @@
     "basic-shelter": {
       "name": "Basic shelter",
       "plural": "Basic shelters",
-      "weight": 27,
+      "weight": 50,
       "eat": null,
       "uses": 0,
       "places": "basic-shelter",
@@ -435,6 +435,17 @@
         "stone-axe": 1
       }
     },
+    "stick": {
+      "needs": {
+        "log": 1
+      },
+      "makes": {
+        "stick": 5
+      },
+      "keeps": {
+        "knife": 1
+      }
+    },
     "campfire": {
       "needs": {
         "log": 1,
@@ -493,7 +504,7 @@
         "seconds": 8,
         "tool": "fishing-spear",
         "catch": "fish",
-        "chance": 0.5,
+        "chance": 0.7,
         "holds": 10,
         "regrowMinutes": 60
       },
@@ -534,7 +545,7 @@
     }
   },
   "berryKind": "berry",
-  "carryCapacity": 30,
+  "carryCapacity": 60,
   "toolSlots": 7,
   "inventorySquares": 10,
   "stackSize": 10,
@@ -568,10 +579,10 @@
   },
   "timeZone": "Australia/Darwin",
   "energyCosts": {
-    "pickup": 2,
+    "pickup": 1,
     "harvest": 2,
     "drink": 1,
-    "craft": 5,
+    "craft": 2,
     "chop": 10,
     "walkPerMetre": 0.15,
     "build": 8,
@@ -593,12 +604,6 @@
       "seconds": 10,
       "gives": {
         "log": 1
-      }
-    },
-    "log": {
-      "seconds": 8,
-      "gives": {
-        "stick": 5
       }
     },
     "regrowDays": [
@@ -670,7 +675,7 @@
     },
     "small-crate": {
       "item": "small-crate",
-      "buildSeconds": 6,
+      "buildSeconds": 10,
       "solid": 0.4,
       "size": [
         1,
