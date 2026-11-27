@@ -2128,13 +2128,15 @@ async def placing_grid():
         expect(abs(got[0] - spot[0]) < 1e-6 and abs(got[1] - spot[1]) < 1e-6, f'a tap just off the middle of a square snaps onto it ({got} for {spot})')
         grid = await a.evaluate("[__pl.placeGrid.visible, __pl.placeGrid.geometry.drawRange.count]")
         expect(grid[0] and grid[1] > 100, f'the squares show on the ground round it while choosing ({grid})')
+        seats = await a.evaluate("__pl.placeSpotsShown().map(([x, z]) => Math.round(Math.hypot(x - __pl.placing.x, z - __pl.placing.z) * 100) / 100)")
+        expect(seats == [1.7] * 6, f'a circle for each of its 6 seats, 1.7 m out (0.2.3: so you know where people sit) ({seats})')
         expect(abs(round(got[2] / 1.5708) * 1.5708 - got[2]) < 0.01, f'it faces one of 4 ways ({got[2]})')
         await a.evaluate("__pl.turnPlacing()")
         turned = await a.evaluate("__pl.placing.rot")
         expect(abs(((turned - got[2]) % 6.2832) - 1.5708) < 0.01, f'Turn turns it a quarter ({got[2]} to {turned})')
         expect(await shown(a, '#placeTurn'), 'the place bar has a Turn button')
         await a.evaluate("__pl.finishPlacing()")
-        expect(not await a.evaluate("__pl.placeGrid.visible"), 'and go once it is chosen')
+        expect(not await a.evaluate("__pl.placeGrid.visible") and not await a.evaluate("__pl.placeSpotsShown().length"), 'the squares and circles go once it is chosen')
         await idle(a, 40); await a.wait_for_timeout(1500)
         th = await a.evaluate("[...__pl.placed.values()].map((t) => [t.x, t.z, t.rot, t.built])")
         expect(len(th) == 1 and abs(th[0][0] - spot[0]) < 1e-6 and abs(th[0][1] - spot[1]) < 1e-6 and th[0][3], f'put down and built on the grid ({th})')
@@ -2528,10 +2530,15 @@ async def storage():
         await a.click('#bagList .bag-tile[data-kind="small-crate"]'); await a.wait_for_timeout(200)
         expect(await text(a, '#bagInfo button.go') == 'Place', 'its green button is Place')
         await a.click('#bagInfo button.go'); await a.wait_for_timeout(400)
+        facing = await a.evaluate("""(() => { const s = __pl.placeSpotsShown(), p = __pl.player.position, P = __pl.placing;
+          return [s.length, Math.hypot(s[0][0] - p.x, s[0][1] - p.z) < Math.hypot(P.x - p.x, P.z - p.z)]; })()""")
+        expect(facing == [1, True], f'while placing it, one circle shows its front, and it starts off facing you (0.2.3) ({facing})')
         put = await a.evaluate(f"""(() => {{ const f = __pl.placed.get({fid});
           for (let r = 3; r < 7; r += 0.5) for (let k = 0; k < 16; k++) {{ const x = f.x + Math.cos(k / 16 * 6.28) * r, z = f.z + Math.sin(k / 16 * 6.28) * r;
             __pl.movePlacing(x, z); if (__pl.placing.ok) return [__pl.placing.x, __pl.placing.z]; }} return null; }})()""")
         expect(put is not None, f'a spot for it in the camp ({put})')
+        front = await a.evaluate("(() => { const P = __pl.placing, s = __pl.placeSpotsShown()[0]; return Math.abs(Math.hypot(s[0] - P.x, s[1] - P.z) - 0.75) < 0.01 && Math.abs(Math.atan2(s[0] - P.x, s[1] - P.z) - Math.atan2(Math.sin(P.rot), Math.cos(P.rot))) < 0.01; })()")
+        expect(front, 'the circle is 0.75 m out the way it faces, where the twine tie is')
         await a.evaluate('__pl.finishPlacing()'); await idle(a, 60); await a.wait_for_timeout(1500)
         cid = await a.evaluate(f"({CRATE} || {{}}).id")
         expect(await a.evaluate(f"!!{CRATE} && {CRATE}.built"), 'put down and built')
@@ -2540,6 +2547,8 @@ async def storage():
         expect(await a.evaluate(f"__pl.placedName({CRATE})") == 'Small wooden crate · empty', 'its title says it is empty')
         # Open crate: walks over, then its 5 squares show at the top of the inventory
         await a.evaluate(f"__pl.queueTask({{ type: 'open', id: {cid} }})"); await idle(a, 30); await a.wait_for_timeout(600)
+        stood = await a.evaluate(f"(() => {{ const f = __pl.frontSpot({CRATE}), p = __pl.player.position; return Math.round(Math.hypot(f[0] - p.x, f[1] - p.z) * 100) / 100; }})()")
+        expect(stood < 0.4, f'your person opens it standing at its front ({stood} m from the spot)')
         sq = await a.evaluate("[document.querySelectorAll('#storeList > li').length, document.getElementById('storeUsed').textContent, document.getElementById('storeName').textContent]")
         expect(await a.evaluate(f"__pl.storeShowing({cid})") and await shown(a, '#store') and sq == [5, 'Empty', 'Small wooden crate'], f'Open crate: its 5 squares at the top of the inventory ({sq})')
         # Put in all: the square of 8 sticks

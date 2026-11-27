@@ -99,6 +99,11 @@ export function seatSpotOf(th, seats, k) {
   const n = Math.max(1, Math.floor((seats || {}).count) || 6), d = Number((seats || {}).distance) || 1.2, a = (th.rot || 0) + (k * Math.PI * 2) / n;
   return [th.x + Math.sin(a) * d, th.z + Math.cos(a) * d];
 }
+// where you stand to use it (0.2.3, Luke: a crate's front): front metres out from its middle, the way it faces (its +z)
+export function frontSpotOf(th, front) {
+  const a = th.rot || 0;
+  return [th.x + Math.sin(a) * front, th.z + Math.cos(a) * front];
+}
 
 /* ---------- the placing grid (0.1.17; 1 m squares since 0.2.2, Luke: half a metre was too fiddly to line up) ----------
    Placed things go on an invisible grid of PLACE_GRID metre squares and face one of 4 ways. Each placeable's size is

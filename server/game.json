@@ -660,6 +660,7 @@
       "fire": null,
       "seats": null,
       "inCamp": true,
+      "front": 0.75,
       "storage": {
         "squares": 5
       }

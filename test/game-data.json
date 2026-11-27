@@ -1,7 +1,7 @@
 {
   "_generated": "Made from content/*.json by python3 tools/worlds.py test-build. Edit those files, not this one.",
-  "version": "0.2.2",
-  "build": 2,
+  "version": "0.2.3",
+  "build": 1,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -1126,6 +1126,7 @@
         1,
         1
       ],
+      "front": 0.75,
       "inCamp": true,
       "storage": {
         "squares": 5
@@ -1570,6 +1571,16 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.2.3",
+      "date": "2026-11-27",
+      "added": [
+        "While placing, circles show where people sit round a campfire and the front of a crate"
+      ],
+      "improved": [
+        "A crate faces you when you place it, and your person stands at its front to use it"
+      ]
+    },
     {
       "version": "0.2.2",
       "date": "2026-11-27",

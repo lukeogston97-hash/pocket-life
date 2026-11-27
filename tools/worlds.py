@@ -131,6 +131,8 @@ def problems(d):
             known(p['madeWith'], f'{w}.madeWith')
             if not (items.get(p['madeWith']) or {}).get('tool'): out.append(f'{w}.madeWith: "{p["madeWith"]}" should be a tool (it goes on the tool bar)')
         elif not any(it.get('places') == k for it in items.values()): out.append(f'{w}: no item has "places": "{k}", so nobody could place it')
+        if p.get('front') is not None and not (isinstance(p['front'], (int, float)) and not isinstance(p['front'], bool) and 0.3 <= p['front'] <= 3):
+            out.append(f'{w}.front: needs a number of metres from 0.3 to 3 (where you stand to use it, out from its middle)')
         s = p.get('storage')  # it holds things (0.2.2): how many squares
         if s is not None and not (isinstance(s, dict) and isinstance(s.get('squares'), int) and not isinstance(s.get('squares'), bool) and 1 <= s['squares'] <= 40):
             out.append(f'{w}.storage: needs "squares", a whole number from 1 to 40 (how many squares it holds)')
@@ -244,6 +246,7 @@ def server_files(d):
         'placeables': {k: {'item': next((i for i, it in d['items'].items() if it.get('places') == k), k), 'buildSeconds': v.get('buildSeconds', 10),
                            'solid': v.get('solid', 0.5), 'size': v.get('size'), 'keepClear': v.get('keepClear'), 'fire': v.get('fire'), 'seats': v.get('seats'),
                            'inCamp': bool(v.get('inCamp')),  # only in your own camp (the farm field, the small wooden crate)
+                           **({'front': v['front']} if v.get('front') else {}),  # where you stand to use it (0.2.3, the crate's front)
                            # it holds things in squares, like the inventory (0.2.2, the small wooden crate)
                            **({'storage': {'squares': v['storage']['squares']}} if v.get('storage') else {}),
                            # dug with a tool instead of placed from an item (0.1.18, the farm field)

@@ -8,7 +8,7 @@
 // These are methods of the World (index.js adds them to it), so `this` is the world.
 import { ACTIONS } from './actions.js';
 import { PLACEABLES, fireRule, seatAt, CROPS, cropSource, cropGrown, cropBerries } from './placed.js';
-import { fuelRoom, recipeWants } from './rules.js';
+import { fuelRoom, recipeWants, frontSpotOf } from './rules.js';
 import { onBar, barOf, addCarry } from './needs.js';
 import { G, num, dist, spend } from './shared.js';
 
@@ -96,7 +96,7 @@ export const taskMethods = {
     const w = this.world, at = [p.x, p.z];
     if (!w || !task) return null;
     if (task.from != null && !(p.took || []).includes(task.from)) return null; // moving a loose item whose pick-up didn't happen
-    const nearThing = (th) => { const s = (PLACEABLES[th.kind] || {}).solid || 0.5; return toward(at, [th.x, th.z], s + 0.35, s + 0.75); };
+    const nearThing = (th) => { const P = PLACEABLES[th.kind] || {}, s = P.solid || 0.5; return P.front ? frontSpotOf(th, P.front) : toward(at, [th.x, th.z], s + 0.35, s + 0.75); }; // (a crate: at its front, 0.2.3)
     switch (task.type) {
       case 'walk': return task.x != null && task.z != null ? { to: [task.x, task.z], seconds: 0 } : null;
       case 'pickup': {
@@ -166,7 +166,7 @@ export const taskMethods = {
         const kind = task.item && (G.items[task.item] || {}).places, rule = PLACEABLES[kind];
         if (!rule || !p.carry[task.item] || task.x == null || task.z == null) return null;
         const s = rule.solid || 0.5;
-        return { to: toward(at, [task.x, task.z], s + 0.45, s + 0.9), seconds: 0.9, pose: 'bend' };
+        return { to: rule.front ? frontSpotOf({ x: task.x, z: task.z, rot: task.rot }, rule.front) : toward(at, [task.x, task.z], s + 0.45, s + 0.9), seconds: 0.9, pose: 'bend' }; // (a crate: from its front)
       }
       case 'build': {
         const th = this.placedById(task.id);
