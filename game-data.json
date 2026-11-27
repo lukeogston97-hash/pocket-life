@@ -1,6 +1,6 @@
 {
   "_generated": "Made from content/*.json by python3 tools/worlds.py test-build. Edit those files, not this one.",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "build": 1,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
@@ -1029,7 +1029,7 @@
       "makes": {
         "plank": 2
       },
-      "about": "Split a log with a stone axe. You keep the axe"
+      "about": "Split a log with the stone axe on your tool bar. It takes a use"
     },
     {
       "id": "campfire",
@@ -1571,6 +1571,13 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.2.4",
+      "date": "2026-11-27",
+      "improved": [
+        "A tool used on the craft mat takes a use and has to be on your tool bar, like chopping"
+      ]
+    },
     {
       "version": "0.2.3",
       "date": "2026-11-27",
