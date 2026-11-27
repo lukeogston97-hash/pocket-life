@@ -20,8 +20,9 @@ import { clearCellsNear, dropGhosts, findPath, freeAt, queueTask, solidAt, tasks
 import {
   cantPlaceAt, claimAt, claimHere, claimMine, cropBerriesNow, cropK, CROPS, digActions, drawCrop, endSit,
   fieldActions, fieldState, finishPlacing, fuelLeft, isLit, levelPlaced, movePlacing, notMineAt, placed,
-  placedActions, placedName, placing, rectOf, startDigging, startPlacing, stationNear, turnPlacing,
+  placeGrid, placedActions, placedName, placing, rectOf, startDigging, startPlacing, stationNear, storedIn, storeWords, turnPlacing,
 } from './placeables.js';
+import { storeShowing } from './inventory.js';
 import { glowOn, menuActions, ndc, pickTarget } from './input.js';
 import { die, enterMenu, showGoneCard, showWelcomeBack } from './screens.js';
 import { frame } from './loop.js';
@@ -43,8 +44,8 @@ goOnline();
 if (ADMIN_LINK) openAdminLogin(); // the address ended in ?admin (admin-mode.js)
 requestAnimationFrame(frame);
 // for automated checks only: open the page with ?debug to reach the game's state from the browser console
-if (location.search.includes('debug')) window.__pl = { THREE, renderer, groundY, rectOf, groundUnder, startPlacing, turnPlacing, landAsMade, speed, tip, pondShape, pondShapeAt, POND, solidAt, walk, tasks, trees, you, others, net, plants, queueTask, camera, berryBushes, buildItem, layoutData, oldStumps, rocks, placed, placedActions, placedName, stationNear, placing, movePlacing, finishPlacing, cantPlaceAt, startDigging, digActions, fieldActions, fieldState, CROPS, cropK, cropBerriesNow, drawCrop, DETAILS, setFlats, levelPlaced, LIFTED, groundMovedUnder, wildBushes, spots, spotKey, WALK_THROUGH, fuelLeft, isLit, endSit, get player() { return player; }, get heldView() { return heldView; }, get freshLook() { return game.freshLook; }, itemViews, dropGhosts, findPath, freeAt, die, showWelcomeBack, showGoneCard, showMaintenance, hideMaintenance, admin, STAT, SOURCES, CHOP, MINE, world, menuActions, notMineAt, claimMine, claimHere, openSociety, drawSociety, inviteAction, claimAt, sendAct, outbox, goOnline, getItem, peopleDrawn, get glowOn() { return glowOn; }, get adminData() { return { playersData, playerData, inboxData, itemsData, firesData, logData, adminTab }; },
-  ui, controls, openAdminLogin,
+if (location.search.includes('debug')) window.__pl = { THREE, renderer, groundY, rectOf, groundUnder, startPlacing, turnPlacing, landAsMade, speed, tip, pondShape, pondShapeAt, POND, solidAt, walk, tasks, trees, you, others, net, plants, queueTask, camera, berryBushes, buildItem, layoutData, oldStumps, rocks, placed, placedActions, placedName, stationNear, placing, placeGrid, movePlacing, finishPlacing, cantPlaceAt, startDigging, digActions, fieldActions, fieldState, CROPS, cropK, cropBerriesNow, drawCrop, DETAILS, setFlats, levelPlaced, LIFTED, groundMovedUnder, wildBushes, spots, spotKey, WALK_THROUGH, fuelLeft, isLit, endSit, get player() { return player; }, get heldView() { return heldView; }, get freshLook() { return game.freshLook; }, itemViews, dropGhosts, findPath, freeAt, die, showWelcomeBack, showGoneCard, showMaintenance, hideMaintenance, admin, STAT, SOURCES, CHOP, MINE, world, menuActions, notMineAt, claimMine, claimHere, openSociety, drawSociety, inviteAction, claimAt, sendAct, outbox, goOnline, getItem, peopleDrawn, get glowOn() { return glowOn; }, get adminData() { return { playersData, playerData, inboxData, itemsData, firesData, logData, adminTab }; },
+  ui, controls, openAdminLogin, storedIn, storeWords, storeShowing, // storage (0.2.2)
   // what a tap at a spot on the screen would find, and what the admin could do with it (for checks)
   adminAt(px, py) { const r = canvas.getBoundingClientRect(); ndc.set(((px - r.left) / r.width) * 2 - 1, -((py - r.top) / r.height) * 2 + 1); const t = pickTarget(px - r.left, py - r.top); return { kind: t ? t.kind : null, name: t ? t.name : null, acts: t ? adminActionsFor(t).map((a) => a.label) : [] }; },
   get adminMode() { return { on: adminMode.on, asking: adminMode.asking, hasCode: !!adminMode.code, follow: adminMode.follow }; } }; // (adminMode: never the password itself)
