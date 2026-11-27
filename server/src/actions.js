@@ -120,8 +120,12 @@ export const ACTIONS = {
   craft: { when: 'alive', async run({ ws, me, m, p, w, reply, save }) {
     const r = Object.hasOwn(G.recipes || {}, String(m.id)) ? G.recipes[m.id] : null; // (only a real recipe: a name every object has, like 'constructor', isn't one)
     if (r && r.seconds && (!r.near || this.stationFor(p, r.near)) && !this.worked(ws, me, p, r.seconds)) { reply({ t: 'slow' }); reply(this.mine(p)); return; } // cooking takes time (guard.js)
+    // a tool it keeps (the stone axe for planks) has to be on the tool bar, and wears a use, like chopping (0.2.4, Luke)
+    const tools = r ? Object.keys(r.keeps || {}).filter((k) => (G.items[k] || {}).uses) : [], off = tools.find((k) => !onBar(p, k, G));
+    if (off) { reply({ t: 'placeNo', why: `Equip your ${G.items[off].name.toLowerCase()} first` }); reply(this.mine(p)); return; }
     if (r && (!r.near || this.stationFor(p, r.near)) && craft(p, r, G)) {
       spend(p, 'craft', G);
+      for (const k of tools) this.wearTool(p, k, reply);
       p.found = Array.isArray(p.found) ? p.found : [];
       if (!p.found.includes(m.id)) p.found.push(m.id);
       save();

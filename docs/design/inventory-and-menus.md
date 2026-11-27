@@ -48,3 +48,6 @@
 - Order inside each heading (Luke: simple to advanced): the ones you have everything for first, then the greyed out ones, each by how many steps it is from things found lying about (a sharp stone 1, a stone axe 3: stepsOf in inventory.js), then game-data.json order.
 - The admin's item lists (Add item, Give items and the Items tab) use the same headings.
 - Checks: craft_mat (headings, order, cooked fish greyed out), fishing (cooked fish under Food with fish in the bag), admin_items.
+
+## Tools used on the craft mat (0.2.4, Luke, 27 Nov 2026)
+- Luke: when a recipe uses a tool, "I think it should count as a use". A real tool a recipe keeps (one with uses, so far only the stone axe for planks) takes a use each time, and, like chopping, it has to be on the tool bar: with it only in the inventory the mat says "Equip your stone axe first" and Make stays off (the server says the same). Its chip in Recipes says "Stone axe (1 use)", lit while it's on the bar. A sharp stone isn't a tool, so berry seeds still just keep it. If the use breaks the axe, the next one on the bar (or a spare from the inventory) takes over, as when chopping.

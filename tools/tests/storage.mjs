@@ -51,16 +51,23 @@ const plank = DATA.recipes.find((r) => r.id === 'plank'), crateR = DATA.recipes.
 expect(plank && JSON.stringify(plank.needs) === '{"log":1}' && JSON.stringify(plank.keeps) === '{"stone-axe":1}' && plank.makes.plank === 2, 'planks: 1 log split with the stone axe (kept) makes 2', JSON.stringify(plank));
 expect(crateR && JSON.stringify(crateR.needs) === '{"plank":4,"stick":4,"twine":2}' && crateR.makes['small-crate'] === 1, 'the crate: 4 planks, 4 sticks and 2 twine', JSON.stringify(crateR && crateR.needs));
 expect(DATA.placeables['small-crate'].storage.squares === 5 && DATA.placeables['small-crate'].inCamp, 'it holds 5 squares and only goes in your camp');
-Object.assign(kim, { x: 22, z: 20, carry: { log: 2, 'stone-axe': 1, stick: 4, twine: 2 }, wear: {}, bar: { 'stone-axe': 1 } });
-await ask(kimS, { t: 'craft', id: 'plank' });
+const AXE = DATA.items['stone-axe'].tool.uses;
+Object.assign(kim, { x: 22, z: 20, carry: { log: 2, 'stone-axe': 1, stick: 4, twine: 2 }, wear: {}, bar: {} });
+let got = await ask(kimS, { t: 'craft', id: 'plank' });
+expect(said(got) === 'Equip your stone axe first' && !kim.carry.plank && kim.carry.log === 2, 'the axe only in the inventory: Equip your stone axe first (0.2.4)', said(got));
+kim.bar = { 'stone-axe': 1 };
 await fresh(); await ask(kimS, { t: 'craft', id: 'plank' });
-expect(kim.carry.plank === 4 && !kim.carry.log && kim.carry['stone-axe'] === 1, 'two goes: 4 planks, no logs, and the axe is still there', JSON.stringify(kim.carry));
+await fresh(); await ask(kimS, { t: 'craft', id: 'plank' });
+expect(kim.carry.plank === 4 && !kim.carry.log && kim.carry['stone-axe'] === 1 && [].concat(kim.wear['stone-axe'])[0] === AXE - 2, 'two goes on the tool bar: 4 planks, no logs, and the axe kept with 2 uses gone (0.2.4)', `${JSON.stringify(kim.carry)} ${JSON.stringify(kim.wear)}`);
 await fresh(); await ask(kimS, { t: 'craft', id: 'small-crate' });
 expect(kim.carry['small-crate'] === 1 && !kim.carry.plank && !kim.carry.stick && !kim.carry.twine, 'made a small wooden crate', JSON.stringify(kim.carry));
+Object.assign(kim, { carry: { 'small-crate': 1, log: 1, 'stone-axe': 1 }, wear: { 'stone-axe': [1] }, bar: { 'stone-axe': 1 } });
+await fresh(); got = await ask(kimS, { t: 'craft', id: 'plank' });
+expect(kim.carry.plank === 2 && !kim.carry['stone-axe'] && got.some((m) => m.t === 'broke' && m.kind === 'stone-axe'), "the axe's last use: the planks are made and the axe breaks", JSON.stringify(kim.carry));
 
 console.log('B. it only goes in your own camp');
 Object.assign(kim, { x: 34, z: 20 });
-let got = await ask(kimS, { t: 'place', kind: 'small-crate', x: 35, z: 20, rot: 0 });
+await fresh(); got = await ask(kimS, { t: 'place', kind: 'small-crate', x: 35, z: 20, rot: 0 });
 expect(said(got) === 'Small wooden crates only go in your camp' && !crates().length, 'outside their camp: no', said(got));
 Object.assign(kim, { x: -23, z: 20 });
 await fresh(); got = await ask(kimS, { t: 'place', kind: 'small-crate', x: -24, z: 20, rot: 0 });

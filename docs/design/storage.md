@@ -7,7 +7,7 @@ Decided with Luke 27 Nov 2026, built as 0.2.2 test 1.
 - Then (27 Nov 2026) Luke picked a Small wooden crate: 4 planks + 4 sticks + 2 twine, 5 squares.
 
 ## What players do
-- Planks (Luke: the craft mat is best for now; a workbench may come later, then the recipe just gets "near": "workbench"): 1 log + a stone axe on the craft mat makes 2 planks. The axe is kept and doesn't wear (like the sharp stone for berry seeds). A plank weighs 2 (a log is 5). Recipes lists it as Planks, under Materials.
+- Planks (Luke: the craft mat is best for now; a workbench may come later, then the recipe just gets "near": "workbench"): 1 log + a stone axe on the craft mat makes 2 planks. The axe is kept but takes a use, and has to be on the tool bar (0.2.4, Luke: "I think it should count as a use"; it didn't wear in 0.2.2 and 0.2.3). A plank weighs 2 (a log is 5). Recipes lists it as Planks, under Materials.
 - Small wooden crate: 4 planks + 4 sticks + 2 twine (Luke's recipe). Weight 14 (its parts, like the campfire). The look is the crate Luke saw on 27 Nov, made smaller: two planks high all round, a stick in each corner tied with twine, a lid of two planks with two cross pieces and a tie on the front. About knee high, on one square of the placing grid (1 m, since 0.2.2's 1 m grid).
 - Its front (0.2.3, Luke): the side with the twine tie. While placing, a circle shows it on the ground, and it starts off facing you; your person stands there to put it down, build, open, pack up or take it apart (placeables.md, Circles while placing).
 - It only goes in your own camp (inCamp, like a farm field): "Small wooden crates only go in your camp". Placed and built like a campfire (6 seconds).

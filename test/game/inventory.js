@@ -9,7 +9,7 @@ import { $, buildItem, countLabel, deg, fmt, groupOf, GROUPS, ITEMS, RECIPES } f
 import { disposeMaterials } from './people.js';
 import {
   addToCarry, barRoom, carried, carryNo, drawCarry, drawHeld, drawWeightBar, FULL, hasTool, headTop, invSquares, onBar, player,
-  showGain, showTag, squaresTaken, stackOfKind, takeFromCarry, toolSlots, ui, you,
+  showGain, showTag, squaresTaken, stackOfKind, takeFromCarry, toolSlots, toolWhy, ui, you,
 } from './you.js';
 import { spendEnergy } from './needs.js';
 import { hideHint, tipDid } from './tips.js';
@@ -535,6 +535,8 @@ function afterMaking(r) {
 // why a recipe can't be made right now ('' if it can): things missing, too heavy, no square for it, or not by what it needs
 export function cantMake(r) {
   if (!hasAll(r)) return 'Need more';
+  const off = Object.keys(r.keeps || {}).find((k) => ITEMS[k].uses && !hasTool(k)); // a tool it keeps is used: it has to be on the tool bar (0.2.4)
+  if (off) return toolWhy(off);
   const a = afterMaking(r);
   if (a.w > SETTINGS.carryCapacity) return 'Too heavy';
   if (a.sq > invSquares() && a.sq > a.sq0) return FULL; // (0.2.1: someone over already can still make what fits)
@@ -591,7 +593,7 @@ function drawMat() {
   else if (r) { // all there: what it makes, made before or not (no mystery: Luke, 0.1.10)
     const cant = cantMake(r);
     pic = madeBy(r); name = recipeName(r);
-    why = cant === 'Too heavy' ? 'Too heavy to carry' : cant === FULL ? FULL : r.about || '';
+    why = cant === 'Too heavy' ? 'Too heavy to carry' : cant === FULL || /^Equip /.test(cant) ? cant : r.about || '';
     go = !cant; state = 'match';
   } else if (goal) { // the things it takes, and what's still missing; made at a station: where (the mat can't make it)
     pic = madeBy(goal); name = recipeName(goal); state = 'goal';
@@ -655,7 +657,9 @@ function foundRow(r) {
     needs.className = 'craft-needs';
     const chip = (text, ok) => { const c = document.createElement('span'); c.className = 'need-chip' + (ok ? ' ok' : ''); c.textContent = text; needs.appendChild(c); };
     for (const [k, n] of Object.entries(r.needs)) { const have = you.carry[k] || 0; chip(`${ITEMS[k].plural} ${Math.min(have, n)}/${n}`, have >= n); }
-    for (const k of Object.keys(r.keeps || {})) chip(`Keeps ${ITEMS[k].name.toLowerCase()}`, (you.carry[k] || 0) >= r.keeps[k]);
+    for (const k of Object.keys(r.keeps || {})) { // what it keeps: a tool takes a use, from the tool bar (0.2.4, Luke)
+      if (ITEMS[k].uses) chip(`${ITEMS[k].name} (1 use)`, hasTool(k)); else chip(`Keeps ${ITEMS[k].name.toLowerCase()}`, (you.carry[k] || 0) >= r.keeps[k]);
+    }
     if (r.near && game.PLACEABLES[r.near]) chip(`At a ${game.PLACEABLES[r.near].name.toLowerCase()}`, !!game.stationNear(r.near)); // (made there, not on the mat)
     words.appendChild(needs);
   }
