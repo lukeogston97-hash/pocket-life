@@ -1297,12 +1297,15 @@ export function fieldActions(th) {
     { label: 'Walk here', foot: true, run: () => walkFirst(P.walkOver ? V(th.x, 0, th.z) : V(th.x + P.solid + 0.8, 0, th.z)) }); // (onto it: it's walked over)
   return out;
 }
-// Dig farm field, on the ground's tap menu (input.js): carrying a hoe, in your own camp
+// Dig farm field, on the ground's tap menu (input.js): carrying a hoe, in your own camp. Outside your camp it isn't
+// there at all (Luke, 0.2.6); in your camp with the hoe only in your inventory it's greyed out (Equip your stone hoe)
 export function digActions(at) {
   const out = [];
   for (const P of Object.values(PLACEABLES)) {
     if (!P.madeWith || !(you.carry[P.madeWith] > 0)) continue;
-    const c = P.inCamp ? claimAt(at.x, at.z) : null, why = !hasTool(P.madeWith) ? toolNeed(P.madeWith) : P.inCamp && !(c && claimMine(c)) ? 'Only in your camp' : '';
+    const c = P.inCamp ? claimAt(at.x, at.z) : null;
+    if (P.inCamp && !(c && claimMine(c))) continue;
+    const why = !hasTool(P.madeWith) ? toolNeed(P.madeWith) : '';
     out.push({ label: `Dig ${P.name.toLowerCase()}`, note: why || `${P.makeSeconds} s`, disabled: !!why, run: () => startDigging(P.kind, at) });
   }
   return out;

@@ -87,7 +87,7 @@ export const SUN_OFFSET = V(-24, 36, 15);
 
 /* ---------- the game's data: index.html loads it first (always fresh), then this file ---------- */
 export const DATA = window.GAME_DATA;
-export const SETTINGS = { carryCapacity: 30, walkSpeed: 2.2, worldSize: 100, needsSpeed: 1, ...(DATA.settings || {}) };
+export const SETTINGS = { carryCapacity: 60, walkSpeed: 2.2, worldSize: 100, needsSpeed: 1, ...(DATA.settings || {}) };
 export const VERSION = String(DATA.version || '0.0.0');
 export const TEST_BUILD = location.pathname.includes('/test/'); // the test copy, before it's released
 export const VERSION_LABEL = TEST_BUILD ? `${VERSION} (test ${DATA.build || 1})` : VERSION;
