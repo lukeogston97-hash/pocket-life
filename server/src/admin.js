@@ -5,7 +5,7 @@
 // (trees, rocks, berry bushes, campfires, loose items) are moved, regrown and removed from their tap menus.
 // These are methods of the World (index.js adds them to it), so `this` is the world.
 import { FILTER, G, starText, MINUTE, HOUR, clean, blank, num, kindOk, addCarry, carryNo, takeCarry, ageOf, pickRandom, laidNow, barOf } from './shared.js';
-import { fireRule, PLACEABLES, cropGrowMs } from './placed.js';
+import { fireRule, PLACEABLES, cropGrowMs, storageOf, storedCount } from './placed.js';
 import { placeSnap } from './rules.js';
 import { CLAIM_KIND } from './claims.js';
 import { SOC, freshSocieties } from './societies.js';
@@ -23,7 +23,8 @@ const TOOLS = { 'a.maintenance': 'Maintenance', 'a.announce': 'Message to everyo
   'a.mute': 'Mute', 'a.fill': 'Fill needs', 'a.give': 'Give', 'a.take': 'Take', 'a.wake': 'Wake', 'a.sleep': 'Send to sleep', 'a.movePerson': 'Move person',
   'a.setStats': 'Edit person', 'a.removePerson': 'Remove person', 'a.unlinkAll': 'Unlink all devices', 'a.regrowAll': 'Regrow everything', 'a.clear': 'Clear loose items', 'a.move': 'Move', 'a.regrow': 'Regrow',
   'a.remove': 'Remove', 'a.live': 'Setting', 'a.liveItem': 'Item number', 'a.fire': 'Fire', 'a.claim': 'Claim', 'a.rename': 'Rename', 'a.tell': 'Message',
-  'a.socRename': 'Rename society', 'a.socRemove': 'Take out of society', 'a.socEnd': 'End society', 'a.clearTasks': 'Clear task list', 'a.found': 'Found recipes' };
+  'a.socRename': 'Rename society', 'a.socRemove': 'Take out of society', 'a.socEnd': 'End society', 'a.clearTasks': 'Clear task list', 'a.found': 'Found recipes',
+  'a.empty': 'Empty storage' };
 // which thing a tool was used on, when its answer doesn't say (server: the World)
 function aboutOf(m, server) {
   const short = (v) => clean(String(v == null ? '' : v), 40);
@@ -32,7 +33,7 @@ function aboutOf(m, server) {
   if (m.t === 'a.announce') return `"${clean(m.text, 60).trim()}"`;
   if (m.t === 'a.unban') return short(m.id);
   if (m.t.startsWith('a.soc')) { const soc = server.socById(m.id); return soc ? short(soc.name) : ''; } // a society: by its name
-  if (['a.fire', 'a.claim', 'a.move', 'a.regrow', 'a.remove'].includes(m.t)) {
+  if (['a.fire', 'a.claim', 'a.move', 'a.regrow', 'a.remove', 'a.empty'].includes(m.t)) {
     const th = m.id != null ? server.placedById(m.id) : null; // a campfire: by where it is
     if (th) return `${th.kind} at ${Math.round(th.x)}, ${Math.round(th.z)}`;
     return m.what && m.what !== 'placed' ? `${short(m.what === 'plant' ? m.plant : m.what)} ${short(m.idx != null ? m.idx : m.id)}` : '';
@@ -433,6 +434,18 @@ export const adminMethods = {
         await this.save();
         return done('Grown back');
       }
+      case 'a.empty': { // storage (0.2.2, the small wooden crate): everything in it lands on the ground round it
+        if (!w) return;
+        const th = this.placedById(m.id);
+        if (!th || !storageOf(th.kind)) return done("It's gone");
+        const n = storedCount(th);
+        if (!n) return done("There's nothing in it");
+        const spilt = this.spillStore(th);
+        await this.save();
+        this.sendPlaced(th);
+        this.send({ t: 'added', items: spilt }, null);
+        return done(`${n} ${n === 1 ? 'thing' : 'things'} put on the ground`);
+      }
       case 'a.remove': { // a loose item or campfire (by id), or a tree, rock or berry bush from the layout (for good)
         if (!w) return;
         if (MOVABLE[m.what]) {
@@ -452,9 +465,11 @@ export const adminMethods = {
           if (j < 0) return;
           for (const o of this.persons.values()) if (o.sit && o.sit.fire === m.id) this.standUp(o);
           this.note('admin', `Remove: ${list[j].kind} at ${Math.round(list[j].x)}, ${Math.round(list[j].z)}`);
+          const spilt = this.spillStore(list[j]); // storage (0.2.2): what's in it lands on the ground round it
           list.splice(j, 1);
           await this.save();
           this.send({ t: 'unplaced', id: m.id }, null);
+          if (spilt.length) this.send({ t: 'added', items: spilt }, null);
           return;
         }
         this.note('admin', `Remove: loose ${w.items[i].kind} at ${Math.round(w.items[i].x)}, ${Math.round(w.items[i].z)}`);

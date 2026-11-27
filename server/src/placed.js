@@ -3,7 +3,7 @@
 // game-data.json "placeables"). A fire burns its fuel only while lit: fuel is how many ms of burning are left as of
 // `at`, so nothing has to tick. It goes out by itself when that runs out, whether or not anyone is watching.
 // These are methods of the World (index.js adds them to it), so `this` is the world.
-import { G, num, HOUR } from './shared.js';
+import { G, num, HOUR, laidNow } from './shared.js';
 import { fireRuleOf, seatSpotOf, cropGrowth, berriesGrown } from './rules.js';
 
 export const PLACEABLES = G.placeables || {};
@@ -21,6 +21,22 @@ export function cropBerries(crop, now = Date.now()) {
   if (!src || !cropGrown(crop, now)) return 0;
   const b = crop.berries || [null, null];
   return berriesGrown(b[0], b[1], src.holds || 5, (src.regrowHours || 0) * HOUR, now);
+}
+// Storage (0.2.2, the small wooden crate): a placed thing with storage { squares } holds things in its own squares, the
+// same squares and stacks as the inventory (rules.js storeRoom). th.store { kind: n } is what's in it, and th.wear
+// { kind: [uses left, ...] } how worn each tool in it is (one number per tool; missing ones are new), like a person's wear.
+export const storageOf = (kind) => { const s = (PLACEABLES[kind] || {}).storage; return s && s.squares >= 1 ? s : null; };
+export const storedCount = (th) => Object.values((th && th.store) || {}).reduce((n, k) => n + (k > 0 ? k : 0), 0);
+// the short word for it in sentences: the last word of its name (Small wooden crate: crate)
+export const storeNoun = (kind) => String((G.items[(PLACEABLES[kind] || {}).item] || {}).name || 'crate').split(' ').pop().toLowerCase();
+// something that holds things can't go in one (a crate in a crate)
+export const storable = (kind) => { const it = G.items[kind]; return !!it && !(it.places && storageOf(it.places)); };
+// the uses left of each tool of this kind in it, in order (missing ones are new)
+export function storeWear(th, kind) {
+  const n = (th.store || {})[kind] || 0, full = (G.items[kind] || {}).uses || 0, w = (th.wear || {})[kind];
+  const list = (Array.isArray(w) ? w : []).slice(0, n);
+  while (list.length < n) list.push(full);
+  return list;
 }
 // the fire's rules in ms: each fuel it takes, and the most it holds (rules.js, the same as in the game)
 export const fireRule = (kind) => fireRuleOf((PLACEABLES[kind] || {}).fire, (k) => !!G.items[k]);
@@ -61,21 +77,55 @@ export const placedMethods = {
     const c = this.notYours(p, th.x, th.z, admin);
     if (c) return this.claimNo(c);
     if (th.by && th.by !== p.who && !admin) return 'Only the person who built it can do that';
+    if (storedCount(th) > 0) return 'Empty it first'; // storage (0.2.2): what's in it would be lost
     if (this.burn(th).lit) return 'Put the fire out first';
     const now = Date.now();
     for (const o of this.persons.values()) if (o.who !== p.who && this.alive(o) && o.sit && o.sit.fire === th.id && o.sit.until > now) return 'Someone is sitting by it';
     return '';
+  },
+  // why this person can't put things in or take them out of it now ('' if they can): it has to hold things and be built,
+  // they have to be by it, and it can't be in someone else's camp (0.2.2; anyone's once the camp ends, Luke)
+  storeNo(th, p, me) {
+    if (!th || !storageOf(th.kind)) return "That can't hold things";
+    if (!th.built) return 'Build it first';
+    if (!me.admin && !this.near(p, [th.x, th.z], (PLACEABLES[th.kind] || {}).solid || 0.5)) return 'Too far away';
+    const c = this.notYours(p, th.x, th.z, me.admin);
+    return c ? this.claimNo(c) : '';
   },
   // what the game is told: fuel is ms left right now (so phone clocks don't matter)
   placedView(th, now = Date.now()) {
     this.burn(th, now);
     const v = { id: th.id, kind: th.kind, x: th.x, z: th.z, rot: th.rot, built: !!th.built, fuel: Math.round(th.fuel || 0), lit: !!th.lit, burnt: !!th.burnt };
     if (th.claim) v.claim = { who: th.claim, name: this.ownerName(th) }; // whose claim it is (while it burns)
+    if (storedCount(th) > 0) { // what's in it (0.2.2), and how worn its tools are
+      v.store = { ...th.store };
+      const worn = Object.keys(v.store).filter((k) => (G.items[k] || {}).uses);
+      if (worn.length) v.wear = Object.fromEntries(worn.map((k) => [k, storeWear(th, k)]));
+    }
     if (th.crop) { // what grows on a farm field: ages in ms, so phone clocks don't matter (the game works the rest out)
       const b = th.crop.berries || [null, null];
       v.crop = { kind: th.crop.kind, age: Math.max(0, now - th.crop.at), berries: b[0] == null ? null : [b[0], Math.max(0, now - b[1])] };
     }
     return v;
+  },
+  // everything in it lands on the ground round it (the admin's Empty and Remove): tools keep their wear. The items made.
+  spillStore(th) {
+    const w = this.world, out = [];
+    if (!w || !storedCount(th)) return out;
+    const R = ((PLACEABLES[th.kind] || {}).solid || 0.5) + 0.35;
+    for (const [kind, n] of Object.entries(th.store)) {
+      if (!Object.hasOwn(G.items, kind)) continue;
+      const worn = storeWear(th, kind), full = G.items[kind].uses;
+      for (let k = 0; k < n && out.length < 60; k++) {
+        const a = out.length * 2.39996, rad = R + (out.length % 3) * 0.18;
+        const item = { id: w.nextId++, kind, x: num(th.x + Math.cos(a) * rad), z: num(th.z + Math.sin(a) * rad), rot: num(Math.random() * Math.PI), laid: laidNow() };
+        if (full && worn[k] < full) item.uses = worn[k]; // a worn tool stays worn on the ground
+        out.push(item);
+      }
+    }
+    th.store = {}; delete th.wear;
+    w.items.push(...out);
+    return out;
   },
   sendPlaced(th, reply, extra) {
     const v = this.placedView(th);

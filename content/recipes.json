@@ -147,6 +147,20 @@
       "about": "Digs farm fields in your camp"
     },
     {
+      "id": "plank",
+      "name": "Planks",
+      "needs": {
+        "log": 1
+      },
+      "keeps": {
+        "stone-axe": 1
+      },
+      "makes": {
+        "plank": 2
+      },
+      "about": "Split a log with a stone axe. You keep the axe"
+    },
+    {
       "id": "campfire",
       "name": "Campfire",
       "needs": {
@@ -158,6 +172,19 @@
         "campfire": 1
       },
       "about": "Place it, build it, then light it"
+    },
+    {
+      "id": "small-crate",
+      "name": "Small wooden crate",
+      "needs": {
+        "plank": 4,
+        "stick": 4,
+        "twine": 2
+      },
+      "makes": {
+        "small-crate": 1
+      },
+      "about": "Planks with a stick in each corner, tied with twine"
     },
     {
       "id": "cooked-fish",

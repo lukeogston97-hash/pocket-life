@@ -9,7 +9,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { game, share } from './links.js';
 import {
   berriesGrown, berryPicked, claimProblem, cropGrowth, cropStage, fireRuleOf, fuelLeftAt, fuelRoom, PLACE_GRID,
-  placeClash, placeRect, placeSnap, seatSpotOf,
+  placeClash, placeRect, placeSnap, seatSpotOf, squaresUsed,
 } from './rules.js';
 import {
   app, clamp01, DATA, hash, mat, pick, rand, reduceMotion, rr, scene, SETTINGS, smoothstep, sun, V, withOwnRand,
@@ -26,7 +26,7 @@ import {
   toolNeed, toolWhy, you,
 } from './you.js';
 import { slowness, spendEnergy } from './needs.js';
-import { cantMake, closeBag, closeCraft, make, recipeKnown, recipeName } from './inventory.js';
+import { cantMake, closeBag, closeCraft, drawBag, make, openStore, recipeKnown, recipeName, storeCheck, storeShowing } from './inventory.js';
 import { controls } from './camera.js';
 import {
   allTasks, approach, clearCellsNear, drawQueue, face, nextTask, queueTask, setLegs, solidAt, startAction, TASK_KINDS,
@@ -36,7 +36,7 @@ import {
 share({
   get claimCheckAt() { return claimCheckAt; }, set claimCheckAt(v) { claimCheckAt = v; }, endSit,
   get isLit() { return isLit; }, get notMineAt() { return notMineAt; }, get PLACEABLES() { return PLACEABLES; },
-  get placing() { return placing; }, get roomFor() { return roomFor; }, startPlacing, stationNear,
+  get placed() { return placed; }, get placing() { return placing; }, get roomFor() { return roomFor; }, startPlacing, stationNear,
 });
 
 export const PLACEABLES = {};
@@ -54,6 +54,9 @@ for (const [kind, raw] of Object.entries(DATA.placeables || {})) {
     // dug with a tool (the farm field): the tool, how long digging and flattening take, only in your camp, and its look
     madeWith: tool, makeSeconds: Math.max(1, Number(raw.makeSeconds) || 8), makeVerb: raw.makeVerb || 'Digging', flattenSeconds: Math.max(1, Number(raw.flattenSeconds) || 4),
     inCamp: !!raw.inCamp, look: raw.look || null, walkOver: !!raw.walkOver, // walkOver: people walk over it (a farm field)
+    // it holds things (0.2.2, the small wooden crate): how many squares. noun: the short word for it ("Open crate")
+    store: !tool && raw.storage && raw.storage.squares >= 1 ? { squares: Math.floor(raw.storage.squares) } : null,
+    noun: String(raw.name || (item ? ITEMS[item].name : kind)).split(' ').pop().toLowerCase(),
   };
   if (item) ITEMS[item].places = kind;
 }
@@ -66,6 +69,21 @@ for (const [id, raw] of Object.entries(DATA.crops || {})) {
   CROPS[id] = { id, name: raw.name || id, seed: raw.seed, on, growMs: (Number(raw.growHours) || 24) * 3600000, plantSeconds: Math.max(1, Number(raw.plantSeconds) || 3), like };
 }
 export const placed = new Map(); // id -> { id, kind, x, z, rot, built, fuel, lit, at, progress, view }
+
+/* ---------- storage (0.2.2, the small wooden crate) ----------
+   A placed thing with storage holds things in its own squares, the same squares and stacks as the inventory (rules.js
+   storeRoom, the same as the server). th.store { kind: n } and th.wear { kind: [uses left] } (its tools) come from the
+   server. Open on its tap menu walks over and shows its squares at the top of your inventory (inventory.js). Only your
+   camp can open it while the camp lasts, anyone once it ends (Luke). Not packed up or taken apart until it's empty. */
+export const storedIn = (th) => Object.values(th.store || {}).reduce((n, k) => n + (k > 0 ? k : 0), 0);
+export const storeUsed = (th) => squaresUsed(th.store || {}, null, ITEMS, SETTINGS.stackSize);
+// what's in it, in words: "Holds 12 sticks and 5 berries", or "Empty"
+export function storeWords(th) {
+  const words = Object.entries(th.store || {}).filter(([k, n]) => n > 0 && ITEMS[k]).map(([k, n]) => countLabel(k, n).toLowerCase());
+  if (!words.length) return 'Empty';
+  return `Holds ${words.length > 1 ? `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}` : words[0]}`;
+}
+const storeNote = (th) => (storedIn(th) ? `${storeUsed(th)} of ${PLACEABLES[th.kind].store.squares} squares` : 'Empty');
 
 /* ---------- fire and fuel ---------- */
 export const fuelLeft = (th, now = Date.now()) => fuelLeftAt(th, now); // ms of burning left (rules.js)
@@ -90,6 +108,7 @@ function timeLeft(ms) {
 function fireState(th) {
   const f = PLACEABLES[th.kind].fire;
   if (!th.built) return 'Not built yet';
+  if (PLACEABLES[th.kind].store) return notMineAt(th.x, th.z) ? '' : storeWords(th); // what's in it (not for others: their camp's things are theirs)
   if (!f) return '';
   const left = fuelLeft(th);
   return `${isLit(th) ? 'Burning' : 'Out'} · ${left > 0 ? `${timeLeft(left)} of fuel (holds ${timeLeft(f.max)})` : 'no fuel'}`;
@@ -99,6 +118,7 @@ export const placedName = (th) => {
   const P = PLACEABLES[th.kind];
   if (P.madeWith) { const def = th.crop && CROPS[th.crop.kind]; return def ? `${P.name} · ${def.name.toLowerCase()}` : P.name; } // a farm field: what grows on it
   if (!th.built) return `${P.name} (not built)`;
+  if (P.store) return notMineAt(th.x, th.z) ? P.name : `${P.name} · ${storeNote(th).toLowerCase()}`; // how full it is (0.2.2)
   if (!P.fire) return P.name;
   const left = fuelLeft(th);
   if (claimOn(th)) return `${claimName(th)} · ${timeLeft(left)} left`;
@@ -293,6 +313,12 @@ export function setPlaced(v) {
   if (th.lit || v.burnt) th.burnt = true;
   if (th.built && !wasBuilt && !th.progress) th.progress = 0.999; // built by someone else: pieces just settle
   drawPlaced(th);
+  if (PLACEABLES[th.kind].store) { // what's in it (0.2.2): kinds and how many, and how worn its tools are
+    th.store = {}; th.wear = {};
+    for (const [k, n] of Object.entries(v.store || {})) if (ITEMS[k] && n > 0) th.store[k] = Math.floor(n);
+    for (const [k, list] of Object.entries(v.wear || {})) if (th.store[k] && Array.isArray(list)) th.wear[k] = list.slice(0, th.store[k]).map((x) => Number(x) || 0);
+    if (storeShowing(th.id)) drawBag(); // its squares are open on your screen
+  }
   if (PLACEABLES[th.kind].madeWith) { // a farm field: what grows on it, from ages (so phone clocks don't matter)
     const c = v.crop && CROPS[v.crop.kind] ? v.crop : null, now = Date.now();
     th.crop = c ? { kind: c.kind, at: now - (Number(c.age) || 0), berries: Array.isArray(c.berries) ? [Number(c.berries[0]) || 0, now - (Number(c.berries[1]) || 0)] : [null, null] } : null;
@@ -329,6 +355,7 @@ export function animatePlaced(dt) {
   if (second) placedTick = 0;
   let near = null, nd = Infinity;
   const c = controls.target;
+  if (second) storeCheck(); // an open crate's squares go when you walk away from it, or it's gone (inventory.js)
   for (const th of placed.values()) {
     if (second && th.shown && (th.shown.lit !== isLit(th) || th.shown.show !== fuelShown(th))) {
       burnNow(th); drawPlaced(th); // burnt down a stick, or out of fuel: the fire goes out by itself
@@ -441,7 +468,7 @@ export function levelPlaced() {
       c.shown = null; drawPlant(kind, c);
     }
   }
-  const bare = rects.filter((f) => PLACEABLES[f.th.kind].madeWith); // dug soil (a farm field): no grass grows through it
+  const bare = rects; // no grass grows through a placed thing: dug soil (a farm field), and since 0.2.2 the rest too (it poked out of the crate's lid)
   for (const d of DETAILS) { // grass: back where it grew, then onto the levelled ground
     const m = d.ms;
     if (!d.y0) d.y0 = Float32Array.from(d.xs, (_, i) => m[i * 16 + 13]);
@@ -721,6 +748,22 @@ Object.assign(TASK_KINDS, {
     },
     spot: placedSpot,
   },
+  // opening something that holds things (0.2.2, the small wooden crate): walk over, then its squares show at the top of
+  // your inventory (inventory.js openStore). There's nothing to carry on with while you're away, so the server leaves it off.
+  open: {
+    start(t) {
+      const th = placed.get(t.id);
+      if (!th || !th.built || !PLACEABLES[th.kind].store) { nextTask(); return; }
+      const c = notMineAt(th.x, th.z);
+      if (c) { showTag(`This belongs to ${c.claim.name}`, headTop(), 2); nextTask(); return; } // (someone else's camp; the server checks too)
+      goNear(th, () => {
+        face(th.x, th.z);
+        startAction({ pose: 'bend', seconds: 0.5, end: () => { if (placed.has(th.id)) openStore(th.id); } });
+      });
+    },
+    name: (t, now) => { const th = placed.get(t.id), n = th ? PLACEABLES[th.kind].noun : 'it'; return now ? `Opening the ${n}` : `Open ${n}`; },
+    spot: placedSpot,
+  },
   // sitting by the fire: walk to a free seat and sit until you stand up, do something else or the fire goes out (it carries on while you're away)
   sit: {
     start(t) {
@@ -819,15 +862,17 @@ export function placedActions(th) {
     }) });
   }
   if (P.seats && (!F || lit)) out.push({ label: F ? 'Sit by the fire' : `Sit by the ${name}`, run: () => queueTask({ type: 'sit', id: th.id }) });
+  if (P.store) out.push({ label: `Open ${P.noun}`, note: storeNote(th), run: () => queueTask({ type: 'open', id: th.id }) }); // its squares at the top of your inventory (0.2.2)
   if (lit) { // a society's fire (0.1.5): putting it out ends the society, so only its leader can (the server checks too)
     const lead = you.soc && th.claim && th.claim.who === `s:${you.soc.id}` ? you.soc.members.find((x) => x.lead) : null, notLeader = lead && lead.id !== game.net.myId;
     out.push({ label: 'Put out fire', note: notLeader ? `Only ${lead.name} can put it out` : th.claim && claimMine(th) ? `Ends ${you.soc ? you.soc.name : 'your camp'}` : '', disabled: !!notLeader,
       run: () => queueTask({ type: 'tend', id: th.id, do: 'out' }) });
   }
   else { // once it's out: pack it into your inventory, or take it apart for what it's made of (only who built it; the server checks)
-    const no = carryNo({ [P.item]: 1 }); // too heavy, or no square for it (0.2.1)
+    const full = !!P.store && storedIn(th) > 0; // something in it: empty it first (0.2.2; the server says the same)
+    const no = full ? 'Empty it first' : carryNo({ [P.item]: 1 }); // too heavy, or no square for it (0.2.1)
     out.push({ label: 'Pack up', disabled: !!no, note: no || (F && fuelLeft(th) > 0 ? 'Fuel left is lost' : 'Into your inventory'), run: () => queueTask({ type: 'unplace', id: th.id }) });
-    out.push({ label: 'Take apart', note: takeApartNote(th), run: () => queueTask({ type: 'apart', id: th.id }) });
+    out.push({ label: 'Take apart', disabled: full, note: full ? 'Empty it first' : takeApartNote(th), run: () => queueTask({ type: 'apart', id: th.id }) });
   }
   out.push({ label: 'Inspect', foot: true, run: () => showTag(fireState(th) || P.name, V(th.x, groundY(th.x, th.z) + 1.1, th.z), 2, 5) }, walkHere);
   return out;

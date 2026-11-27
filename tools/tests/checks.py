@@ -2413,7 +2413,7 @@ async def server_tests():
     import subprocess
     from lib import bundle
     bundle()
-    for f in ['admin_extras.mjs', 'live_items.mjs', 'stale_admin.mjs', 'cheats.mjs', 'societies.mjs', 'tasks.mjs', 'fade.mjs', 'forget.mjs', 'accounts.mjs', 'regrow.mjs', 'toolbar.mjs', 'farming.mjs', 'retire.mjs', 'upgrades.mjs']:
+    for f in ['admin_extras.mjs', 'live_items.mjs', 'stale_admin.mjs', 'cheats.mjs', 'societies.mjs', 'tasks.mjs', 'fade.mjs', 'forget.mjs', 'accounts.mjs', 'regrow.mjs', 'toolbar.mjs', 'farming.mjs', 'storage.mjs', 'retire.mjs', 'upgrades.mjs']:
         r = subprocess.run(['node', f], cwd=HERE, capture_output=True, text=True, timeout=180)
         last = (r.stdout.strip().splitlines() or ['(nothing printed)'])[-1]
         if r.returncode: print(r.stdout[-4000:], r.stderr[-2000:])
@@ -2494,7 +2494,105 @@ async def squares():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'tasks_away': tasks_away, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'tool_bar': tool_bar, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'craft_mat': craft_mat, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'loading': loading, 'sideways': sideways, 'menu_rest': menu_rest, 'tips': tips, 'placed_kinds': placed_kinds, 'parts_look': parts_look, 'ore_vein': ore_vein, 'stress': stress, 'placing_grid': placing_grid, 'farming': farming, 'leaving': leaving, 'squares': squares, 'server_tests': server_tests}
+async def storage():
+    """Storage (0.2.2, the small wooden crate): planks on the craft mat (a log with the stone axe kept), the crate made and
+    only placed in your camp, its tap menu (Open crate, Pack up and Take apart), Open walking over and showing its 5
+    squares at the top of the inventory, Put in all and Put in 1, Take and Take 1, dragging a square in and out, Pack up
+    and Take apart greyed out until it's empty, someone not in the camp seeing nothing inside and being refused, the
+    squares going when you walk away, and the admin's Empty it putting what's in it on the ground."""
+    kit = {'campfire': 1, 'stick': 16, 'log': 2, 'stone-axe': 1, 'twine': 2, 'berry': 4}  # (8 sticks left once the fire and the crate have theirs; under the 30 weight)
+    send = "(m) => window.__sock.send(JSON.stringify(m))"
+    CRATE = "[...__pl.placed.values()].find((t) => t.kind === 'small-crate')"
+    async with world(KIT=json.dumps(kit)) as W:
+        a = await W.page('crateA'); await join(a)
+        # a camp: the campfire put down away from the pond, built, fed and lit (as in farming)
+        await a.evaluate("__pl.queueTask({ type: 'walk', x: 28, z: 6 })"); await idle(a, 50); await a.wait_for_timeout(1500)
+        spot = await a.evaluate("(() => { const p = __pl.player.position; for (let k = 0; k < 16; k++) { const ang = k / 16 * Math.PI * 2, x = p.x + Math.cos(ang) * 1.8, z = p.z + Math.sin(ang) * 1.8; if (!__pl.cantPlaceAt(x, z, 'campfire')) return [x, z]; } return null; })()")
+        await a.evaluate(f"({send})({{ t: 'place', kind: 'campfire', x: {spot[0]:.2f}, z: {spot[1]:.2f}, rot: 0 }})"); await a.wait_for_timeout(800)
+        fid = await a.evaluate("[...__pl.placed.keys()][0]")
+        for m in [f"{{ t: 'build', id: {fid} }}", f"{{ t: 'fire', id: {fid}, do: 'add', n: 4, fuel: 'stick' }}", f"{{ t: 'fire', id: {fid}, do: 'light' }}"]:
+            await a.evaluate(f"({send})({m})"); await a.wait_for_timeout(700)
+        await idle(a, 40)
+        expect(await a.evaluate(f"__pl.claimMine(__pl.placed.get({fid})) && __pl.isLit(__pl.placed.get({fid}))"), 'a lit campfire: their camp')
+        # planks on the craft mat (the axe is kept), then the crate
+        said = await mat_make(a, [('log', 1), ('stone-axe', 1)])
+        await mat_make(a, [('log', 1), ('stone-axe', 1)])
+        got = await a.evaluate("[__pl.you.carry.plank || 0, __pl.you.carry.log || 0, __pl.you.bar['stone-axe'] || 0]")
+        expect(said == 'Planks' and got == [4, 0, 1], f'Planks on the craft mat, twice: 4 planks, no logs, the axe still on the tool bar ({said}; {got})')
+        await mat_make(a, [('plank', 4), ('stick', 4), ('twine', 2)])
+        expect(await a.evaluate("__pl.you.carry['small-crate'] === 1 && !__pl.you.carry.plank"), 'made a small wooden crate')
+        far = await a.evaluate(f"(() => {{ const f = __pl.placed.get({fid}); return __pl.cantPlaceAt(f.x - 16, f.z, 'small-crate'); }})()")
+        expect(far == 'Small wooden crates only go in your camp', f'outside the camp it can\'t go ({far})')
+        # placed in the camp from the inventory, the way a player does
+        await a.click('#bagBtn'); await a.wait_for_timeout(400)
+        await a.click('#bagList .bag-tile[data-kind="small-crate"]'); await a.wait_for_timeout(200)
+        expect(await text(a, '#bagInfo button.go') == 'Place', 'its green button is Place')
+        await a.click('#bagInfo button.go'); await a.wait_for_timeout(400)
+        put = await a.evaluate(f"""(() => {{ const f = __pl.placed.get({fid});
+          for (let r = 3; r < 7; r += 0.5) for (let k = 0; k < 16; k++) {{ const x = f.x + Math.cos(k / 16 * 6.28) * r, z = f.z + Math.sin(k / 16 * 6.28) * r;
+            __pl.movePlacing(x, z); if (__pl.placing.ok) return [__pl.placing.x, __pl.placing.z]; }} return null; }})()""")
+        expect(put is not None, f'a spot for it in the camp ({put})')
+        await a.evaluate('__pl.finishPlacing()'); await idle(a, 60); await a.wait_for_timeout(1500)
+        cid = await a.evaluate(f"({CRATE} || {{}}).id")
+        expect(await a.evaluate(f"!!{CRATE} && {CRATE}.built"), 'put down and built')
+        acts = await a.evaluate(f"__pl.placedActions({CRATE}).map((x) => [x.label, x.note || '', !!x.disabled])")
+        expect([x[0] for x in acts] == ['Open crate', 'Pack up', 'Take apart', 'Inspect', 'Walk here'] and acts[0][1] == 'Empty' and not acts[1][2], f'its tap menu: Open crate (Empty), Pack up, Take apart ({acts})')
+        expect(await a.evaluate(f"__pl.placedName({CRATE})") == 'Small wooden crate · empty', 'its title says it is empty')
+        # Open crate: walks over, then its 5 squares show at the top of the inventory
+        await a.evaluate(f"__pl.queueTask({{ type: 'open', id: {cid} }})"); await idle(a, 30); await a.wait_for_timeout(600)
+        sq = await a.evaluate("[document.querySelectorAll('#storeList > li').length, document.getElementById('storeUsed').textContent, document.getElementById('storeName').textContent]")
+        expect(await a.evaluate(f"__pl.storeShowing({cid})") and await shown(a, '#store') and sq == [5, 'Empty', 'Small wooden crate'], f'Open crate: its 5 squares at the top of the inventory ({sq})')
+        # Put in all: the square of 8 sticks
+        await a.click('#bagList .bag-tile[data-kind="stick"]'); await a.wait_for_timeout(200)
+        b1 = await text(a, '#bagInfo button.go')
+        await a.click('#bagInfo button.go'); await a.wait_for_timeout(900)
+        got = await a.evaluate(f"[{CRATE}.store.stick || 0, __pl.you.carry.stick || 0, document.getElementById('storeUsed').textContent]")
+        expect(b1 == 'Put in all' and got == [8, 0, '1 of 5 squares'], f'tap the square of 8 sticks, Put in all: they go in ({b1}; {got})')
+        # Put in 1 berry, then another square of the berries by dragging it in
+        await a.click('#bagList .bag-tile[data-kind="berry"]'); await a.wait_for_timeout(200)
+        await a.click('#bagInfo .info-acts button:has-text("Put in 1")'); await a.wait_for_timeout(900)
+        expect(await a.evaluate(f"[{CRATE}.store.berry, __pl.you.carry.berry]") == [1, 3], 'Put in 1: one berry goes in')
+        await shot(a, 'storage_open')
+        async def drag(sel, to):
+            src = await (await a.query_selector(sel)).bounding_box(); dst = await (await a.query_selector(to)).bounding_box()
+            await a.mouse.move(src['x'] + src['width'] / 2, src['y'] + src['height'] / 2); await a.mouse.down()
+            await a.mouse.move(dst['x'] + dst['width'] / 2, dst['y'] + dst['height'] / 2, steps=8); await a.mouse.up(); await a.wait_for_timeout(900)
+        await drag('#bagList .bag-tile[data-kind="berry"]', '#storeList')
+        expect(await a.evaluate(f"[{CRATE}.store.berry, __pl.you.carry.berry || 0]") == [4, 0], 'a square dragged onto the crate goes in')
+        await drag('#storeList .bag-tile[data-kind="berry"]', '#bagList')
+        expect(await a.evaluate(f"[{CRATE}.store.berry || 0, __pl.you.carry.berry]") == [0, 4], 'and dragged back out onto the inventory, it comes out')
+        # Take: a square in the crate
+        await a.click('#storeList .bag-tile[data-kind="stick"]'); await a.wait_for_timeout(200)
+        info = await a.evaluate("[document.querySelector('#bagInfo button.go').textContent, [...document.querySelectorAll('#bagInfo .info-acts button')].map((b) => b.textContent)]")
+        expect(info == ['Take all', ['Take 1']], f'a square in the crate: Take all and Take 1 ({info})')
+        await a.click('#bagInfo .info-acts button:has-text("Take 1")'); await a.wait_for_timeout(900)
+        expect(await a.evaluate(f"[{CRATE}.store.stick, __pl.you.carry.stick]") == [7, 1], 'Take 1: one stick back')
+        await a.click('#bagClose'); await a.wait_for_timeout(300)
+        acts = await a.evaluate(f"__pl.placedActions({CRATE}).map((x) => [x.label, x.note || '', !!x.disabled])")
+        expect(acts[0] == ['Open crate', '1 of 5 squares', False] and acts[1] == ['Pack up', 'Empty it first', True] and acts[2] == ['Take apart', 'Empty it first', True], f'with something in it: Pack up and Take apart wait till it is empty ({acts[:3]})')
+        insp = await a.evaluate(f"[__pl.placedName({CRATE}), __pl.storeWords({CRATE})]")
+        expect(insp == ['Small wooden crate · 1 of 5 squares', 'Holds 7 sticks'], f'its title and Inspect say what is in it ({insp})')
+        # someone not in the camp: nothing inside to see, and the server says no
+        b = await W.page('crateB'); await join(b); await b.wait_for_timeout(800)
+        theirs = await b.evaluate(f"(() => {{ const t = {CRATE}; return [__pl.menuActions({{ kind: 'placed', th: t, name: '' }}).map((x) => x.label), __pl.placedName(t), __pl.storedIn(t)]; }})()")
+        expect('Open crate' not in theirs[0] and theirs[1] == 'Small wooden crate' and theirs[2] == 7, f"someone else sees no Open crate and nothing inside in its title ({theirs})")
+        await b.evaluate(f"({send})({{ t: 'takeOut', id: {cid}, kind: 'stick', n: 7 }})"); await b.wait_for_timeout(700)
+        expect(await a.evaluate(f"{CRATE}.store.stick") == 7, 'and taking things out of it is refused')
+        # walking away closes its squares
+        await a.evaluate(f"__pl.queueTask({{ type: 'open', id: {cid} }})"); await idle(a, 30); await a.wait_for_timeout(600)
+        P0 = await a.evaluate('[__pl.player.position.x, __pl.player.position.z]')
+        await a.evaluate(f"__pl.queueTask({{ type: 'walk', x: {P0[0] - 7}, z: {P0[1]} }})"); await idle(a, 30); await a.wait_for_timeout(1500)
+        expect(not await a.evaluate(f"__pl.storeShowing({cid})") and not await shown(a, '#store'), 'walking away: its squares go')
+        # the admin's Empty it: what's in it lands on the ground round it
+        adm = await W.page('crateAdmin'); await open_admin(adm)
+        n0 = await a.evaluate("__pl.world.items.length")
+        await adm.evaluate(f"({send})({{ t: 'a.empty', id: {cid} }})"); await a.wait_for_timeout(1500)
+        got = await a.evaluate(f"[__pl.storedIn({CRATE}), __pl.world.items.length]")
+        expect(got[0] == 0 and got[1] == n0 + 7, f"the admin's Empty it: the 7 sticks are on the ground ({got}, was {n0})")
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'tasks_away': tasks_away, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'tool_bar': tool_bar, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'craft_mat': craft_mat, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'loading': loading, 'sideways': sideways, 'menu_rest': menu_rest, 'tips': tips, 'placed_kinds': placed_kinds, 'parts_look': parts_look, 'ore_vein': ore_vein, 'stress': stress, 'placing_grid': placing_grid, 'farming': farming, 'leaving': leaving, 'squares': squares, 'storage': storage, 'server_tests': server_tests}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

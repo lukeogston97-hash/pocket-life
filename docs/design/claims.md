@@ -11,4 +11,5 @@
 - Fires lit before old 0.3.0 are just fires until they're lit again.
 - Societies (0.1.4, reworked 0.1.5, societies.md): your claim is your society. Lighting your first fire starts both (th.claim 's:<id>'), members use it as their own, only the leader can put the fire out, and the fire going out ends both.
 - Players see a claim as a camp (0.1.6, Luke: "camp"): see wording.md. The code, the server and the admin still say claim.
-- Not built yet: storage inside a claim, a claim marker other than the fire, more water for a bigger world (see later.md).
+- Storage inside a claim (0.2.2, storage.md): the small wooden crate only goes in your own camp, only your camp can open it, and anyone can once the camp ends.
+- Not built yet: a claim marker other than the fire, more water for a bigger world (see later.md).

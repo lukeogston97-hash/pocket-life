@@ -76,6 +76,7 @@
   "items": {
     "stick": {
       "name": "Stick",
+      "plural": "Sticks",
       "weight": 1,
       "eat": null,
       "uses": 0,
@@ -85,6 +86,7 @@
     },
     "stone": {
       "name": "Stone",
+      "plural": "Stones",
       "weight": 1,
       "eat": null,
       "uses": 0,
@@ -94,6 +96,7 @@
     },
     "twine": {
       "name": "Twine",
+      "plural": "Twine",
       "weight": 1,
       "eat": null,
       "uses": 0,
@@ -103,6 +106,7 @@
     },
     "sharp-stone": {
       "name": "Sharp stone",
+      "plural": "Sharp stones",
       "weight": 1,
       "eat": null,
       "uses": 0,
@@ -112,6 +116,7 @@
     },
     "short-handle": {
       "name": "Short tool handle",
+      "plural": "Short tool handles",
       "weight": 1,
       "eat": null,
       "uses": 0,
@@ -121,6 +126,7 @@
     },
     "long-stick": {
       "name": "Long tool handle",
+      "plural": "Long tool handles",
       "weight": 2,
       "eat": null,
       "uses": 0,
@@ -130,6 +136,7 @@
     },
     "axe-head": {
       "name": "Stone axe head",
+      "plural": "Stone axe heads",
       "weight": 1,
       "eat": null,
       "uses": 0,
@@ -139,6 +146,7 @@
     },
     "pick-head": {
       "name": "Stone pick head",
+      "plural": "Stone pick heads",
       "weight": 1,
       "eat": null,
       "uses": 0,
@@ -148,6 +156,7 @@
     },
     "hoe-head": {
       "name": "Stone hoe head",
+      "plural": "Stone hoe heads",
       "weight": 1,
       "eat": null,
       "uses": 0,
@@ -157,6 +166,7 @@
     },
     "berry": {
       "name": "Berry",
+      "plural": "Berries",
       "weight": 1,
       "eat": {
         "hunger": 10
@@ -168,6 +178,7 @@
     },
     "berry-seeds": {
       "name": "Berry seeds",
+      "plural": "Berry seeds",
       "weight": 1,
       "eat": null,
       "uses": 0,
@@ -177,6 +188,7 @@
     },
     "fish": {
       "name": "Raw fish",
+      "plural": "Raw fish",
       "weight": 1,
       "eat": null,
       "uses": 0,
@@ -186,6 +198,7 @@
     },
     "cooked-fish": {
       "name": "Cooked fish",
+      "plural": "Cooked fish",
       "weight": 1,
       "eat": {
         "hunger": 35
@@ -197,6 +210,7 @@
     },
     "knife": {
       "name": "Stone knife",
+      "plural": "Stone knives",
       "weight": 1,
       "eat": null,
       "uses": 20,
@@ -206,6 +220,7 @@
     },
     "stone-axe": {
       "name": "Stone axe",
+      "plural": "Stone axes",
       "weight": 2,
       "eat": null,
       "uses": 30,
@@ -215,6 +230,7 @@
     },
     "stone-pickaxe": {
       "name": "Stone pickaxe",
+      "plural": "Stone pickaxes",
       "weight": 2,
       "eat": null,
       "uses": 30,
@@ -224,6 +240,7 @@
     },
     "stone-hoe": {
       "name": "Stone hoe",
+      "plural": "Stone hoes",
       "weight": 2,
       "eat": null,
       "uses": 30,
@@ -233,6 +250,7 @@
     },
     "fishing-spear": {
       "name": "Fishing spear",
+      "plural": "Fishing spears",
       "weight": 2,
       "eat": null,
       "uses": 20,
@@ -242,7 +260,18 @@
     },
     "log": {
       "name": "Log",
+      "plural": "Logs",
       "weight": 5,
+      "eat": null,
+      "uses": 0,
+      "places": null,
+      "startInWorld": 0,
+      "spawnsNear": null
+    },
+    "plank": {
+      "name": "Plank",
+      "plural": "Planks",
+      "weight": 2,
       "eat": null,
       "uses": 0,
       "places": null,
@@ -251,10 +280,21 @@
     },
     "campfire": {
       "name": "Campfire",
+      "plural": "Campfires",
       "weight": 9,
       "eat": null,
       "uses": 0,
       "places": "campfire",
+      "startInWorld": 0,
+      "spawnsNear": null
+    },
+    "small-crate": {
+      "name": "Small wooden crate",
+      "plural": "Small wooden crates",
+      "weight": 14,
+      "eat": null,
+      "uses": 0,
+      "places": "small-crate",
       "startInWorld": 0,
       "spawnsNear": null
     }
@@ -374,6 +414,17 @@
         "stone-hoe": 1
       }
     },
+    "plank": {
+      "needs": {
+        "log": 1
+      },
+      "makes": {
+        "plank": 2
+      },
+      "keeps": {
+        "stone-axe": 1
+      }
+    },
     "campfire": {
       "needs": {
         "log": 1,
@@ -382,6 +433,16 @@
       },
       "makes": {
         "campfire": 1
+      }
+    },
+    "small-crate": {
+      "needs": {
+        "plank": 4,
+        "stick": 4,
+        "twine": 2
+      },
+      "makes": {
+        "small-crate": 1
       }
     },
     "cooked-fish": {
@@ -568,7 +629,8 @@
       "seats": {
         "count": 6,
         "distance": 1.7
-      }
+      },
+      "inCamp": false
     },
     "field": {
       "item": "field",
@@ -581,10 +643,26 @@
       "keepClear": null,
       "fire": null,
       "seats": null,
+      "inCamp": true,
       "madeWith": "stone-hoe",
       "makeSeconds": 8,
-      "flattenSeconds": 4,
-      "inCamp": true
+      "flattenSeconds": 4
+    },
+    "small-crate": {
+      "item": "small-crate",
+      "buildSeconds": 6,
+      "solid": 0.4,
+      "size": [
+        1,
+        1
+      ],
+      "keepClear": null,
+      "fire": null,
+      "seats": null,
+      "inCamp": true,
+      "storage": {
+        "squares": 5
+      }
     }
   },
   "crops": {

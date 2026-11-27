@@ -192,6 +192,14 @@ export const stackOf = (it, size) => (!it || it.uses || it.places ? 1 : Math.max
 // how many squares what's carried takes (the tools on the bar take none)
 export const squaresUsed = (carry, bar, items, size) => Object.entries(carry || {})
   .reduce((s, [k, n]) => s + Math.ceil(Math.max(0, n - ((bar || {})[k] || 0)) / stackOf(items[k], size)), 0);
+/* ---------- storage (0.2.2, the small wooden crate) ----------
+   A placed thing with storage holds things in its own squares, the same squares and stacks as the inventory. store:
+   { kind: n } what's in it, squares: how many it has. How many more of `kind` fit: the squares the other kinds leave
+   free, as stacks of it, less what's already in. */
+export function storeRoom(store, kind, items, size, squares) {
+  const others = squaresUsed({ ...(store || {}), [kind]: 0 }, null, items, size);
+  return Math.max(0, (squares - others) * stackOf(items[kind], size) - ((store || {})[kind] || 0));
+}
 
 /* ---------- claims: can a fire lit at x, z claim the land round it? ---------- */
 // o: { radius, spawnRadius, pond: { x, z }, hasClaim, claims: [{ x, z, name }] } (claims: every other claim's fire)

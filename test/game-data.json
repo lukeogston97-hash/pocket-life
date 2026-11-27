@@ -1,7 +1,7 @@
 {
   "_generated": "Made from content/*.json by python3 tools/worlds.py test-build. Edit those files, not this one.",
   "version": "0.2.2",
-  "build": 1,
+  "build": 2,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -482,6 +482,88 @@
       },
       "startInWorld": 0
     },
+    "plank": {
+      "name": "Plank",
+      "about": "Split from a log with a stone axe. For building things like crates.",
+      "plural": "Planks",
+      "weight": 2,
+      "look": {
+        "shape": "parts",
+        "colour": "#9c7650",
+        "parts": [
+          {
+            "form": "box",
+            "size": [
+              0.78,
+              0.045,
+              0.17
+            ],
+            "at": [
+              0,
+              0.0225,
+              0
+            ]
+          },
+          {
+            "form": "box",
+            "size": [
+              0.004,
+              0.041,
+              0.166
+            ],
+            "at": [
+              0.3915,
+              0.0225,
+              0
+            ],
+            "colour": "#c4a273"
+          },
+          {
+            "form": "box",
+            "size": [
+              0.004,
+              0.041,
+              0.166
+            ],
+            "at": [
+              -0.3915,
+              0.0225,
+              0
+            ],
+            "colour": "#c4a273"
+          },
+          {
+            "form": "box",
+            "size": [
+              0.6,
+              0.003,
+              0.007
+            ],
+            "at": [
+              -0.05,
+              0.0458,
+              -0.04
+            ],
+            "colour": "#7f5f3e"
+          },
+          {
+            "form": "box",
+            "size": [
+              0.44,
+              0.003,
+              0.007
+            ],
+            "at": [
+              0.11,
+              0.0458,
+              0.038
+            ],
+            "colour": "#7f5f3e"
+          }
+        ]
+      },
+      "startInWorld": 0
+    },
     "campfire": {
       "name": "Campfire",
       "plural": "Campfires",
@@ -494,6 +576,300 @@
         "ash": "#4a443d"
       },
       "places": "campfire",
+      "startInWorld": 0
+    },
+    "small-crate": {
+      "name": "Small wooden crate",
+      "about": "Put it in your camp to keep things in. It holds 5 squares, and only your camp can open it.",
+      "plural": "Small wooden crates",
+      "weight": 14,
+      "look": {
+        "shape": "parts",
+        "colour": "#8d6b48",
+        "parts": [
+          {
+            "form": "box",
+            "size": [
+              0.56,
+              0.28,
+              0.36
+            ],
+            "at": [
+              0,
+              0.16,
+              0
+            ],
+            "colour": "#4a3726"
+          },
+          {
+            "form": "box",
+            "size": [
+              0.62,
+              0.13,
+              0.42
+            ],
+            "at": [
+              0,
+              0.085,
+              0
+            ],
+            "colour": "#8d6b48"
+          },
+          {
+            "form": "box",
+            "size": [
+              0.62,
+              0.13,
+              0.42
+            ],
+            "at": [
+              0,
+              0.235,
+              0
+            ],
+            "colour": "#7c5d40"
+          },
+          {
+            "form": "cylinder",
+            "size": [
+              0.026,
+              0.33
+            ],
+            "at": [
+              -0.31,
+              0.165,
+              -0.21
+            ],
+            "colour": "#6c5137",
+            "sides": 7
+          },
+          {
+            "form": "cylinder",
+            "size": [
+              0.032,
+              0.03
+            ],
+            "at": [
+              -0.31,
+              0.07,
+              -0.21
+            ],
+            "colour": "#c9b77a",
+            "sides": 7
+          },
+          {
+            "form": "cylinder",
+            "size": [
+              0.032,
+              0.03
+            ],
+            "at": [
+              -0.31,
+              0.25,
+              -0.21
+            ],
+            "colour": "#c9b77a",
+            "sides": 7
+          },
+          {
+            "form": "cylinder",
+            "size": [
+              0.026,
+              0.33
+            ],
+            "at": [
+              -0.31,
+              0.165,
+              0.21
+            ],
+            "colour": "#6c5137",
+            "sides": 7
+          },
+          {
+            "form": "cylinder",
+            "size": [
+              0.032,
+              0.03
+            ],
+            "at": [
+              -0.31,
+              0.07,
+              0.21
+            ],
+            "colour": "#c9b77a",
+            "sides": 7
+          },
+          {
+            "form": "cylinder",
+            "size": [
+              0.032,
+              0.03
+            ],
+            "at": [
+              -0.31,
+              0.25,
+              0.21
+            ],
+            "colour": "#c9b77a",
+            "sides": 7
+          },
+          {
+            "form": "cylinder",
+            "size": [
+              0.026,
+              0.33
+            ],
+            "at": [
+              0.31,
+              0.165,
+              -0.21
+            ],
+            "colour": "#6c5137",
+            "sides": 7
+          },
+          {
+            "form": "cylinder",
+            "size": [
+              0.032,
+              0.03
+            ],
+            "at": [
+              0.31,
+              0.07,
+              -0.21
+            ],
+            "colour": "#c9b77a",
+            "sides": 7
+          },
+          {
+            "form": "cylinder",
+            "size": [
+              0.032,
+              0.03
+            ],
+            "at": [
+              0.31,
+              0.25,
+              -0.21
+            ],
+            "colour": "#c9b77a",
+            "sides": 7
+          },
+          {
+            "form": "cylinder",
+            "size": [
+              0.026,
+              0.33
+            ],
+            "at": [
+              0.31,
+              0.165,
+              0.21
+            ],
+            "colour": "#6c5137",
+            "sides": 7
+          },
+          {
+            "form": "cylinder",
+            "size": [
+              0.032,
+              0.03
+            ],
+            "at": [
+              0.31,
+              0.07,
+              0.21
+            ],
+            "colour": "#c9b77a",
+            "sides": 7
+          },
+          {
+            "form": "cylinder",
+            "size": [
+              0.032,
+              0.03
+            ],
+            "at": [
+              0.31,
+              0.25,
+              0.21
+            ],
+            "colour": "#c9b77a",
+            "sides": 7
+          },
+          {
+            "form": "box",
+            "size": [
+              0.6799999999999999,
+              0.04,
+              0.48
+            ],
+            "at": [
+              0,
+              0.32,
+              0
+            ],
+            "colour": "#7a5c40"
+          },
+          {
+            "form": "box",
+            "size": [
+              0.685,
+              0.042,
+              0.012
+            ],
+            "at": [
+              0,
+              0.32,
+              0
+            ],
+            "colour": "#4a3726"
+          },
+          {
+            "form": "box",
+            "size": [
+              0.06,
+              0.025,
+              0.5
+            ],
+            "at": [
+              -0.19,
+              0.3525,
+              0
+            ],
+            "colour": "#654a33"
+          },
+          {
+            "form": "box",
+            "size": [
+              0.06,
+              0.025,
+              0.5
+            ],
+            "at": [
+              0.19,
+              0.3525,
+              0
+            ],
+            "colour": "#654a33"
+          },
+          {
+            "form": "box",
+            "size": [
+              0.06,
+              0.08,
+              0.014
+            ],
+            "at": [
+              0,
+              0.3,
+              0.247
+            ],
+            "colour": "#c9b77a"
+          }
+        ]
+      },
+      "places": "small-crate",
       "startInWorld": 0
     }
   },
@@ -642,6 +1018,20 @@
       "about": "Digs farm fields in your camp"
     },
     {
+      "id": "plank",
+      "name": "Planks",
+      "needs": {
+        "log": 1
+      },
+      "keeps": {
+        "stone-axe": 1
+      },
+      "makes": {
+        "plank": 2
+      },
+      "about": "Split a log with a stone axe. You keep the axe"
+    },
+    {
       "id": "campfire",
       "name": "Campfire",
       "needs": {
@@ -653,6 +1043,19 @@
         "campfire": 1
       },
       "about": "Place it, build it, then light it"
+    },
+    {
+      "id": "small-crate",
+      "name": "Small wooden crate",
+      "needs": {
+        "plank": 4,
+        "stick": 4,
+        "twine": 2
+      },
+      "makes": {
+        "small-crate": 1
+      },
+      "about": "Planks with a stick in each corner, tied with twine"
     },
     {
       "id": "cooked-fish",
@@ -712,6 +1115,20 @@
         "shape": "field",
         "colour": "#5a3f2b",
         "ridge": "#7a5a3d"
+      }
+    },
+    "small-crate": {
+      "name": "Small wooden crate",
+      "buildSeconds": 6,
+      "buildVerb": "Building the small wooden crate",
+      "solid": 0.4,
+      "size": [
+        1,
+        1
+      ],
+      "inCamp": true,
+      "storage": {
+        "squares": 5
       }
     }
   },
@@ -1157,7 +1574,9 @@
       "version": "0.2.2",
       "date": "2026-11-27",
       "added": [
-        "Faint squares show on the ground while you choose where to place or dig"
+        "Faint squares show on the ground while you choose where to place or dig",
+        "Planks: split a log with a stone axe on the craft mat",
+        "Small wooden crate: 5 squares to keep things in at your camp"
       ],
       "improved": [
         "Campfires and farm fields go on 1 metre squares, so things line up easily",

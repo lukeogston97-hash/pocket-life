@@ -18,7 +18,7 @@ import { tickStats } from './needs.js';
 import { bagOpen, craftOpen, drawBag, drawCraft, madeBy, recipeGroup, recipeName } from './inventory.js';
 import { controls } from './camera.js';
 import { stopQueue, taskName } from './moving.js';
-import { CROPS, PLACEABLES, placed } from './placeables.js';
+import { CROPS, PLACEABLES, placed, storedIn, storeWords } from './placeables.js';
 import { ndc, ray } from './input.js';
 import { net, others, outbox, showMaintenance } from './online.js';
 // shared for files further down game/main.js, and the variables other files change (game/links.js)
@@ -177,6 +177,8 @@ export function adminPlacedActions(th) {
     ...(F && th.built ? [{ label: 'Fill with fuel', run: () => adminSend({ t: 'a.regrow', what: 'placed', id: th.id }) },
       th.lit ? (th.claim ? sure('Put out', fire('out'), whose) : { label: 'Put out', run: fire('out') }) : { label: 'Light', run: fire('light') }] : []),
     ...(th.claim ? [sure('End claim', () => adminSend({ t: 'a.claim', id: th.id, do: 'end' }), 'The fire burns on')] : []),
+    ...(PLACEABLES[th.kind] && PLACEABLES[th.kind].store && th.built ? [storedIn(th) // storage (0.2.2): what's in it, and Empty puts it all on the ground
+      ? sure('Empty it', () => adminSend({ t: 'a.empty', id: th.id }), storeWords(th)) : { label: 'Empty it', note: 'Nothing in it', disabled: true }] : []),
     ...(F ? [{ label: 'Fires and claims', note: 'Set fuel, give a claim', run: () => { openFire = th.id; openAdminPanel(); showAdminTab('world'); } }] : []),
     sure('Remove', () => adminSend({ t: 'a.remove', id: th.id }))];
 }
@@ -500,14 +502,15 @@ function drawCounts() {
   const kinds = {};
   for (const it of world.items) kinds[it.kind] = (kinds[it.kind] || 0) + 1;
   const loose = Object.entries(kinds).sort((a, b) => b[1] - a[1]).map(([k, c]) => `${c} ${c === 1 ? ITEMS[k].name.toLowerCase() : ITEMS[k].plural.toLowerCase()}`);
-  const fires = {}, planted = {}; // (every kind of placed thing: campfires, farm fields and how many have something growing)
-  for (const th of placed.values()) { fires[th.kind] = (fires[th.kind] || 0) + 1; if (th.crop) planted[th.kind] = (planted[th.kind] || 0) + 1; }
+  const fires = {}, planted = {}, holding = {}; // (every kind of placed thing: campfires, farm fields and how many have something growing, crates and how many have things in)
+  for (const th of placed.values()) { fires[th.kind] = (fires[th.kind] || 0) + 1; if (th.crop) planted[th.kind] = (planted[th.kind] || 0) + 1; if (storedIn(th)) holding[th.kind] = (holding[th.kind] || 0) + 1; }
   const lines = [
     ['Trees', `${n(trees, (t) => t.state === 'tree')}`], ['Tree stumps', `${n(trees, (t) => t.state === 'stump')}`],
     ['Boulders', `${n(rocks, (r) => r.boulder && r.state !== 'gone')} (${n(rocks, (r) => r.boulder && r.state === 'mined')} mined)`],
     ['Rocks', `${n(rocks, (r) => !r.boulder && r.state !== 'gone')} (${n(rocks, (r) => !r.boulder && r.state === 'gone')} broken)`],
     ['Berry bushes', `${bushes.length} (${n(bushes, (b) => berriesOn(b) < bushHolds(SOURCES[b.userData.source] || {}))} picked)`],
-    ...Object.entries(fires).map(([k, c]) => [PLACEABLES[k] ? `${PLACEABLES[k].name}s` : k, PLACEABLES[k] && PLACEABLES[k].madeWith ? `${c} (${planted[k] || 0} planted)` : String(c)]),
+    ...Object.entries(fires).map(([k, c]) => [PLACEABLES[k] ? `${PLACEABLES[k].name}s` : k, PLACEABLES[k] && PLACEABLES[k].madeWith ? `${c} (${planted[k] || 0} planted)`
+      : PLACEABLES[k] && PLACEABLES[k].store ? `${c} (${holding[k] || 0} with things in)` : String(c)]),
     ['Loose items', `${world.items.length}`]];
   const box = $('adminCounts');
   box.replaceChildren(...lines.flatMap(([a, b]) => [el('span', '', a), el('b', '', b)]));

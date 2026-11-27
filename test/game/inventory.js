@@ -2,14 +2,14 @@
    Drawn once from the real 3D models with a small separate renderer, then that renderer is let go. */
 import * as THREE from 'three';
 import { game, share } from './links.js';
-import { matIs, recipeWants, tidyBar } from './rules.js';
+import { matIs, recipeWants, squaresUsed, storeRoom, tidyBar } from './rules.js';
 import { camera, canvas, renderer, SETTINGS, V } from './core.js';
 import { terrain } from './land.js';
 import { $, buildItem, countLabel, deg, fmt, groupOf, GROUPS, ITEMS, RECIPES } from './items.js';
 import { disposeMaterials } from './people.js';
 import {
-  addToCarry, barRoom, carried, drawCarry, drawHeld, drawWeightBar, FULL, hasTool, headTop, invSquares, onBar, player, showGain,
-  showTag, squaresTaken, stackOfKind, takeFromCarry, toolSlots, ui, you,
+  addToCarry, barRoom, carried, carryNo, drawCarry, drawHeld, drawWeightBar, FULL, hasTool, headTop, invSquares, onBar, player,
+  showGain, showTag, squaresTaken, stackOfKind, takeFromCarry, toolSlots, ui, you,
 } from './you.js';
 import { spendEnergy } from './needs.js';
 import { hideHint, tipDid } from './tips.js';
@@ -72,19 +72,20 @@ export function itemPic(kind) {
 /* ---------- your inventory: a grid of what you carry; tap one to see what it is and what you can do with it ---------- */
 export const bagOpen = () => $('bag').classList.contains('open');
 let bagPick = null; // the tile tapped in the grid (kind:number; its info shows under it), or null
-function smallButton(text, onClick, primary) {
+function smallButton(text, onClick, primary, off) {
   const b = document.createElement('button');
   b.type = 'button';
   b.className = 'small-btn' + (primary ? ' go' : '');
   b.textContent = text;
+  b.disabled = !!off;
   b.addEventListener('click', onClick);
   return b;
 }
 // food first, then tools, then things you place, then everything else, each in game-data.json order
 const ITEM_ORDER = Object.keys(ITEMS);
 const bagGroup = (it) => (Object.keys(it.eat || {}).length ? 0 : it.uses ? 1 : it.places ? 2 : 3);
-const bagKinds = () => Object.keys(you.carry).filter((k) => ITEMS[k] && you.carry[k] > 0)
-  .sort((a, b) => bagGroup(ITEMS[a]) - bagGroup(ITEMS[b]) || ITEM_ORDER.indexOf(a) - ITEM_ORDER.indexOf(b));
+const kindOrder = (a, b) => bagGroup(ITEMS[a]) - bagGroup(ITEMS[b]) || ITEM_ORDER.indexOf(a) - ITEM_ORDER.indexOf(b);
+const bagKinds = () => Object.keys(you.carry).filter((k) => ITEMS[k] && you.carry[k] > 0).sort(kindOrder);
 // a line about it: its own "about" in game-data.json, else the about of the recipe that makes it
 const itemAbout = (kind) => { const a = ITEMS[kind].about || (RECIPES.find((r) => r.makes[kind]) || {}).about || ''; return a && !/[.!?]$/.test(a) ? `${a}.` : a; }; // (a recipe's line has no full stop)
 // a tool's uses left, one per tool you carry, the one in use first (the server sends a list; before 0.2.6 one number)
@@ -128,7 +129,8 @@ function bagTile(s) {
   b.dataset.key = s.key;
   if (s.bar) b.dataset.barKey = s.key;
   b.setAttribute('aria-pressed', String(bagPick === s.key));
-  b.setAttribute('aria-label', (it.uses ? `${it.name}, ${s.bar ? (s.spare ? `spare, ${s.left} uses` : usesWord(s.left)) : `in your inventory, ${usesWord(s.left)}`}` : countLabel(s.kind, s.n)));
+  b.setAttribute('aria-label', s.store ? `${it.uses ? `${it.name}, ${usesWord(s.left)}` : countLabel(s.kind, s.n)}, in the ${storeNoun()}`
+    : (it.uses ? `${it.name}, ${s.bar ? (s.spare ? `spare, ${s.left} uses` : usesWord(s.left)) : `in your inventory, ${usesWord(s.left)}`}` : countLabel(s.kind, s.n)));
   b.appendChild(itemPic(s.kind));
   if (s.n > 1) { const c = document.createElement('span'); c.className = 'count'; c.textContent = s.n; b.appendChild(c); }
   if (it.uses) { const w = document.createElement('span'); w.className = 'wear'; w.style.setProperty('--w', (s.left / it.uses).toFixed(2)); b.appendChild(w); }
@@ -188,7 +190,7 @@ function bagDragOn(b, s) {
   b.addEventListener('dragstart', (e) => e.preventDefault()); // the browser's own picture-drag would cancel ours
   b.addEventListener('pointerdown', (e) => {
     if (e.button > 0) return;
-    const x0 = e.clientX, y0 = e.clientY, touch = e.pointerType !== 'mouse', tool = !!ITEMS[s.kind].uses;
+    const x0 = e.clientX, y0 = e.clientY, touch = e.pointerType !== 'mouse', tool = !!ITEMS[s.kind].uses, storing = storeOn(), stay = tool || storing;
     let ghost = null, timer = null, over = false;
     const start = () => {
       clearTimeout(timer);
@@ -196,8 +198,9 @@ function bagDragOn(b, s) {
       ghost.className = 'drag-ghost';
       ghost.appendChild(itemPic(s.kind));
       document.body.appendChild(ghost);
-      $('bag').classList.add(tool ? 'dragging-tool' : 'dragging'); // a tool: the inventory stays, to drop it on or off the tool bar (0.1.17)
-      if (tool) $(s.bar ? 'bagList' : 'toolBar').classList.add('drop-on');
+      $('bag').classList.add(stay ? 'dragging-tool' : 'dragging'); // a tool: the inventory stays, to drop it on or off the tool bar (0.1.17); a crate open too (0.2.2)
+      if (storing) { $(s.store ? 'bagList' : 'storeList').classList.add('drop-on'); if (s.store && tool) $('toolBar').classList.add('drop-on'); } // into the crate, or out of it
+      else if (tool) $(s.bar ? 'bagList' : 'toolBar').classList.add('drop-on');
       bagDragging = true;
       dragPoint = { x: e.clientX, y: e.clientY, armed: false };
       move(e);
@@ -205,7 +208,7 @@ function bagDragOn(b, s) {
     const move = (m) => {
       if (!ghost) return;
       ghost.style.transform = `translate(${m.clientX - 28}px, ${m.clientY - 28}px)`;
-      if (dragPoint) { dragPoint.x = m.clientX; dragPoint.y = m.clientY; dragPoint.inSheet = tool && pointIn($('bag'), m); } // (the view doesn't slide while over the inventory)
+      if (dragPoint) { dragPoint.x = m.clientX; dragPoint.y = m.clientY; dragPoint.inSheet = stay && pointIn($('bag'), m); } // (the view doesn't slide while over the inventory)
     };
     const onMove = (m) => {
       if (!ghost) {
@@ -223,11 +226,16 @@ function bagDragOn(b, s) {
       if (!ghost) return;
       ghost.remove();
       $('bag').classList.remove('dragging', 'dragging-tool');
-      $('toolBar').classList.remove('drop-on'); $('bagList').classList.remove('drop-on');
+      $('toolBar').classList.remove('drop-on'); $('bagList').classList.remove('drop-on'); $('storeList').classList.remove('drop-on');
       bagDragging = false;
       dragPoint = null;
       bagDragged = Date.now();
-      if (m && !over) { if (tool && bagOpen() && pointIn($('bag'), m)) toolDropAt(s, m); else bagDropAt(s, m); }
+      if (m && !over) {
+        if (storing && storeOn() && pointIn($('bag'), m)) storeDropAt(s, m); // a crate open: into it or out of it (0.2.2)
+        else if (s.store) { /* a crate's square let go off the inventory: it stays in the crate */ }
+        else if (tool && bagOpen() && pointIn($('bag'), m)) toolDropAt(s, m);
+        else bagDropAt(s, m);
+      }
       if (!bagOpen()) openBag();
     };
     const up = (m) => { end(m); }, cancel = () => { over = true; end(null); };
@@ -273,7 +281,7 @@ export function bagDropAt(s, e, loose) {
       if (why && why !== 'Not here') say(why); else then({ type: 'make', id: th.id, recipe: r2.id });
       return;
     }
-    // (storage, later: a placed thing that holds items gets a "put in" task here)
+    if (P.store) { say(`Open the ${P.noun} to put things in`); return; } // storage (0.2.2): its squares, at the top of your inventory
   }
   game.ray.setFromCamera(game.ndc, camera);
   const gh = game.ray.intersectObject(terrain, false)[0]; // the ground under your finger (past grass, trees and the like)
@@ -288,7 +296,8 @@ function drawBagInfo(s) {
   const box = $('bagInfo');
   box.hidden = !s;
   if (!s) { box.replaceChildren(); return; }
-  const kind = s.kind, it = ITEMS[kind], n = s.n;
+  if (s.store) { drawStoreInfo(s); return; } // a square in the crate (0.2.2)
+  const kind = s.kind, it = ITEMS[kind], n = s.n, th = storeOn() ? storeThing() : null;
   const title = document.createElement('strong');
   title.textContent = it.uses ? it.name : countLabel(kind, n);
   const detail = document.createElement('small');
@@ -298,7 +307,11 @@ function drawBagInfo(s) {
   const head = document.createElement('div');
   head.className = 'info-head';
   head.appendChild(words);
-  if (s.bar) head.appendChild(smallButton('Unequip', () => unequipTool(s))); // the tool bar (0.1.17): off it, into the inventory
+  const fit = th ? putFit(th, kind, n) : 0; // a crate is open (0.2.2): Put in is the main thing (Luke's pick: tap, then Put in or Take)
+  if (th) {
+    head.appendChild(smallButton(n > 1 ? (fit >= n || fit < 1 ? 'Put in all' : `Put in ${fit}`) : 'Put in', () => putIn(s, n), true, fit < 1));
+    if (fit < 1) detail.textContent = putWhy(th, kind);
+  } else if (s.bar) head.appendChild(smallButton('Unequip', () => unequipTool(s))); // the tool bar (0.1.17): off it, into the inventory
   else if (it.uses) head.appendChild(smallButton('Equip', () => equipTool(s), true)); // onto the tool bar: only tools there get used
   else if (it.places) head.appendChild(smallButton('Place', () => game.startPlacing(kind), true)); // a campfire: choose where it goes
   else if (Object.keys(it.eat || {}).length) head.appendChild(smallButton('Eat', () => game.eatOne(kind), true));
@@ -307,6 +320,7 @@ function drawBagInfo(s) {
   if (about) { const p = document.createElement('p'); p.className = 'info-about'; p.textContent = about; parts.push(p); }
   const acts = document.createElement('div');
   acts.className = 'info-acts';
+  if (th && n > 1 && fit > 0) acts.appendChild(smallButton('Put in 1', () => putIn(s, 1)));
   acts.appendChild(smallButton(n > 1 ? 'Drop 1' : 'Drop', () => game.dropItems(kind, 1, it.uses ? s.i : undefined))); // a tool: this one
   if (n > 1) acts.appendChild(smallButton('Drop all', () => game.dropItems(kind, n)));
   parts.push(acts);
@@ -325,15 +339,20 @@ export function drawBag() {
   for (const [id, tab] of [['bagTabBag', 'bag'], ['bagTabRecipes', 'recipes']]) { $(id).classList.toggle('on', bagTab === tab); $(id).setAttribute('aria-pressed', String(bagTab === tab)); }
   $('bagPart').hidden = crafting;
   $('bagHeadWeight').hidden = crafting; // (the weight sits in the header on the Inventory tab, 0.1.17)
+  const crate = crafting ? null : storeThing(), inCrate = crate ? storeSlots(crate) : []; // a crate open (0.2.2): its squares at the top
+  $('store').hidden = !crate;
+  $('bag').classList.toggle('storing', !!crate);
   $('mat').hidden = !crafting;
   $('found').hidden = !crafting;
   if (crafting) { drawMat(); drawFound(); }
   const slots = bagSlots(), tools = barSlots(), spots = toolSlots();
-  const picked = [...tools, ...slots].find((s) => s.key === bagPick) || null;
+  const picked = [...tools, ...slots, ...inCrate].find((s) => s.key === bagPick) || null;
   if (!picked) bagPick = null;
-  const shows = JSON.stringify([slots.map((s) => [s.key, s.n, s.left || 0]), tools.map((s) => [s.key, s.left, s.spares]), spots, bagPick]);
+  const shows = JSON.stringify([slots.map((s) => [s.key, s.n, s.left || 0]), tools.map((s) => [s.key, s.left, s.spares]), spots, bagPick,
+    crate ? [crate.id, inCrate.map((s) => [s.key, s.n, s.left || 0]), carried(), squaresTaken()] : null]);
   if (shows === bagDrawn) return;
   bagDrawn = shows;
+  if (crate) drawStore(crate, inCrate);
   $('bagEmpty').hidden = slots.length + tools.length > 0;
   const cells = slots.map((s) => { const li = document.createElement('li'); li.appendChild(bagTile(s)); return li; });
   const total = Math.max(invSquares(), slots.length); // the inventory's squares (0.2.1: locked, a live setting); empty ones dashed
@@ -346,6 +365,120 @@ export function drawBag() {
   $('toolBar').setAttribute('aria-label', `Tool bar, ${tools.length} of ${spots}`);
   $('toolBar').replaceChildren(...bar);
   drawBagInfo(picked);
+}
+
+/* ---------- storage: a crate's squares at the top of the Inventory tab (0.2.2, the small wooden crate) ----------
+   Open on a crate's tap menu walks over, then openStore shows its squares above your tool bar (Luke's pick: tap a square,
+   then Put in or Take). In the crate: Take all and Take 1; in your inventory or on the tool bar: Put in all and Put in 1.
+   Dragging a square across does the same. It happens straight away, like the server does it (actions.js putIn and
+   takeOut), and the server's answer has the last word. The squares go when the inventory closes, you switch to Recipes,
+   or you walk away from the crate (storeCheck, once a second). The same squares and stacks as the inventory (rules.js). */
+let storeId = null; // the placed thing whose squares show, or null
+const storeThing = () => (storeId != null && game.placed && game.placed.get(storeId)) || null;
+const storeOn = () => !!storeThing() && bagOpen() && bagTab === 'bag';
+const storeNoun = () => { const th = storeThing(); return th ? game.PLACEABLES[th.kind].noun : 'crate'; };
+export const storeShowing = (id) => storeId != null && storeId === id && bagOpen();
+export function openStore(id) { storeId = id; bagPick = null; openBag('bag'); }
+// still by it? Its squares go once you're more than a couple of metres away, it's gone, or it's someone else's camp now
+export function storeCheck() {
+  if (storeId == null) return;
+  const th = storeThing(), P = th && game.PLACEABLES[th.kind];
+  const near = th && player && Math.hypot(th.x - player.position.x, th.z - player.position.z) <= P.solid + 2.6 && !game.notMineAt(th.x, th.z);
+  if (near && bagOpen()) return;
+  storeId = null; bagPick = null;
+  if (bagOpen()) drawBag();
+}
+// the uses left of each tool of a kind in it (the server sends a list; missing ones are new)
+function storeWear(th, kind) {
+  const n = (th.store || {})[kind] || 0, list = ((th.wear || {})[kind] || []).slice(0, n);
+  while (list.length < n) list.push(ITEMS[kind].uses);
+  return list;
+}
+// a square for each stack, like your inventory (bagSlots); each tool its own, with its wear
+function storeSlots(th) {
+  const out = [], st = th.store || {};
+  for (const kind of Object.keys(st).filter((k) => ITEMS[k] && st[k] > 0).sort(kindOrder)) {
+    const n = st[kind];
+    if (!ITEMS[kind].uses) { const size = stackOfKind(kind); for (let j = 0, left = n; left > 0; j++, left -= size) out.push({ kind, key: `store:${kind}:${j}`, n: Math.min(size, left), store: true }); continue; }
+    const worn = storeWear(th, kind);
+    for (let i = 0; i < n; i++) out.push({ kind, key: `store:${kind}:t${i}`, n: 1, i, left: worn[i], store: true });
+  }
+  return out;
+}
+function drawStore(th, inCrate) {
+  const P = game.PLACEABLES[th.kind], squares = P.store.squares, used = squaresUsed(th.store, null, ITEMS, SETTINGS.stackSize);
+  $('storeName').textContent = P.name;
+  $('storeUsed').textContent = inCrate.length ? `${used} of ${squares} squares` : 'Empty';
+  $('storeList').setAttribute('aria-label', `In the ${P.noun}, ${used} of ${squares} squares`);
+  const cells = inCrate.map((s) => { const li = document.createElement('li'); li.appendChild(bagTile(s)); return li; });
+  while (cells.length < Math.max(squares, inCrate.length)) { const li = document.createElement('li'); li.className = 'bag-slot'; li.setAttribute('aria-hidden', 'true'); cells.push(li); }
+  $('storeList').replaceChildren(...cells);
+}
+// something that holds things can't go in one (a crate in a crate; the server says the same)
+const storable = (kind) => { const pl = ITEMS[kind].places; return !(pl && game.PLACEABLES[pl] && game.PLACEABLES[pl].store); };
+// how many of these fit in it (up to n), and why none do
+const putFit = (th, kind, n) => (storable(kind) ? Math.min(ITEMS[kind].uses ? 1 : n, storeRoom(th.store, kind, ITEMS, SETTINGS.stackSize, game.PLACEABLES[th.kind].store.squares)) : 0);
+const putWhy = (th, kind) => (storable(kind) ? `The ${game.PLACEABLES[th.kind].noun} is full` : `${ITEMS[kind].plural} can't go in a ${game.PLACEABLES[th.kind].noun}`);
+// how many you can take of these (up to n): as many as you can carry
+function takeFit(kind, n) { let k = ITEMS[kind].uses ? 1 : n; while (k > 0 && carryNo({ [kind]: k })) k--; return k; }
+const takeWhy = (kind) => (carryNo({ [kind]: 1 }) === FULL ? FULL : 'Too heavy to carry');
+// from your inventory (or tool bar) into the crate: n of that square (a tool: that one)
+function putIn(s, n) {
+  const th = storeOn() ? storeThing() : null;
+  if (!th || ui.mode !== 'world' || !player || you.dead || !you.carry[s.kind]) return;
+  const tool = !!ITEMS[s.kind].uses, k = Math.min(putFit(th, s.kind, n), you.carry[s.kind]);
+  if (k < 1) { showTag(putWhy(th, s.kind), headTop(), 2.5); return; }
+  const uses = tool ? wearList(s.kind)[s.i] : null, worn = tool ? storeWear(th, s.kind) : null;
+  takeFromCarry(s.kind, k, tool ? s.i : undefined);
+  th.store[s.kind] = (th.store[s.kind] || 0) + k;
+  if (tool) th.wear[s.kind] = [...worn, uses];
+  game.sendAct({ t: 'putIn', id: th.id, kind: s.kind, n: k, ...(tool ? { which: s.i } : {}) });
+  bagPick = null;
+  drawHeld();
+  drawCarry();
+}
+// out of the crate into your inventory (a tool onto the tool bar if there's room, like one picked up)
+function takeOut(s, n) {
+  const th = storeOn() ? storeThing() : null;
+  if (!th || ui.mode !== 'world' || !player || you.dead || !((th.store || {})[s.kind] > 0)) return;
+  const tool = !!ITEMS[s.kind].uses, k = Math.min(takeFit(s.kind, n), th.store[s.kind]);
+  if (k < 1) { showTag(takeWhy(s.kind), headTop(), 2.5); return; }
+  let uses;
+  if (tool) { const worn = storeWear(th, s.kind); uses = worn.splice(s.i, 1)[0]; th.wear[s.kind] = worn; }
+  th.store[s.kind] -= k;
+  if (th.store[s.kind] < 1) { delete th.store[s.kind]; delete th.wear[s.kind]; }
+  addToCarry(s.kind, k, uses);
+  game.sendAct({ t: 'takeOut', id: th.id, kind: s.kind, n: k, ...(tool ? { which: s.i } : {}) });
+  showGain(`+${countLabel(s.kind, k).toLowerCase()}`);
+  bagPick = null;
+  drawHeld();
+  drawCarry();
+}
+// a square dragged and let go on the inventory while a crate is open: onto the crate's squares puts it in, a crate's
+// square anywhere else on the inventory takes it out; a tool from the inventory still goes on or off the tool bar
+function storeDropAt(s, e) {
+  const onCrate = pointIn($('storeList'), e);
+  if (s.store) { if (!onCrate) takeOut(s, s.n); return; }
+  if (onCrate) { putIn(s, s.n); return; }
+  if (ITEMS[s.kind].uses) toolDropAt(s, e);
+}
+// the info bar for a square in the crate: Take all (as many as you can carry) and Take 1
+function drawStoreInfo(s) {
+  const box = $('bagInfo'), kind = s.kind, it = ITEMS[kind], n = s.n, fit = takeFit(kind, n);
+  const title = document.createElement('strong');
+  title.textContent = it.uses ? it.name : countLabel(kind, n);
+  const detail = document.createElement('small');
+  detail.textContent = fit < 1 ? takeWhy(kind) : `In the ${storeNoun()} · ${it.uses ? usesWord(s.left) : `Weight ${fmt(it.weight * n)}`}`;
+  const words = document.createElement('div');
+  words.append(title, detail);
+  const head = document.createElement('div');
+  head.className = 'info-head';
+  head.append(words, smallButton(n > 1 ? (fit >= n || fit < 1 ? 'Take all' : `Take ${fit}`) : 'Take', () => takeOut(s, n), true, fit < 1));
+  const parts = [head];
+  const about = itemAbout(kind);
+  if (about) { const p = document.createElement('p'); p.className = 'info-about'; p.textContent = about; parts.push(p); }
+  if (n > 1 && fit > 0) { const acts = document.createElement('div'); acts.className = 'info-acts'; acts.appendChild(smallButton('Take 1', () => takeOut(s, 1))); parts.push(acts); }
+  box.replaceChildren(...parts);
 }
 
 /* ---------- the craft mat, on the inventory's Recipes tab ----------
@@ -588,6 +721,7 @@ function openBag(tab) {
   $('bag').classList.add('open'); $('bagBtn').setAttribute('aria-expanded', 'true'); tipDid('bag'); hideHint();
 }
 export function closeBag() {
+  storeId = null; // (a crate's squares go with it, 0.2.2)
   $('bag').classList.remove('open'); $('bagBtn').setAttribute('aria-expanded', 'false');
   bagTab = 'bag'; matGoal = null; matNew = null; foundQuery = ''; $('foundQuery').value = '';
 }

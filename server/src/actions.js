@@ -3,9 +3,9 @@
 // person, with their needs caught up to now) or 'world' (also needs the shared world). run gets the message (m), your
 // person (p), the world (w), reply() to answer just you, and save() to save your person straight away; `this` is the
 // world (index.js), so this.send() tells everyone. Remember a spam limit in LIMITS (shared.js) for anything new.
-import { PLACEABLES, fireRule, seatAt, CROPS, cropSource, cropGrown, cropBerries } from './placed.js';
+import { PLACEABLES, fireRule, seatAt, CROPS, cropSource, cropGrown, cropBerries, storageOf, storeNoun, storable, storeWear } from './placed.js';
 import { SOC, socMax, INVITE_MS } from './societies.js';
-import { fuelRoom, placeSnap, placeClash, berryPicked } from './rules.js';
+import { fuelRoom, placeSnap, placeClash, berryPicked, storeRoom } from './rules.js';
 import { FILTER, G, starText, badName, freshStats, addCarry, carryNo, takeCarry, wearList, applyGives, eatOne, craft, spend, clean, blank, num, kindOk, START, REST, BERRY_SRC, cleanLook, REPORTS_KEEP, laidNow, onBar, equipTool, unequipTool, HOUR } from './shared.js';
 const SIT_OPEN = 365 * 24 * 3600000; // sitting has no set time: `until` is far off, and ends when they stand up, do something else, or the fire goes out
 
@@ -317,6 +317,7 @@ export const ACTIONS = {
     if (Math.hypot(x - p.x, z - p.z) > 4) return no('Too far away');
     const cl = this.notYours(p, x, z, me.admin);
     if (cl) return no(this.claimNo(cl));
+    if (rule.inCamp && !me.admin) { const c = this.claimAt(x, z); if (!c || !this.claimIsMine(c, p.who)) return no(`${item.plural} only go in your camp`); } // (the small wooden crate, 0.2.2; the game says the same)
     if (placeClash(this.placedList(), { x, z, rot }, kind, PLACEABLES)) return no('Too close to something else');
     const land = me.admin ? null : this.cantPlaceAt(x, z); // not in the water, off the land or inside a tree or rock (guard.js)
     if (land) return no(land);
@@ -386,6 +387,55 @@ export const ACTIONS = {
     save();
     this.send({ t: 'unplaced', id: th.id }, null);
     if (out.length) this.send({ t: 'added', items: out }, null);
+    reply(this.mine(p));
+  } },
+  // Storage (0.2.2, the small wooden crate): putting things in and taking them out, from its squares at the top of the
+  // inventory (no walking, no time: the game only shows them while you're by it). Only your camp can, while the camp
+  // lasts; anyone once it ends (Luke). The same squares and stacks as the inventory (rules.js storeRoom). m: { id, kind,
+  // n, which } (which: for a tool, which one: its place in your wear list, or in the crate's)
+  putIn: { when: 'world', async run({ me, m, p, reply, save }) {
+    const th = this.placedById(m.id), why = this.storeNo(th, p, me);
+    const no = (text) => { reply({ t: 'placeNo', why: text }); if (th) reply({ t: 'placed', thing: this.placedView(th) }); reply(this.mine(p)); };
+    if (why) return no(why);
+    const kind = String(m.kind), it = kindOk(kind) && Object.hasOwn(G.items, kind) ? G.items[kind] : null, have = it ? p.carry[kind] || 0 : 0;
+    if (!it || have < 1) return no("That isn't in your inventory");
+    if (!storable(kind)) return no(`${it.plural} can't go in a ${storeNoun(th.kind)}`);
+    const room = storeRoom(th.store, kind, G.items, G.stackSize, storageOf(th.kind).squares);
+    const n = it.uses ? 1 : Math.min(Math.max(1, Math.floor(m.n) || 1), have, room); // (a tool: one at a time, with its wear)
+    if (room < 1) return no(`The ${storeNoun(th.kind)} is full`);
+    const which = it.uses && Number.isInteger(m.which) && m.which >= 0 && m.which < have ? m.which : undefined;
+    const uses = it.uses ? wearList(p, kind, G)[which ?? have - 1] : null; // (the same one takeCarry takes)
+    takeCarry(p, kind, n, which);
+    th.store = th.store || {};
+    if (it.uses) { th.wear = th.wear || {}; th.wear[kind] = [...storeWear(th, kind), uses]; }
+    th.store[kind] = (th.store[kind] || 0) + n;
+    await this.save();
+    save();
+    this.sendPlaced(th);
+    reply(this.mine(p));
+  } },
+  takeOut: { when: 'world', async run({ me, m, p, reply, save }) {
+    const th = this.placedById(m.id), why = this.storeNo(th, p, me);
+    const no = (text) => { reply({ t: 'placeNo', why: text }); if (th) reply({ t: 'placed', thing: this.placedView(th) }); reply(this.mine(p)); };
+    if (why) return no(why);
+    const kind = String(m.kind), it = kindOk(kind) && Object.hasOwn(G.items, kind) ? G.items[kind] : null, have = it ? (th.store || {})[kind] || 0 : 0;
+    if (!it || have < 1) return no(`That isn't in the ${storeNoun(th.kind)}`);
+    let n = it.uses ? 1 : Math.min(Math.max(1, Math.floor(m.n) || 1), have);
+    while (n > 0 && carryNo(p, kind, n, G)) n--; // as many as they can carry (weight and squares)
+    if (n < 1) return no(carryNo(p, kind, 1, G) || 'Too heavy to carry');
+    let uses;
+    if (it.uses) {
+      const worn = storeWear(th, kind), i = Number.isInteger(m.which) && m.which >= 0 && m.which < have ? m.which : have - 1;
+      uses = worn.splice(i, 1)[0];
+      th.wear = th.wear || {};
+      if (worn.length) th.wear[kind] = worn; else delete th.wear[kind];
+    }
+    addCarry(p, kind, n, G, uses); // (a tool goes on the tool bar if there's room, like one picked up)
+    if (have - n > 0) th.store[kind] = have - n; else delete th.store[kind];
+    if (th.wear && !Object.keys(th.wear).length) delete th.wear;
+    await this.save();
+    save();
+    this.sendPlaced(th);
     reply(this.mine(p));
   } },
   // a fire: light it, put it out, or add fuel (n sticks, as many as fit)

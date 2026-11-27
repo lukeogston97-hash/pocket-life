@@ -15,4 +15,5 @@
 - Admin: World tab, Societies: each one with its leader, how many of how many, and its claim; Fly to, Members (each with Take out, and a Rename box), End (two taps: its fire goes out). End claim on a fire ends its society too (the fire burns on). Give claim makes a new society for that person (not someone already in one). A player's page shows their society with Take out of society. The Log has started, joined, left, taken out, renamed, ended and the admin's tools.
 - Claims from before 0.1.5 (a player's id) became their owner's society when the server started; a 0.1.4 society with no burning fire ended (socTidy).
 - Checks: tools/tests/societies.mjs (the server, no browser, part of server_tests) and the societies check (the game in Chrome, with the admin's list).
-- Not built yet: storage and shelter shared by a society, trading, a claim that grows with the society.
+- A camp's members share its small wooden crates (0.2.2, storage.md): every member can open them.
+- Not built yet: shelter shared by a society, trading, a claim that grows with the society.

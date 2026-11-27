@@ -1,5 +1,7 @@
 # Inventory, Craft and tap menus
 
+- A crate's squares (0.2.2, storage.md): while one is open, its squares show at the top of the Inventory tab, above the tool bar; the info bar's green button becomes Put in all (in your inventory) or Take all (in the crate), with Put in 1 / Take 1 beside it, and dragging across works. The inventory stays on screen while dragging then.
+
 - Squares and stacks (0.2.1, Luke, 27 Nov 2026: "Lock in 10 squares for inventory, keep the 30 weight, stack should either be 10 or 20? Placeables and tools just 1"; Claude picked 10, as with the 30 weight 20 would mean squares almost never run out, and it gives storage a real limit later):
   - The inventory is locked at settings.inventorySquares (10) squares, and the 30 weight (carryCapacity) still counts too. One square holds a stack of one kind: up to settings.stackSize (10), or an item's own "stack" in content/items.json; tools and things you place are always 1 a square. Tools on the tool bar take no square. 15 sticks show as a square of 10 and a square of 5; Drop all on a square drops that square's stack.
   - Full: "Your inventory is full" (picking up, cutting, fishing, picking berries, Pack up, crafting, unequipping a tool). Someone already over the squares (from before 0.2.1) keeps what they have and can still top up a stack with room.

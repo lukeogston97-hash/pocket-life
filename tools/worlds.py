@@ -131,6 +131,10 @@ def problems(d):
             known(p['madeWith'], f'{w}.madeWith')
             if not (items.get(p['madeWith']) or {}).get('tool'): out.append(f'{w}.madeWith: "{p["madeWith"]}" should be a tool (it goes on the tool bar)')
         elif not any(it.get('places') == k for it in items.values()): out.append(f'{w}: no item has "places": "{k}", so nobody could place it')
+        s = p.get('storage')  # it holds things (0.2.2): how many squares
+        if s is not None and not (isinstance(s, dict) and isinstance(s.get('squares'), int) and not isinstance(s.get('squares'), bool) and 1 <= s['squares'] <= 40):
+            out.append(f'{w}.storage: needs "squares", a whole number from 1 to 40 (how many squares it holds)')
+        if s is not None and p.get('madeWith') is not None: out.append(f'{w}.storage: something dug with a tool (like a farm field) can\'t hold things')
         f = p.get('fire')
         if f:
             known(f.get('fuel'), f'{w}.fire.fuel')
@@ -211,7 +215,7 @@ def server_files(d):
     berry = next((k for s in srcs.values() for k in (s.get('harvest') or {})), 'berry')
     game = {
         'needs': d['stats'],
-        'items': {k: {'name': v.get('name', k), 'weight': v.get('weight', 1), 'eat': v.get('eat'), 'uses': (v.get('tool') or {}).get('uses', 0), 'places': v.get('places'), **({'stack': v['stack']} if v.get('stack') else {}),
+        'items': {k: {'name': v.get('name', k), 'plural': v.get('plural', v.get('name', k) + 's'), 'weight': v.get('weight', 1), 'eat': v.get('eat'), 'uses': (v.get('tool') or {}).get('uses', 0), 'places': v.get('places'), **({'stack': v['stack']} if v.get('stack') else {}),
                        'startInWorld': v.get('startInWorld', 0), 'spawnsNear': v.get('spawnsNear')} for k, v in d['items'].items()},
         # (seconds and pose: how long a task takes and how it looks, for people carrying on with their task list while away, tasks.js)
         'recipes': {r['id']: {'needs': r['needs'], 'makes': r['makes'], **({'keeps': r['keeps']} if r.get('keeps') else {}), **({'near': r['near']} if r.get('near') else {}), **({'seconds': r['seconds']} if r.get('seconds') else {})} for r in d.get('recipes', [])},
@@ -239,8 +243,11 @@ def server_files(d):
         # things you place and build (the campfire): which item places them, how they burn, where people sit
         'placeables': {k: {'item': next((i for i, it in d['items'].items() if it.get('places') == k), k), 'buildSeconds': v.get('buildSeconds', 10),
                            'solid': v.get('solid', 0.5), 'size': v.get('size'), 'keepClear': v.get('keepClear'), 'fire': v.get('fire'), 'seats': v.get('seats'),
+                           'inCamp': bool(v.get('inCamp')),  # only in your own camp (the farm field, the small wooden crate)
+                           # it holds things in squares, like the inventory (0.2.2, the small wooden crate)
+                           **({'storage': {'squares': v['storage']['squares']}} if v.get('storage') else {}),
                            # dug with a tool instead of placed from an item (0.1.18, the farm field)
-                           **({'madeWith': v['madeWith'], 'makeSeconds': v.get('makeSeconds', 8), 'flattenSeconds': v.get('flattenSeconds', 4), 'inCamp': bool(v.get('inCamp'))} if v.get('madeWith') else {})}
+                           **({'madeWith': v['madeWith'], 'makeSeconds': v.get('makeSeconds', 8), 'flattenSeconds': v.get('flattenSeconds', 4)} if v.get('madeWith') else {})}
                        for k, v in d.get('placeables', {}).items()},
         # what grows on a farm field (0.1.18)
         'crops': {k: {'seed': c['seed'], 'on': c.get('on', 'field'), 'growHours': c.get('growHours', 24), 'plantSeconds': c.get('plantSeconds', 3), 'like': c.get('like')} for k, c in d.get('crops', {}).items()},
