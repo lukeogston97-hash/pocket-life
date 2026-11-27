@@ -381,8 +381,7 @@ function tookInput() {
   lastInput = performance.now();
   if (!auto.on) return;
   auto.on = false;
-  stopQueue();
-  $('autoChip').hidden = true;
+  stopQueue(); // (the task list goes back from Autopilot to Now)
 }
 for (const ev of ['pointerdown', 'keydown', 'wheel']) document.addEventListener(ev, tookInput, true);
 function busy() { return !!(tasks.current || tasks.list.length || action || walk.target); }
@@ -394,7 +393,7 @@ function autopilot() {
     auto.on = true;
     auto.home = AWAY.near === 'pond' ? [POND.x, POND.z] : [player.position.x, player.position.z];
     auto.nextAt = now;
-    $('autoChip').hidden = false;
+    drawQueue(); // the task list says Autopilot, then what your person is doing (it was a chip at the top, till 0.2.7)
   }
   if (busy() || now < auto.nextAt) return;
   const st = you.stats;
@@ -474,6 +473,7 @@ export function setSleeping(on, fromServer = false, bed = null) {
     if (!fromServer) showTag('Awake', headTop(), 1.5);
   }
   drawNeeds();
+  drawQueue(); // (the task list says Sleeping while they're asleep)
 }
 // Waking: any task wakes your person, unless they collapsed from no Rest and it isn't back to wakeAt yet.
 export const REST = STATS.find((s) => s.id === 'rest');
@@ -745,19 +745,31 @@ export function taskName(t, now) {
   if (TASK_KINDS[t.type]) return TASK_KINDS[t.type].name(t, now);
   return '';
 }
-// the list above the bottom bar: what your person is doing now, then what's next
+// the task list, top left under the info card (0.2.7): what your person is doing now, then what's next. It stays as a
+// small box when there's nothing to do (so Schedule is always a tap away), and says Autopilot when that takes over.
 let queueOpen = false; // the full list is showing
+let queueTab = 'tasks'; // Tasks or Schedule (the schedule is coming soon)
+for (const [id, tab] of [['qTabTasks', 'tasks'], ['qTabSchedule', 'schedule']]) $(id).addEventListener('click', () => { queueTab = tab; drawQueue(); });
 export function drawQueue() {
   syncTasksSoon(); // (the server keeps a copy, for while you're away)
   drawDropGhosts();
   for (const b of badges) removeLabel(b);
   badges = [];
   const cur = tasks.current;
-  // only shown while your person has something to do
-  const show = ui.mode === 'world' && !!player && !you.dead && !!(cur || tasks.list.some(listed));
+  const show = ui.mode === 'world' && !!player && !you.dead;
   $('queue').hidden = !show;
   if (!show) return;
-  $('queueNow').textContent = cur ? taskName(cur, true) : 'Waiting for something to do';
+  const onTasks = queueTab === 'tasks';
+  $('qTabTasks').setAttribute('aria-pressed', String(onTasks));
+  $('qTabSchedule').setAttribute('aria-pressed', String(!onTasks));
+  $('qTasks').hidden = !onTasks;
+  $('qSchedule').hidden = onTasks;
+  // the Now task counts as 1, the same as the numbers over things (they were one ahead of the list till 0.2.7)
+  const numbered = !!cur && listed(cur);
+  $('queueNowLabel').textContent = auto.on ? 'Autopilot' : 'Now';
+  $('queueNowLabel').hidden = !cur && !auto.on;
+  $('queueNowNum').hidden = !numbered;
+  $('queueNow').textContent = cur ? taskName(cur, true) : you.sleeping ? 'Sleeping' : auto.on ? 'Taking a break' : 'Waiting for a command';
   $('queueNowRow').classList.toggle('idle', !cur);
   const next = tasks.list.map((t, i) => ({ t, i })).filter(({ t }) => listed(t));
   const shown = queueOpen ? 25 : 2; // folded: the next 2; tap the list to see them all
@@ -766,7 +778,7 @@ export function drawQueue() {
     const name = document.createElement('span');
     const num = document.createElement('span');
     num.className = 'n';
-    num.textContent = `${k + 1}.`;
+    num.textContent = `${k + 1 + (numbered ? 1 : 0)}.`;
     name.append(num, taskName(t, false));
     const x = document.createElement('button');
     x.type = 'button';

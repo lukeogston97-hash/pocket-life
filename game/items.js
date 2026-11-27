@@ -258,8 +258,9 @@ function logGeos(r, len) {
 // Handles (Luke, 26 Nov 2026: the stone axe is the one to match, and every handle, part and tool should match it and
 // look right): a smooth six-sided handle, a little thicker towards the head, with a flare at the end you hold, from x0
 // (that end) to x1. look.grip: twine wrapped round where you hold it (the short tool handle). look.join: twine wrapped
-// round half way along, where the long tool handle's two sticks are tied. The handles on their own and the tools made
-// from them are drawn by this, so they look the same.
+// round where its sticks are tied: half way along (the medium tool handle's two sticks), or look.joins places spread
+// evenly (2: the long tool handle's three sticks, 0.2.7). The handles on their own and the tools made from them are
+// drawn by this, so they look the same.
 function toolHandle(g, look, x0, x1, t) {
   const len = x1 - x0, wood = tinted(look.colour || '#8a6847', 0.04), knobLen = t * 1.2;
   const shaft = new THREE.Mesh(new THREE.CylinderGeometry(t * 0.9, t * 1.1, len, 6).rotateZ(Math.PI / 2), wood);
@@ -269,7 +270,8 @@ function toolHandle(g, look, x0, x1, t) {
   knob.position.x = x0 + knobLen / 2;
   g.add(knob);
   if (look.grip) twineWrap(g, matFor(look.grip), x0 + knobLen + t * 0.4, t * 1.2, t * 0.65, t * 0.2, 4);
-  if (look.join) twineWrap(g, matFor(look.join), (x0 + x1) / 2 - t * 1.25, t * 1.3, t * 0.7, t * 0.2, 3); // (3 turns span 2.5 t)
+  const joins = look.join ? Math.max(1, Math.round(look.joins || 1)) : 0;
+  for (let j = 1; j <= joins; j++) twineWrap(g, matFor(look.join), x0 + len * j / (joins + 1) - t * 1.25, t * 1.3, t * 0.7, t * 0.2, 3); // (3 turns span 2.5 t)
 }
 // n turns of twine side by side, each w wide with gap between, r round, starting at x and going along +x
 function twineWrap(g, twine, x, r, w, gap, n) {
@@ -459,8 +461,8 @@ const SHAPES = {
     g.add(lean);
     return { model: g, rest: t, hold: 'rod', hit: [len + 0.3, 0.3, 0.36] };
   },
-  // a tool handle on its own (0.1.21): the short tool handle (look.grip) and the long tool handle (look.join), drawn
-  // the way the tools made from them draw theirs (toolHandle)
+  // a tool handle on its own (0.1.21): the short tool handle (look.grip), and the medium and long tool handles (look.join,
+  // 0.2.7), drawn the way the tools made from them draw theirs (toolHandle)
   handle(look) {
     const len = look.length ?? 0.16, t = look.thickness ?? 0.016, g = new THREE.Group();
     toolHandle(g, look, -len / 2, len / 2, t);

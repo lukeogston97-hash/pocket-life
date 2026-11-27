@@ -1,7 +1,7 @@
 /* Pocket Life: the look of everything that isn't the 3D world.
    Dark glass (0.0.9, Luke's pick, like SEED): small see-through dark panels with white text and thin light edges,
    round icon buttons, as little on screen as possible while you play.
-   Layers, bottom to top: the world, name tags (1), HUD (2), task list and tip (3), autopilot chip (20),
+   Layers, bottom to top: the world, name tags (1), HUD with the task list (2), tip (3),
    tap menu (25), inventory and craft sheets (26), say box and main menu (30), pop-ups (40), banners (55, 58), maintenance (60). */
 :root {
   --haze: #e3e0c8;
@@ -33,7 +33,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* the glass everything is made of */
-.glass, .tag3d, .name-tag, .bubble, .queue, .hint, .auto-chip, .joining, .announce, .act-menu {
+.glass, .tag3d, .name-tag, .bubble, .queue, .hint, .joining, .announce, .act-menu {
   background: var(--glass); color: var(--ink);
   border: 1px solid var(--line);
   -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
@@ -55,7 +55,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .seg-btn { min-height: 34px; padding: 0 12px; border: 0; border-radius: 999px; background: none; color: var(--ink-soft); font: 700 13px/1 var(--font-ui); cursor: pointer; }
 .seg-btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
 
-/* ---------- playing: info top left, Menu top right, needs bottom left, Say Craft Inventory bottom right ---------- */
+/* ---------- playing: info and task list top left, Menu top right, needs bottom left, Say and Inventory bottom right ---------- */
 .hud-top { position: absolute; top: 0; left: 0; right: 0; z-index: 2; display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; padding: calc(10px + env(safe-area-inset-top, 0px)) 10px 0; pointer-events: none; }
 .who { min-width: 0; padding: 6px 12px 7px; border-radius: 14px; }
 .who-line { display: flex; align-items: baseline; min-width: 0; }
@@ -93,17 +93,28 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .need.low .need-label { color: var(--warn); }
 .warn { display: none; }
 
-/* what your person is doing, the tip, autopilot */
-.queue { position: absolute; z-index: 3; left: 50%; bottom: calc(68px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); width: max-content; min-width: 180px; max-width: calc(100% - 24px);
-  padding: 6px 6px 6px 12px; border-radius: 14px; font-size: 13px; font-weight: 700; pointer-events: auto; }
+/* the task list, under the info card and the same width (0.2.7, Luke's pick): a Tasks and Schedule pill like Settings' Graphics.
+   With nothing to do it stays a small box ("Waiting for a command"), says Autopilot when that takes over, and the list counts
+   the Now task as 1, the same as the numbers over things. Schedule says Coming soon for now. */
+.hud-left { display: flex; flex-direction: column; align-items: stretch; gap: 6px; min-width: 0; width: max-content; max-width: calc(100% - 54px); }
+.queue { padding: 5px; border-radius: 14px; font-size: 13px; font-weight: 700; pointer-events: auto; }
 .queue[hidden] { display: none; }
-.q-now { display: flex; align-items: center; gap: 6px; min-height: 24px; }
-.q-now small { font-size: 11px; font-weight: 700; color: var(--ink-faint); }
+.q-tabs .seg-btn { flex: 1; min-height: 32px; padding: 0 12px; font-size: 12.5px; }
+.q-in { padding: 4px 1px 0 7px; }
+.q-now { display: flex; align-items: center; gap: 6px; min-height: 28px; }
+.q-now small { flex: none; font-size: 11px; font-weight: 700; color: var(--ink-faint); }
+.q-cur { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.q-now.idle .q-cur { color: var(--ink-soft); }
 .q-list { list-style: none; margin: 4px 0 0; padding: 4px 0 0; border-top: 1px solid var(--line); display: grid; gap: 2px; max-height: 40vh; overflow-y: auto; }
 .q-list[hidden] { display: none; }
 .q-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
+.q-list li > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .q-more { min-height: 32px; padding: 0; border: 0; background: none; color: var(--accent); font: 700 12.5px/1 var(--font-ui); cursor: pointer; }
-.q-list .n { color: var(--ink-faint); margin-right: 5px; font-variant-numeric: tabular-nums; }
+.queue .n { color: var(--ink-faint); margin-right: 5px; font-variant-numeric: tabular-nums; }
+.q-now .n { font-weight: 600; }
+.q-soon { display: grid; gap: 2px; padding: 7px 7px 4px; width: 0; min-width: 100%; } /* (width 0: its words wrap, so switching tabs never widens the box) */
+.q-soon[hidden] { display: none; }
+.q-soon small { font-size: 11.5px; font-weight: 600; color: var(--ink-soft); }
 .q-x { flex: none; width: 32px; height: 32px; border: 0; border-radius: 999px; background: none; color: var(--ink-faint); font: 700 17px/1 var(--font-ui); cursor: pointer; }
 .q-x:hover { background: var(--hover); }
 .q-stop { width: 100%; min-height: 34px; margin-top: 5px; }
@@ -112,8 +123,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .hint { position: absolute; z-index: 3; left: 50%; bottom: calc(130px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); width: max-content; max-width: calc(100% - 32px); margin: 0; padding: 8px 14px; border-radius: 14px;
   font-size: 13px; font-weight: 600; text-align: center; pointer-events: none; }
 .hint[hidden] { display: none; }
-.auto-chip { position: absolute; left: 50%; top: var(--below-hud, 90px); transform: translateX(-50%); z-index: 20; padding: 6px 13px; border-radius: 999px; font: 700 12.5px var(--font-ui); white-space: nowrap; pointer-events: none; }
-.auto-chip[hidden] { display: none; }
 /* choosing where to put a campfire: a bar along the bottom with Cancel and Place */
 /* (width: max-content: a bar centred with left: 50% otherwise only gets half the screen, and the note squeezes to a word a line) */
 .place-bar { position: absolute; z-index: 4; left: 50%; bottom: calc(68px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: flex; align-items: center; gap: 6px;
@@ -429,11 +438,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .menu-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 0 4px; font-size: 11.5px; font-weight: 700; color: var(--ink-soft); }
 .menu-ver { color: var(--ink-faint); white-space: nowrap; }
 /* on the main menu only the world and the name tags show */
-.is-menu .hud-top, .is-menu .hud-bottom, .is-menu .hint, .is-menu .bag, .is-menu .queue, .is-menu .act-menu, .is-menu .chat, .is-menu .auto-chip { display: none; }
+.is-menu .hud-top, .is-menu .hud-bottom, .is-menu .hint, .is-menu .bag, .is-menu .queue, .is-menu .act-menu, .is-menu .chat { display: none; }
 
 /* while making your person, nothing from playing shows */
 .is-creating .hud-top, .is-creating .hud-bottom, .is-creating #labels, .is-creating .mist-top, .is-creating .hint, .is-creating .bag,
-.is-creating .queue, .is-creating .act-menu, .is-creating .chat, .is-creating .auto-chip { display: none; }
+.is-creating .queue, .is-creating .act-menu, .is-creating .chat { display: none; }
 .pic { width: 40px; height: 40px; border-radius: 10px; background: rgba(255, 255, 255, 0.07); border: 1px solid var(--line); object-fit: contain; flex: none; }
 
 /* the Admin panel's tabs (Server, Players, Inbox, World, Settings) */
@@ -481,8 +490,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 }
 /* on a computer the corner cards and buttons are a little bigger, so they don't look lost on a wide screen */
 @media (min-width: 1000px) and (pointer: fine) {
-  .hud-top .who, .hud-top .top-btns, .hud-bottom .needs, .hud-bottom .bottom-btns { transform: scale(1.2); }
-  .hud-top .who { transform-origin: left top; }
+  .hud-top .hud-left, .hud-top .top-btns, .hud-bottom .needs, .hud-bottom .bottom-btns { transform: scale(1.2); }
+  .hud-top .hud-left { transform-origin: left top; }
   .hud-top .top-btns { transform-origin: right top; }
   .hud-bottom .needs { transform-origin: left bottom; }
   .hud-bottom .bottom-btns { transform-origin: right bottom; }
@@ -497,7 +506,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 /* ---------- admin mode: no person, a free camera over the live world, panels floating over it (game/admin-mode.js) ---------- */
 .menu-ver { padding: 12px 6px 12px 14px; margin: -12px -6px -12px -14px; cursor: default; -webkit-user-select: none; user-select: none; touch-action: manipulation; } /* a bigger target for the 5 taps; looks the same. manipulation: quick taps are taps, never a double-tap zoom (iPhones) */
 .admin-login-actions { margin-top: 12px; }
-.is-admin .hud-top, .is-admin .hud-bottom, .is-admin .hint, .is-admin .bag, .is-admin .queue, .is-admin .chat, .is-admin .auto-chip, .is-admin .place-bar { display: none; }
+.is-admin .hud-top, .is-admin .hud-bottom, .is-admin .hint, .is-admin .bag, .is-admin .queue, .is-admin .chat, .is-admin .place-bar { display: none; }
 .admin-bar { position: absolute; z-index: 27; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; right: 10px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; pointer-events: none; }
 .admin-bar[hidden] { display: none; }
 .admin-bar > * { pointer-events: auto; }

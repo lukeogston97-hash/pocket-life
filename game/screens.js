@@ -283,7 +283,7 @@ export function dropPlayer() {
   stopPlacing();
   stopQueue();
   game.action = null;
-  auto.on = false; $('autoChip').hidden = true;
+  auto.on = false;
   removePlayer();
   you.look = null; you.stats = null; you.dead = false; you.sleeping = false; you.bed = null;
 }
