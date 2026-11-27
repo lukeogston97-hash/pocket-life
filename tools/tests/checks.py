@@ -2671,7 +2671,43 @@ async def shelter():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'tasks_away': tasks_away, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'tool_bar': tool_bar, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'craft_mat': craft_mat, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'loading': loading, 'sideways': sideways, 'menu_rest': menu_rest, 'tips': tips, 'placed_kinds': placed_kinds, 'parts_look': parts_look, 'ore_vein': ore_vein, 'stress': stress, 'placing_grid': placing_grid, 'farming': farming, 'leaving': leaving, 'squares': squares, 'storage': storage, 'shelter': shelter, 'server_tests': server_tests}
+async def task_list():
+    """The task list (0.2.7): top left under the info card, with Tasks and Schedule (Schedule says Coming soon). Folded to
+    one line (0.2.8): what your person is doing now and +4; tap it to open the next 2, with +2 more and Stop all on one
+    line; tapping the world folds it again. Nothing to do: Waiting for a command. The list counts the Now task as 1, the
+    same as the numbers over things."""
+    async with world() as W:
+        a = await W.page('taskList'); await join(a)
+        expect(await text(a, '#queueNow') == 'Waiting for a command' and await shown(a, '#queue') and not await shown(a, '#queueFold'),
+               f'with nothing to do: a small box that says Waiting for a command ({await text(a, "#queueNow")!r})')
+        await a.click('#qTabSchedule'); await a.wait_for_timeout(300)
+        expect(await shown(a, '#qSchedule') and not await shown(a, '#qTasks') and 'Coming soon' in await text(a, '#qSchedule'), 'Schedule says Coming soon')
+        await a.click('#qTabTasks'); await a.wait_for_timeout(300)
+        # one walk now and 4 after it, each 10 m or more away (so the first isn't done before the checks are)
+        await a.evaluate("""(() => { const p = __pl.player.position;
+          for (const [dx, dz] of [[10, 0], [0, 10], [-10, 0], [0, -10], [10, 10]]) __pl.queueTask({ type: 'walk', x: p.x + dx, z: p.z + dz }); })()""")
+        await a.wait_for_timeout(600)
+        expect(await text(a, '#queueCount') == '+4' and await shown(a, '#queueNowNum') and not await shown(a, '#queueMore'),
+               f'folded to one line: Now 1. and +4 ({await text(a, "#queueCount")!r})')
+        await a.click('#queueNowRow'); await a.wait_for_timeout(300)
+        rows = await a.evaluate("[...document.querySelectorAll('#queueList li')].map((li) => li.textContent.replace('\\u00d7', '').trim())")
+        expect(await shown(a, '#queueMore') and rows == ['2.Walk there', '3.Walk there'] and await text(a, '#queueAll') == '+2 more' and await shown(a, '#queueStop'),
+               f'tap it: the next 2, numbered 2 and 3, then +2 more and Stop all ({rows})')
+        await a.click('#queueAll'); await a.wait_for_timeout(300)
+        n = await a.evaluate("document.querySelectorAll('#queueList li').length")
+        expect(n == 4 and await text(a, '#queueAll') == 'Show less', f'+2 more shows them all ({n})')
+        nums = await a.evaluate("[...document.querySelectorAll('.qnum')].map((e) => e.textContent).join()")
+        expect(nums.startswith('1,2,3'), f'the numbers over things count the same way ({nums})')
+        await a.mouse.click(195, 640); await a.wait_for_timeout(500)
+        expect(not await shown(a, '#queueMore') and await text(a, '#queueCount') == '+4', 'tapping the world folds it again')
+        await a.click('#queueNowRow'); await a.wait_for_timeout(300)
+        await a.click('#queueStop'); await a.wait_for_timeout(500)
+        expect(await text(a, '#queueNow') == 'Waiting for a command' and not await shown(a, '#queueMore') and not await shown(a, '#queueFold'),
+               'Stop all: back to Waiting for a command, folded')
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'tasks_away': tasks_away, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'task_list': task_list, 'tool_bar': tool_bar, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'craft_mat': craft_mat, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'loading': loading, 'sideways': sideways, 'menu_rest': menu_rest, 'tips': tips, 'placed_kinds': placed_kinds, 'parts_look': parts_look, 'ore_vein': ore_vein, 'stress': stress, 'placing_grid': placing_grid, 'farming': farming, 'leaving': leaving, 'squares': squares, 'storage': storage, 'shelter': shelter, 'server_tests': server_tests}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

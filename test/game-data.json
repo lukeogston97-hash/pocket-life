@@ -1,7 +1,7 @@
 {
   "_generated": "Made from content/*.json by python3 tools/worlds.py test-build. Edit those files, not this one.",
-  "version": "0.2.7",
-  "build": 2,
+  "version": "0.2.8",
+  "build": 1,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -2567,6 +2567,14 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.2.8",
+      "date": "2026-11-27",
+      "improved": [
+        "Your task list folds to one line: tap it to see what's next, tap the world to fold it",
+        "Stop all sits on the +more line, and a long task list scrolls"
+      ]
+    },
     {
       "version": "0.2.7",
       "date": "2026-11-27",

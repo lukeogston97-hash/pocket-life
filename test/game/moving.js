@@ -747,9 +747,16 @@ export function taskName(t, now) {
 }
 // the task list, top left under the info card (0.2.7): what your person is doing now, then what's next. It stays as a
 // small box when there's nothing to do (so Schedule is always a tap away), and says Autopilot when that takes over.
-let queueOpen = false; // the full list is showing
+// Folded to one line the rest of the time (0.2.8, Luke: it took up a lot of the screen when full): what your person is
+// doing now, and +5 for what's after it (the numbers over things show those too). Tap it to open the list; tapping the
+// world folds it again.
+let queueOpen = false; // the list is open
+let queueAll = false; // opened all the way: every task, 5 at a time then it scrolls (else the next 2)
 let queueTab = 'tasks'; // Tasks or Schedule (the schedule is coming soon)
 for (const [id, tab] of [['qTabTasks', 'tasks'], ['qTabSchedule', 'schedule']]) $(id).addEventListener('click', () => { queueTab = tab; drawQueue(); });
+$('queueNowRow').addEventListener('click', () => { queueOpen = !queueOpen; if (!queueOpen) queueAll = false; drawQueue(); });
+$('queueAll').addEventListener('click', () => { queueAll = !queueAll; drawQueue(); });
+$('world').addEventListener('pointerdown', () => { if (queueOpen) { queueOpen = queueAll = false; drawQueue(); } });
 export function drawQueue() {
   syncTasksSoon(); // (the server keeps a copy, for while you're away)
   drawDropGhosts();
@@ -772,8 +779,15 @@ export function drawQueue() {
   $('queueNow').textContent = cur ? taskName(cur, true) : you.sleeping ? 'Sleeping' : auto.on ? 'Taking a break' : 'Waiting for a command';
   $('queueNowRow').classList.toggle('idle', !cur);
   const next = tasks.list.map((t, i) => ({ t, i })).filter(({ t }) => listed(t));
-  const shown = queueOpen ? 25 : 2; // folded: the next 2; tap the list to see them all
-  const rows = next.slice(0, shown).map(({ t, i }, k) => {
+  const canOpen = !!cur || next.length > 0;
+  if (!canOpen) queueOpen = false;
+  if (!queueOpen || next.length <= 2) queueAll = false;
+  $('queueNowRow').disabled = !canOpen;
+  $('queueNowRow').setAttribute('aria-expanded', String(queueOpen));
+  $('queueFold').hidden = !canOpen;
+  $('queueCount').textContent = !queueOpen && next.length ? `+${next.length}` : '';
+  $('queueMore').hidden = !queueOpen;
+  const rows = (queueOpen ? next.slice(0, queueAll ? next.length : 2) : []).map(({ t, i }, k) => {
     const li = document.createElement('li');
     const name = document.createElement('span');
     const num = document.createElement('span');
@@ -789,20 +803,11 @@ export function drawQueue() {
     li.append(name, x);
     return li;
   });
-  if (next.length > 2) {
-    const li = document.createElement('li');
-    li.className = 'more';
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'q-more';
-    b.textContent = queueOpen ? 'Show less' : `+${next.length - shown} more`;
-    b.addEventListener('click', () => { queueOpen = !queueOpen; drawQueue(); });
-    li.appendChild(b);
-    rows.push(li);
-  } else queueOpen = false;
   $('queueList').replaceChildren(...rows);
   $('queueList').hidden = rows.length === 0;
-  $('queueStop').hidden = !cur && !next.length;
+  $('queueAll').hidden = next.length <= 2; // +3 more, on the same line as Stop all
+  $('queueAll').textContent = queueAll ? 'Show less' : `+${next.length - 2} more`;
+  $('queueStop').hidden = !canOpen;
   // numbers over the things you've queued
   const list = shownTasks();
   if (!list.length) return; // (a lone task keeps its 1 till it's done)
