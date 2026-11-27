@@ -105,12 +105,12 @@ setTimeout(function () { if (!window.__bootStarted) window.__bootFail("This brow
           <button id="qTabTasks" class="seg-btn" type="button" aria-pressed="true">Tasks</button>
           <button id="qTabSchedule" class="seg-btn" type="button" aria-pressed="false">Schedule</button>
         </div>
-        <div id="qTasks" aria-live="polite">
-          <div class="q-in">
-            <div id="queueNowRow" class="q-now"><small id="queueNowLabel">Now</small><span class="q-cur"><span id="queueNowNum" class="n" hidden>1.</span><span id="queueNow">Waiting for a command</span></span></div>
+        <div id="qTasks" class="q-in" aria-live="polite">
+          <button id="queueNowRow" class="q-now" type="button" aria-expanded="false" aria-controls="queueMore" disabled><small id="queueNowLabel">Now</small><span class="q-cur"><span id="queueNowNum" class="n" hidden>1.</span><span id="queueNow">Waiting for a command</span></span><span id="queueFold" class="q-fold" hidden><span id="queueCount"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span></button>
+          <div id="queueMore" hidden>
             <ol id="queueList" class="q-list" hidden></ol>
+            <div class="q-foot"><button id="queueAll" class="q-more" type="button" hidden></button><button id="queueStop" class="small-btn q-stop" type="button" hidden>Stop all</button></div>
           </div>
-          <button id="queueStop" class="small-btn q-stop" type="button" hidden>Stop all</button>
         </div>
         <div id="qSchedule" class="q-soon" hidden><strong>Coming soon</strong><small>Plan your person's day</small></div>
       </div>

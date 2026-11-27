@@ -2569,7 +2569,7 @@
   "devlog": [
     {
       "version": "0.2.8",
-      "date": "2026-11-27",
+      "date": "2026-11-28",
       "improved": [
         "Your task list folds to one line: tap it to see what's next, tap the world to fold it",
         "Stop all sits on the +more line, and a long task list scrolls"
