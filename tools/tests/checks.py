@@ -429,7 +429,7 @@ async def smoke():
         await a.click('#bagClose')
         # greyed out means you don't carry everything it takes, made before or not (Luke, 0.1.12): nothing carried, every
         # recipe made: all greyed; 2 stones, nothing made: the sharp stone first and not greyed; 20 of everything: none greyed
-        # (it was 9 until the basic shelter, 0.2.5, which takes 10 sticks)
+        # (it was 9 until the basic shelter, 0.2.5 test 1, took 10 sticks; 20 leaves room for bigger recipes)
         found = await a.evaluate("""(async () => { const out = [], data = await (await fetch('game-data.json')).json(), every = {}, keep = [__pl.you.carry, __pl.you.found];
           for (const k of Object.keys(data.items)) every[k] = 20;
           for (const [carry, f] of [[{}, data.recipes.map((r) => r.id)], [{ stone: 2 }, []], [every, []]]) {
@@ -2611,11 +2611,11 @@ async def storage():
 
 
 async def shelter():
-    """The basic shelter (0.2.5): made on the craft mat from 3 logs, 10 sticks and 4 twine, placed in your camp facing you
+    """The basic shelter (0.2.5): made on the craft mat from 3 logs, 8 sticks and 4 twine, placed in your camp facing you
     (2 x 2 squares), its tap menu (Sleep in shelter: twice as good as the ground), Sleep in shelter walking to its front
     and lying down inside it along its width, someone else seeing you lying inside it (and no Sleep in shelter for them:
     it's your camp's), Pack up and Take apart waiting till you're up, and Wake up putting you back out at its front."""
-    kit = {'campfire': 1, 'log': 3, 'stick': 14, 'twine': 4}  # (29 to carry once the fire and its 4 sticks are down)
+    kit = {'campfire': 1, 'log': 3, 'stick': 12, 'twine': 4}  # (27 to carry once the fire and its 4 sticks are down)
     send = "(m) => window.__sock.send(JSON.stringify(m))"
     SH = "[...__pl.placed.values()].find((t) => t.kind === 'basic-shelter')"
     async with world(KIT=json.dumps(kit)) as W:
@@ -2628,8 +2628,8 @@ async def shelter():
             await a.evaluate(f"({send})({m})"); await a.wait_for_timeout(700)
         await idle(a, 40)
         expect(await a.evaluate(f"__pl.claimMine(__pl.placed.get({fid})) && __pl.isLit(__pl.placed.get({fid}))"), 'a lit campfire: their camp')
-        said = await mat_make(a, [('log', 3), ('stick', 10), ('twine', 4)])
-        expect(said == 'Basic shelter' and await a.evaluate("__pl.you.carry['basic-shelter'] === 1 && !__pl.you.carry.log"), f'made on the craft mat from 3 logs, 10 sticks and 4 twine ({said})')
+        said = await mat_make(a, [('log', 3), ('stick', 8), ('twine', 4)])
+        expect(said == 'Basic shelter' and await a.evaluate("__pl.you.carry['basic-shelter'] === 1 && !__pl.you.carry.log"), f'made on the craft mat from 3 logs, 8 sticks and 4 twine ({said})')
         # placed in the camp from the inventory, the way a player does
         await a.click('#bagBtn'); await a.wait_for_timeout(400)
         await a.click('#bagList .bag-tile[data-kind="basic-shelter"]'); await a.wait_for_timeout(200)

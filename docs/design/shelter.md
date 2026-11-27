@@ -6,13 +6,13 @@ Decided with Luke 27 Nov 2026, built as 0.2.5 test 1.
 - Luke picked shelter as the next update (the last part of "storage and shelter" on his build order, before hunting and animals).
 - Look: a lean-to (Luke's pick over an A-frame hut). Before building, a picture of it was drawn by the game itself (by a campfire, the roof from behind, the recipe, someone asleep in it as a mock-up) and Luke said build it.
 - Name: Basic shelter (Luke: "Just call it Basic shelter"). Lean-to was the other option.
-- Recipe: Luke felt long tool handles were odd in a shelter, then wanted it to match the picture (3 logs: 2 posts and the top beam) with lots of sticks. 3 logs + 16 sticks + 4 twine weighs 35, over the 30 you can carry, so it couldn't be made. He picked 3 logs + 10 sticks + 4 twine (weighs 29: a big job, room left for about 1 berry; 10 sticks fill one square).
+- Recipe: Luke felt long tool handles were odd in a shelter, then wanted it to match the picture (3 logs: 2 posts and the top beam) with lots of sticks. 3 logs + 16 sticks + 4 twine weighs 35, over the 30 you can carry, so it couldn't be made. He picked 3 logs + 10 sticks + 4 twine (weighs 29) for test 1, then 8 sticks for test 2 (Luke, 27 Nov 2026: "maybe it needs to be 8 sticks?"): 3 logs + 8 sticks + 4 twine, weighs 27. Three trees give the 3 logs and 6 of the sticks, so only 2 more come off the ground, and there's room left for 3 small things.
 - It stays an item you carry and place (Luke: no shelter in the inventory would mean no campfire in the inventory either).
 - What it does (Luke picked all four, then "it takes a lot to build, it should be twice as better than sleeping on the floor"): sleep in it is twice as good as on the ground. Rest and Health fill twice as fast, Hunger and Thirst drop half as fast, and away people sleep in it.
 - Who: your camp, one at a time (Luke's pick). Like the crate: only goes in your camp, and anyone can use it once the camp ends.
 
 ## What players do
-- Make it on the craft mat (Building): 3 logs, 10 sticks, 4 twine. Weight 29, its parts.
+- Make it on the craft mat (Building): 3 logs, 8 sticks, 4 twine. Weight 27, its parts.
 - Place it in your camp (inCamp): 2 x 2 squares on the placing grid, turned 4 ways, its front (the open side) shown by a circle while placing and starting off facing you. Built in 20 seconds. It's solid on all 4 squares, so people walk round its corners.
 - Its tap menu: Sleep in shelter ("Twice as good as the ground", or greyed out "Someone's asleep in it"), Pack up, Take apart, Inspect, Walk here. Someone else's camp: only its name and Walk here, as for every placed thing.
 - Sleep in shelter walks to its front, then your person lies down inside it, along its width, face up. Lying down ends your task list, as Sleep does. Tap yourself for Wake up: you're back out at its front, facing out. Any task wakes you, as before.
@@ -30,9 +30,9 @@ Decided with Luke 27 Nov 2026, built as 0.2.5 test 1.
 - Admin: Move waits while someone's asleep in it ("Someone's asleep in it"); Remove gets the sleeper out (they sleep on, on the ground at its front). The World tab counts "Basic shelters 2 (1 slept in)", and a player's page says "asleep in a basic shelter".
 
 ## Checks
-- tools/tests/shelter.mjs (quick, server only, part of server_tests): the recipe and weight, only in your camp, Sleep in it (reach, camps, one at a time, anyone once the camp ends), the rates against sleeping on the ground, pack up and take apart refused, the admin's Move and Remove, getting up, away people going to it when tired and for the long sleep, the task, coming back.
+- tools/tests/shelter.mjs (quick, server only, part of server_tests): the recipe (3 logs, 8 sticks, 4 twine) and weight (27), only in your camp, Sleep in it (reach, camps, one at a time, anyone once the camp ends), the rates against sleeping on the ground, pack up and take apart refused, the admin's Move and Remove, getting up, away people going to it when tired and for the long sleep, the task, coming back.
 - shelter (browser): made on the craft mat, placed and built, its tap menu, lying inside along it, someone else seeing that and being refused, Wake up out at its front.
-- smoke's Recipes check gives 20 of everything now (it was 9; the shelter takes 10 sticks).
+- smoke's Recipes check gives 20 of everything now (it was 9; the shelter took 10 sticks in test 1).
 
 ## Later (not decided)
 - A bigger shelter for 2, a bed of dry grass inside, leaves on the roof, shelter from weather or animals at night, sitting in it.

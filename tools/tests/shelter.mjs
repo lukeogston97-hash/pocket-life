@@ -1,6 +1,6 @@
 // The basic shelter (0.2.5): somewhere to sleep, tried against the server's own code with no browser.
 // Run: cd tools/tests && python3 -c "import lib; lib.bundle()" && node shelter.mjs   (exit 0: all as it should be)
-// What it checks: it's made from 3 logs, 10 sticks and 4 twine and only goes in your own camp; Sleep in it needs it built,
+// What it checks: it's made from 3 logs, 8 sticks and 4 twine and only goes in your own camp; Sleep in it needs it built,
 // you by its front and it not in someone else's camp, and puts you at its front; sleep there is twice as good as on the
 // ground (Rest and Health fill twice as fast, Hunger and Thirst drop half as fast); one at a time; once the camp ends
 // anyone can; it can't be packed up or taken apart while someone's asleep in it; everyone is told who's in it; getting
@@ -54,10 +54,10 @@ w.work = new Map();
 
 console.log('A. made on the craft mat, and only in your own camp');
 const R = DATA.recipes.find((r) => r.id === 'basic-shelter'), P = DATA.placeables['basic-shelter'];
-expect(R && JSON.stringify(R.needs) === '{"log":3,"stick":10,"twine":4}' && R.makes['basic-shelter'] === 1, 'the recipe: 3 logs, 10 sticks and 4 twine', JSON.stringify(R && R.needs));
-expect(DATA.items['basic-shelter'].weight === 29 && DATA.items['basic-shelter'].places === 'basic-shelter', 'it weighs 29, the same as its parts, and is placed');
+expect(R && JSON.stringify(R.needs) === '{"log":3,"stick":8,"twine":4}' && R.makes['basic-shelter'] === 1, 'the recipe: 3 logs, 8 sticks and 4 twine', JSON.stringify(R && R.needs));
+expect(DATA.items['basic-shelter'].weight === 27 && DATA.items['basic-shelter'].places === 'basic-shelter', 'it weighs 27, the same as its parts, and is placed');
 expect(P.inCamp && P.bed && P.bed.sleepers === 1 && P.bed.better === 2 && JSON.stringify(P.size) === '[2,2]' && P.front > 1, 'only in your camp, 2 x 2 squares, one sleeper, twice as good', JSON.stringify(P));
-Object.assign(kim, { carry: { log: 3, stick: 10, twine: 4 }, bar: {} });
+Object.assign(kim, { carry: { log: 3, stick: 8, twine: 4 }, bar: {} });
 await fresh(); await ask(kimS, { t: 'craft', id: 'basic-shelter' });
 expect(kim.carry['basic-shelter'] === 1 && !kim.carry.log && !kim.carry.stick && !kim.carry.twine, 'made a basic shelter', JSON.stringify(kim.carry));
 Object.assign(kim, { x: 36, z: 20 });

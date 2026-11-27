@@ -1,7 +1,7 @@
 {
   "_generated": "Made from content/*.json by python3 tools/worlds.py test-build. Edit those files, not this one.",
   "version": "0.2.5",
-  "build": 1,
+  "build": 2,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "settings": {
@@ -876,7 +876,7 @@
       "name": "Basic shelter",
       "about": "A lean-to for your camp. Sleeping in it is twice as good as sleeping on the ground.",
       "plural": "Basic shelters",
-      "weight": 29,
+      "weight": 27,
       "look": {
         "shape": "parts",
         "colour": "#8a6847",
@@ -2002,7 +2002,7 @@
       "name": "Basic shelter",
       "needs": {
         "log": 3,
-        "stick": 10,
+        "stick": 8,
         "twine": 4
       },
       "makes": {
@@ -2535,7 +2535,7 @@
       "version": "0.2.5",
       "date": "2026-11-27",
       "added": [
-        "Basic shelter: a lean-to for your camp, made from 3 logs, 10 sticks and 4 twine",
+        "Basic shelter: a lean-to for your camp, made from 3 logs, 8 sticks and 4 twine",
         "Sleep in shelter: Rest and Health fill twice as fast, Hunger and Thirst drop half as fast"
       ],
       "improved": [

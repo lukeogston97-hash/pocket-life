@@ -6,7 +6,7 @@
     "devlog": "What's new, shown in the Menu. Newest first, one entry per version: version, date (the release day, with from for a range), no name (Luke, 26 Nov 2026: versions only), and short lines for players in added (+ new features), improved (~ changes to what's there) and fixed (− bug fixes and removed issues). No full stop at the end."
   },
   "version": "0.2.5",
-  "build": 1,
+  "build": 2,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "devlog": [
@@ -14,7 +14,7 @@
       "version": "0.2.5",
       "date": "2026-11-27",
       "added": [
-        "Basic shelter: a lean-to for your camp, made from 3 logs, 10 sticks and 4 twine",
+        "Basic shelter: a lean-to for your camp, made from 3 logs, 8 sticks and 4 twine",
         "Sleep in shelter: Rest and Health fill twice as fast, Hunger and Thirst drop half as fast"
       ],
       "improved": [
