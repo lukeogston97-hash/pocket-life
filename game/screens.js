@@ -285,7 +285,7 @@ export function dropPlayer() {
   game.action = null;
   auto.on = false; $('autoChip').hidden = true;
   removePlayer();
-  you.look = null; you.stats = null; you.dead = false; you.sleeping = false;
+  you.look = null; you.stats = null; you.dead = false; you.sleeping = false; you.bed = null;
 }
 $('playBtn').addEventListener('click', play);
 $('creatorBack').addEventListener('click', toMenu);

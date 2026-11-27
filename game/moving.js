@@ -401,7 +401,11 @@ function autopilot() {
   // night: off to bed until morning. Tired: lie down until rested
   const night = nightNow();
   if (you.sleeping) { if (!night && st.rest != null && st.rest >= 99) setSleeping(false); return; }
-  if (night || (st.rest != null && st.rest < (AWAY.sleepBelow || 35))) { setSleeping(true); return; }
+  if (night || (st.rest != null && st.rest < (AWAY.sleepBelow || 35))) {
+    const bed = game.myFreeBed(); // your camp's shelter, if there's room in one (0.2.5)
+    if (bed) { queueTask({ type: 'bed', id: bed.id }); return; }
+    setSleeping(true); return;
+  }
   // eat what you carry when hungry
   for (let n = 0; n < 6 && st.hunger < AWAY.eatBelow; n++) {
     const food = Object.keys(you.carry).find((k) => ITEMS[k] && ITEMS[k].eat);
@@ -439,23 +443,36 @@ function bushTask(b) {
     stop: Math.max(box.max.x - box.min.x, box.max.z - box.min.z) / 2 + 0.3 };
 }
 setInterval(autopilot, 2000);
-// Sleeping: lie down where you are (Rest fills up); giving your person anything to do wakes them
-export function setSleeping(on, fromServer = false) {
+// Sleeping: lie down where you are (Rest fills up); giving your person anything to do wakes them. bed: the id of a bed
+// to lie down in instead (0.2.5, the basic shelter: you're at its front, and lie down inside it; getting up, you're
+// back out at its front)
+export function setSleeping(on, fromServer = false, bed = null) {
   on = !!on;
-  if (!player || you.dead) { you.sleeping = on; return; }
-  const was = !!you.sleeping;
+  const th = on && bed != null && game.placed ? game.placed.get(bed) : null, inBed = th && game.PLACEABLES[th.kind].bed ? th.id : null;
+  if (!player || you.dead) { you.sleeping = on; you.bed = inBed; return; }
+  const was = !!you.sleeping, wasBed = you.bed;
+  if (!fromServer && game.online()) { // told first, from where you're standing (sendAct says where you are before what you did)
+    if (inBed) game.sendAct({ t: 'sleep', on, bed: inBed });
+    else game.net.sock.send(JSON.stringify({ t: 'sleep', on }));
+  }
   you.sleeping = on;
+  you.bed = inBed;
   if (on) {
     stopQueue();
-    player.rotation.x = -Math.PI / 2;
-    player.position.y = game.playerGround + 0.2;
+    if (wasBed != null && wasBed !== inBed) game.outOfBed(player, null); // (from one bed to the ground or another)
+    if (inBed) game.lieInBed(player, th);
+    else { player.rotation.x = -Math.PI / 2; player.position.y = game.playerGround + 0.2; }
     if (!was) showTag('Zzz…', headTop(), 2.5);
   } else if (was) {
     resetPose();
+    if (wasBed != null) { // up and out at its front, facing out (or where you are, if it's gone)
+      game.outOfBed(player, game.placed.get(wasBed) || null);
+      game.playerGround = groundY(player.position.x, player.position.z);
+      player.position.y = game.playerGround;
+    }
     you.collapsed = false;
     if (!fromServer) showTag('Awake', headTop(), 1.5);
   }
-  if (!fromServer && game.online()) game.net.sock.send(JSON.stringify({ t: 'sleep', on }));
   drawNeeds();
 }
 // Waking: any task wakes your person, unless they collapsed from no Rest and it isn't back to wakeAt yet.

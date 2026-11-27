@@ -67,7 +67,7 @@ export function drawNeeds() {
 // (asleep: whileAsleep instead, and whileAsleepAtNight at night, so Rest fills faster at night; sitting by a fire: whileSitting)
 // (the maths is needsStep in rules.js, the same on the server)
 function stepStats(hours) {
-  needsStep(you.stats, hours, STATS, { asleep: !!you.sleeping, night: !!you.sleeping && nightNow(), sitting: !!you.sit });
+  needsStep(you.stats, hours, STATS, { asleep: !!you.sleeping, night: !!you.sleeping && nightNow(), sitting: !!you.sit, better: you.sleeping && you.bed != null ? game.bedBetterOf(you.bed) : 1 }); // (better: in a bed, 0.2.5)
 }
 // the admin's "speed up time" for testing ({ x, until }), told by the server
 let timeSpeed = null;

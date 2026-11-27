@@ -17,7 +17,7 @@ import { controls, gfx, GRAPHICS } from './camera.js';
 import {
   animateAct, feetOnGround, findPath, onDryLand, outsideSolid, sendTasks, setLegs, solidAt, walk,
 } from './moving.js';
-import { placed, seatSpot, sitPose, unsitPose } from './placeables.js';
+import { lieInBed, outOfBed, PLACEABLES, placed, seatSpot, sitPose, unsitPose } from './placeables.js';
 import { closeMenu, typing } from './input.js';
 import { cleanLook, FILTER, goOnline, net, others } from './online.js';
 // shared for files further down game/main.js, and the variables other files change (game/links.js)
@@ -59,7 +59,8 @@ function addOther(p) {
   name.off = true; name.el.style.display = 'none'; // until they're picked to be drawn
   const o = { id: p.id, who: p.who || p.id, title: p.name || 'Someone', state: p.state || 'online', look: cleanLook({ ...p.look, name: p.name }), mesh, body: null,
     tx: x, tz: z, tr: mesh.rotation.y, phase: 0, name, bubble: null,
-    speed: p.speed || null, due: p.ms ? game.elapsed + p.ms / 1000 : null, shown: false, sit: Array.isArray(p.sit) ? p.sit : null, soc: p.soc || null };
+    speed: p.speed || null, due: p.ms ? game.elapsed + p.ms / 1000 : null, shown: false, sit: Array.isArray(p.sit) ? p.sit : null, soc: p.soc || null,
+    bed: p.bed ?? null }; // asleep in a bed, like the basic shelter (0.2.5): drawn lying inside it
   shownAt = -1; // work out again who's drawn
   if (p.tx != null) Object.assign(o, { tx: p.tx, tz: p.tz });
   others.set(p.id, o);
@@ -94,8 +95,15 @@ function roundThePond(x, z, ux, uz, step) {
 // sleepers lie on the ground; people sitting by a fire sit (updateOthers holds them there)
 function poseOther(o) {
   const lying = o.state === 'asleep' || o.state === 'sleeping';
+  if (o.mesh.rotation.order !== 'XYZ') outOfBed(o.mesh, null); // (out of a bed: the usual way round again, 0.2.5)
   o.mesh.rotation.x = lying ? -Math.PI / 2 : 0;
   o.name.offset.y = lying ? 0.7 : o.sit ? 1.35 : 2.0;
+}
+// the bed they're asleep in, if it's here (0.2.5)
+function bedOf(o) {
+  if (o.bed == null || !(o.state === 'asleep' || o.state === 'sleeping')) return null;
+  const th = placed.get(o.bed);
+  return th && th.built && PLACEABLES[th.kind] && PLACEABLES[th.kind].bed ? th : null;
 }
 // someone sat down by a fire, or got up
 function setOtherSit(m) {
@@ -115,6 +123,7 @@ function setOtherState(m) {
   const o = others.get(m.id);
   if (!o) return;
   o.state = m.state;
+  o.bed = m.bed ?? null; // asleep in a bed (0.2.5)
   if (m.x != null) [o.tx, o.tz] = onDryLand(m.x, m.z);
   if (m.state !== 'away') o.speed = null;
   if (m.state === 'online' && o.bubble) { removeLabel(o.bubble); o.bubble = null; }
@@ -192,7 +201,12 @@ export function updateOthers(dt) {
       if (P) sitPose(m, P, groundY(sx, sz));
       continue;
     }
-    if (o.state === 'asleep' || o.state === 'sleeping') { m.position.x = o.tx; m.position.z = o.tz; m.position.y = groundY(m.position.x, m.position.z) + 0.2; continue; }
+    if (o.state === 'asleep' || o.state === 'sleeping') {
+      const bed = bedOf(o);
+      if (bed) { lieInBed(m, bed, o.body); continue; } // lying inside it (0.2.5)
+      if (m.rotation.order !== 'XYZ') poseOther(o); // (its bed has gone: on the ground)
+      m.position.x = o.tx; m.position.z = o.tz; m.position.y = groundY(m.position.x, m.position.z) + 0.2; continue;
+    }
     if (d > (o.speed ? 120 : 8)) { m.position.x = o.tx; m.position.z = o.tz; } // too far behind: jump there
     else if (d > 0.02) {
       // walkers keep their pace, a little quicker if the server says they're due somewhere (so a long way round
@@ -237,6 +251,7 @@ export function updateOthers(dt) {
 // This sends about a tenth of the messages of sending every step, which keeps the server inside Cloudflare's free plan.
 function sendMove() {
   if (!online() || !player) return;
+  if (you.sleeping && you.bed != null) return; // asleep in a bed (0.2.5): the server has you at its front, where you got in
   const x = player.position.x, z = player.position.z, ry = player.rotation.y;
   const goal = walk.target ? [Math.round(walk.target.x * 100) / 100, Math.round(walk.target.z * 100) / 100] : null;
   const l = net.last;

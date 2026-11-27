@@ -283,7 +283,7 @@ function applyMe(m, spawn = false) {
   you.wear = m.wear || {};
   you.seen = m.seen || you.seen || [];
   you.found = Array.isArray(m.found) ? m.found : you.found || []; // the recipes found on the craft mat (inventory.js)
-  if (!!m.sleeping !== !!you.sleeping) setSleeping(m.sleeping, true);
+  if (!!m.sleeping !== !!you.sleeping || (m.sleeping && (m.bed ?? null) !== (you.bed ?? null))) setSleeping(m.sleeping, true, m.bed ?? null); // (in a bed too, 0.2.5)
   you.collapsed = !!m.collapsed;
   you.lastKind = carry[you.lastKind] ? you.lastKind : (ITEMS[m.lastKind] && carry[m.lastKind] ? m.lastKind : Object.keys(carry)[0] || null);
   game.setSociety(m.soc); // your society, if you're in one (society.js)
