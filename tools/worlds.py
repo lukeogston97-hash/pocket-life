@@ -21,7 +21,8 @@ GAME_DATA = os.path.join(root, 'test', 'game-data.json')
 # the order of the sections in test/game-data.json (kept as it was, so the file reads the same as before 0.2.0)
 ORDER = ['version', 'build', 'era', 'server', 'settings', 'testNames', 'defaultLook', 'stats', 'energyCosts', 'chopping', 'mining',
          'retired', 'itemGroups', 'items', 'recipes', 'placeables', 'sources', 'away', 'night', 'berryBushes', 'daylight', 'looks',
-         'bodyShapes', 'chatFilter', 'tips', 'devlog', 'plants', 'regions', 'liveSettings', 'claims', 'societies', 'crops']
+         'bodyShapes', 'chatFilter', 'tips', 'devlog', 'plants', 'regions', 'liveSettings', 'claims', 'societies', 'crops',
+         'appleTrees', 'clearing', 'wild']
 
 
 def load_content():
@@ -184,6 +185,26 @@ def problems(d):
         if c.get('tool') is not None: known(c['tool'], f'{key}.tool')
         for what, rule in c.items():
             if isinstance(rule, dict): counts(rule.get('gives'), f'{key}.{what}.gives', ranges=True)
+    # clearing land in your camp and the wild topping itself up (0.2.9)
+    plants = d.get('plants', {})
+    for what, rule in (d.get('clearing') or {}).items():
+        if what not in ('bush', 'boulder') and what not in plants: out.append(f'clearing.{what}: bush, boulder, or the id of a plant')
+        if not isinstance(rule, dict): continue
+        if rule.get('tool') is not None: known(rule['tool'], f'clearing.{what}.tool')
+        counts(rule.get('gives'), f'clearing.{what}.gives')
+        if not (isinstance(rule.get('seconds'), (int, float)) and rule['seconds'] > 0): out.append(f'clearing.{what}.seconds should be a number above 0')
+        if not (rule.get('action') and rule.get('verb')): out.append(f'clearing.{what}: needs "action" (the button) and "verb" (while doing it)')
+    wild = d.get('wild') or {}
+    for what, h in (wild.get('everyHours') or {}).items():
+        if what not in ('tree', 'bush', 'boulder') and what not in plants: out.append(f'wild.everyHours.{what}: tree, bush, boulder, or the id of a plant')
+        if not (isinstance(h, (int, float)) and h > 0): out.append(f'wild.everyHours.{what} should be a number of hours above 0')
+    if 'growsBackTo' in wild and not (isinstance(wild['growsBackTo'], (int, float)) and 0 <= wild['growsBackTo'] <= 100): out.append('wild.growsBackTo: a per cent, 0 to 100')
+    at = d.get('appleTrees')
+    if at is not None and not (whole(at.get('count', 0)) and 0 <= at.get('count', 0) <= 200 and whole(at.get('nearStart', 0)) and whole(at.get('seed', 1))): out.append('appleTrees: count (0 to 200), nearStart and seed, whole numbers')
+    for k, c in d.get('crops', {}).items():
+        if c.get('room') is not None and not (whole(c['room']) and 0 <= c['room'] <= 3): out.append(f'crops.{k}.room: how many squares all round stay empty, 0 to 3')
+        t = c.get('tree')
+        if t is not None and not (isinstance(t, dict) and isinstance(t.get('stumpBackHours'), (int, float)) and t['stumpBackHours'] > 0): out.append(f'crops.{k}.tree: {{"stumpBackHours": hours}}, how long its stump takes to grow back')
     live = [s.get('id') for s in d.get('liveSettings', [])]
     if len(set(live)) != len(live): out.append('liveSettings: two settings share an id')
     for s in d.get('liveSettings', []):
@@ -253,6 +274,9 @@ def server_files(d):
         'energyCosts': d.get('energyCosts', {}),
         'chopping': d.get('chopping', {}),
         'mining': d.get('mining', {}),
+        # clearing land in your own camp, and the wild topping itself up (0.2.9: actions.js clear, nature.js topUpWild)
+        'clearing': {k: {'tool': v.get('tool'), 'seconds': v.get('seconds', 8), 'gives': v.get('gives') or {}} for k, v in d.get('clearing', {}).items()},
+        'wild': d.get('wild', {}),
         # things you place and build (the campfire): which item places them, how they burn, where people sit
         'placeables': {k: {'item': next((i for i, it in d['items'].items() if it.get('places') == k), k), 'buildSeconds': v.get('buildSeconds', 10),
                            'solid': v.get('solid', 0.5), 'size': v.get('size'), 'keepClear': v.get('keepClear'), 'fire': v.get('fire'), 'seats': v.get('seats'),
@@ -266,7 +290,8 @@ def server_files(d):
                            **({'madeWith': v['madeWith'], 'makeSeconds': v.get('makeSeconds', 8), 'flattenSeconds': v.get('flattenSeconds', 4)} if v.get('madeWith') else {})}
                        for k, v in d.get('placeables', {}).items()},
         # what grows on a farm field (0.1.18)
-        'crops': {k: {'seed': c['seed'], 'on': c.get('on', 'field'), 'growHours': c.get('growHours', 24), 'plantSeconds': c.get('plantSeconds', 3), 'like': c.get('like')} for k, c in d.get('crops', {}).items()},
+        'crops': {k: {'name': c.get('name', k), 'seed': c['seed'], 'on': c.get('on', 'field'), 'growHours': c.get('growHours', 24), 'plantSeconds': c.get('plantSeconds', 3), 'like': c.get('like'),
+                      **({'tree': c['tree']} if c.get('tree') else {}), **({'room': c['room']} if c.get('room') else {})} for k, c in d.get('crops', {}).items()},  # (tree and room: the apple tree, 0.2.9)
         # numbers the admin can change live (Admin > Settings); wired up in server/src/live.js
         'liveSettings': d.get('liveSettings', []),
         'claims': d.get('claims', {}),

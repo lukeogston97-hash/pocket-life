@@ -47,7 +47,7 @@ export function pondShapeAt(pond, x, z) {
 // count, from: how many were left and since when (count null: never picked); holds: a full bush; regrowMs: a whole bush
 export function berriesGrown(count, from, holds, regrowMs, t) {
   if (count == null || !regrowMs) return holds;
-  return Math.min(holds, count + Math.floor((t - from) / (regrowMs / holds)));
+  return Math.max(0, Math.min(holds, count + Math.floor(Math.max(0, t - from) / (regrowMs / holds)))); // (from can be ahead: a tree growing back, 0.2.9)
 }
 // one berry picked at t: the bush's new [count, from]
 export function berryPicked(count, from, holds, regrowMs, t) {
@@ -65,6 +65,15 @@ export function berryPicked(count, from, holds, regrowMs, t) {
 export const cropGrowth = (at, growMs, t) => (growMs > 0 ? Math.max(0, Math.min(1, (t - at) / growMs)) : 1);
 // how it looks at that point: a sprout for the first third, then a small bush getting bigger, then grown
 export const cropStage = (k) => (k >= 1 ? 'grown' : k < 1 / 3 ? 'sprout' : 'young');
+// A tree on a farm field (a crop with "tree", 0.2.9: the apple tree). Chopped at `stump`, it's a stump until stumpAt +
+// backMs, then a tree again with its fruit growing back from then, one at a time like berries. b: [count, from] as it
+// was picked. Returns { stump: true while it's a stump, back: when it's a tree again, fruit: how many on it now }.
+export function cropTree(b, stump, backMs, holds, regrowMs, t) {
+  const back = stump ? stump + backMs : 0;
+  if (back && t < back) return { stump: true, back, fruit: 0 };
+  const [count, from] = back && (b[1] == null || b[1] < back) ? [0, back] : b; // (picked before it was chopped: it starts again from when it grew back)
+  return { stump: false, back, fruit: berriesGrown(count, from, holds, regrowMs, t) };
+}
 
 /* ---------- stumps growing back into trees ---------- */
 // chopping.regrowDays: a number of days, or [soonest, latest] (Luke, 0.1.16: 1 to 2 days). As [first, second], unsorted.
@@ -142,6 +151,20 @@ export function placeClash(list, th, kind, rules) {
     if (o.id != null && o.id === th.id) continue;
     const need = Math.max(myClear, Number((rules[o.kind] || {}).keepClear) || 0);
     if (placeGap(me, placeRect(o, rules[o.kind])) < need - 0.001) return o;
+  }
+  return null;
+}
+
+// Trees on farm fields need the squares round them empty (0.2.9, crops' "room": how many squares all round). The first
+// placed thing in them (null if none): list is what's placed ({ id, kind, x, z, rot, crop }), th where something goes
+// (its kind), room the squares it needs round it (a tree about to be planted on it), crops the crops from game-data.json.
+export function roomClash(list, th, kind, rules, crops, room = 0) {
+  const roomOf = (o) => { const c = o.crop && crops[o.crop.kind]; return (c && Number(c.room)) || 0; };
+  const me = placeRect(th, rules[kind]);
+  for (const o of list) {
+    if (o.id != null && o.id === th.id) continue;
+    const need = Math.max(Number(room) || 0, roomOf(o)) * PLACE_GRID;
+    if (need > 0 && placeGap(me, placeRect(o, rules[o.kind])) < need - 0.001) return o;
   }
   return null;
 }

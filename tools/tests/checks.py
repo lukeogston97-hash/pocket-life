@@ -38,8 +38,10 @@ FINGERPRINT = """(() => {
     oldStumps: P.oldStumps.length + ':' + h(JSON.stringify(P.oldStumps.map((t) => [r(t.x), r(t.z)]))),
     bushes: P.berryBushes.length + ':' + h(JSON.stringify(P.berryBushes.map((b) => [r(b.position.x), r(b.position.z)]))),
     plants: Object.entries(P.plants).map(([k, p]) => k + ':' + p.clumps.length + ':' + h(JSON.stringify(p.clumps.map((c) => [r(c.x), r(c.z)])))).join(','),
-    serverLayout: h(JSON.stringify((({ boulders, ...rest }) => rest)(P.layoutData()))), // (what the server is told, as it was before it was also told which rocks are boulders, 0.1.10)
+    serverLayout: h(JSON.stringify((({ boulders, apples, shrubs, ...rest }) => rest)(P.layoutData()))), // (what the server is told, as it was before it was also told which rocks are boulders, 0.1.10, and the apple trees and plain bushes, 0.2.9)
     boulders: (P.layoutData().boulders || []).length + ':' + h(JSON.stringify(P.layoutData().boulders || [])), // which rocks are boulders
+    apples: (P.layoutData().apples || []).length + ':' + h(JSON.stringify(P.layoutData().apples || [])), // which trees are apple trees (0.2.9)
+    shrubs: (P.layoutData().shrubs || []).length + ':' + h(JSON.stringify(P.layoutData().shrubs || [])), // the bushes with no berries (0.2.9)
   };
 })()"""
 
@@ -2411,12 +2413,100 @@ async def farming():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
+async def wild():
+    """The wild and clearing land (0.2.9): apple trees with apples on them, picked one at a time and chopped down (the
+    apples fall); a stump out in the wild says Only in your camp; in your own camp a plain bush is dug up with the hoe and
+    is gone for both phones; apple seeds on a farm field need the squares round it empty; the planted tree grows (the
+    admin's Grow now), is in the way like a wild one, is picked, chopped to a stump and dug up; a young tree is drawn small."""
+    kit = {'campfire': 1, 'stick': 6, 'stone-hoe': 1, 'stone-axe': 1, 'apple-seeds': 2, 'sharp-stone': 1}
+    send = "(m) => window.__sock.send(JSON.stringify(m))"
+    async with world(KIT=json.dumps(kit)) as W:
+        a = await W.page('wildA'); await join(a)
+        got = await a.evaluate("[__pl.APPLES.size, __pl.APPLES.mesh.count, [...__pl.APPLES.keys()].every((i) => __pl.applesOn(i) === 4 && __pl.trees[i].state === 'tree' && !__pl.trees[i].pine)]")
+        expect(got[0] == 24 and got[1] == 96 and got[2], f'24 apple trees, all leafy, each with 4 apples on it ({got})')
+        # the apple tree nearest the start: its tap menu, then pick one
+        AT = "__pl.trees[__pl.wildTree]"
+        await a.evaluate("""window.__pl.wildTree = [...__pl.APPLES.keys()].sort((i, j) => { const p = __pl.player.position, d = (k) => Math.hypot(__pl.trees[k].x - p.x, __pl.trees[k].z - p.z); return d(i) - d(j); })[0]""")
+        menu = await a.evaluate(f"__pl.menuActions({{ kind: 'tree', idx: __pl.wildTree, name: 'Apple tree', x: {AT}.x, z: {AT}.z }}).map((x) => [x.label, x.note || '', !!x.disabled])")
+        expect(menu[0] == ['Pick apples', '4 left', False] and menu[1][0] == 'Chop tree' and menu[-1][0] == 'Walk here', f'an apple tree: Pick apples (4 left), Chop tree ({menu})')
+        await a.evaluate(f"__pl.queueTask({{ type: 'apple', idx: __pl.wildTree, x: {AT}.x, z: {AT}.z }})"); await idle(a, 60); await a.wait_for_timeout(1500)
+        got = await a.evaluate("[__pl.you.carry.apple || 0, __pl.applesOn(__pl.wildTree)]")
+        expect(got == [1, 3], f'picked: an apple in the inventory, 3 left on the tree ({got})')
+        await shot(a, 'wild_apple_tree')
+        # chopped down: its apples fall, and its stump can only be dug up in your camp
+        await a.evaluate(f"__pl.queueTask({{ type: 'chop', what: 'tree', idx: __pl.wildTree, x: {AT}.x, z: {AT}.z }})"); await idle(a, 90); await a.wait_for_timeout(1500)
+        got = await a.evaluate(f"[{AT}.state, __pl.world.items.filter((it) => it.kind === 'apple').length, __pl.applesOn(__pl.wildTree)]")
+        expect(got == ['stump', 3, 0], f'chopped: a stump, and its 3 apples on the ground ({got})')
+        menu = await a.evaluate(f"__pl.menuActions({{ kind: 'stump', idx: __pl.wildTree, name: 'Tree stump', x: {AT}.x, z: {AT}.z }}).map((x) => [x.label, x.note || '', !!x.disabled])")
+        expect(menu[0] == ['Dig up stump', 'Only in your camp', True] and menu[1][0].startswith('Grows back in'), f'out in the wild: Dig up stump, Only in your camp ({menu})')
+        # a camp next to a plain bush, away from the pond
+        spot = await a.evaluate("""(() => { const p = __pl.POND;
+          for (const [i, b] of __pl.wildBushes.entries()) { if (Math.hypot(b.x - p.x, b.z - p.z) < 30 || Math.abs(b.x) > 40 || Math.abs(b.z) > 40) continue;
+            for (let k = 0; k < 12; k++) { const g = k / 12 * 6.283, x = b.x + Math.cos(g) * 3, z = b.z + Math.sin(g) * 3; if (!__pl.cantPlaceAt(x, z, 'campfire') && Math.hypot(x - p.x, z - p.z) > 28) return [i, x, z]; } }
+          return null; })()""")
+        expect(spot is not None, f'a plain bush to make a camp beside ({spot})')
+        await a.evaluate(f"__pl.queueTask({{ type: 'walk', x: {spot[1] + 1.5:.2f}, z: {spot[2]:.2f} }})"); await idle(a, 90); await a.wait_for_timeout(800)
+        await a.evaluate(f"({send})({{ t: 'place', kind: 'campfire', x: {spot[1]:.2f}, z: {spot[2]:.2f}, rot: 0 }})"); await a.wait_for_timeout(900)
+        fid = await a.evaluate("[...__pl.placed.values()].find((t) => t.kind === 'campfire').id")
+        for m in [f"{{ t: 'build', id: {fid} }}", f"{{ t: 'fire', id: {fid}, do: 'add', n: 5, fuel: 'stick' }}", f"{{ t: 'fire', id: {fid}, do: 'light' }}"]:
+            await a.evaluate(f"({send})({m})"); await a.wait_for_timeout(700)
+        await idle(a, 40)
+        expect(await a.evaluate(f"__pl.claimMine(__pl.placed.get({fid}))"), 'a lit campfire: their camp')
+        SH = f"__pl.wildBushes[{spot[0]}]"
+        menu = await a.evaluate(f"__pl.menuActions({{ kind: 'shrub', idx: {spot[0]}, name: 'Bush', x: {SH}.x, z: {SH}.z }}).map((x) => [x.label, x.note || '', !!x.disabled])")
+        expect(menu[0] == ['Dig up bush', '8 s', False], f'a plain bush in their camp: Dig up bush ({menu})')
+        far = await a.evaluate(f"""(() => {{ const f = __pl.placed.get({fid}), i = __pl.wildBushes.findIndex((b) => Math.hypot(b.x - f.x, b.z - f.z) > 14); const b = __pl.wildBushes[i];
+          return __pl.menuActions({{ kind: 'shrub', idx: i, name: 'Bush', x: b.x, z: b.z }}).map((x) => [x.label, x.note || '', !!x.disabled]); }})()""")
+        expect(far[0] == ['Dig up bush', 'Only in your camp', True], f'one out in the wild: Only in your camp ({far})')
+        b = await W.page('wildB'); await join(b); await b.wait_for_timeout(800)
+        await a.evaluate(f"__pl.queueTask({{ type: 'clear', what: 'shrub', idx: {spot[0]}, x: {SH}.x, z: {SH}.z }})"); await idle(a, 60); await a.wait_for_timeout(1500)
+        got = await a.evaluate(f"[!!{SH}.cleared, __pl.world.items.filter((it) => it.kind === 'stick' && Math.hypot(it.x - {SH}.x, it.z - {SH}.z) < 2).length, !__pl.spots.get(__pl.spotKey({SH}.x, {SH}.z)) || !__pl.spots.get(__pl.spotKey({SH}.x, {SH}.z)).some((v, k) => k % 4 === 0 && Math.abs(v - {SH}.x) < 0.01)]")
+        expect(got[0] and got[1] >= 1 and got[2], f'dug up: gone, a stick by where it was, and out of the way ({got})')
+        expect(await b.evaluate(f"!!{SH}.cleared"), 'the other phone sees it gone')
+        # apple seeds on a farm field in the camp
+        await a.evaluate(f"""(() => {{ const f = __pl.placed.get({fid}); for (let r = 3; r < 8; r += 0.5) for (let k = 0; k < 24; k++) {{ const g = k / 24 * 6.283, x = f.x + Math.cos(g) * r, z = f.z + Math.sin(g) * r;
+          if (!__pl.cantPlaceAt(x, z, 'field')) {{ __pl.startDigging('field', {{ x, z }}); __pl.finishPlacing(); return; }} }} }})()""")
+        await idle(a, 90); await a.wait_for_timeout(1500)
+        FIELD = "[...__pl.placed.values()].find((t) => t.kind === 'field')"
+        acts = await a.evaluate(f"__pl.fieldActions({FIELD}).map((x) => [x.label, x.note || '', !!x.disabled])")
+        expect(acts[0] == ['Plant apple seeds', '3 s', False], f'a field: Plant apple seeds ({acts})')
+        await a.evaluate(f"__pl.queueTask({{ type: 'plant', id: {FIELD}.id, seed: 'apple-seeds' }})"); await idle(a, 40); await a.wait_for_timeout(1200)
+        crop = await a.evaluate(f"(() => {{ const t = {FIELD}, c = t.view.userData.parts.cropParts; return [t.crop && t.crop.kind, !!c && c.sprout.visible, !!c && !!c.tree && c.tree.visible, __pl.fieldState(t)]; }})()")
+        expect(crop[0] == 'apple-tree' and crop[1] and not crop[2] and crop[3].startswith('Apple tree sprout · grown in '), f'planted: an apple tree sprout ({crop})')
+        near = await a.evaluate(f"(() => {{ const t = {FIELD}; return [__pl.cantPlaceAt(t.x + 1, t.z + 1, 'field'), __pl.cantPlaceAt(t.x + 2, t.z, 'field')]; }})()")
+        expect(near[0] == 'Too close to the apple tree' and near[1] != 'Too close to the apple tree', f'nothing can go in the squares round it ({near})')
+        adm = await W.page('wildAdmin'); await open_admin(adm)
+        await adm.evaluate(f"({send})({{ t: 'a.regrow', what: 'placed', id: {await a.evaluate(f'{FIELD}.id')} }})"); await a.wait_for_timeout(1500)
+        grown = await a.evaluate(f"(() => {{ const t = {FIELD}, c = t.view.userData.parts.cropParts; return [__pl.cropK(t), __pl.cropBerriesNow(t), c.tree.visible, c.apples.filter((m) => m.visible).length, !!__pl.solidAt(t.x, t.z), __pl.fieldState(t)]; }})()")
+        expect(grown[0] == 1 and grown[1] == 4 and grown[2] and grown[3] == 4 and grown[4], f'Grow now: a full apple tree with 4 apples, in the way like a wild one ({grown})')
+        menu = await a.evaluate(f"__pl.fieldActions({FIELD}).map((x) => [x.label, x.note || '', !!x.disabled])")
+        expect(menu[0] == ['Pick apples', '4 left', False] and menu[1] == ['Chop tree', '10 s', False], f'its tap menu: Pick apples, Chop tree ({menu})')
+        await a.evaluate(f"__pl.queueTask({{ type: 'harvest', id: {FIELD}.id }})"); await idle(a, 40); await a.wait_for_timeout(1500)
+        await shot(a, 'wild_planted_tree')
+        await a.evaluate(f"__pl.queueTask({{ type: 'treeCrop', id: {FIELD}.id, do: 'chop' }})"); await idle(a, 90); await a.wait_for_timeout(1500)
+        got = await a.evaluate(f"(() => {{ const t = {FIELD}, c = t.view.userData.parts.cropParts; return [c.stump.visible, c.tree.visible, __pl.fieldState(t), __pl.fieldActions(t).map((x) => [x.label, x.note || '', !!x.disabled])]; }})()")
+        expect(got[0] and not got[1] and got[2].startswith('Apple tree stump · grows back in') and got[3][0] == ['Dig up stump', '10 s', False], f'chopped: its stump, which can be dug up in the camp ({got})')
+        await a.evaluate(f"__pl.queueTask({{ type: 'treeCrop', id: {FIELD}.id, do: 'dig' }})"); await idle(a, 90); await a.wait_for_timeout(1500)
+        got = await a.evaluate(f"(() => {{ const t = {FIELD}; return [!t.crop, !__pl.solidAt(t.x, t.z), __pl.fieldState(t)]; }})()")
+        expect(got[0] and got[1] and got[2] == 'Dug and ready for seeds', f'its stump dug up: the field is empty again and walked over ({got})')
+        # a young tree (the wild growing one back) is drawn small, growing up
+        young = await a.evaluate(f"""(() => {{ const i = __pl.trees.findIndex((t, k) => t.state === 'tree' && Math.hypot(t.x - __pl.player.position.x, t.z - __pl.player.position.z) < 12);
+          const t = __pl.trees[i], p = t.parts[0], m4 = new __pl.THREE.Matrix4(), size = () => {{ p.full.getMatrixAt(p.idx, m4); return new __pl.THREE.Vector3().setFromMatrixScale(m4).y; }};
+          const full = size(); __pl.setTreeState(i, 'young', Date.now() - 3600000); const small = size();
+          const menu = __pl.menuActions({{ kind: 'tree', idx: i, young: true, name: 'Young tree', x: t.x, z: t.z }}).map((x) => [x.label, !!x.disabled]);
+          return [i, full, small, menu]; }})()""")
+        expect(young[2] < young[1] * 0.4 and young[3][0][0].startswith('Grown in ') and young[3][0][1], f'a young tree is drawn small, and says when it will be grown ({young})')
+        await shot(a, 'wild_young_tree')
+        await a.evaluate(f"__pl.setTreeState({young[0]}, 'tree')")
+        expect(not W.errors, f'no errors {W.errors[:3]}')
+
+
 async def server_tests():
-    """The server's own code, tested with no browser (quick): the admin's fire, claim, Log, rename and message tools, live item numbers, that an old admin flag gives a player nothing, that things which aren't in the world can't be chopped, mined or picked, societies, task lists carried on while away, old things left on the ground fading, and stumps and boulders growing back."""
+    """The server's own code, tested with no browser (quick): the admin's fire, claim, Log, rename and message tools, live item numbers, that an old admin flag gives a player nothing, that things which aren't in the world can't be chopped, mined or picked, societies, task lists carried on while away, old things left on the ground fading, and stumps and boulders growing back, and the wild growing back and clearing land in your camp (wild.mjs, 0.2.9)."""
     import subprocess
     from lib import bundle
     bundle()
-    for f in ['admin_extras.mjs', 'live_items.mjs', 'stale_admin.mjs', 'cheats.mjs', 'societies.mjs', 'tasks.mjs', 'fade.mjs', 'forget.mjs', 'accounts.mjs', 'regrow.mjs', 'toolbar.mjs', 'farming.mjs', 'storage.mjs', 'shelter.mjs', 'retire.mjs', 'upgrades.mjs']:
+    for f in ['admin_extras.mjs', 'live_items.mjs', 'stale_admin.mjs', 'cheats.mjs', 'societies.mjs', 'tasks.mjs', 'fade.mjs', 'forget.mjs', 'accounts.mjs', 'regrow.mjs', 'toolbar.mjs', 'farming.mjs', 'storage.mjs', 'shelter.mjs', 'retire.mjs', 'upgrades.mjs', 'wild.mjs']:
         r = subprocess.run(['node', f], cwd=HERE, capture_output=True, text=True, timeout=180)
         last = (r.stdout.strip().splitlines() or ['(nothing printed)'])[-1]
         if r.returncode: print(r.stdout[-4000:], r.stderr[-2000:])
@@ -2707,7 +2797,7 @@ async def task_list():
         expect(not W.errors, f'no errors {W.errors[:3]}')
 
 
-CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'tasks_away': tasks_away, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'task_list': task_list, 'tool_bar': tool_bar, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'craft_mat': craft_mat, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'loading': loading, 'sideways': sideways, 'menu_rest': menu_rest, 'tips': tips, 'placed_kinds': placed_kinds, 'parts_look': parts_look, 'ore_vein': ore_vein, 'stress': stress, 'placing_grid': placing_grid, 'farming': farming, 'leaving': leaving, 'squares': squares, 'storage': storage, 'shelter': shelter, 'server_tests': server_tests}
+CHECKS = {'layout': layout, 'smoke': smoke, 'menu': menu, 'line': line, 'walking': walking, 'grass_and_tools': grass_and_tools, 'collapse': collapse, 'screens': screens, 'new_home': new_home, 'strolling': strolling, 'tasks_away': tasks_away, 'regions': regions, 'pond': pond, 'campfire': campfire, 'mining': mining, 'admin_tools': admin_tools, 'reset_all': reset_all, 'restore': restore, 'claims': claims, 'societies': societies, 'guards': guards, 'maintenance': maintenance, 'reconnect': reconnect, 'errors': errors, 'crowd': crowd, 'fishing': fishing, 'bagdrag': bagdrag, 'task_list': task_list, 'tool_bar': tool_bar, 'glow': glow, 'admin_login': admin_login, 'admin_people': admin_people, 'admin_mode': admin_mode, 'admin_taps': admin_taps, 'live_items_game': live_items_game, 'craft_mat': craft_mat, 'admin_items': admin_items, 'admin_follow': admin_follow, 'admin_extras': admin_extras, 'admin_phone': admin_phone, 'loading': loading, 'sideways': sideways, 'menu_rest': menu_rest, 'tips': tips, 'placed_kinds': placed_kinds, 'parts_look': parts_look, 'ore_vein': ore_vein, 'stress': stress, 'placing_grid': placing_grid, 'farming': farming, 'leaving': leaving, 'squares': squares, 'storage': storage, 'shelter': shelter, 'wild': wild, 'server_tests': server_tests}
 
 # shortcuts: `run.py quick` for small changes
 GROUPS = {'quick': ['layout', 'smoke']}

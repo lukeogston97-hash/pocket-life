@@ -36,5 +36,8 @@ Decided with Luke 26 Nov 2026 (0.1.18, built in one test build: "Build it all in
 - tools/tests/farming.mjs (quick, server only): digging in your camp only, on the grid, the hoe on the bar and its wear, no packing up, flattening, planting, growing from the planting time, picking (2 with the knife), someone else's camp, away tasks, the admin's Grow now, Regrow everything and the live grow time.
 - farming (browser): the ground's Dig farm field in and out of the camp, digging, no grass through the field, planting, the sprout and young bush, Grow now, picking with the knife, the other phone seeing each step, Flatten field.
 
+## Apple trees on fields (0.2.9)
+- Apple seeds grow an apple tree on a field in a day; it needs the squares round its field empty, is picked like a wild one, chopped to a stump that grows back in a day, and its stump can be dug up (the field is empty again). The whole of it is in wild.md.
+
 ## Later (not decided)
 - Watering, more crops (each a crops entry with its own seed and like), scarecrows or fences, crops that die if left, autopilot picking your own bushes.

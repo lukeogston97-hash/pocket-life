@@ -1636,6 +1636,35 @@
       },
       "places": "basic-shelter",
       "startInWorld": 0
+    },
+    "apple": {
+      "name": "Apple",
+      "about": "Picked from apple trees. Eat one to feel less hungry, or cut it open for apple seeds.",
+      "plural": "Apples",
+      "weight": 2,
+      "look": {
+        "shape": "ball",
+        "size": 0.07,
+        "colour": "#c23b2e",
+        "leaf": "#5f8a3c"
+      },
+      "startInWorld": 0,
+      "eat": {
+        "hunger": 20
+      }
+    },
+    "apple-seeds": {
+      "name": "Apple seeds",
+      "about": "Cut from an apple. Plant them on a farm field in your camp, with the squares round it empty, and an apple tree grows in about a day.",
+      "plural": "Apple seeds",
+      "weight": 1,
+      "group": "Misc",
+      "look": {
+        "shape": "seeds",
+        "size": 0.05,
+        "colour": "#5b3a24"
+      },
+      "startInWorld": 0
     }
   },
   "retired": {

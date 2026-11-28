@@ -317,6 +317,28 @@
       "places": "basic-shelter",
       "startInWorld": 0,
       "spawnsNear": null
+    },
+    "apple": {
+      "name": "Apple",
+      "plural": "Apples",
+      "weight": 2,
+      "eat": {
+        "hunger": 20
+      },
+      "uses": 0,
+      "places": null,
+      "startInWorld": 0,
+      "spawnsNear": null
+    },
+    "apple-seeds": {
+      "name": "Apple seeds",
+      "plural": "Apple seeds",
+      "weight": 1,
+      "eat": null,
+      "uses": 0,
+      "places": null,
+      "startInWorld": 0,
+      "spawnsNear": null
     }
   },
   "recipes": {
@@ -504,6 +526,17 @@
       "makes": {
         "basic-shelter": 1
       }
+    },
+    "apple-seeds": {
+      "needs": {
+        "apple": 1
+      },
+      "makes": {
+        "apple-seeds": 1
+      },
+      "keeps": {
+        "sharp-stone": 1
+      }
     }
   },
   "sources": {
@@ -542,6 +575,20 @@
       },
       "regrowHours": 4,
       "holds": 5,
+      "fish": null,
+      "seconds": 2,
+      "pose": "pick"
+    },
+    "appleTree": {
+      "gives": null,
+      "harvest": {
+        "apple": 1
+      },
+      "water": false,
+      "tool": null,
+      "toolHarvest": null,
+      "regrowHours": 24,
+      "holds": 4,
       "fish": null,
       "seconds": 2,
       "pose": "pick"
@@ -608,7 +655,8 @@
     "tend": 1,
     "fish": 3,
     "dig": 8,
-    "plant": 2
+    "plant": 2,
+    "clear": 8
   },
   "chopping": {
     "tool": "stone-axe",
@@ -649,6 +697,37 @@
     },
     "regrowDays": 1,
     "rockBackHours": 4
+  },
+  "clearing": {
+    "bush": {
+      "tool": "stone-hoe",
+      "seconds": 8,
+      "gives": {
+        "stick": 1
+      }
+    },
+    "boulder": {
+      "tool": "stone-pickaxe",
+      "seconds": 20,
+      "gives": {
+        "stone": 6
+      }
+    },
+    "tallGrass": {
+      "tool": "stone-hoe",
+      "seconds": 3,
+      "gives": {}
+    }
+  },
+  "wild": {
+    "awayFromPeople": 15,
+    "growsBackTo": 100,
+    "everyHours": {
+      "tree": 2,
+      "bush": 2,
+      "boulder": 12,
+      "tallGrass": 0.5
+    }
   },
   "placeables": {
     "campfire": {
@@ -730,11 +809,24 @@
   },
   "crops": {
     "berry-bush": {
+      "name": "Berry bush",
       "seed": "berry-seeds",
       "on": "field",
       "growHours": 24,
       "plantSeconds": 3,
       "like": "berryBush"
+    },
+    "apple-tree": {
+      "name": "Apple tree",
+      "seed": "apple-seeds",
+      "on": "field",
+      "growHours": 24,
+      "plantSeconds": 3,
+      "like": "appleTree",
+      "tree": {
+        "stumpBackHours": 24
+      },
+      "room": 1
     }
   },
   "liveSettings": [
@@ -829,15 +921,6 @@
       "step": 0.01
     },
     {
-      "id": "rockBackHours",
-      "name": "A broken rock comes back every",
-      "group": "Respawn times",
-      "unit": "h",
-      "min": 0.1,
-      "max": 240,
-      "step": 0.1
-    },
-    {
       "id": "fadeDays",
       "name": "Things left on the ground fade after (0: never)",
       "group": "Respawn times",
@@ -845,6 +928,60 @@
       "min": 0,
       "max": 365,
       "step": 1
+    },
+    {
+      "id": "wildTreeHours",
+      "name": "The wild grows a tree back every",
+      "group": "The wild",
+      "unit": "h",
+      "min": 0.1,
+      "max": 240,
+      "step": 0.1
+    },
+    {
+      "id": "wildBushHours",
+      "name": "The wild grows a bush back every",
+      "group": "The wild",
+      "unit": "h",
+      "min": 0.1,
+      "max": 240,
+      "step": 0.1
+    },
+    {
+      "id": "wildGrassHours",
+      "name": "The wild grows tall grass back every",
+      "group": "The wild",
+      "unit": "h",
+      "min": 0.1,
+      "max": 240,
+      "step": 0.1
+    },
+    {
+      "id": "wildBoulderHours",
+      "name": "A boulder comes back every",
+      "group": "The wild",
+      "unit": "h",
+      "min": 0.1,
+      "max": 240,
+      "step": 0.1
+    },
+    {
+      "id": "rockBackHours",
+      "name": "A broken rock comes back every",
+      "group": "The wild",
+      "unit": "h",
+      "min": 0.1,
+      "max": 240,
+      "step": 0.1
+    },
+    {
+      "id": "wildGrowsBackTo",
+      "name": "The wild grows back to",
+      "group": "The wild",
+      "unit": "%",
+      "min": 0,
+      "max": 100,
+      "step": 5
     },
     {
       "id": "cropGrowHours",

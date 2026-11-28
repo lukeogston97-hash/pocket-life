@@ -3,11 +3,26 @@
 // person, with their needs caught up to now) or 'world' (also needs the shared world). run gets the message (m), your
 // person (p), the world (w), reply() to answer just you, and save() to save your person straight away; `this` is the
 // world (index.js), so this.send() tells everyone. Remember a spam limit in LIMITS (shared.js) for anything new.
-import { PLACEABLES, fireRule, seatAt, CROPS, cropSource, cropGrown, cropBerries, storageOf, storeNoun, storable, storeWear, bedOf, bedFront } from './placed.js';
+import { PLACEABLES, fireRule, seatAt, CROPS, cropSource, cropGrown, cropBerries, cropTreeDef, cropIsStump, cropPickFrom, storageOf, storeNoun, storable, storeWear, bedOf, bedFront } from './placed.js';
 import { SOC, socMax, INVITE_MS } from './societies.js';
-import { fuelRoom, placeSnap, placeClash, berryPicked, storeRoom } from './rules.js';
+import { fuelRoom, placeSnap, placeClash, roomClash, berryPicked, storeRoom } from './rules.js';
 import { FILTER, G, starText, badName, freshStats, addCarry, carryNo, takeCarry, wearList, applyGives, eatOne, craft, spend, clean, blank, num, kindOk, START, REST, BERRY_SRC, cleanLook, REPORTS_KEEP, laidNow, onBar, equipTool, unequipTool, HOUR } from './shared.js';
 const SIT_OPEN = 365 * 24 * 3600000; // sitting has no set time: `until` is far off, and ends when they stand up, do something else, or the fire goes out
+const ONLY_CAMP = 'Only in your camp'; // clearing land (0.2.9): the game greys these out with the same words
+const toolNo = (tool) => `You need a ${String((G.items[tool] || {}).name || 'tool').toLowerCase()} on your tool bar`;
+// things that fall round a spot when something is chopped, mined or cleared: { kind: n } (n can be [least, most])
+function dropRound(w, at, gives, r0 = 0.5, r1 = 0.8) {
+  const out = [];
+  for (const [kind, c] of Object.entries(gives || {})) {
+    if (!G.items[kind]) continue;
+    const count = Array.isArray(c) ? c[0] + Math.floor(Math.random() * (c[1] - c[0] + 1)) : c;
+    for (let k = 0; k < count && out.length < 20; k++) {
+      const a = Math.random() * Math.PI * 2, r = r0 + Math.random() * r1;
+      out.push({ id: w.nextId++, kind, x: num(at[0] + Math.cos(a) * r), z: num(at[1] + Math.sin(a) * r), rot: num(Math.random() * Math.PI), laid: laidNow() });
+    }
+  }
+  return out;
+}
 
 export const ACTIONS = {
   // feedback from the Send feedback screen
@@ -240,8 +255,11 @@ export const ACTIONS = {
     if (!me.admin && !this.near(p, at)) { reply({ t: 'placeNo', why: 'Too far away' }); reply(this.mine(p)); return; }
     const cl = this.notYours(p, at[0], at[1], me.admin);
     if (cl) { reply({ t: 'placeNo', why: this.claimNo(cl) }); reply(this.mine(p)); return; }
+    // digging up a stump clears the land for good, so it's only for your own camp (0.2.9, Luke); out in the wild it grows back
+    if ((m.what === 'stump' || m.what === 'oldStump') && !me.admin && !this.inOwnCamp(p, at[0], at[1])) { reply({ t: 'placeNo', why: ONLY_CAMP }); reply(this.mine(p)); return; }
     if (!this.worked(ws, me, p, rule.seconds)) { reply({ t: 'slow' }); reply(this.mine(p)); return; } // chopping takes time (guard.js)
     w.trees = w.trees || {};
+    let fruit = 0; // an apple tree chopped down: the apples on it fall too (0.2.9)
     if (m.what === 'oldStump') { // an old stump that was already in the world: dug out for good
       const i = Math.floor(m.idx);
       if (!(i >= 0 && i < 5000)) return;
@@ -253,8 +271,9 @@ export const ACTIONS = {
       const i = Math.floor(m.idx);
       if (!(i >= 0 && i < 5000)) return;
       const st = w.trees[i];
-      if (m.what === 'tree' && st) { reply({ t: 'tree', idx: i, state: st[0] }); return; } // someone else got it first
-      if (m.what === 'stump' && (!st || st[0] !== 'stump')) { reply({ t: 'tree', idx: i, state: st ? st[0] : 'tree' }); return; }
+      if (m.what === 'tree' && st) { reply({ t: 'tree', idx: i, state: st[0], at: st[1] }); return; } // someone else got it first (or it's young)
+      if (m.what === 'stump' && (!st || st[0] !== 'stump')) { reply({ t: 'tree', idx: i, state: st ? st[0] : 'tree', at: st && st[1] }); return; }
+      if (m.what === 'tree') { fruit = this.applesOn(i); delete (w.apples || {})[i]; }
       w.trees[i] = [m.what === 'tree' ? 'stump' : 'gone', Date.now()];
       this.send({ t: 'tree', idx: i, state: w.trees[i][0], at: w.trees[i][1] }, null);
     } else {
@@ -264,13 +283,9 @@ export const ACTIONS = {
       w.items.splice(j, 1);
       this.send({ t: 'gone', id: m.id }, null);
     }
-    // what falls: round where it was chopped
-    const out = [];
-    let n = 0;
-    for (const [kind, count] of Object.entries(rule.gives || {})) for (let k = 0; k < count && n < 20; k++, n++) {
-      const a = Math.random() * Math.PI * 2, r = 0.5 + Math.random() * 0.8;
-      out.push({ id: w.nextId++, kind, x: num(at[0] + Math.cos(a) * r), z: num(at[1] + Math.sin(a) * r), rot: num(Math.random() * Math.PI), laid: laidNow() });
-    }
+    // what falls: round where it was chopped (and an apple tree's apples)
+    const out = dropRound(w, at, rule.gives);
+    if (fruit > 0 && G.sources.appleTree) out.push(...dropRound(w, at, Object.fromEntries(Object.keys(G.sources.appleTree.harvest || {}).map((k) => [k, fruit])), 0.4, 1.2));
     w.items.push(...out);
     if (out.length) this.send({ t: 'added', items: out }, null);
     spend(p, 'chop', G);
@@ -331,6 +346,112 @@ export const ACTIONS = {
     if (n > 1) { this.wearTool(p, BERRY_SRC.tool, reply); reply(this.mine(p)); }
     save();
   } },
+  // picking an apple off a wild apple tree (0.2.9): one at a time, like a berry bush (nature.js applesOn)
+  apple: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
+    const i = Math.floor(m.idx), src = G.sources.appleTree;
+    const no = (why) => { reply({ t: 'appleNo', idx: i, why }); reply(this.mine(p)); };
+    if (!src || !src.harvest || !(i >= 0 && i < 5000)) return;
+    if (!this.isThing('tree', i) || !this.isApple(i)) return no('There are no apples on it');
+    const st = (w.trees || {})[i];
+    if (st) { reply({ t: 'tree', idx: i, state: st[0], at: st[1] }); return no(st[0] === 'young' ? "It's too young for apples" : "It's been chopped down"); }
+    const at = this.spotOf('tree', i) || [p.x, p.z], cl = this.notYours(p, at[0], at[1], me.admin);
+    if (cl) return no(this.claimNo(cl));
+    if (!me.admin && !this.near(p, at)) return no('Too far away');
+    if (this.applesOn(i) < 1) return no('Someone picked it first');
+    if (!this.worked(ws, me, p, src.seconds)) return no('Slow down a little'); // picking takes time (guard.js)
+    const kind = Object.keys(src.harvest)[0], n = Number(src.harvest[kind]) || 1;
+    if (!addCarry(p, kind, n, G)) return no(carryNo(p, kind, n, G) || 'Too heavy to carry');
+    this.takeApple(i);
+    spend(p, 'harvest', G);
+    save();
+    reply(this.mine(p));
+  } },
+  // Clearing land in your own camp (0.2.9, Luke): a bush dug up (m.what bush: a berry bush, shrub: one with no berries),
+  // grass cleared (plant, m.plant: its id), a boulder broken up. It never comes back in the camp; the wild grows back by
+  // itself (nature.js topUpWild). A stump is dug up with chop. The rules are G.clearing (tool, seconds, gives).
+  clear: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
+    const what = String(m.what), i = Math.floor(m.idx), plant = String(m.plant || ''), CL = G.clearing || {};
+    const key = what === 'shrub' ? 'bush' : what === 'plant' ? plant : what, rule = Object.hasOwn(CL, key) ? CL[key] : null;
+    const no = (why) => { reply({ t: 'placeNo', why }); reply(this.mine(p)); };
+    if (!rule || !['bush', 'shrub', 'plant', 'boulder'].includes(what) || !(i >= 0 && i < 5000)) return no("That can't be cleared");
+    const removed = w.removed || {};
+    let at = null;
+    if (what === 'bush' || what === 'shrub') {
+      if (!this.isThing(what, i) || removed[`${what}:${i}`]) return no("It's gone");
+      if (this.isCleared(what, i)) { reply({ t: 'cleared', what, idx: i }); return no('Someone dug it up first'); }
+      at = this.spotOf(what, i);
+    } else if (what === 'plant') {
+      if (!Object.hasOwn(G.plants || {}, plant) || !this.isPlant(plant, i)) return no("It's gone");
+      if (this.isCleared('plant', i, plant)) { reply({ t: 'cleared', what, plant, idx: i }); return no('Someone cleared it first'); }
+      at = this.plantSpot(plant, i);
+    } else {
+      if (!this.isThing('rock', i) || this.rockKind(i, 'boulder') !== 'boulder') return no("That can't be broken up");
+      const st = (w.rocks || {})[i];
+      if (st && st[0] === 'gone') { reply({ t: 'rock', idx: i, state: 'gone' }); return no('Someone broke it up first'); }
+      at = this.spotOf('rock', i);
+    }
+    at = at || [p.x, p.z]; // (no layout yet: where they stand, next to it)
+    if (!me.admin && !this.near(p, at, what === 'boulder' ? 1 : 0)) return no('Too far away');
+    if (!me.admin && !this.inOwnCamp(p, at[0], at[1])) return no(ONLY_CAMP);
+    if (rule.tool && !onBar(p, rule.tool, G)) return no(toolNo(rule.tool));
+    if (!this.worked(ws, me, p, rule.seconds)) { reply({ t: 'slow' }); reply(this.mine(p)); return; } // clearing takes time (guard.js)
+    const now = Date.now(), gives = { ...(rule.gives || {}) };
+    w.cleared = w.cleared || {};
+    if (what === 'bush' || what === 'shrub') {
+      if (what === 'bush') { const n = this.berriesOn(i, now); if (n > 0) gives[G.berryKind] = (gives[G.berryKind] || 0) + n; } // the berries on it fall too
+      w.cleared[`${what}:${i}`] = now;
+      this.send({ t: 'cleared', what, idx: i }, null);
+    } else if (what === 'plant') {
+      const def = G.plants[plant], ready = ((w.plants || {})[plant] || {})[i];
+      if (!(ready && ready > now)) for (const [k, n] of Object.entries(def.gives || {})) gives[k] = (gives[k] || 0) + n; // grown grass gives its twine too
+      w.cleared[`${plant}:${i}`] = now;
+      this.send({ t: 'cleared', what, plant, idx: i }, null);
+    } else {
+      w.rocks = w.rocks || {};
+      w.rocks[i] = ['gone', now];
+      this.send({ t: 'rock', idx: i, state: 'gone', at: now }, null);
+    }
+    const out = dropRound(w, at, gives, what === 'boulder' ? 0.6 : 0.3, 0.7);
+    w.items.push(...out);
+    if (out.length) this.send({ t: 'added', items: out }, null);
+    spend(p, 'clear', G);
+    if (rule.tool) this.wearTool(p, rule.tool, reply);
+    await this.save();
+    save();
+    reply(this.mine(p));
+  } },
+  // A tree on a farm field (0.2.9, the apple tree): chop it down (m.do chop: a log and sticks, its apples drop, and a stump is
+  // left that grows back) or dig up its stump (dig: the field is empty again). The axe, as for a wild tree (G.chopping).
+  treeCrop: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
+    const th = this.placedById(m.id), T = th && th.crop && cropTreeDef(th.crop), C = G.chopping || {}, rule = C[m.do === 'dig' ? 'stump' : 'tree'];
+    const no = (why) => { reply({ t: 'placeNo', why }); if (th) this.sendPlaced(th, reply, {}); reply(this.mine(p)); };
+    if (!th || !T || !rule || !['chop', 'dig'].includes(m.do)) return no("There's no tree here");
+    if (!me.admin && Math.hypot(th.x - p.x, th.z - p.z) > 3 + ((PLACEABLES[th.kind] || {}).solid || 0.5)) return no('Too far away');
+    const c = this.notYours(p, th.x, th.z, me.admin);
+    if (c) return no(this.claimNo(c));
+    if (C.tool && !onBar(p, C.tool, G)) return no(toolNo(C.tool));
+    const now = Date.now(), stump = cropIsStump(th.crop, now);
+    if (m.do === 'chop' && (!cropGrown(th.crop, now) || stump)) return no(stump ? "It's a stump, growing back" : 'Not grown yet');
+    if (m.do === 'dig' && !stump) return no('Chop it down first');
+    if (m.do === 'dig' && !me.admin && !this.inOwnCamp(p, th.x, th.z)) return no(ONLY_CAMP);
+    if (!this.worked(ws, me, p, rule.seconds)) { reply({ t: 'slow' }); this.sendPlaced(th, reply, {}); reply(this.mine(p)); return; } // (the axe takes time, guard.js)
+    const gives = { ...(rule.gives || {}) };
+    if (m.do === 'chop') {
+      const fruit = cropBerries(th.crop, now), src = cropSource(th.crop), kind = src && Object.keys(src.harvest || {})[0];
+      if (fruit > 0 && kind) gives[kind] = (gives[kind] || 0) + fruit; // its apples fall too
+      th.crop.stump = now;
+      th.crop.berries = [0, now];
+    } else th.crop = null; // the stump dug up: just a field again
+    const out = dropRound(w, [th.x, th.z], gives, 0.6, 0.9);
+    w.items.push(...out);
+    if (out.length) this.send({ t: 'added', items: out }, null);
+    spend(p, 'chop', G);
+    this.wearTool(p, C.tool, reply);
+    await this.save();
+    save();
+    this.sendPlaced(th, null);
+    reply(this.mine(p));
+  } },
   // putting a placeable down (a campfire): it starts as an unbuilt site
   place: { when: 'world', async run({ ws, me, m, p, w, reply, save }) {
     const item = Object.hasOwn(G.items, String(m.kind)) ? G.items[m.kind] : null, kind = item && item.places, rule = kind && Object.hasOwn(PLACEABLES, kind) ? PLACEABLES[kind] : null;
@@ -342,6 +463,8 @@ export const ACTIONS = {
     if (cl) return no(this.claimNo(cl));
     if (rule.inCamp && !me.admin) { const c = this.claimAt(x, z); if (!c || !this.claimIsMine(c, p.who)) return no(`${item.plural} only go in your camp`); } // (the small wooden crate, 0.2.2; the game says the same)
     if (placeClash(this.placedList(), { x, z, rot }, kind, PLACEABLES)) return no('Too close to something else');
+    const tree = roomClash(this.placedList(), { x, z, rot }, kind, PLACEABLES, CROPS); // the squares round a tree on a farm field stay empty (0.2.9)
+    if (tree) return no(`Too close to the ${String((CROPS[tree.crop.kind] || {}).name || 'tree').toLowerCase()}`);
     const land = me.admin ? null : this.cantPlaceAt(x, z); // not in the water, off the land or inside a tree or rock (guard.js)
     if (land) return no(land);
     takeCarry(p, m.kind, 1);
@@ -473,6 +596,8 @@ export const ACTIONS = {
     if (!me.admin && Math.hypot(x - p.x, z - p.z) > 4) return no('Too far away');
     if (rule.inCamp && !me.admin) { const c = this.claimAt(x, z); if (!c || !this.claimIsMine(c, p.who)) return no('Farm fields only go in your camp'); }
     if (placeClash(this.placedList(), { x, z, rot }, kind, PLACEABLES)) return no('Too close to something else');
+    const tree = roomClash(this.placedList(), { x, z, rot }, kind, PLACEABLES, CROPS); // (0.2.9: the squares round a tree on a field)
+    if (tree) return no(`Too close to the ${String((CROPS[tree.crop.kind] || {}).name || 'tree').toLowerCase()}`);
     const land = me.admin ? null : this.cantPlaceAt(x, z); // not in the water, off the land or inside a tree or rock (guard.js)
     if (land) return no(land);
     if (!this.worked(ws, me, p, rule.makeSeconds)) { reply({ t: 'slow' }); reply(this.mine(p)); return; } // digging takes time (guard.js)
@@ -512,6 +637,7 @@ export const ACTIONS = {
     if (!kind) return no("That doesn't grow here");
     if (th.crop) return no('Something is already growing here');
     if (!p.carry[m.seed]) return no('You have no seeds to plant');
+    if (CROPS[kind].room && roomClash(this.placedList(), th, th.kind, PLACEABLES, CROPS, CROPS[kind].room)) return no('It needs the squares round it empty'); // (a tree, 0.2.9)
     if (!me.admin && Math.hypot(th.x - p.x, th.z - p.z) > 3 + (rule.solid || 0.5)) return no('Too far away');
     const c = this.notYours(p, th.x, th.z, me.admin);
     if (c) return no(this.claimNo(c));
@@ -534,12 +660,13 @@ export const ACTIONS = {
     if (c) return no(this.claimNo(c));
     const now = Date.now();
     if (!cropGrown(th.crop, now)) return no('Not grown yet');
+    if (cropIsStump(th.crop, now)) return no("It's a stump, growing back");
     const kind = Object.keys(src.harvest)[0], have = cropBerries(th.crop, now);
     if (have < 1) return no('None to pick yet');
     const many = src.tool && src.toolHarvest && onBar(p, src.tool, G) ? Number(src.toolHarvest[kind]) || 1 : 1;
     const n = have >= many ? many : 1;
     if (!addCarry(p, kind, n, G)) return no(carryNo(p, kind, n, G) || 'Too heavy to carry');
-    let b = th.crop.berries || [null, null];
+    let b = cropPickFrom(th.crop, now); // (a tree on the field that grew back: its fruit counts from then, 0.2.9)
     for (let k = 0; k < n; k++) b = berryPicked(b[0], b[1], src.holds || 5, (src.regrowHours || 0) * HOUR, now); // (rules.js, the same as a wild bush)
     th.crop.berries = b;
     spend(p, 'harvest', G);
@@ -602,6 +729,7 @@ export const ACTIONS = {
     w.plants = w.plants || {};
     const ps = (w.plants[m.plant] = w.plants[m.plant] || {}), now = Date.now();
     if (!this.isPlant(m.plant, i)) { reply({ t: 'cutNo', plant: m.plant, i, readyAt: ps[i] || 0 }); return; } // no such clump (guard.js)
+    if (this.isCleared('plant', i, m.plant)) { reply({ t: 'cleared', what: 'plant', plant: m.plant, idx: i }); reply({ t: 'cutNo', plant: m.plant, i, readyAt: 0, why: "It's been cleared" }); return; } // (cleared from a camp, 0.2.9)
     const plant = this.plantSpot(m.plant, i) || [p.x, p.z]; // where it is (guard.js), else where they're standing, next to it
     const cl = this.notYours(p, plant[0], plant[1], me.admin);
     if (cl) { reply({ t: 'cutNo', plant: m.plant, i, readyAt: ps[i] || 0, why: this.claimNo(cl) }); return; }

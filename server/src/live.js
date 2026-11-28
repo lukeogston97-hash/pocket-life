@@ -8,6 +8,7 @@ import { daysSpan } from './rules.js';
 
 const need = (id) => (G.needs || []).find((s) => s.id === id) || {};
 const inside = (key) => (G[key] = G[key] || {});
+const wildEvery = () => { const W = inside('wild'); return (W.everyHours = W.everyHours || {}); };
 // needs drop, so "drops 4.2 per hour" is a perHour of -4.2
 const drop = (id) => ({ get: () => -(need(id).perHour || 0), set: (v) => { need(id).perHour = -v; }, needs: true });
 const RULES = {
@@ -23,6 +24,12 @@ const RULES = {
   treeRegrowDaysMost: { get: () => daysSpan(inside('chopping').regrowDays)[1], set: (v) => { const C = inside('chopping'); C.regrowDays = [daysSpan(C.regrowDays)[0], v]; } },
   boulderRegrowDays: { get: () => inside('mining').regrowDays || 3, set: (v) => { inside('mining').regrowDays = v; } },
   rockBackHours: { get: () => inside('mining').rockBackHours || 4, set: (v) => { inside('mining').rockBackHours = v; } },
+  // the wild growing back (0.2.9, nature.js topUpWild): one of each kind every so often, up to so full
+  wildTreeHours: { get: () => wildEvery().tree || 2, set: (v) => { wildEvery().tree = v; } },
+  wildBushHours: { get: () => wildEvery().bush || 2, set: (v) => { wildEvery().bush = v; } },
+  wildGrassHours: { get: () => wildEvery().tallGrass || 0.5, set: (v) => { wildEvery().tallGrass = v; } },
+  wildBoulderHours: { get: () => wildEvery().boulder || 12, set: (v) => { wildEvery().boulder = v; } },
+  wildGrowsBackTo: { get: () => inside('wild').growsBackTo ?? 100, set: (v) => { inside('wild').growsBackTo = v; } },
   fadeDays: { get: () => G.fadeDays ?? 7, set: (v) => { G.fadeDays = v; } }, // (nature.js fadeOld; 0: nothing fades)
   hungerPerHour: drop('hunger'),
   thirstPerHour: drop('thirst'),

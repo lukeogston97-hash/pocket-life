@@ -325,14 +325,18 @@ export const adminMethods = {
       /* ---------- World: the whole world at once ---------- */
       case 'a.regrowAll': { // stumps back to trees, mined boulders and broken rocks back, bushes full, grass grown, sticks and stones topped up
         if (!w) return;
-        const removed = w.removed || {};
-        for (const [i, st] of Object.entries(w.trees || {})) if (st[0] === 'stump') delete w.trees[i];
-        for (const [i, st] of Object.entries(w.rocks || {})) if (st[0] === 'mined' || (st[0] === 'gone' && !removed[`rock:${i}`])) delete w.rocks[i];
-        w.nextRockBack = 0;
+        for (const [i, st] of Object.entries(w.trees || {})) if (st[0] === 'stump' || st[0] === 'young') delete w.trees[i]; // (young trees grown up, 0.2.9)
+        for (const [i, st] of Object.entries(w.rocks || {})) if (st[0] === 'mined') delete w.rocks[i];
+        delete w.nextRockBack;
         w.bushes = [];
         w.plants = {};
+        w.apples = {}; // every apple tree full (0.2.9)
         delete w.pond; // the pond is full of fish again
-        for (const th of this.placedList()) if (th.crop) { th.crop.at = Math.min(th.crop.at, Date.now() - cropGrowMs(th.crop)); th.crop.berries = null; } // crops on farm fields grown (0.1.18)
+        for (const th of this.placedList()) if (th.crop) { th.crop.at = Math.min(th.crop.at, Date.now() - cropGrowMs(th.crop)); th.crop.berries = null; th.crop.stump = 0; } // crops on farm fields grown (0.1.18), trees on them too (0.2.9)
+        // everything gone from the wild comes back (0.2.9): broken rocks, and whatever was cleared from camps that have ended.
+        // Never inside a camp that's still there (what its people cleared stays cleared), nor on something placed.
+        this.topUpWild(Date.now(), { all: true });
+        for (const [i, st] of Object.entries(w.trees || {})) if (st[0] === 'young') delete w.trees[i]; // (and grown up straight away)
         this.topUp();
         await everyoneSees();
         return done('Everything grown back');
@@ -408,9 +412,10 @@ export const adminMethods = {
         if (!w) return;
         if (m.what === 'placed') {
           const th = this.placedById(m.id), rule = th && fireRule(th.kind);
-          if (th && th.crop) { // a farm field (0.1.18): what's planted is grown, full of berries
+          if (th && th.crop) { // a farm field (0.1.18): what's planted is grown, full of berries (a tree on it grown back, 0.2.9)
             th.crop.at = Math.min(th.crop.at, Date.now() - cropGrowMs(th.crop));
             th.crop.berries = null;
+            th.crop.stump = 0;
             await this.save();
             this.sendPlaced(th);
             return done('Grown');
@@ -423,9 +428,13 @@ export const adminMethods = {
           return done('Full of fuel');
         }
         const i = Math.floor(m.idx);
-        if (m.what === 'tree' && idxOk(i, MOVABLE.tree) && (w.trees || {})[i] && w.trees[i][0] === 'stump') {
+        if (m.what === 'tree' && idxOk(i, MOVABLE.tree) && (w.trees || {})[i] && (w.trees[i][0] === 'stump' || w.trees[i][0] === 'young')) { // (a young tree grown up, 0.2.9)
           delete w.trees[i];
           this.send({ t: 'tree', idx: i, state: 'tree' }, null);
+          if (this.isApple(i)) { delete (w.apples || {})[i]; this.send({ t: 'apples', idx: i, count: null, growFrom: null }, null); }
+        } else if (m.what === 'tree' && idxOk(i, MOVABLE.tree) && this.isApple(i) && (w.apples || {})[i] && !(w.trees || {})[i]) { // an apple tree full of apples (0.2.9)
+          delete w.apples[i];
+          this.send({ t: 'apples', idx: i, count: null, growFrom: null }, null);
         } else if (m.what === 'rock' && idxOk(i, MOVABLE.rock) && (w.rocks || {})[i] && !(w.removed || {})[`rock:${i}`]) {
           delete w.rocks[i];
           this.send({ t: 'rock', idx: i, state: 'whole' }, null);

@@ -83,13 +83,18 @@ function layPieces(kind, def) {
   P.mats = meshes.map((m) => m.instanceMatrix.array.slice());
   interactive.push(...meshes);
 }
-export const plantReady = (c) => !c.readyAt || Date.now() >= c.readyAt;
+export const plantReady = (c) => !c.cleared && (!c.readyAt || Date.now() >= c.readyAt);
 // a cut clump is short stubble with no seed heads; a grown one is as it was laid out
 const STUB = new THREE.Matrix4().makeScale(1, 0.22, 1), NONE = new THREE.Matrix4().makeScale(0, 0, 0), tmpM = new THREE.Matrix4();
 export function drawPlant(kind, c) {
-  const P = plants[kind], up = game.freshLook || plantReady(c);
-  if (c.shown === up) return;
-  c.shown = up;
+  const P = plants[kind], gone = c.cleared && !game.freshLook, up = game.freshLook || plantReady(c), look = gone ? 'gone' : up;
+  if (c.shown === look) return;
+  c.shown = look;
+  if (gone) { // cleared from a camp (0.2.9): not there at all till the wild grows it back
+    if (P.form === 'parts') P.meshes.forEach((m) => { NONE.toArray(m.instanceMatrix.array, c.i * 16); m.instanceMatrix.needsUpdate = true; });
+    else { for (let k = 0; k < P.per; k++) { const o = (c.i * P.per + k) * 16; NONE.toArray(P.blades.instanceMatrix.array, o); NONE.toArray(P.heads.instanceMatrix.array, o); } P.blades.instanceMatrix.needsUpdate = P.heads.instanceMatrix.needsUpdate = true; }
+    return;
+  }
   if (P.form === 'parts') {
     const stub = P.def.look.whenUsed === 'stub', o = c.i * 16;
     P.meshes.forEach((m, j) => {
@@ -113,6 +118,12 @@ export function drawPlant(kind, c) {
   }
   P.blades.instanceMatrix.needsUpdate = P.heads.instanceMatrix.needsUpdate = true;
 }
+export function setPlantCleared(kind, i, on) {
+  const c = plants[kind] && plants[kind].clumps[i];
+  if (!c || !!c.cleared === !!on) return;
+  c.cleared = !!on;
+  drawPlant(kind, c);
+}
 export function setPlant(kind, i, readyAt) {
   const c = plants[kind] && plants[kind].clumps[i];
   if (!c) return;
@@ -123,7 +134,7 @@ export const drawPlants = () => { for (const [kind, P] of Object.entries(plants)
 // the clump nearest a ground point (thin blades are hard to tap exactly)
 export function plantNear(gp, within = 0.8) {
   let best = null, bd = within;
-  for (const [kind, P] of Object.entries(plants)) for (const c of P.clumps) { const d = Math.hypot(c.x - gp.x, c.z - gp.z); if (d < bd) { bd = d; best = { kind, c }; } }
+  for (const [kind, P] of Object.entries(plants)) for (const c of P.clumps) { if (c.cleared) continue; const d = Math.hypot(c.x - gp.x, c.z - gp.z); if (d < bd) { bd = d; best = { kind, c }; } }
   return best;
 }
 export const plantTarget = (kind, c) => ({ kind: 'plant', plant: kind, i: c.i, x: c.x, z: c.z, name: PLANTS[kind].name });

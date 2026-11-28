@@ -10,7 +10,7 @@ import { daysSpan } from './rules.js';
 import { app, camera, DATA, SETTINGS, VERSION_LABEL } from './core.js';
 import { pondShape, terrain, WALK_LIMIT } from './land.js';
 import { berryBushes, rocks, trees } from './nature.js';
-import { berriesOn, bushHolds, CHOP, drawBerries, MINE } from './world-build.js';
+import { APPLES, applesOn, berriesOn, bushHolds, CHOP, drawBerries, MINE } from './world-build.js';
 import { $, countLabel, groupOf, GROUPS, harvests, ITEMS, RECIPES, SOURCES, STAT, STATS } from './items.js';
 import { world } from './world-items.js';
 import { drawCarry, headTop, player, showTag, you } from './you.js';
@@ -88,6 +88,7 @@ $('announce').addEventListener('click', () => { $('announce').hidden = true; });
 
 /* ---------- live settings (Settings tab): the server sends the numbers it changed, and the game uses them too ---------- */
 const BERRY_SOURCE = () => Object.values(SOURCES).find(harvests);
+const wildEvery = () => { const W = (DATA.wild = DATA.wild || {}); return (W.everyHours = W.everyHours || {}); };
 const LIVE_SET = {
   maxPlaying: (v) => { SETTINGS.maxPlaying = v; },
   toolSlots: (v) => { if (SETTINGS.toolSlots !== v) { SETTINGS.toolSlots = v; if (player && bagOpen()) drawBag(); } }, // the tool bar's spots (inventory.js)
@@ -100,6 +101,10 @@ const LIVE_SET = {
   treeRegrowDaysMost: (v) => { CHOP.regrowDays = [daysSpan(CHOP.regrowDays)[0], v]; },
   boulderRegrowDays: (v) => { MINE.regrowDays = v; },
   rockBackHours: (v) => { MINE.rockBackHours = v; },
+  // the wild growing back (0.2.9): only the server uses them (server/src/nature.js topUpWild)
+  wildTreeHours: (v) => { wildEvery().tree = v; }, wildBushHours: (v) => { wildEvery().bush = v; },
+  wildGrassHours: (v) => { wildEvery().tallGrass = v; }, wildBoulderHours: (v) => { wildEvery().boulder = v; },
+  wildGrowsBackTo: (v) => { (DATA.wild = DATA.wild || {}).growsBackTo = v; },
   fadeDays: (v) => { SETTINGS.fadeDays = v; }, // (only the server uses it: server/src/nature.js fadeOld)
   hungerPerHour: (v) => { if (STAT.hunger) STAT.hunger.perHour = -v; },
   thirstPerHour: (v) => { if (STAT.thirst) STAT.thirst.perHour = -v; },
@@ -108,6 +113,7 @@ const LIVE_SET = {
 };
 const LIVE_BASE = { maxPlaying: SETTINGS.maxPlaying, toolSlots: SETTINGS.toolSlots ?? 7, inventorySquares: SETTINGS.inventorySquares ?? 10, stackSize: SETTINGS.stackSize ?? 10, societyMax: (DATA.societies || {}).maxMembers ?? 3, respawnMinutes: SETTINGS.respawnMinutes, berryRegrowHours: (BERRY_SOURCE() || {}).regrowHours,
   treeRegrowDays: daysSpan(CHOP.regrowDays)[0], treeRegrowDaysMost: daysSpan(CHOP.regrowDays)[1], boulderRegrowDays: MINE.regrowDays ?? 3, rockBackHours: MINE.rockBackHours ?? 4, fadeDays: SETTINGS.fadeDays ?? 7,
+  wildTreeHours: wildEvery().tree ?? 2, wildBushHours: wildEvery().bush ?? 2, wildGrassHours: wildEvery().tallGrass ?? 0.5, wildBoulderHours: wildEvery().boulder ?? 12, wildGrowsBackTo: (DATA.wild || {}).growsBackTo ?? 100,
   hungerPerHour: -((STAT.hunger || {}).perHour || 0), thirstPerHour: -((STAT.thirst || {}).perHour || 0), restPerHour: -((STAT.rest || {}).perHour || 0),
   cropGrowHours: (Object.values(DATA.crops || {})[0] || {}).growHours ?? 24 };
 function applyLive(live) {
@@ -160,9 +166,9 @@ export function adminGroundActions(p) {
     { label: 'Fly here', run: () => game.adminFlyTo(p.x, p.z) }];
 }
 // a tree, rock or berry bush laid out with the world (what: tree | rock | bush, i: its number); grown: there's something to grow back
-export function adminThingActions(what, i, grown) {
+export function adminThingActions(what, i, grown, label = '') { // (label: a young tree or an apple tree says what it does, 0.2.9)
   if (!admin.on) return [];
-  const regrow = { tree: 'Grow back into a tree', rock: 'Grow back', bush: 'Fill with berries' }[what];
+  const regrow = label || { tree: 'Grow back into a tree', rock: 'Grow back', bush: 'Fill with berries' }[what];
   return [{ label: 'Move', note: 'Then tap where it goes', run: () => startMove({ what, idx: i }) },
     ...(grown ? [{ label: regrow, run: () => adminSend({ t: 'a.regrow', what, idx: i }) }] : []),
     sure('Remove', () => adminSend({ t: 'a.remove', what, idx: i }), 'Gone for good')];
@@ -498,7 +504,8 @@ function drawInbox() {
 /* ---------- World tab: what's in the world, and changes to all of it ---------- */
 function drawCounts() {
   const n = (list, f) => list.filter(f).length;
-  const bushes = berryBushes.filter((b) => !b.userData.removed);
+  const bushes = berryBushes.filter((b) => !b.userData.removed && !b.userData.cleared);
+  const apples = [...APPLES.keys()].filter((i) => trees[i] && trees[i].state !== 'gone'), full = (SOURCES.appleTree || {}).holds || 4; // (0.2.9)
   const kinds = {};
   for (const it of world.items) kinds[it.kind] = (kinds[it.kind] || 0) + 1;
   const loose = Object.entries(kinds).sort((a, b) => b[1] - a[1]).map(([k, c]) => `${c} ${c === 1 ? ITEMS[k].name.toLowerCase() : ITEMS[k].plural.toLowerCase()}`);
@@ -511,6 +518,8 @@ function drawCounts() {
   }
   const lines = [
     ['Trees', `${n(trees, (t) => t.state === 'tree')}`], ['Tree stumps', `${n(trees, (t) => t.state === 'stump')}`],
+    ['Young trees', `${n(trees, (t) => t.state === 'young')}`], // (the wild growing back, 0.2.9)
+    ['Apple trees', `${apples.length} (${n(apples, (i) => trees[i].state === 'tree' && applesOn(i) < full)} picked)`],
     ['Boulders', `${n(rocks, (r) => r.boulder && r.state !== 'gone')} (${n(rocks, (r) => r.boulder && r.state === 'mined')} mined)`],
     ['Rocks', `${n(rocks, (r) => !r.boulder && r.state !== 'gone')} (${n(rocks, (r) => !r.boulder && r.state === 'gone')} broken)`],
     ['Berry bushes', `${bushes.length} (${n(bushes, (b) => berriesOn(b) < bushHolds(SOURCES[b.userData.source] || {}))} picked)`],

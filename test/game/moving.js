@@ -3,9 +3,9 @@ import * as THREE from 'three';
 import { game, share } from './links.js';
 import { clamp01, DATA, rand, scene, SETTINGS, V } from './core.js';
 import { groundY, heightAt, POND, pondShape, WALK_LIMIT, WATER_Y } from './land.js';
-import { berryBushes, oldStumps, rocks, roomAt, spotKey, spots, trees, WALK_THROUGH } from './nature.js';
+import { berryBushes, oldStumps, rocks, roomAt, spotKey, spots, trees, WALK_THROUGH, wildBushes } from './nature.js';
 import { growsIn, plantReady, PLANTS, plants, setPlant } from './plants.js';
-import { berriesOn, CHOP, drawBerries, MINE, pickBerry, readyIn, ripe } from './world-build.js';
+import { appleReadyIn, applesOn, berriesOn, CHOP, drawBerries, isApple, MINE, pickApple, pickBerry, readyIn, ripe } from './world-build.js';
 import { $, buildItem, countLabel, harvests, ITEMS, SOURCES, STAT, STATS } from './items.js';
 import { disposeMaterials, setArm } from './people.js';
 import { getItem, itemViews, removeWorldItem, seeThrough } from './world-items.js';
@@ -577,6 +577,7 @@ function eatOne(kind) {
 function doCut(t) {
   const def = PLANTS[t.plant], c = plants[t.plant] && plants[t.plant].clumps[t.i];
   if (!def || !c) { nextTask(); return; }
+  if (c.cleared) { showTag("It's been cleared", headTop(), 2); nextTask(); return; } // (0.2.9)
   if (!plantReady(c)) { showTag(`Grows back in ${growsIn(c)}`, headTop(), 2); nextTask(); return; }
   const no = carryNo(def.gives);
   if (no) { showTag(no, headTop(), 2); stopQueue(); return; }
@@ -663,6 +664,67 @@ Object.assign(TASK_KINDS, {
     spot: () => V(POND.x, WATER_Y + 0.5, POND.z),
   },
 });
+/* ---------- apple trees and clearing land (0.2.9) ----------
+   Picking an apple goes straight into your inventory (the server has the final say: appleNo takes it back). Clearing
+   something in your camp (a bush dug up, grass cleared, a boulder broken up) takes its time, then the server clears it
+   for everyone and drops what it gives round it. */
+const CLEARING = DATA.clearing || {};
+const clearRuleOf = (t) => { const k = t.what === 'shrub' ? 'bush' : t.what === 'plant' ? t.plant : t.what; return Object.hasOwn(CLEARING, k) ? CLEARING[k] : null; };
+// where the thing being cleared is, and whether it's still there: { x, z, r } or null
+function clearTarget(t) {
+  if (t.what === 'bush') { const b = berryBushes[t.idx]; return b && !b.userData.cleared && !b.userData.removed ? { x: b.position.x, z: b.position.z, r: b.userData.r } : null; }
+  if (t.what === 'shrub') { const b = wildBushes[t.idx]; return b && !b.cleared ? { x: b.x, z: b.z, r: b.r } : null; }
+  if (t.what === 'plant') { const c = plants[t.plant] && plants[t.plant].clumps[t.idx]; return c && !c.cleared ? { x: c.x, z: c.z, r: 0.35 } : null; }
+  if (t.what === 'boulder') { const r = rocks[t.idx]; return r && r.boulder && r.state !== 'gone' ? { x: r.x, z: r.z, r: r.r } : null; }
+  return null;
+}
+Object.assign(TASK_KINDS, {
+  apple: {
+    start(t) {
+      const tr = trees[t.idx], src = SOURCES.appleTree;
+      if (!tr || !src || !isApple(t.idx) || tr.state !== 'tree') { nextTask(); return; }
+      const kind = Object.keys(src.harvest)[0], no = () => (applesOn(t.idx) < 1 ? `Next ${ITEMS[kind].name.toLowerCase()} in ${appleReadyIn(t.idx)}` : carryNo(src.harvest));
+      if (no()) { showTag(no(), headTop(), 2); nextTask(); return; }
+      approach(tr.x, tr.z, 0.95, 1.3, () => {
+        if (tr.state !== 'tree' || no()) { if (tr.state === 'tree') showTag(no(), headTop(), 2); nextTask(); return; }
+        face(tr.x, tr.z);
+        showTag(`${src.verb}…`, headTop(), 2, src.seconds * slowness() + 0.3);
+        game.tagLabel.busy = true;
+        startAction({ pose: src.pose, seconds: src.seconds, end: () => {
+          if (tr.state !== 'tree' || no()) return;
+          for (const [k, n] of Object.entries(src.harvest)) addToCarry(k, n);
+          pickApple(t.idx);
+          spendEnergy('harvest');
+          drawHeld(); drawCarry();
+          showGain(Object.entries(src.harvest).map(([k, n]) => `+${countLabel(k, n).toLowerCase()}`).join(', '));
+          game.sendAct({ t: 'apple', idx: t.idx });
+        } });
+      });
+    },
+    name: (t, now) => { const src = SOURCES.appleTree || {}; return now ? src.verb || 'Picking apples' : src.action || 'Pick apples'; },
+    spot: (t) => { const tr = trees[t.idx]; return tr ? V(tr.x, groundY(tr.x, tr.z) + 2.6 * tr.s, tr.z) : null; },
+  },
+  clear: {
+    start(t) {
+      const rule = clearRuleOf(t), at = clearTarget(t);
+      if (!rule || !at) { nextTask(); return; }
+      if (rule.tool && !hasTool(rule.tool)) { showTag(toolWhy(rule.tool), headTop(), 2); nextTask(); return; }
+      const stop = t.what === 'boulder' ? at.r * 0.8 + 0.45 : t.what === 'plant' ? 0.55 : at.r + 0.35;
+      approach(at.x, at.z, stop, stop + 0.4, () => {
+        if (!clearTarget(t)) { nextTask(); return; }
+        face(at.x, at.z);
+        showTag(`${rule.verb || 'Clearing'}…`, headTop(), 2, rule.seconds * slowness() + 0.3);
+        game.tagLabel.busy = true;
+        startAction({ pose: t.what === 'boulder' ? 'chop' : 'kneel', seconds: rule.seconds, tool: rule.tool, end: () => {
+          spendEnergy('clear');
+          game.sendAct({ t: 'clear', what: t.what, idx: t.idx, ...(t.plant ? { plant: t.plant } : {}) });
+        } });
+      });
+    },
+    name: (t, now) => { const rule = clearRuleOf(t) || {}; return now ? rule.verb || 'Clearing' : rule.action || 'Clear'; },
+    spot: (t) => { const at = clearTarget(t); return at ? V(at.x, groundY(at.x, at.z) + (t.what === 'plant' ? 0.9 : at.r + 0.8), at.z) : null; },
+  },
+});
 // where dropped things land: one in front of you, more in a small pile around it
 function dropSpot(i, at) { // at: {x, z} where you let go (else just in front of you)
   const fx = Math.sin(player.rotation.y), fz = Math.cos(player.rotation.y);
@@ -740,7 +802,7 @@ export function taskName(t, now) {
   }
   if (t.type === 'drop') return now ? 'Putting down' : `Drop ${countLabel(t.kind, t.n).toLowerCase()}`;
   if (t.type === 'cut') return now ? `${(PLANTS[t.plant] || {}).verb || 'Cutting'}` : (PLANTS[t.plant] || {}).action || 'Cut';
-  if (t.type === 'chop') return t.what === 'tree' ? (now ? 'Chopping a tree' : 'Chop tree') : t.what === 'stump' || t.what === 'oldStump' ? (now ? 'Removing a stump' : 'Remove stump') : (now ? 'Chopping into sticks' : 'Chop into sticks');
+  if (t.type === 'chop') return t.what === 'tree' ? (now ? 'Chopping a tree' : 'Chop tree') : t.what === 'stump' || t.what === 'oldStump' ? (now ? 'Digging up a stump' : 'Dig up stump') : (now ? 'Chopping into sticks' : 'Chop into sticks');
   if (t.type === 'walk') return now ? 'Walking' : 'Walk there';
   if (TASK_KINDS[t.type]) return TASK_KINDS[t.type].name(t, now);
   return '';

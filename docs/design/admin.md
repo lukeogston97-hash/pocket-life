@@ -16,7 +16,7 @@ How it works now. How it got this way (the admin player before admin mode, the f
 - The ground: Add item (a picker with search, the Recipes headings and 1, 5 or 10) and Fly here.
 - A person: their page, fly to, follow, move (tap where they go), fill needs, mute, kick, ban.
 - A loose item: remove.
-- A tree, stump, rock, boulder or berry bush: Move (then tap where it goes), Regrow (a stump back to a tree, a mined boulder back, a bush full of berries) and Remove (asks once more; gone for good).
+- A tree, stump, rock, boulder or berry bush: Move (then tap where it goes), Regrow (a stump back to a tree, a mined boulder back, a bush full of berries; since 0.2.9 Grow up now on a young tree and Fill with apples on an apple tree) and Remove (asks once more; gone for good).
 - A campfire: Move, Fill with fuel, Light or Put out, End claim, Remove, and Fires and claims.
 - A farm field: Move, Grow now (when something is planted: grown and full of berries), Remove.
 - The layout never moves: moved things are kept in world.moved (`'tree:12': [x, z]`) and drawn shifted from where they were laid out; removed trees and rocks are state gone plus world.removed (removed rocks never come back), removed berry bushes are in world.removed.
@@ -36,8 +36,8 @@ How it works now. How it got this way (the admin player before admin mode, the f
 - Feedback and Reports, with a new count. Done or Delete; Done ones are deleted after 30 days. Auto notes from errors ("Server error", "Game error") land here too, counted when they repeat.
 
 ## World tab
-- Counts of everything (trees, stumps, boulders, rocks, berry bushes, each kind of placed thing, with "Farm fields 3 (2 planted)", loose items by kind).
-- Regrow everything: stumps, mined boulders, broken rocks, bushes, the pond's fish, crops on farm fields, grass, and sticks and stones topped up.
+- Counts of everything (trees, stumps, young trees, apple trees and how many picked, boulders, rocks, berry bushes, each kind of placed thing, with "Farm fields 3 (2 planted)", loose items by kind).
+- Regrow everything: stumps, mined boulders, broken rocks, bushes, the pond's fish, crops on farm fields, grass, and sticks and stones topped up. Since 0.2.9 also young trees grown up, every apple tree full, and everything gone from the wild back at once (never inside a camp or on something placed: wild.md).
 - Clear loose items near you (10 m) or in the whole world (two taps).
 - Fires and claims: every fire, whose claim it is, burning or out, and the fuel left. Fly to, Put out, Light, End claim, and under More the hours of fuel and who the claim goes to. The same rules as the game: one claim each, clear of the pond and of other claims, only a burning campfire holds one (`claimFit` in claims.js). Put out ends a claim on that fire, so it asks twice. End claim frees the land and the fire burns on. A fire with no fuel can't be lit. A fire the admin lights is nobody's claim until it's given to someone. The owner is told when their claim ends or when they're given one.
 - Societies (camps): each with its leader, how many of how many, and its claim. Fly to, Members (each with Take out, and Rename), End (two taps: its fire goes out). A claim is a society: End claim ends it (the fire burns on), and Give claim starts a new one for that person. See societies.md.
@@ -46,7 +46,7 @@ How it works now. How it got this way (the admin player before admin mode, the f
 
 ## Changing numbers live: what wins
 - game-data.json is where every number starts. A change the admin makes sits on top and wins, also over a new build, until its Reset is tapped. A changed number says "Changed (was X)".
-- Settings tab: the live settings (liveSettings in game-data.json for names, groups, units and limits; server/src/live.js and LIVE_SET plus LIVE_BASE in game/admin.js wire up each id; saved as 'live'; games get them in welcome and 'live'). Groups now: Players (player limit, people in a camp, tool bar spots), Respawn times, Farming (planted crops grow in), Need rates.
+- Settings tab: the live settings (liveSettings in game-data.json for names, groups, units and limits; server/src/live.js and LIVE_SET plus LIVE_BASE in game/admin.js wire up each id; saved as 'live'; games get them in welcome and 'live'). Groups now: Players (player limit, people in a camp, tool bar spots), Respawn times, The wild (0.2.9: how often a tree, a bush, tall grass, a boulder and a broken rock come back, and how full the wild grows back), Farming (planted crops grow in), Need rates.
 - Items tab (server/src/live-items.js, storage key `liveItems`): an item's weight, a tool's uses, how much a food fills, and how many of each thing a recipe needs and makes. Every game gets them straight away. Not changeable there: names, looks, new items or ingredients, and how many lie about in the world. It shows one line per item, A to Z, summing up its numbers ("weighs 1 · 20 uses", "Changed" if any are), with the Recipes headings as chips (0.1.20) and a search; tap a line to open its numbers (Save once a box changes, Reset once it has). Check: `admin_items`.
 - Copy my changes: lines like `items.knife.weight: 1 -> 4`, to send to Claude, who writes them into content/*.json (then test-build); then they're Reset in admin. That's how a change becomes permanent.
 

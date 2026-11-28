@@ -7,23 +7,25 @@
 // Kept apart from the away routine so other things (a schedule, later) can hand the server tasks to run too.
 // These are methods of the World (index.js adds them to it), so `this` is the world.
 import { ACTIONS } from './actions.js';
-import { PLACEABLES, fireRule, seatAt, CROPS, cropSource, cropGrown, cropBerries, bedOf, bedFront } from './placed.js';
+import { PLACEABLES, fireRule, seatAt, CROPS, cropSource, cropGrown, cropBerries, cropTreeDef, cropIsStump, bedOf, bedFront } from './placed.js';
 import { fuelRoom, recipeWants, frontSpotOf } from './rules.js';
 import { onBar, barOf, addCarry } from './needs.js';
 import { G, num, dist, spend } from './shared.js';
 
 export const MAX_TASKS = 30; // the same as the game's list (MAX_QUEUE in game/moving.js)
-const TYPES = ['pickup', 'use', 'drop', 'chop', 'cut', 'walk', 'mine', 'fish', 'place', 'build', 'unplace', 'apart', 'tend', 'sit', 'make', 'dig', 'flatten', 'plant', 'harvest', 'bed'];
-const WHATS = ['tree', 'stump', 'oldStump', 'rock', 'boulder'];
+const TYPES = ['pickup', 'use', 'drop', 'chop', 'cut', 'walk', 'mine', 'fish', 'place', 'build', 'unplace', 'apart', 'tend', 'sit', 'make', 'dig', 'flatten', 'plant', 'harvest', 'bed',
+  'apple', 'clear', 'treeCrop']; // (0.2.9: picking apples, clearing land in your camp, a tree on a farm field)
+const WHATS = ['tree', 'stump', 'oldStump', 'rock', 'boulder', 'bush', 'shrub', 'plant'];
 // what each kind of task can't do without (one missing: the task is dropped)
 const NEEDS = { pickup: ['id'], use: ['source'], drop: ['kind', 'n'], chop: ['what'], cut: ['plant', 'i'], walk: ['x', 'z'], mine: ['idx'], fish: [],
   place: ['item', 'kind', 'x', 'z'], build: ['id'], unplace: ['id'], apart: ['id'], tend: ['id', 'do'], sit: ['id'], make: ['id', 'recipe'],
   dig: ['kind', 'x', 'z'], flatten: ['id'], plant: ['id', 'seed'], harvest: ['id'], // farming (0.1.18)
-  bed: ['id'] }; // sleeping in a bed, like the basic shelter (0.2.5)
+  bed: ['id'], // sleeping in a bed, like the basic shelter (0.2.5)
+  apple: ['idx'], clear: ['what', 'idx'], treeCrop: ['id', 'do'] }; // (0.2.9)
 const int = (v, most) => (Number.isInteger(v) && v >= 0 && v < most ? v : undefined);
 const has = (obj, k) => typeof k === 'string' && !!obj && Object.hasOwn(obj, k);
 // replies that mean "no" (someone got there first, too far, in someone else's camp, too heavy...)
-const NO = ['placeNo', 'cutNo', 'sitNo', 'tree', 'rock', 'oldStump', 'placed'];
+const NO = ['placeNo', 'cutNo', 'sitNo', 'tree', 'rock', 'oldStump', 'placed', 'appleNo', 'cleared'];
 const refused = (r) => r.ok === false || NO.includes(r.t) || (r.t === 'fished' && /far|heavy|full/i.test(r.why || ''));
 // where to stand to use something at `spot`: where they are if that's close enough (reach), else `stop` metres short of it
 function toward(at, spot, stop, reach = stop + 0.35) {
@@ -49,7 +51,7 @@ export function cleanTasks(list) {
     if (has(G.plants, t.plant)) c.plant = t.plant;
     if (has(G.sources, t.source)) c.source = t.source;
     if (WHATS.includes(t.what) || has(G.items, t.what)) c.what = t.what; // (a log being chopped: its kind)
-    if (['add', 'light', 'out'].includes(t.do)) c.do = t.do;
+    if (['add', 'light', 'out', 'chop', 'dig'].includes(t.do)) c.do = t.do; // (chop and dig: a tree on a farm field, 0.2.9)
     if (t.water === true) c.water = true;
     if (NEEDS[c.type].every((k) => c[k] !== undefined)) out.push(c);
   }
@@ -130,6 +132,7 @@ export const taskMethods = {
           const i = task.idx, st = (w.trees || {})[i];
           if (i == null || !this.isThing('tree', i) || (what === 'tree' ? st : !st || st[0] !== 'stump')) return null; // chopped (or grown back) since
           spot = this.spotOf('tree', i);
+          if (what === 'stump' && spot && !this.inOwnCamp(p, spot[0], spot[1])) return null; // dug up only in your own camp (0.2.9)
         } else if (what === 'oldStump') {
           if (task.idx == null || !this.isThing('oldStump', task.idx) || (w.oldStumps || {})[task.idx]) return null;
           spot = this.spotOf('oldStump', task.idx);
@@ -144,7 +147,7 @@ export const taskMethods = {
       }
       case 'cut': {
         const def = (G.plants || {})[task.plant], i = task.i;
-        if (!def || i == null || !this.isPlant(task.plant, i) || !this.canCarry(p, def.gives || {})) return null;
+        if (!def || i == null || !this.isPlant(task.plant, i) || this.isCleared('plant', i, task.plant) || !this.canCarry(p, def.gives || {})) return null; // (cleared: 0.2.9)
         const ready = ((w.plants || {})[task.plant] || {})[i];
         if (ready && ready > Math.max(t, Date.now())) return null; // not grown back yet
         const spot = this.plantSpot(task.plant, i) || (task.x != null ? [task.x, task.z] : null);
@@ -232,6 +235,34 @@ export const taskMethods = {
         if (!src || !src.harvest || !cropGrown(th.crop) || cropBerries(th.crop) < 1 || !this.canCarry(p, src.harvest)) return null;
         return { to: nearThing(th), seconds: src.seconds || 2, pose: src.pose || 'pick' };
       }
+      // picking apples off a wild apple tree (0.2.9)
+      case 'apple': {
+        const src = G.sources.appleTree, i = task.idx;
+        if (!src || !this.isThing('tree', i) || !this.isApple(i) || this.applesOn(i, t) < 1 || !this.canCarry(p, src.harvest || {})) return null;
+        const spot = this.spotOf('tree', i);
+        return spot ? { to: toward(at, spot, 0.95, 1.4), seconds: src.seconds || 2, pose: src.pose || 'pick' } : null;
+      }
+      // clearing land in their own camp (0.2.9): a bush dug up, grass cleared, a boulder broken up (its tool on the bar)
+      case 'clear': {
+        const CL = G.clearing || {}, what = task.what, i = task.idx, key = what === 'shrub' ? 'bush' : what === 'plant' ? task.plant : what;
+        const rule = key && Object.hasOwn(CL, key) ? CL[key] : null;
+        if (!rule || (rule.tool && !onBar(p, rule.tool, G))) return null;
+        let spot = null;
+        if (what === 'bush' || what === 'shrub') { if (!this.isThing(what, i) || this.isCleared(what, i)) return null; spot = this.spotOf(what, i); }
+        else if (what === 'plant') { if (!task.plant || !this.isPlant(task.plant, i) || this.isCleared('plant', i, task.plant)) return null; spot = this.plantSpot(task.plant, i); }
+        else if (what === 'boulder') { if (!this.isThing('rock', i) || this.rockKind(i, 'boulder') !== 'boulder' || ((w.rocks || {})[i] || [])[0] === 'gone') return null; spot = this.spotOf('rock', i); }
+        else return null;
+        if (!spot || !this.inOwnCamp(p, spot[0], spot[1])) return null;
+        return { to: toward(at, spot, what === 'boulder' ? 1.6 : what === 'plant' ? 0.55 : 1.0), seconds: rule.seconds || 8, pose: what === 'boulder' ? 'chop' : 'kneel' };
+      }
+      // a tree on a farm field (0.2.9): chop it down, or dig up its stump
+      case 'treeCrop': {
+        const th = this.placedById(task.id), C = G.chopping || {}, rule = C[task.do === 'dig' ? 'stump' : 'tree'];
+        if (!th || !th.crop || !cropTreeDef(th.crop) || !rule || (C.tool && !onBar(p, C.tool, G))) return null;
+        const stump = cropIsStump(th.crop);
+        if (task.do === 'chop' ? !cropGrown(th.crop) || stump : !stump || !this.inOwnCamp(p, th.x, th.z)) return null;
+        return { to: nearThing(th), seconds: rule.seconds || 10, pose: 'chop' };
+      }
       // sleeping in a bed (0.2.5, the basic shelter): walk to its front, then lie down in it (the away routine wakes them)
       case 'bed': {
         const th = this.placedById(task.id);
@@ -271,6 +302,9 @@ export const taskMethods = {
       case 'plant': return { t: 'plant', id: task.id, seed: task.seed };
       case 'harvest': return { t: 'harvest', id: task.id };
       case 'bed': return { t: 'sleep', on: true, bed: task.id };
+      case 'apple': return { t: 'apple', idx: task.idx };
+      case 'clear': return { t: 'clear', what: task.what, idx: task.idx, plant: task.plant };
+      case 'treeCrop': return { t: 'treeCrop', id: task.id, do: task.do };
       default: return null;
     }
   },

@@ -5,11 +5,27 @@
     "server": "server is the address of the online world. The test link and the release both join the same live world (there's no separate test world). Leave it empty to play offline.",
     "devlog": "What's new, shown in the Menu. Newest first, one entry per version: version, date (the release day, with from for a range), no name (Luke, 26 Nov 2026: versions only), and short lines for players in added (+ new features), improved (~ changes to what's there) and fixed (− bug fixes and removed issues). No full stop at the end."
   },
-  "version": "0.2.8",
+  "version": "0.2.9",
   "build": 1,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
   "devlog": [
+    {
+      "version": "0.2.9",
+      "date": "2026-11-28",
+      "added": [
+        "Apple trees: pick their apples, or chop one down for logs and its stump grows back",
+        "Apple seeds: cut an apple with a sharp stone, then grow an apple tree on a farm field",
+        "Clear land in your camp: dig up stumps and bushes, clear grass, break up boulders"
+      ],
+      "improved": [
+        "The wild grows back by itself, as thick as it started, and never inside a camp",
+        "New things never pop up near anyone, and new trees grow up from small",
+        "A broken rock comes back somewhere new in the wild, not in the same spot",
+        "Sticks and stones no longer turn up inside camps or right next to you",
+        "Remove stump is now Dig up stump, and only in your own camp"
+      ]
+    },
     {
       "version": "0.2.8",
       "date": "2026-11-28",

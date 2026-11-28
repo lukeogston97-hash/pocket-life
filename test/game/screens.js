@@ -6,7 +6,7 @@ import { app, camera, DATA, HAZE, reduceMotion, SETTINGS, TEST_BUILD, V, VERSION
 import { groundY, POND } from './land.js';
 import { berryBushes, oldStumps, rocks, trees } from './nature.js';
 import { drawPlants } from './plants.js';
-import { drawBerries, drawRock, showParts } from './world-build.js';
+import { drawBerries, drawClearedLook, drawNature, drawRock, showParts } from './world-build.js';
 import { $, DEFAULT_LOOK, deg, ITEMS, LOOKS } from './items.js';
 import { disposeMaterials, pscene, refreshPreview } from './people.js';
 import { itemViews, showItemBatches } from './world-items.js';
@@ -214,7 +214,7 @@ function drawRegions() {
 export function setFresh(on) {
   if (game.freshLook === on) return;
   game.freshLook = on;
-  trees.forEach((t) => { showParts(t, on || t.state === 'tree'); if (t.stump) t.stump.visible = !on; });
+  trees.forEach((t) => { showParts(t, on || t.state === 'tree' || t.state === 'young'); if (t.stump) t.stump.visible = !on; });
   oldStumps.forEach((t) => showParts(t, on || !t.gone));
   rocks.forEach(drawRock);
   for (const v of itemViews.values()) v.visible = !on;
@@ -223,6 +223,7 @@ export function setFresh(on) {
   fireLight.visible = !on;
   for (const b of berryBushes) drawBerries(b);
   drawPlants();
+  drawClearedLook(); drawNature(); // (bushes dug up in camps, young trees and apples: 0.2.9)
 }
 export function drawMenu() {
   setFresh(ui.mode === 'menu' && !!game.menuRegion && !game.menuRegion.open);

@@ -381,23 +381,23 @@ export class World extends DurableObject {
         if (keep.length !== (w.graves || []).length) { w.graves = keep; this.send({ t: 'graves', graves: keep }, null); await this.save(); }
         if (now >= (w.nextRespawn || 0)) await this.respawn(now);
         if (now >= (this.fadeAt || 0)) { this.fadeAt = now + HOUR; if (this.fadeOld(now)) await this.save(); } // old things left on the ground (nature.js)
-        // stumps grow back into trees after a few days (removed stumps are gone for good)
+        // stumps grow back into trees after a few days (dug-up stumps are gone from there), and young trees grow up in the
+        // same time (0.2.9); an apple tree's apples grow from then
         const regrow = (G.chopping || {}).regrowDays; // days, or [soonest, latest]: each stump its own time (rules.js stumpBackMs)
         let grew = false;
-        for (const [i, st] of Object.entries(w.trees || {})) if (st[0] === 'stump' && now - st[1] > stumpBackMs(regrow, Number(i), st[1])) { delete w.trees[i]; this.send({ t: 'tree', idx: Number(i), state: 'tree' }, null); grew = true; }
-        // mined boulders can be mined again after the same time; one broken rock comes back every rockBackHours
+        for (const [i, st] of Object.entries(w.trees || {})) {
+          if ((st[0] === 'stump' || st[0] === 'young') && now - st[1] > stumpBackMs(regrow, Number(i), st[1])) {
+            delete w.trees[i];
+            this.send({ t: 'tree', idx: Number(i), state: 'tree' }, null);
+            this.applesFromNow(Number(i), now);
+            grew = true;
+          }
+        }
+        // mined boulders can be mined again after the same time
         const R = G.mining || {}, again = (R.regrowDays || 3) * 24 * HOUR;
         for (const [i, st] of Object.entries(w.rocks || {})) if (st[0] === 'mined' && now - st[1] > again) { delete w.rocks[i]; this.send({ t: 'rock', idx: Number(i), state: 'whole' }, null); grew = true; }
-        const broken = Object.keys(w.rocks || {}).filter((i) => w.rocks[i][0] === 'gone' && !(w.removed || {})[`rock:${i}`]); // ones the admin removed stay gone
-        if (!broken.length) w.nextRockBack = 0;
-        else if (!w.nextRockBack) { w.nextRockBack = now + (R.rockBackHours || 4) * HOUR; grew = true; }
-        else if (now >= w.nextRockBack) {
-          const i = broken[Math.floor(Math.random() * broken.length)];
-          delete w.rocks[i];
-          this.send({ t: 'rock', idx: Number(i), state: 'whole' }, null);
-          w.nextRockBack = broken.length > 1 ? now + (R.rockBackHours || 4) * HOUR : 0;
-          grew = true;
-        }
+        delete w.nextRockBack; // (broken rocks come back with the rest of the wild now: nature.js topUpWild)
+        if (this.topUpWild(now)) grew = true; // the wild growing back, as thick as it was laid out (0.2.9)
         if (grew) await this.save();
       }
       for (const [k, list] of this.adminFails) if (!list.some((t) => now - t < 15 * MINUTE)) this.adminFails.delete(k); // old wrong-code counts are forgotten

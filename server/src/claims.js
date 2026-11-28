@@ -32,6 +32,8 @@ export const claimsMethods = {
     const s = this.socOf(who);
     return !!s && th.claim === socKey(s);
   },
+  // is x, z inside p's own camp (theirs, or their society's)? Clearing land is only for there (0.2.9, Luke)
+  inOwnCamp(p, x, z) { const c = Number.isFinite(x) && Number.isFinite(z) ? this.claimAt(x, z) : null; return !!c && this.claimIsMine(c, p.who); },
   // someone else's claim at x, z, or null if p may act there (their own or their society's claim, nobody's land, or the admin)
   notYours(p, x, z, admin) {
     if (admin || !Number.isFinite(x) || !Number.isFinite(z)) return null;

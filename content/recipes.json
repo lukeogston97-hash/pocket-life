@@ -236,6 +236,19 @@
         "basic-shelter": 1
       },
       "about": "Three logs for the frame, sticks leaned on for a roof, tied with twine"
+    },
+    {
+      "id": "apple-seeds",
+      "needs": {
+        "apple": 1
+      },
+      "keeps": {
+        "sharp-stone": 1
+      },
+      "makes": {
+        "apple-seeds": 1
+      },
+      "about": "Cut an apple open for its seeds with a sharp stone (you keep the stone)"
     }
   ]
 }

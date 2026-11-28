@@ -3,11 +3,11 @@
 // on a phone, opens a small menu of what you can do with that thing.
 import * as THREE from 'three';
 import { game, share } from './links.js';
-import { app, camera, canvas, clamp01, lerpAngle, scene, SETTINGS, V } from './core.js';
+import { app, camera, canvas, clamp01, DATA, lerpAngle, scene, SETTINGS, V } from './core.js';
 import { groundY, pondShape, terrain, water, WATER_Y, WORLD_HALF } from './land.js';
-import { berryBushes, interactive, oldStumps, rocks, trees } from './nature.js';
+import { berryBushes, interactive, oldStumps, rocks, trees, wildBushes } from './nature.js';
 import { growsIn, plantNear, plantReady, PLANTS, plants, plantTarget } from './plants.js';
-import { berriesOn, CHOP, copyOwner, growsBackIn, MINE, readyIn, ripe, stumpGrowsIn, treeNear } from './world-build.js';
+import { applesOn, appleReadyIn, berriesOn, CHOP, copyOwner, growsBackIn, isApple, MINE, readyIn, ripe, stumpGrowsIn, treeNear } from './world-build.js';
 import { $, buildItem, harvests, ITEMS, SOURCES } from './items.js';
 import { disposeMaterials, setArm } from './people.js';
 import { getItem, HIT_MAT, itemViews, world } from './world-items.js';
@@ -20,11 +20,11 @@ import { hideHint } from './tips.js';
 import { bagDropAt, bagOpen, closeBag, closeCraft, craftOpen, itemPic } from './inventory.js';
 import { controls } from './camera.js';
 import {
-  feetOnGround, findPath, inWorld, nextTask, queuedItem, queueTask, resetPose, REST, setLegs, setSleeping,
+  allTasks, feetOnGround, findPath, inWorld, nextTask, queuedItem, queueTask, resetPose, REST, setLegs, setSleeping,
   shorePointToward, solidAt, tooTiredToWake, wakeUp, walk, walkFirst,
 } from './moving.js';
 import {
-  digActions, endSit, holdSit, movePlacing, notMineAt, placed, placedActions, placedName, placing, stopPlacing,
+  claimAt, claimMine, digActions, endSit, holdSit, movePlacing, notMineAt, placed, placedActions, placedName, placing, stopPlacing,
 } from './placeables.js';
 // shared for files further down game/main.js, and the variables other files change (game/links.js)
 share({
@@ -211,20 +211,27 @@ export function pickTarget(px, py) {
   const rk = owner && owner.userData.rock != null ? owner.userData.rock : copy && copy.kind === 'rock' ? copy.i : -1;
   if (rk >= 0 && rocks[rk].state !== 'gone') { const r = rocks[rk]; return { kind: 'rock', idx: rk, name: r.boulder ? (r.state === 'mined' ? 'Mined boulder' : 'Boulder') : 'Rock', x: r.x, z: r.z }; }
   if (copy && copy.kind === 'oldStump' && !oldStumps[copy.i].gone) { const o = oldStumps[copy.i]; return { kind: 'oldStump', idx: copy.i, name: 'Tree stump', x: o.x, z: o.z }; }
-  if (copy && copy.kind === 'tree' && trees[copy.i].state === 'tree') { const tr = trees[copy.i]; return { kind: 'tree', idx: copy.i, name: tr.pine ? 'Pine tree' : 'Tree', x: tr.x, z: tr.z, hit }; }
+  if (copy && copy.kind === 'tree' && (trees[copy.i].state === 'tree' || trees[copy.i].state === 'young')) return treeTarget(copy.i, hit);
+  const sh = owner && owner.userData.shrub != null ? owner.userData.shrub : copy && copy.kind === 'shrub' ? copy.i : -1; // a bush with no berries (0.2.9)
+  if (sh >= 0 && wildBushes[sh] && !wildBushes[sh].cleared) { const b = wildBushes[sh]; return { kind: 'shrub', idx: sh, name: 'Bush', x: b.x, z: b.z }; }
   if (owner && (owner.userData.label === 'Tree' || owner.userData.label === 'Pine tree')) {
     const i = treeNear(hit.point);
-    if (i >= 0) return { kind: 'tree', idx: i, name: owner.userData.label, x: trees[i].x, z: trees[i].z, hit };
+    if (i >= 0) return treeTarget(i, hit);
   }
   if (hit && hit.object && hit.object.userData.plant && hit.instanceId != null) {
     const P = plants[hit.object.userData.plant], c = P && P.clumps[Math.floor(hit.instanceId / P.per)];
-    if (c) return plantTarget(hit.object.userData.plant, c);
+    if (c && !c.cleared) return plantTarget(hit.object.userData.plant, c);
   }
   if (owner) return { kind: 'thing', owner, hit, name: owner.userData.label || '' };
   const pl = gp && plantNear(gp);
   if (pl) return plantTarget(pl.kind, pl.c);
   if (gp) return { kind: 'ground', point: gp, name: '' };
   return null;
+}
+// a tree: an apple tree (0.2.9), a young one the wild grew back, or just a tree
+function treeTarget(i, hit) {
+  const tr = trees[i];
+  return { kind: 'tree', idx: i, young: tr.state === 'young', name: tr.state === 'young' ? 'Young tree' : isApple(i) ? 'Apple tree' : tr.pine ? 'Pine tree' : 'Tree', x: tr.x, z: tr.z, hit };
 }
 // Walking needs a double tap (or double-click), so a stray tap doesn't send you off.
 // The first tap leaves a faint ring where you'd go; tap again near it, quickly, to walk.
@@ -261,7 +268,7 @@ function handleTap(px, py) {
   if (!t) return;
   if (t.kind === 'you') { firstTap = null; openMenuAt(px, py, { kind: 'self', name: 'You' }); return; }
   // a stick, stone, berry bush or the pond: open the menu of what you can do with it
-  if (['item', 'use', 'person', 'grave', 'tree', 'stump', 'oldStump', 'rock', 'plant', 'placed'].includes(t.kind)) { firstTap = null; openMenuAt(px, py, t); return; }
+  if (['item', 'use', 'person', 'grave', 'tree', 'stump', 'oldStump', 'rock', 'plant', 'placed', 'shrub'].includes(t.kind)) { firstTap = null; openMenuAt(px, py, t); return; }
   // the ground (or a rock, tree or log): one tap opens Walk here, a quick double-tap walks straight there
   const now = performance.now();
   if (!firstTap || now - firstTap.t > DOUBLE_MS || Math.hypot(px - firstTap.px, py - firstTap.py) > DOUBLE_PX) {
@@ -294,9 +301,19 @@ function targetSpot(t) {
   if (t.kind === 'item') return [t.item.x, t.item.z];
   if (t.kind === 'placed') return [t.th.x, t.th.z];
   if (t.kind === 'use') return t.task.water || t.task.x == null ? null : [t.task.x, t.task.z];
-  if (['tree', 'stump', 'oldStump', 'rock', 'plant'].includes(t.kind)) return [t.x, t.z];
+  if (['tree', 'stump', 'oldStump', 'rock', 'plant', 'shrub'].includes(t.kind)) return [t.x, t.z];
   return null;
 }
+/* ---------- clearing land (0.2.9, Luke): only in your own camp. Out in the wild it shows greyed out, saying so ---------- */
+const CLEARING = DATA.clearing || {};
+const inMyCamp = (x, z) => { const c = claimAt(x, z); return !!c && claimMine(c); };
+// the tap menu line for clearing something: what, where it is, its rule (tool, seconds) and the task it queues
+function clearAction(label, x, z, rule, task) {
+  const tool = rule.tool, has = !tool || hasTool(tool), mine = inMyCamp(x, z);
+  return { label, note: !mine ? 'Only in your camp' : has ? `${rule.seconds || 8} s` : toolNeed(tool), disabled: !mine || !has, run: () => queueTask(task) };
+}
+const clearRule = (key) => (Object.hasOwn(CLEARING, key) ? CLEARING[key] : null);
+const allQueued = (type, idx) => allTasks().filter((q) => q.type === type && q.idx === idx).length; // (so a tree's last apple isn't queued twice)
 // the small menu. Inside someone else's claim it only says whose claim it is, with Walk here (and Admin for the admin)
 export function menuActions(t) {
   const acts = thingActions(t), at = t && targetSpot(t), c = at && notMineAt(at[0], at[1]);
@@ -322,21 +339,34 @@ function thingActions(t) {
     return [...(t.kind === 'ground' && t.point ? digActions(t.point) : []), { label: 'Walk here', foot: true, run: () => walkToTarget(t) }];
   }
   if (t.kind === 'tree' || t.kind === 'stump' || t.kind === 'oldStump') {
-    const what = t.kind;
+    const what = t.kind, walkHere = { label: 'Walk here', foot: true, run: () => walkFirst(V(t.x + 1.2, 0, t.z)) };
+    if (t.young) return [{ label: `Grown in ${stumpGrowsIn(t.idx)}`, disabled: true }, walkHere]; // (the wild grew it back, 0.2.9: too small to chop)
     const rule = CHOP[what === 'oldStump' ? 'stump' : what] || {}, tool = CHOP.tool && ITEMS[CHOP.tool];
     const has = !tool || hasTool(CHOP.tool); // (only a tool on the tool bar gets used, 0.1.17)
-    return [{ label: what === 'tree' ? 'Chop tree' : 'Remove stump', note: has ? `${rule.seconds || 15} s` : toolNeed(CHOP.tool), disabled: !has,
-      run: () => queueTask({ type: 'chop', what, idx: t.idx, x: t.x, z: t.z }) },
-      ...(what === 'stump' && trees[t.idx] ? [{ label: `Grows back in ${stumpGrowsIn(t.idx)}`, disabled: true }] : []),
-      { label: 'Walk here', foot: true, run: () => walkFirst(V(t.x + 1.2, 0, t.z)) }];
+    const apples = [];
+    if (what === 'tree' && isApple(t.idx) && SOURCES.appleTree) { // an apple tree (0.2.9): pick its apples, one at a time
+      const n = applesOn(t.idx), queued = allQueued('apple', t.idx);
+      apples.push({ label: SOURCES.appleTree.action || 'Pick apples', note: n ? `${n} left` : `Next in ${appleReadyIn(t.idx)}`, disabled: n - queued < 1,
+        run: () => queueTask({ type: 'apple', idx: t.idx, x: t.x, z: t.z }) });
+    }
+    // digging up a stump clears the land for good, so only in your own camp (0.2.9)
+    const chop = what === 'tree' ? { label: 'Chop tree', note: has ? `${rule.seconds || 15} s` : toolNeed(CHOP.tool), disabled: !has, run: () => queueTask({ type: 'chop', what, idx: t.idx, x: t.x, z: t.z }) }
+      : clearAction('Dig up stump', t.x, t.z, { tool: CHOP.tool, seconds: rule.seconds || 15 }, { type: 'chop', what, idx: t.idx, x: t.x, z: t.z });
+    return [...apples, chop, ...(what === 'stump' && trees[t.idx] ? [{ label: `Grows back in ${stumpGrowsIn(t.idx)}`, disabled: true }] : []), walkHere];
+  }
+  if (t.kind === 'shrub') { // a bush with no berries (0.2.9): dug up in your camp
+    const rule = clearRule('bush');
+    return [...(rule ? [clearAction(rule.action || 'Dig up bush', t.x, t.z, rule, { type: 'clear', what: 'shrub', idx: t.idx, x: t.x, z: t.z })] : []),
+      { label: 'Walk here', foot: true, run: () => walkFirst(V(t.x + 1.1, 0, t.z)) }];
   }
   if (t.kind === 'rock') {
     const r = rocks[t.idx], rule = MINE[r.boulder ? 'boulder' : 'rock'] || {}, tool = MINE.tool && ITEMS[MINE.tool];
     const has = !tool || hasTool(MINE.tool);
     const walk = { label: 'Walk here', foot: true, run: () => walkFirst(V(r.x + r.r + 0.6, 0, r.z)) };
-    if (r.state === 'mined') return [{ label: `Mine again in ${growsBackIn(r.since, MINE.regrowDays || 3)}`, disabled: true }, walk];
+    const breakUp = r.boulder && clearRule('boulder') ? [clearAction(clearRule('boulder').action || 'Break up boulder', r.x, r.z, clearRule('boulder'), { type: 'clear', what: 'boulder', idx: t.idx, x: r.x, z: r.z })] : []; // (in your camp, 0.2.9)
+    if (r.state === 'mined') return [{ label: `Mine again in ${growsBackIn(r.since, MINE.regrowDays || 3)}`, disabled: true }, ...breakUp, walk];
     return [{ label: r.boulder ? 'Mine boulder' : 'Break rock', note: has ? `${rule.seconds || 10} s` : toolNeed(MINE.tool), disabled: !has,
-      run: () => queueTask({ type: 'mine', idx: t.idx, x: r.x, z: r.z }) }, walk];
+      run: () => queueTask({ type: 'mine', idx: t.idx, x: r.x, z: r.z }) }, ...breakUp, walk];
   }
   if (t.kind === 'self') {
     const rest = you.stats && you.stats.rest != null ? Math.round(you.stats.rest) : null;
@@ -348,9 +378,11 @@ function thingActions(t) {
   if (t.kind === 'plant') {
     const def = PLANTS[t.plant], c = plants[t.plant].clumps[t.i], fast = def.tool && hasTool(def.tool);
     const ready = plantReady(c), noTool = def.toolNeeded && !fast; // (toolNeeded: it can't be done by hand, like mining an ore vein)
+    const rule = clearRule(t.plant); // grass can be cleared in your camp (0.2.9)
     return [{ label: def.action || 'Cut', disabled: !ready || noTool,
       note: !ready ? `Grows back in ${growsIn(c)}` : noTool ? toolWhy(def.tool) : fast ? `${def.toolSeconds || def.seconds} s` : `${def.seconds} s${def.tool ? ` · faster with a ${ITEMS[def.tool].name.toLowerCase()}` : ''}`,
       run: () => queueTask({ type: 'cut', plant: t.plant, i: t.i, x: t.x, z: t.z }) },
+      ...(rule ? [clearAction(rule.action || 'Clear', t.x, t.z, rule, { type: 'clear', what: 'plant', plant: t.plant, idx: t.i, x: t.x, z: t.z })] : []),
       { label: 'Walk here', foot: true, run: () => walkFirst(V(t.x + 0.7, 0, t.z)) }];
   }
   if (t.kind === 'item') {
@@ -370,9 +402,11 @@ function thingActions(t) {
     } };
     if (harvests(src)) {
       const b = berryBushes[task.bush];
-      const ready = !b || ripe(b);
+      const ready = !b || ripe(b), rule = b && clearRule('bush');
       return [{ label: src.action || `Pick ${ITEMS[Object.keys(src.harvest)[0]].plural.toLowerCase()}`, note: ready ? (b ? `${berriesOn(b)} left` : '') : `Next in ${readyIn(b)}`,
-        disabled: !ready, run: () => queueTask(task) }, walkHere];
+        disabled: !ready, run: () => queueTask(task) },
+        ...(rule ? [clearAction(rule.action || 'Dig up bush', b.position.x, b.position.z, rule, { type: 'clear', what: 'bush', idx: task.bush, x: b.position.x, z: b.position.z })] : []), // (in your camp, 0.2.9)
+        walkHere];
     }
     const F = src.fish, has = F && hasTool(F.tool);
     return [{ label: src.action || `Use ${src.name.toLowerCase()}`, run: () => queueTask(task) },

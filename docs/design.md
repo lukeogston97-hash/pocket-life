@@ -15,6 +15,7 @@ Version numbers: 0.2.x and 0.3.x written as "old 0.3.0" are the numbers from bef
 - docs/design/needs-and-crafting.md: crafting, chopping, rest, stamina, tall grass, held tools, the timing pass, stone and mining, fishing and cooking
 - docs/design/placeables.md: campfires, fuel, sitting, the placing grid, flat ground (and trees, rocks and bushes moving with it)
 - docs/design/farming.md: the stone hoe, farm fields (dig in your camp, flatten), berry seeds, crops growing, the admin's Grow now
+- docs/design/wild.md: the wild growing back by itself, clearing land only in your own camp, apple trees (wild and on farm fields) (0.2.9)
 - docs/design/storage.md: planks, the small wooden crate (only in your camp, 5 squares, Open, Put in and Take), the admin's Empty it
 - docs/design/shelter.md: the basic shelter (a lean-to in your camp), Sleep in shelter (twice as good as the ground), away people sleeping in it
 - docs/design/claims.md: campfire claims (who can do what where, fuel, away people)

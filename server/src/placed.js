@@ -4,7 +4,7 @@
 // `at`, so nothing has to tick. It goes out by itself when that runs out, whether or not anyone is watching.
 // These are methods of the World (index.js adds them to it), so `this` is the world.
 import { G, num, HOUR, laidNow } from './shared.js';
-import { fireRuleOf, seatSpotOf, cropGrowth, berriesGrown, frontSpotOf } from './rules.js';
+import { fireRuleOf, seatSpotOf, cropGrowth, cropTree, frontSpotOf } from './rules.js';
 
 export const PLACEABLES = G.placeables || {};
 // Farming (0.1.18): a farm field is a placed thing dug with a tool (PLACEABLES.field.madeWith, the stone hoe) instead
@@ -15,12 +15,28 @@ export const CROPS = G.crops || {};
 export const cropSource = (crop) => { const def = crop && CROPS[crop.kind]; return def && def.like ? (G.sources || {})[def.like] || null : null; };
 export const cropGrowMs = (crop) => ((CROPS[crop.kind] || {}).growHours || 24) * HOUR;
 export const cropGrown = (crop, now = Date.now()) => cropGrowth(crop.at, cropGrowMs(crop), now) >= 1;
-// berries on a grown crop right now (0 while it's still growing)
+// A tree on a farm field (a crop with "tree", 0.2.9: the apple tree): chopped, it's a stump (crop.stump: when) till it
+// grows back after tree.stumpBackHours, its fruit growing back from then (rules.js cropTree, the same in the game)
+export const cropTreeDef = (crop) => { const def = crop && CROPS[crop.kind]; return (def && def.tree) || null; };
+export function cropTreeNow(crop, now = Date.now()) {
+  const src = cropSource(crop), T = cropTreeDef(crop) || {}, b = crop.berries || [null, null];
+  return cropTree(b, crop.stump || 0, (Number(T.stumpBackHours) || 24) * HOUR, (src && src.holds) || 5, ((src && src.regrowHours) || 0) * HOUR, now);
+}
+export const cropIsStump = (crop, now = Date.now()) => !!crop.stump && cropTreeNow(crop, now).stump;
+// berries (or apples) on a grown crop right now (0 while it's still growing, or a stump)
 export function cropBerries(crop, now = Date.now()) {
   const src = cropSource(crop);
   if (!src || !cropGrown(crop, now)) return 0;
+  return cropTreeNow(crop, now).fruit;
+}
+// picked: its [count, from] as it is now (a tree that grew back starts again from then)
+export function cropPickFrom(crop, now = Date.now()) {
   const b = crop.berries || [null, null];
-  return berriesGrown(b[0], b[1], src.holds || 5, (src.regrowHours || 0) * HOUR, now);
+  if (!crop.stump) return b;
+  const back = cropTreeNow(crop, now).back;
+  if (now < back) return b;
+  crop.stump = 0; // grown back: it's just a tree again
+  return b[1] == null || b[1] < back ? [0, back] : b;
 }
 // Storage (0.2.2, the small wooden crate): a placed thing with storage { squares } holds things in its own squares, the
 // same squares and stacks as the inventory (rules.js storeRoom). th.store { kind: n } is what's in it, and th.wear
@@ -135,6 +151,7 @@ export const placedMethods = {
     if (th.crop) { // what grows on a farm field: ages in ms, so phone clocks don't matter (the game works the rest out)
       const b = th.crop.berries || [null, null];
       v.crop = { kind: th.crop.kind, age: Math.max(0, now - th.crop.at), berries: b[0] == null ? null : [b[0], Math.max(0, now - b[1])] };
+      if (th.crop.stump) v.crop.stump = Math.max(0, now - th.crop.stump); // a tree on it was chopped this long ago (0.2.9)
     }
     return v;
   },

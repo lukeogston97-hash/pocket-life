@@ -18,7 +18,7 @@ import { pondShapeAt } from './rules.js';
 export const REACH = 4; // metres: how near your person has to be to something to use it (the game stands within about 2)
 const MOVE = { most: 25, faster: 1.6 }; // up to 25 m at once (a patchy connection sends walks late, in bursts), refilled at 1.6 times walking speed
 const moveLeft = new WeakMap(); // per connection: { left, at }: how far they may still move
-const LISTS = { tree: 'trees', rock: 'rocks', bush: 'bushes', oldStump: 'oldStumps' };
+const LISTS = { tree: 'trees', rock: 'rocks', bush: 'bushes', oldStump: 'oldStumps', shrub: 'shrubs' }; // (shrub: a bush with no berries, 0.2.9)
 // Waits: each person earns a second of work for every second that passes, up to `most` seconds saved up, and something
 // that takes S seconds in the game costs `share` of S. A real game has always earned it, because it has just spent that
 // long doing the thing (and what it did while the connection was down, 30 seconds at most, is covered by what was
@@ -56,6 +56,8 @@ export const guardMethods = {
     if (!L || !(L.trees || []).length) return true;
     return !!((L.plants && L.plants[kind]) || [])[i];
   },
+  // is tree i an apple tree? The layout says (a build from 0.2.9 on), never the game's word
+  isApple(i) { const A = this.world && this.world.layout && this.world.layout.apples; return Array.isArray(A) && A.includes(i); },
   nearWater(p) { const pond = G.pond || { x: 0, z: 0 }; return Math.hypot(p.x - pond.x, p.z - pond.z) <= (pond.r || 5) * 1.3 + REACH; },
 
   /* ---------- waits ---------- */
@@ -91,7 +93,7 @@ export const guardMethods = {
     for (const what of ['tree', 'rock', 'bush']) {
       const list = L[LISTS[what]] || [];
       for (let i = 0; i < list.length; i++) {
-        if (removed[`${what}:${i}`] || (gone[what] && gone[what][i] && gone[what][i][0] === 'gone')) continue; // dug out, broken or removed: the ground is free
+        if (removed[`${what}:${i}`] || (gone[what] && gone[what][i] && gone[what][i][0] === 'gone') || this.isCleared(what, i)) continue; // dug out, broken, cleared or removed: the ground is free
         const at = this.spotOf(what, i);
         if (at && Math.hypot(at[0] - x, at[1] - z) < 0.5) return 'Not enough room here';
       }
@@ -133,7 +135,12 @@ export const guardMethods = {
     const rocks = spots(m.rocks, 2000);
     // which rocks are boulders (their numbers): only a build that says so (0.1.10 on) has this, else null (rockKind)
     const boulders = Array.isArray(m.boulders) ? [...new Set(m.boulders.filter((i) => Number.isInteger(i) && i >= 0 && i < rocks.length))].slice(0, 2000) : null;
-    return { bushes: pts(m.bushes, 200), shore: pts(m.shore, 200), open: pts(m.open, 1000), trees: spots(m.trees, 5000), rocks, oldStumps: spots(m.oldStumps, 500), plants, ...(boulders ? { boulders } : {}) };
+    // which trees are apple trees (0.2.9), and the bushes with no berries (so they can be dug up in a camp): only a build that says
+    const trees = spots(m.trees, 5000);
+    const apples = Array.isArray(m.apples) ? [...new Set(m.apples.filter((i) => Number.isInteger(i) && i >= 0 && i < trees.length))].slice(0, 200) : null;
+    const shrubs = Array.isArray(m.shrubs) ? spots(m.shrubs, 2000) : null;
+    return { bushes: pts(m.bushes, 200), shore: pts(m.shore, 200), open: pts(m.open, 1000), trees, rocks, oldStumps: spots(m.oldStumps, 500), plants,
+      ...(boulders ? { boulders } : {}), ...(apples ? { apples } : {}), ...(shrubs ? { shrubs } : {}) };
   },
   // Should this game send the layout? A world with none takes it from anyone. After that, only from a build the server
   // knows (the current test or release build) that's newer than the one that sent it, so new things in a build get

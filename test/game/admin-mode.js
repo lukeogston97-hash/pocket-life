@@ -11,7 +11,7 @@ import { app, camera, V } from './core.js';
 import { groundY, POND, WORLD_HALF } from './land.js';
 import { berryBushes, rocks } from './nature.js';
 import { drawPlants, plantReady, plants } from './plants.js';
-import { berriesOn, bushHolds, drawBerries } from './world-build.js';
+import { applesOn, berriesOn, bushHolds, drawBerries, isApple } from './world-build.js';
 import { $, deg, ITEMS, SOURCES } from './items.js';
 import { formatTime, hudZone, REGIONS, ring, ui, worldNow } from './you.js';
 import { applyDaylight } from './needs.js';
@@ -283,7 +283,11 @@ export function adminActionsFor(t) {
   if (t.kind === 'person') return adminPersonActions(t.person);
   if (t.kind === 'placed') return adminPlacedActions(t.th);
   if (t.kind === 'item') return [{ label: `Remove ${ITEMS[t.item.kind].name.toLowerCase()}`, run: () => adminSend({ t: 'a.remove', id: t.item.id }) }, ...adminGroundActions({ x: t.item.x, z: t.item.z })];
-  if (t.kind === 'tree') return adminThingActions('tree', t.idx, false);
+  if (t.kind === 'tree') { // a young tree grows up now, an apple tree fills with apples (0.2.9)
+    if (t.young) return adminThingActions('tree', t.idx, true, 'Grow up now');
+    const picked = isApple(t.idx) && applesOn(t.idx) < ((SOURCES.appleTree || {}).holds || 4);
+    return adminThingActions('tree', t.idx, picked, 'Fill with apples');
+  }
   if (t.kind === 'stump') return adminThingActions('tree', t.idx, true);
   if (t.kind === 'rock') return adminThingActions('rock', t.idx, rocks[t.idx].state === 'mined');
   if (t.kind === 'plant') { // grass, an ore vein, anything in plants (0.2.0): grown back now, if it isn't

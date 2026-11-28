@@ -1,13 +1,16 @@
 {
   "_help": {
-    "sources": "Things in the world you can use, matched by name (\"Pond\", \"Berry bush\"). action is the button in the tap menu, like \"Drink\". gives adds to stats each time (one drink at the pond gives 15 thirst). harvest is what one pick puts in your inventory (1 berry), holds is how many a full bush has (up to 15), and regrowHours is how long a picked-bare bush takes to grow them all back; picked berries grow back one at a time. seconds is how long it takes. pose is kneel, pick or bend. fish (the pond has it): action and verb are the tap menu button and the busy word, seconds how long a try takes, tool what you need to carry (it wears each try), catch what a catch gives, chance the share of tries that catch one (0.7 since 0.2.6; an empty pond takes no try, so no use and no stamina), holds how many fish the pond has for everyone and regrowMinutes how often one comes back; the server keeps the count (run tools/worlds.py test-build after changing it). tool and toolHarvest: with that tool you get toolHarvest per pick instead (a knife picks 2 berries), and the tool wears.",
+    "sources": "Things in the world you can use, matched by name (\"Pond\", \"Berry bush\"). action is the button in the tap menu, like \"Drink\". gives adds to stats each time (one drink at the pond gives 15 thirst). harvest is what one pick puts in your inventory (1 berry), holds is how many a full bush has (up to 15), and regrowHours is how long a picked-bare bush takes to grow them all back; picked berries grow back one at a time. seconds is how long it takes. pose is kneel, pick or bend. fish (the pond has it): action and verb are the tap menu button and the busy word, seconds how long a try takes, tool what you need to carry (it wears each try), catch what a catch gives, chance the share of tries that catch one (0.7 since 0.2.6; an empty pond takes no try, so no use and no stamina), holds how many fish the pond has for everyone and regrowMinutes how often one comes back; the server keeps the count (run tools/worlds.py test-build after changing it). tool and toolHarvest: with that tool you get toolHarvest per pick instead (a knife picks 2 berries), and the tool wears. appleTree (0.2.9): the apple trees, picked one apple at a time like a berry bush (holds 4, regrowHours 24: one apple every 6 hours); which trees they are is appleTrees.",
     "plants": "Things in the world you work for something, that grow back: tall grass for twine, and anything of the same kind, like an ore vein to mine or a reed bed (0.2.0). Each kind is laid out by itself: count clumps (1 to 200; nearStart of them near the start), on its own random numbers (seed) so nothing else moves, anywhere in the world or only in its area ({\"x\", \"z\", \"r\"} in metres: where it turns up), at least spacing metres apart (default 5). action is the tap menu button, verb what shows while doing it, pose how the person stands (pick, kneel or chop). gives goes into your inventory each time. seconds is how long by hand, toolSeconds with the tool (each use wears the tool); toolNeeded: true means it can't be done by hand at all (mining an ore vein needs the pickaxe). regrowHours [lo, hi]: it grows back at a random time in between. look: grass blades by default (blades per clump, height, width, colour and tips: the seed heads), or form \"parts\" with parts: pieces like an item's (see items) to draw anything else, hidden while it grows back (whenUsed \"stub\" squashes it down instead). Run tools/worlds.py test-build after changing plants.",
-    "chopping": "Chopping with a tool (tool: the item you need). tree: chopping a standing tree (seconds, and what falls: gives); it leaves a stump that grows back into a tree after regrowDays real days: a number, or [soonest, latest] so each stump takes its own time in between (stumpBackMs in rules.js). stump: digging out a stump (then the tree is gone for good). Logs (the item) are no longer chopped where they lie (Luke, 0.2.6): they are cut into sticks with a stone knife and split into planks with a stone axe on the craft mat (recipes). Each chop wears the tool by one use, and takes energyCosts.chop energy. The server uses the same rules.",
-    "mining": "Mining with a tool (tool: the item you need, the stone pickaxe). rock: breaking a small rock (seconds, and what falls: gives); the rock is then gone, but one broken rock comes back by a boulder every rockBackHours. boulder: mining a boulder; gives can be a range like [3, 5]. A mined boulder stays (it can't be removed) and can be mined again after regrowDays real days (the same as trees). Each hit wears the tool by one use and takes energyCosts.chop energy. The server uses the same rules.",
+    "chopping": "Chopping with a tool (tool: the item you need). tree: chopping a standing tree (seconds, and what falls: gives); it leaves a stump that grows back into a tree after regrowDays real days: a number, or [soonest, latest] so each stump takes its own time in between (stumpBackMs in rules.js). stump: digging up a stump (Dig up stump), only in your own camp since 0.2.9 (clearing): it's gone from the camp for good. Logs (the item) are no longer chopped where they lie (Luke, 0.2.6): they are cut into sticks with a stone knife and split into planks with a stone axe on the craft mat (recipes). Each chop wears the tool by one use, and takes energyCosts.chop energy. The server uses the same rules.",
+    "mining": "Mining with a tool (tool: the item you need, the stone pickaxe). rock: breaking a small rock (seconds, and what falls: gives); the rock is then gone, and one broken rock comes back somewhere in the wild every rockBackHours (wild, 0.2.9). boulder: mining a boulder; gives can be a range like [3, 5]. A mined boulder stays (only broken up in your own camp: clearing) and can be mined again after regrowDays real days (the same as trees). Each hit wears the tool by one use and takes energyCosts.chop energy. The server uses the same rules.",
     "berryBushes": "extra: how many more berry bushes grow out in the wider world, besides the ones by the start. seed: their own random numbers, so they're in the same places on every phone (change it to move them all).",
     "regions": "The worlds (regions) on the main menu, under Play. Each is its own world on its own clock (timeZone). open: false shows it as Coming soon; tapping it shows this world's view at that region's time of day. For now only one world exists, so only one region can be open, and its timeZone should match settings.worldTimeZone.",
     "daylight": "Day and night follow the world's clock (settings.worldTimeZone), the same for every player; on the main menu a world that isn't open shows its own region's time. Each entry is how the world looks at that hour, and the game blends between them. sky is the haze colour, skyLight and groundLight light things from above and below, brightness is how strong that is, sun is the sun or moon colour, sunStrength how strong, sunHeight its angle in degrees.",
-    "night": "Night in the world's clock (settings.worldTimeZone), from the hour 'from' to the hour 'to'. Sleeping at night fills Rest at whileAsleepAtNight instead of whileAsleep. People away or on autopilot go to sleep when night starts and get up in the morning. The server uses the same numbers."
+    "night": "Night in the world's clock (settings.worldTimeZone), from the hour 'from' to the hour 'to'. Sleeping at night fills Rest at whileAsleepAtNight instead of whileAsleep. People away or on autopilot go to sleep when night starts and get up in the morning. The server uses the same numbers.",
+    "appleTrees": "Apple trees (0.2.9, Luke's idea): count of the world's trees grow apples (appleTree in sources), nearStart of them near the start, the rest spread out (at least 6 m apart). Only leafy trees you can walk up to, picked on their own random numbers (seed), so nothing in the layout moves. Chop one and the apples on it drop; its stump grows back into an apple tree, with its apples growing back from then. Changing count or seed picks other trees (the server takes the new ones from the next build's layout).",
+    "clearing": "Clearing land, only in your own camp (0.2.9, Luke): bush (berry bushes and plain ones: Dig up bush), boulder (Break up boulder) and a plant by its id (tallGrass: Clear grass). action and verb are the tap menu button and the busy words, tool what has to be on the tool bar (it wears), seconds how long, gives what drops (a berry bush also drops the berries on it; grass gives what cutting gives if it's grown). A stump is dug up with chopping.stump (Dig up stump). Something cleared never comes back in a camp; out in the wild it shows greyed out with Only in your camp. When the camp ends its land is wild again and grows back (wild).",
+    "wild": "The wild tops itself up (0.2.9, Luke): the world keeps the wild as thick as it was laid out, not a fixed total, so camps taking land never crowd the rest. Something gone from the wild (a broken rock, a stump dug up before 0.2.9, or anything in a camp that ended) comes back at its own laid-out spot, one of each kind every everyHours (tree, bush, boulder, and plants by id; rocks: mining.rockBackHours), picked at random. Never inside a camp, never within awayFromPeople metres of a person, never on a placed thing, and only while the wild has less than growsBackTo per cent of them. A tree comes back as a young tree and grows up in the same time as a stump (chopping.regrowDays), a berry bush comes back with no berries, grass as stubble. The admin's Settings has them all live (The wild)."
   },
   "sources": {
     "pond": {
@@ -46,6 +49,18 @@
       "toolHarvest": {
         "berry": 2
       }
+    },
+    "appleTree": {
+      "name": "Apple tree",
+      "action": "Pick apples",
+      "verb": "Picking apples",
+      "seconds": 2,
+      "harvest": {
+        "apple": 1
+      },
+      "holds": 4,
+      "regrowHours": 24,
+      "pose": "pick"
     }
   },
   "plants": {
@@ -235,5 +250,46 @@
   "night": {
     "from": 20,
     "to": 6
+  },
+  "appleTrees": {
+    "count": 24,
+    "nearStart": 3,
+    "seed": 5501
+  },
+  "clearing": {
+    "bush": {
+      "action": "Dig up bush",
+      "verb": "Digging up a bush",
+      "tool": "stone-hoe",
+      "seconds": 8,
+      "gives": {
+        "stick": 1
+      }
+    },
+    "boulder": {
+      "action": "Break up boulder",
+      "verb": "Breaking up a boulder",
+      "tool": "stone-pickaxe",
+      "seconds": 20,
+      "gives": {
+        "stone": 6
+      }
+    },
+    "tallGrass": {
+      "action": "Clear grass",
+      "verb": "Clearing grass",
+      "tool": "stone-hoe",
+      "seconds": 3
+    }
+  },
+  "wild": {
+    "awayFromPeople": 15,
+    "growsBackTo": 100,
+    "everyHours": {
+      "tree": 2,
+      "bush": 2,
+      "boulder": 12,
+      "tallGrass": 0.5
+    }
   }
 }
