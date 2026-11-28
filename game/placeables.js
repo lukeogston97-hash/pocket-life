@@ -8,8 +8,8 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { game, share } from './links.js';
 import {
-  berriesGrown, berryPicked, claimProblem, cropGrowth, cropStage, fireRuleOf, frontSpotOf, fuelLeftAt, fuelRoom, PLACE_GRID,
-  placeClash, placeRect, placeSnap, seatSpotOf, squaresUsed,
+  berryPicked, claimProblem, cropGrowth, cropStage, cropTree, fireRuleOf, frontSpotOf, fuelLeftAt, fuelRoom, PLACE_GRID,
+  placeClash, placeRect, placeSnap, roomClash, seatSpotOf, squaresUsed,
 } from './rules.js';
 import {
   app, clamp01, DATA, hash, mat, pick, rand, reduceMotion, rr, scene, SETTINGS, smoothstep, sun, V, withOwnRand,
@@ -17,7 +17,7 @@ import {
 import { flatReach, groundUnder, groundY, landAsMade, POND, pondShape, setFlats, WALK_LIMIT } from './land.js';
 import { addSpot, BUSH_COLOURS, crownGeoB, interactive, removeSpotNear, roomAt, WALK_THROUGH } from './nature.js';
 import { drawPlant, plants } from './plants.js';
-import { bushHolds, DETAILS, growEvery, liftNear } from './world-build.js';
+import { bushHolds, crownSurface, DETAILS, growEvery, liftNear } from './world-build.js';
 import { $, buildItem, campfireModel, countLabel, harvests, ITEMS, RECIPES, shadowsOn, SOURCES } from './items.js';
 import { disposeMaterials, HIP_Y, setArm } from './people.js';
 import { HIT_BOX, HIT_MAT, itemViews } from './world-items.js';
@@ -71,8 +71,11 @@ export const CROPS = {};
 for (const [id, raw] of Object.entries(DATA.crops || {})) {
   const on = raw.on || 'field', like = SOURCES[raw.like];
   if (!ITEMS[raw.seed] || !PLACEABLES[on] || !like || !harvests(like)) continue;
-  CROPS[id] = { id, name: raw.name || id, seed: raw.seed, on, growMs: (Number(raw.growHours) || 24) * 3600000, plantSeconds: Math.max(1, Number(raw.plantSeconds) || 3), like };
+  CROPS[id] = { id, name: raw.name || id, seed: raw.seed, on, growMs: (Number(raw.growHours) || 24) * 3600000, plantSeconds: Math.max(1, Number(raw.plantSeconds) || 3), like,
+    // a tree (0.2.9, the apple tree): chopped like a wild one, its stump growing back in backMs; room: squares all round kept empty
+    tree: raw.tree ? { backMs: (Number(raw.tree.stumpBackHours) || 24) * 3600000 } : null, room: Math.max(0, Math.floor(Number(raw.room) || 0)) };
 }
+const CHOPPING = DATA.chopping || {}; // (a tree on a field is chopped with the axe, like a wild one)
 export const placed = new Map(); // id -> { id, kind, x, z, rot, built, fuel, lit, at, progress, view }
 
 /* ---------- storage (0.2.2, the small wooden crate) ----------
@@ -401,7 +404,8 @@ export function setPlaced(v) {
   }
   if (PLACEABLES[th.kind].madeWith) { // a farm field: what grows on it, from ages (so phone clocks don't matter)
     const c = v.crop && CROPS[v.crop.kind] ? v.crop : null, now = Date.now();
-    th.crop = c ? { kind: c.kind, at: now - (Number(c.age) || 0), berries: Array.isArray(c.berries) ? [Number(c.berries[0]) || 0, now - (Number(c.berries[1]) || 0)] : [null, null] } : null;
+    th.crop = c ? { kind: c.kind, at: now - (Number(c.age) || 0), berries: Array.isArray(c.berries) ? [Number(c.berries[0]) || 0, now - (Number(c.berries[1]) || 0)] : [null, null],
+      stump: Number.isFinite(c.stump) ? now - c.stump : 0 } : null; // (stump: a tree on it was chopped then, 0.2.9)
     drawCrop(th);
   }
 }
@@ -413,6 +417,7 @@ export function removePlaced(id) {
   const i = interactive.indexOf(th.view);
   if (i >= 0) interactive.splice(i, 1);
   for (const [x, z] of solidSpotsOf(th)) removeSpotNear(x, z);
+  if (th.treeSpot) removeSpotNear(th.x + TREE_SPOT_OFF, th.z); // (a tree growing on it, 0.2.9)
   clearCellsNear(th.x, th.z, PLACEABLES[th.kind].solid + 1);
   flatsDue = true;
   if (th.ring) { scene.remove(th.ring); th.ring.geometry.dispose(); }
@@ -533,6 +538,8 @@ export function cantPlaceAt(x, z, kind, rot = 0) {
   if (Math.abs(x) > WALK_LIMIT - 1 || Math.abs(z) > WALK_LIMIT - 1) return 'Too close to the forest';
   if (pondShape(x, z) < 1.35) return 'Too close to the water';
   if (placeClash([...placed.values()], { x, z, rot }, kind, PLACEABLES)) return 'Too close to another one';
+  const tree = roomClash([...placed.values()], { x, z, rot }, kind, PLACEABLES, CROPS); // the squares round a tree on a farm field stay empty (0.2.9)
+  if (tree) return `Too close to the ${cropOf(tree).name.toLowerCase()}`;
   if (!roomAt(x, z, Math.max(P.solid, Math.hypot(f.hw, f.hd)) + 0.25, 0.4, placedAt)) return 'Not enough room here'; // (other placed things: placeClash above)
   if (groundUnder(f, 0.5).rise > (SETTINGS.placeMaxRise || 0.5)) return 'Too steep here';
   const c = notMineAt(x, z);
@@ -1057,16 +1064,32 @@ Object.assign(TASK_KINDS, {
 const cropOf = (th) => (th.crop && CROPS[th.crop.kind]) || null;
 export const cropK = (th) => { const def = cropOf(th); return def ? cropGrowth(th.crop.at, def.growMs, Date.now()) : 0; }; // how grown, 0 to 1
 // berries on a grown crop right now (picked ones grow back one by one, like a wild bush's: rules.js)
+// A tree on a farm field (0.2.9, the apple tree): chopped, it's a stump till it grows back, its fruit growing back from
+// then (rules.js cropTree, the same as the server). { stump, back, fruit }
+function cropTreeNow(th) {
+  const def = cropOf(th), src = def.like;
+  return cropTree(th.crop.berries || [null, null], th.crop.stump || 0, def.tree ? def.tree.backMs : 0, bushHolds(src), src.regrowHours * 3600000, Date.now());
+}
+export const cropIsStump = (th) => { const def = cropOf(th); return !!(def && def.tree && th.crop.stump) && cropTreeNow(th).stump; };
+// what's been picked, as it is now: [count, from] (a tree that grew back starts again from then)
+function cropPickFrom(th) {
+  const b = th.crop.berries || [null, null];
+  if (!th.crop.stump) return b;
+  const back = cropTreeNow(th).back;
+  if (Date.now() < back) return b;
+  th.crop.stump = 0;
+  return b[1] == null || b[1] < back ? [0, back] : b;
+}
 export function cropBerriesNow(th) {
   const def = cropOf(th);
   if (!def || cropK(th) < 1) return 0;
-  const src = def.like, b = th.crop.berries || [null, null];
-  return berriesGrown(b[0], b[1], bushHolds(src), src.regrowHours * 3600000, Date.now());
+  return cropTreeNow(th).fruit;
 }
 const cropGrownIn = (th) => timeLeft(th.crop.at + cropOf(th).growMs - Date.now()); // "5 h 20 min"
+const stumpBackIn = (th) => timeLeft(cropTreeNow(th).back - Date.now()); // (a tree on a field, chopped)
 // the next berry grows back in (a grown crop with none left)
 function cropNextIn(th) {
-  const src = cropOf(th).like, b = th.crop.berries || [null, null];
+  const src = cropOf(th).like, b = cropPickFrom({ crop: { ...th.crop } }); // (a copy: only working it out)
   return b[1] == null ? '1 min' : timeLeft(Math.max(60000, b[1] + growEvery(src) - Date.now()));
 }
 // what it is right now, for Inspect: "Berry bush sprout · grown in 18 h", "Berry bush · 3 berries"
@@ -1075,6 +1098,7 @@ export function fieldState(th) {
   if (!def) return 'Dug and ready for seeds';
   const stage = cropStage(cropK(th)), name = def.name, kind = Object.keys(def.like.harvest)[0];
   if (stage !== 'grown') return `${stage === 'sprout' ? `${name} sprout` : `Young ${name.toLowerCase()}`} · grown in ${cropGrownIn(th)}`;
+  if (cropIsStump(th)) return `${name} stump · grows back in ${stumpBackIn(th)}`;
   const n = cropBerriesNow(th);
   return n ? `${name} · ${countLabel(kind, n).toLowerCase()}` : `${name} · next ${ITEMS[kind].name.toLowerCase()} in ${cropNextIn(th)}`;
 }
@@ -1121,18 +1145,78 @@ function cropParts(th) {
     }
   });
   g.add(out.sprout, out.bush, out.fruit);
+  if (def.tree) { out.bush.visible = out.fruit.visible = false; g.add(...treeCropParts(th, out)); } // (an apple tree, 0.2.9: its own tree look)
   shadowsOn(g);
   return out;
 }
+// A tree on a field (0.2.9): a sprout, then a young tree getting bigger, then a full tree with its apples (the same size
+// as a wild one: the squares round it are kept empty), or its stump once it's chopped. Built once per field.
+const TREE_MATS = { bark: keepMat('#7a5c40'), leaves: ['#6f8f4f', '#7b9858', '#678a4b'].map((c) => keepMat(c)), apple: keepMat('#c8352a', { roughness: 0.45 }), stumpTop: keepMat('#cfb48a') };
+const treeTrunkGeo = new THREE.CylinderGeometry(0.09, 0.15, 1, 6).translate(0, 0.5, 0), treeAppleGeo = new THREE.IcosahedronGeometry(0.1, 1);
+const treeStumpGeo = new THREE.CylinderGeometry(0.36, 0.44, 0.42, 8), treeStumpTopGeo = new THREE.CylinderGeometry(0.33, 0.33, 0.02, 8);
+const TREE_SPOT_OFF = 0.02; // (the tree's spot sits beside the field's own, so each can be taken off by itself)
+function treeCropParts(th, out) {
+  out.tree = new THREE.Group(); out.stump = new THREE.Group(); out.apples = [];
+  withOwnRand(7001 + th.id * 104729, () => {
+    const h = rr(1.25, 1.55), bw = 1.05;
+    const trunk = new THREE.Mesh(treeTrunkGeo, TREE_MATS.bark);
+    trunk.scale.set(bw, h + 0.15, bw);
+    out.tree.add(trunk);
+    const leaves = pick(TREE_MATS.leaves), crowns = [];
+    for (let i = 0; i < 2; i++) {
+      const cs = rr(1.05, 1.3) * (i ? 0.8 : 1), ox = i ? rr(-0.45, 0.45) : rr(-0.12, 0.12), oz = i ? rr(-0.45, 0.45) : rr(-0.12, 0.12);
+      const m = new THREE.Mesh(crownGeoB, leaves);
+      m.position.set(ox, h + cs * 0.72 + (i ? cs * 0.55 : 0), oz);
+      m.scale.set(cs * rr(0.95, 1.1), cs * rr(0.86, 1.05), cs * rr(0.95, 1.1));
+      m.rotation.y = rand() * 6;
+      out.tree.add(m);
+      crowns.push(m);
+    }
+    const holds = bushHolds(cropOf(th).like);
+    for (let k = 0; k < holds; k++) { // its apples, spread round the crown about its middle (the same as a wild apple tree's)
+      const c = crowns[k % crowns.length], a = (k / holds + rr(-0.08, 0.08)) * Math.PI * 2, ph = rr(0.6, 1.4);
+      const m = new THREE.Mesh(treeAppleGeo, TREE_MATS.apple);
+      const dir = new THREE.Vector3(Math.cos(a) * Math.sin(ph), Math.cos(ph), Math.sin(a) * Math.sin(ph));
+      m.position.copy(dir.multiplyScalar(crownSurface(crownGeoB, dir) * 0.96).multiply(c.scale).applyEuler(c.rotation).add(c.position)); // (on its lumpy leaves)
+      out.tree.add(m);
+      out.apples.push(m);
+    }
+    const body = new THREE.Mesh(treeStumpGeo, TREE_MATS.bark), top = new THREE.Mesh(treeStumpTopGeo, TREE_MATS.stumpTop);
+    body.scale.set(0.55, 0.8, 0.55); body.position.y = 0.16;
+    top.scale.set(0.55, 1, 0.55); top.position.y = 0.335;
+    out.stump.add(body, top);
+  });
+  return [out.tree, out.stump];
+}
+// a tree on a field is in the way like a wild one: its trunk (a tree's spot), or its stump; a sprout isn't (fields are walked over)
+function setTreeSpot(th, want) {
+  if ((th.treeSpot || null) === want) return;
+  if (th.treeSpot) removeSpotNear(th.x + TREE_SPOT_OFF, th.z);
+  if (want) addSpot(th.x + TREE_SPOT_OFF, th.z, want === 'tree' ? 1.3 : 0.45, want === 'tree' ? 1 : 0);
+  th.treeSpot = want;
+  clearCellsNear(th.x, th.z, 2);
+}
 // what's shown changes when it grows a step, or a berry is picked or grows back
-const cropShownKey = (th) => { if (!cropOf(th)) return ''; const k = cropK(th); return `${th.crop.kind}|${Math.floor(k * 40)}|${k >= 1 ? cropBerriesNow(th) : 0}`; };
+const cropShownKey = (th) => { if (!cropOf(th)) return ''; const k = cropK(th); return `${th.crop.kind}|${Math.floor(k * 40)}|${k >= 1 ? cropBerriesNow(th) : 0}|${cropIsStump(th) ? 'stump' : ''}`; };
 export function drawCrop(th) {
   const parts = th.view.userData.parts;
   if (!parts.crop) return;
   th.cropShown = cropShownKey(th);
-  if (!cropOf(th)) { if (parts.cropParts) { parts.crop.clear(); parts.cropParts = null; } return; }
+  if (!cropOf(th)) { if (parts.cropParts) { parts.crop.clear(); parts.cropParts = null; } setTreeSpot(th, null); return; }
   if (!parts.cropParts || parts.cropParts.kind !== th.crop.kind) parts.cropParts = cropParts(th);
   const c = parts.cropParts, k = cropK(th), stage = cropStage(k);
+  if (c.tree) { // a tree on the field (0.2.9)
+    const stump = cropIsStump(th);
+    c.sprout.visible = stage === 'sprout';
+    c.sprout.scale.setScalar(0.75 + 1.2 * k);
+    c.tree.visible = stage !== 'sprout' && !stump;
+    c.tree.scale.setScalar(stage === 'grown' ? 1 : 0.2 + 0.6 * clamp01((k - 1 / 3) * 1.5));
+    c.stump.visible = stump;
+    const n = stage === 'grown' && !stump ? cropBerriesNow(th) : 0;
+    c.apples.forEach((m, i) => { m.visible = i < n; });
+    setTreeSpot(th, stump ? 'stump' : stage === 'sprout' ? null : 'tree');
+    return;
+  }
   c.sprout.visible = stage === 'sprout';
   c.sprout.scale.setScalar(0.75 + 1.2 * k); // (a third of the way: 1.15)
   c.bush.visible = stage !== 'sprout';
@@ -1219,7 +1303,8 @@ Object.assign(TASK_KINDS, {
     start(t) {
       const th = placed.get(t.id), def = th && Object.values(CROPS).find((c) => c.seed === t.seed && c.on === th.kind);
       if (!def) { nextTask(); return; }
-      const no = () => (th.crop ? 'Something is already growing here' : !you.carry[t.seed] ? 'You have no seeds to plant' : '');
+      const no = () => (th.crop ? 'Something is already growing here' : !you.carry[t.seed] ? 'You have no seeds to plant'
+        : def.room && roomClash([...placed.values()], th, th.kind, PLACEABLES, CROPS, def.room) ? 'It needs the squares round it empty' : ''); // (a tree, 0.2.9)
       if (no()) { showTag(no(), headTop(), 2); nextTask(); return; }
       goNear(th, () => {
         if (!placed.has(th.id) || no()) { if (placed.has(th.id)) showTag(no(), headTop(), 2); nextTask(); return; }
@@ -1230,7 +1315,7 @@ Object.assign(TASK_KINDS, {
         startAction({ pose: 'kneel', seconds: def.plantSeconds, end: () => {
           if (!placed.has(th.id) || no()) return;
           takeFromCarry(t.seed, 1);
-          th.crop = { kind: def.id, at: Date.now(), berries: [null, null] };
+          th.crop = { kind: def.id, at: Date.now(), berries: [null, null], stump: 0 };
           drawCrop(th);
           spendEnergy('plant');
           showGain(`${ITEMS[t.seed].plural} planted`);
@@ -1248,7 +1333,7 @@ Object.assign(TASK_KINDS, {
       const th = placed.get(t.id), def = th && cropOf(th);
       if (!def) { nextTask(); return; }
       const src = def.like, kind = Object.keys(src.harvest)[0];
-      const no = () => (cropK(th) < 1 ? 'Not grown yet' : cropBerriesNow(th) < 1 ? `Next ${ITEMS[kind].name.toLowerCase()} in ${cropNextIn(th)}` : carryNo({ [kind]: 1 }));
+      const no = () => (cropK(th) < 1 ? 'Not grown yet' : cropIsStump(th) ? "It's a stump, growing back" : cropBerriesNow(th) < 1 ? `Next ${ITEMS[kind].name.toLowerCase()} in ${cropNextIn(th)}` : carryNo({ [kind]: 1 }));
       if (no()) { showTag(no(), headTop(), 2); nextTask(); return; }
       goNear(th, () => {
         if (!placed.has(th.id) || !cropOf(th) || no()) { if (cropOf(th)) showTag(no(), headTop(), 2); nextTask(); return; }
@@ -1261,7 +1346,7 @@ Object.assign(TASK_KINDS, {
           const full = carryNo({ [kind]: n });
           if (full) { showTag(full, headTop(), 2); return; } // (the same as a wild bush)
           addToCarry(kind, n);
-          let b = th.crop.berries || [null, null];
+          let b = cropPickFrom(th); // (a tree that grew back: its fruit counts from then, 0.2.9)
           for (let i = 0; i < n; i++) b = berryPicked(b[0], b[1], bushHolds(src), src.regrowHours * 3600000, Date.now()); // (rules.js)
           th.crop.berries = b;
           drawCrop(th);
@@ -1275,20 +1360,50 @@ Object.assign(TASK_KINDS, {
     name: (t, now) => { const def = cropOf(placed.get(t.id) || {}), src = def ? def.like : null; return now ? (src ? src.verb : 'Picking') : (src && src.action) || 'Pick'; },
     spot: placedSpot,
   },
+  // a tree on a field (0.2.9): chop it down with the axe (its apples fall, the stump grows back), or dig up its stump
+  treeCrop: {
+    start(t) {
+      const th = placed.get(t.id), def = th && cropOf(th), rule = CHOPPING[t.do === 'dig' ? 'stump' : 'tree'] || {};
+      if (!def || !def.tree) { nextTask(); return; }
+      if (CHOPPING.tool && !hasTool(CHOPPING.tool)) { showTag(toolWhy(CHOPPING.tool), headTop(), 2); nextTask(); return; }
+      const no = () => (!placed.has(th.id) || !cropOf(th) ? 'gone' : t.do === 'dig' ? (cropIsStump(th) ? '' : 'Chop it down first')
+        : cropK(th) < 1 ? 'Not grown yet' : cropIsStump(th) ? "It's a stump, growing back" : '');
+      if (no()) { if (no() !== 'gone') showTag(no(), headTop(), 2); nextTask(); return; }
+      goNear(th, () => {
+        if (no()) { if (no() !== 'gone') showTag(no(), headTop(), 2); nextTask(); return; }
+        face(th.x, th.z);
+        showTag(`${TASK_KINDS.treeCrop.name(t, true)}…`, headTop(), 2, (rule.seconds || 10) * slowness() + 0.3);
+        game.tagLabel.busy = true;
+        startAction({ pose: 'chop', seconds: rule.seconds || 10, tool: CHOPPING.tool, end: () => { spendEnergy('chop'); sendNow({ t: 'treeCrop', id: th.id, do: t.do }); } });
+      });
+    },
+    name: (t, now) => (t.do === 'dig' ? (now ? 'Digging up a stump' : 'Dig up stump') : (now ? 'Chopping a tree' : 'Chop tree')),
+    spot: placedSpot,
+  },
 });
 // a farm field's tap menu: plant seeds, how long it has to grow, or pick what grew; flatten it; Inspect and Walk here
 export function fieldActions(th) {
   const P = PLACEABLES[th.kind], def = cropOf(th), out = [];
   if (!def) { // seeds that grow here: one Plant for each kind you carry (or one that says you have none)
     const all = Object.values(CROPS).filter((c) => c.on === th.kind), mine = all.filter((c) => you.carry[c.seed] > 0);
-    for (const c of mine) out.push({ label: `Plant ${ITEMS[c.seed].plural.toLowerCase()}`, note: `${c.plantSeconds} s`, run: () => queueTask({ type: 'plant', id: th.id, seed: c.seed }) });
+    for (const c of mine) {
+      const cramped = c.room && roomClash([...placed.values()], th, th.kind, PLACEABLES, CROPS, c.room); // a tree needs the squares round it empty (0.2.9)
+      out.push({ label: `Plant ${ITEMS[c.seed].plural.toLowerCase()}`, note: cramped ? 'Needs the squares round it empty' : `${c.plantSeconds} s`, disabled: !!cramped,
+        run: () => queueTask({ type: 'plant', id: th.id, seed: c.seed }) });
+    }
     if (!mine.length && all.length) out.push({ label: all.length === 1 ? `Plant ${ITEMS[all[0].seed].plural.toLowerCase()}` : 'Plant seeds', note: 'You have no seeds', disabled: true, run: () => {} });
   } else if (cropK(th) < 1) out.push({ label: `Grown in ${cropGrownIn(th)}`, disabled: true, run: () => {} });
-  else {
+  else if (def.tree && cropIsStump(th)) { // a tree on it, chopped down (0.2.9): dig up its stump (your camp only), or let it grow back
+    const c = claimAt(th.x, th.z), mine = !!c && claimMine(c), axe = !CHOPPING.tool || hasTool(CHOPPING.tool);
+    out.push({ label: 'Dig up stump', note: !mine ? 'Only in your camp' : axe ? `${(CHOPPING.stump || {}).seconds || 10} s` : toolNeed(CHOPPING.tool), disabled: !mine || !axe,
+      run: () => queueTask({ type: 'treeCrop', id: th.id, do: 'dig' }) },
+    { label: `Grows back in ${stumpBackIn(th)}`, disabled: true, run: () => {} });
+  } else {
     const src = def.like, kind = Object.keys(src.harvest)[0], n = cropBerriesNow(th);
     const queued = allTasks().filter((q) => q.type === 'harvest' && q.id === th.id).length;
     out.push({ label: src.action || `Pick ${ITEMS[kind].plural.toLowerCase()}`, note: n ? `${n} left` : `Next in ${cropNextIn(th)}`, disabled: n - queued < 1,
       run: () => queueTask({ type: 'harvest', id: th.id }) });
+    if (def.tree) { const axe = !CHOPPING.tool || hasTool(CHOPPING.tool); out.push({ label: 'Chop tree', note: axe ? `${(CHOPPING.tree || {}).seconds || 10} s` : toolNeed(CHOPPING.tool), disabled: !axe, run: () => queueTask({ type: 'treeCrop', id: th.id, do: 'chop' }) }); }
   }
   const has = hasTool(P.madeWith);
   out.push({ label: 'Flatten field', note: !has ? toolNeed(P.madeWith) : def ? `The ${def.name.toLowerCase()} is lost` : `${P.flattenSeconds} s`, disabled: !has,

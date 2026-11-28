@@ -2,12 +2,13 @@
 import * as THREE from 'three';
 import { game, share } from './links.js';
 import { berriesGrown, berryPicked, stumpBackMs } from './rules.js';
-import { DATA, mat, scene } from './core.js';
-import { flatReach, groundY, landAsMade } from './land.js';
+import { DATA, hash, mat, rr, scene, withOwnRand } from './core.js';
+import { CLEAR, flatReach, groundY, landAsMade, pondShape, squareDist, WALK_LIMIT } from './land.js';
 import {
-  addSpot, berries, berryBushes, buildDetail, buildSet, cattails, drawnTogether, far, interactive, near, oldStumps,
+  addSpot, berries, berryBushes, buildDetail, buildSet, cattails, drawnTogether, far, IM, interactive, near, oldStumps,
   pads, reeds, refillDetail, removeSpotNear, rocks, takeSpot, trees, tufts, updateLod, WALK_THROUGH, wild, wildBushes,
 } from './nature.js';
+import { plants, setPlantCleared } from './plants.js';
 // shared for files further down game/main.js, and the variables other files change (game/links.js)
 share({
   get detailAt() { return detailAt; }, set detailAt(v) { detailAt = v; },
@@ -43,7 +44,7 @@ export function readyIn(b) {
 export function drawBerries(b) {
   const { start, n } = b.userData.berries;
   const src = game.SOURCES[b.userData.source];
-  const shown = b.userData.removed ? 0 : game.freshLook ? n : Math.min(n, src && game.harvests(src) ? berriesOn(b) : n);
+  const shown = b.userData.removed || (b.userData.cleared && !game.freshLook) ? 0 : game.freshLook ? n : Math.min(n, src && game.harvests(src) ? berriesOn(b) : n);
   if (b.userData.shown === shown) return;
   b.userData.shown = shown;
   const a = berries.instanceMatrix.array;
@@ -65,6 +66,8 @@ export const copyOwner = new Map();
 trees.forEach((t, i) => { for (const p of t.parts) for (const mesh of [p.full, p.simple]) if (mesh) copyOwner.set(`${mesh.uuid}:${p.idx}`, { kind: 'tree', i }); });
 oldStumps.forEach((t, i) => { for (const p of t.parts) if (p.full) copyOwner.set(`${p.full.uuid}:${p.idx}`, { kind: 'oldStump', i }); });
 rocks.forEach((t, i) => { for (const p of t.parts) if (p.full) copyOwner.set(`${p.full.uuid}:${p.idx}`, { kind: 'rock', i }); });
+wildBushes.forEach((t, i) => { for (const p of t.parts) if (p.full) copyOwner.set(`${p.full.uuid}:${p.idx}`, { kind: 'shrub', i }); }); // (dug up in a camp, 0.2.9)
+trees.forEach((t, i) => { t.i = i; });
 // a moved thing (admin): its laid-out copy, shifted by t.off
 // (and lifted with the ground under it, where that was levelled: t.lift, setLift below)
 const shifted = (t, m4) => (t.off || t.lift ? new THREE.Matrix4().makeTranslation((t.off || [0])[0], ((t.off || [0, 0])[1]) + (t.lift || 0), (t.off || [0, 0, 0])[2]).multiply(m4) : m4);
@@ -76,15 +79,21 @@ function keepParts(t) {
     if (!p.saved[mesh.uuid]) { const m4 = new THREE.Matrix4(); mesh.getMatrixAt(p.idx, m4); p.saved[mesh.uuid] = m4; }
   }
 }
-// hide (or show again) the drawn copies a tree or stump is made of
+// hide (or show again) the drawn copies a tree or stump is made of. A young tree (0.2.9) is drawn smaller, growing up
+// round the bottom of its trunk
 export function showParts(t, show) {
+  keepParts(t);
+  const k = show && t.state === 'young' && !game.freshLook ? youngSize(t) : 1;
+  let grow = null;
+  if (k < 1) {
+    const base = new THREE.Vector3().setFromMatrixPosition(shifted(t, Object.values(t.parts[0].saved)[0])); // (the trunk starts at the ground)
+    grow = new THREE.Matrix4().makeTranslation(base.x, base.y, base.z).multiply(new THREE.Matrix4().makeScale(k, k, k)).multiply(new THREE.Matrix4().makeTranslation(-base.x, -base.y, -base.z));
+  }
+  t.drawnSize = show ? k : 0;
   for (const p of t.parts) for (const mesh of [p.full, p.simple]) {
     if (!mesh) continue;
-    p.saved = p.saved || {};
-    if (!show) {
-      if (!p.saved[mesh.uuid]) { const m4 = new THREE.Matrix4(); mesh.getMatrixAt(p.idx, m4); p.saved[mesh.uuid] = m4; }
-      mesh.setMatrixAt(p.idx, NO_TREE);
-    } else if (p.saved[mesh.uuid]) mesh.setMatrixAt(p.idx, shifted(t, p.saved[mesh.uuid]));
+    if (!show) mesh.setMatrixAt(p.idx, NO_TREE);
+    else if (p.saved[mesh.uuid]) mesh.setMatrixAt(p.idx, grow ? grow.clone().multiply(shifted(t, p.saved[mesh.uuid])) : shifted(t, p.saved[mesh.uuid]));
     mesh.instanceMatrix.needsUpdate = true;
     if (t.off) mesh.computeBoundingSphere(); // so it isn't skipped when its old spot is off screen
   }
@@ -106,9 +115,10 @@ const NO_TREE = new THREE.Matrix4().makeScale(0, 0, 0);
 const stumpMat = mat('#7a5c40'), stumpTopMat = mat('#cfb48a');
 export function setTreeState(i, state, since) {
   const t = trees[i];
-  if (t && state === 'stump') t.since = since || t.since || Date.now(); // when it was chopped (it grows back regrowDays after: stumpGrowsIn)
-  if (!t || t.state === state) return;
-  const standing = state === 'tree';
+  if (t && (state === 'stump' || state === 'young')) t.since = since || t.since || Date.now(); // when it was chopped, or came back young (it grows up regrowDays after: stumpGrowsIn)
+  if (!t || t.state === state) { if (t && state === 'young') showParts(t, true); return; }
+  const was = t.state, standing = state === 'tree' || state === 'young';
+  t.state = state;
   showParts(t, standing || game.freshLook);
   if (t.stump) { scene.remove(t.stump); const j = interactive.indexOf(t.stump); if (j >= 0) interactive.splice(j, 1); t.stump = null; }
   if (state === 'stump') { // a fresh stump where the tree was
@@ -130,12 +140,18 @@ export function setTreeState(i, state, since) {
     interactive.push(g);
     t.stump = g;
   }
-  if (state === 'gone' || (t.state === 'gone' && standing)) game.clearCellsNear(t.x, t.z, 2.5);
+  if (state === 'gone' || (was === 'gone' && standing)) game.clearCellsNear(t.x, t.z, 2.5);
   if (state === 'gone') removeSpotNear(t.x, t.z);
-  t.state = state;
+  else if (was === 'gone') addSpot(t.x, t.z, t.s * (t.pine ? 1.3 : 1.35), true); // the wild grew it back (0.2.9): in the way again
+  if (APPLES.has(i)) drawApples(i);
+}
+// how big a young tree is drawn: a sapling growing into a full tree by the time a stump would have grown back
+function youngSize(t) {
+  const back = stumpBackMs(CHOP.regrowDays, t.i, t.since);
+  return Math.max(0.3, Math.min(1, 0.3 + 0.7 * (Date.now() - (t.since || Date.now())) / Math.max(1, back)));
 }
 // how long until a stump grows back into a tree, like "2 d 5 h" or "40 min" (the same as a fire's fuel)
-export const stumpGrowsIn = (i) => { const t = trees[i]; return growsBackIn(t.since, stumpBackMs(CHOP.regrowDays, i, t.since) / 86400000); }; // (each stump its own time, rules.js)
+export const stumpGrowsIn = (i) => { const t = trees[i]; return growsBackIn(t.since, stumpBackMs(CHOP.regrowDays, i, t.since) / 86400000); }; // (each stump its own time, rules.js; a young tree grows up in the same)
 export function growsBackIn(since, days) {
   const mins = Math.max(1, Math.ceil(((since || Date.now()) + days * 86400000 - Date.now()) / 60000));
   if (mins < 90) return `${mins} min`;
@@ -219,8 +235,9 @@ export function moveLayoutThing(what, i, x, z) {
   t.lift = groundMovedUnder(x, z, what === 'tree' ? TRUNK_R : t.r); // (on levelled ground)
   if (t.lift) LIFTED.add(t); else LIFTED.delete(t);
   if (what === 'tree') {
-    showParts(t, t.state === 'tree' || game.freshLook);
+    showParts(t, t.state === 'tree' || t.state === 'young' || game.freshLook);
     if (t.stump) t.stump.position.set(x, groundY(x, z) - 0.05, z);
+    if (APPLES.has(i)) drawApples(i);
   } else {
     drawRock(t);
     if (t.proxy) t.proxy.position.set(x, t.proxy.position.y - groundY(was[0], was[1]) + groundY(x, z), z); // (the tap target: roughly on the ground)
@@ -254,7 +271,7 @@ function drawBushAt(b) {
   const u = b.userData, off = u.off || [0, 0, 0], T = new THREE.Matrix4().makeTranslation(off[0], off[1] + (u.lift || 0), off[2]);
   for (const p of u.parts || []) for (const mesh of [p.full, p.simple]) {
     if (!mesh || !p.saved[mesh.uuid]) continue;
-    mesh.setMatrixAt(p.idx, u.removed ? NO_TREE : T.clone().multiply(p.saved[mesh.uuid]));
+    mesh.setMatrixAt(p.idx, u.removed || (u.cleared && !game.freshLook) ? NO_TREE : T.clone().multiply(p.saved[mesh.uuid]));
     mesh.instanceMatrix.needsUpdate = true;
     mesh.computeBoundingSphere();
   }
@@ -289,17 +306,14 @@ function setLift(kind, t, lift) {
     keepParts(t);
     t.lift = lift;
     if (kind === 'tree') {
-      if (t.state === 'tree' || game.freshLook) showParts(t, true);
+      if (t.state === 'tree' || t.state === 'young' || game.freshLook) showParts(t, true);
       if (t.stump) t.stump.position.y = groundY(t.x, t.z) - 0.05;
+      if (APPLES.has(t.i)) drawApples(t.i);
     } else if (kind === 'rock') {
       drawRock(t);
       if (t.proxy) t.proxy.position.y += lift - was;
     } else {
-      for (const p of t.parts) for (const mesh of [p.full, p.simple]) { // a bush with no berries
-        if (!mesh || !p.saved[mesh.uuid]) continue;
-        mesh.setMatrixAt(p.idx, shifted(t, p.saved[mesh.uuid]));
-        mesh.instanceMatrix.needsUpdate = true;
-      }
+      drawShrub(t); // a bush with no berries
     }
   }
   if (lift) LIFTED.add(t); else LIFTED.delete(t);
@@ -338,4 +352,140 @@ export function removeLayoutThing(what, i) {
 export function useWorldEdits(w) {
   for (const [key, at] of Object.entries(w.moved || {})) { const [what, i] = key.split(':'); moveLayoutThing(what, Number(i), at[0], at[1]); }
   for (const key of Object.keys(w.removed || {})) { const [what, i] = key.split(':'); removeLayoutThing(what, Number(i)); }
+}
+
+/* ---------- apple trees (0.2.9, Luke's idea) ----------
+   A few of the world's leafy trees grow apples (appleTrees in game-data.json: count, nearStart, their own random seed),
+   picked one at a time like a berry bush (sources.appleTree). Which trees they are is the same on every phone, and the
+   server takes it from the layout (online.js layoutData). Chopped down, the apples on it fall; once its stump has grown
+   back, its apples grow back from then. The apples are one InstancedMesh, hidden one by one as they're picked. */
+const AT = DATA.appleTrees || {}, APPLE_RAW = (DATA.sources || {}).appleTree;
+const APPLE_HOLDS = APPLE_RAW ? Math.max(1, Math.min(8, Math.floor(APPLE_RAW.holds) || 4)) : 0;
+export const APPLES = new Map(); // tree number -> { count, growFrom, start, shown }
+// how far out a crown's surface is along dir (the crowns are lumpy), so an apple sits on it, not in the air or inside
+const surfaceRay = new THREE.Raycaster(), surfaceMat = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }), zero = new THREE.Vector3();
+export function crownSurface(geo, dir) {
+  surfaceRay.set(zero, dir.clone().normalize());
+  const hit = surfaceRay.intersectObject(new THREE.Mesh(geo, surfaceMat), false)[0];
+  return hit ? hit.distance : 1;
+}
+const appleSource = () => (game.SOURCES || {}).appleTree || null;
+if (APPLE_RAW && AT.count > 0) {
+  const seed = AT.seed || 5501, cut = WALK_LIMIT - 3;
+  // leafy trees you can walk up to (not pines, not the tall ones), in an order of their own
+  const order = trees.map((t, i) => i).filter((i) => { const t = trees[i]; return !t.pine && !t.tall && squareDist(t.x, t.z) < cut && pondShape(t.x, t.z) > 1.6; })
+    .sort((a, b) => hash(a, seed) - hash(b, seed));
+  const chosen = [], apart = (i) => chosen.every((j) => Math.hypot(trees[j].x - trees[i].x, trees[j].z - trees[i].z) > 6);
+  for (const i of order) if (chosen.length < (AT.nearStart || 0) && Math.hypot(trees[i].x - CLEAR.x, trees[i].z - CLEAR.z) < 22 && apart(i)) chosen.push(i);
+  for (const i of order) if (chosen.length < AT.count && !chosen.includes(i) && apart(i)) chosen.push(i);
+  chosen.sort((a, b) => a - b);
+  const mesh = IM(new THREE.IcosahedronGeometry(0.1, 1), mat('#c8352a', { roughness: 0.45 }), chosen.length * APPLE_HOLDS);
+  mesh.userData.label = 'Tree'; // (a tap on an apple is a tap on its tree: copyOwner)
+  const m4 = new THREE.Matrix4(), dir = new THREE.Vector3(), q = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1), C = new THREE.Color('#ffffff');
+  for (const i of chosen) {
+    const t = trees[i], crowns = t.parts.slice(1).filter((p) => p.full), start = mesh.count;
+    keepParts(t);
+    withOwnRand(seed * 31 + i * 7919, () => {
+      for (let k = 0; k < APPLE_HOLDS; k++) {
+        const p = crowns[k % crowns.length] || t.parts[0], crown = p.saved[p.full.uuid];
+        const a = (k / APPLE_HOLDS + rr(-0.08, 0.08)) * Math.PI * 2, ph = rr(0.6, 1.4); // spread round the crown, on its upper side, where they show from above
+        dir.set(Math.cos(a) * Math.sin(ph), Math.cos(ph), Math.sin(a) * Math.sin(ph));
+        dir.multiplyScalar(crownSurface(p.full.geometry, dir) * 0.96).applyMatrix4(crown); // (just into its leaves)
+        m4.compose(dir, q.identity(), one.clone().multiplyScalar(Math.max(0.8, Math.min(1.25, t.s)) * rr(0.9, 1.1)));
+        mesh.setMatrixAt(mesh.count, m4);
+        mesh.setColorAt(mesh.count, C);
+        copyOwner.set(`${mesh.uuid}:${mesh.count}`, { kind: 'tree', i });
+        mesh.count++;
+      }
+    });
+    APPLES.set(i, { count: null, growFrom: null, start, shown: -1 });
+  }
+  mesh.userData.base = mesh.instanceMatrix.array.slice();
+  mesh.computeBoundingSphere();
+  interactive.push(mesh);
+  APPLES.mesh = mesh;
+}
+export const isApple = (i) => APPLES.has(i);
+// apples on tree i right now: none on a stump or a young tree (the same maths as a berry bush, rules.js)
+export function applesOn(i) {
+  const a = APPLES.get(i), src = appleSource(), t = trees[i];
+  if (!a || !src || !t || t.state !== 'tree') return 0;
+  return berriesGrown(a.count, a.growFrom, APPLE_HOLDS, src.regrowHours * 3600000, Date.now());
+}
+export function appleReadyIn(i) {
+  const a = APPLES.get(i), src = appleSource();
+  const mins = Math.max(1, Math.ceil(((a.growFrom || Date.now()) + (src.regrowHours * 3600000) / APPLE_HOLDS - Date.now()) / 60000));
+  return mins >= 90 ? `${Math.round(mins / 60)} h` : `${mins} min`;
+}
+export function pickApple(i) {
+  const a = APPLES.get(i), src = appleSource();
+  if (!a || !src) return;
+  [a.count, a.growFrom] = berryPicked(a.count, a.growFrom, APPLE_HOLDS, src.regrowHours * 3600000, Date.now());
+  drawApples(i);
+}
+export function setApples(i, count, growFrom) {
+  const a = APPLES.get(i);
+  if (!a) return;
+  a.count = count == null ? null : Number(count);
+  a.growFrom = growFrom == null ? null : Number(growFrom);
+  drawApples(i);
+}
+// the apples shown on tree i: as many as are on it, where the tree is now (moved or lifted with levelled ground)
+export function drawApples(i) {
+  const a = APPLES.get(i), mesh = APPLES.mesh, t = trees[i];
+  if (!a || !mesh) return;
+  const n = game.freshLook ? APPLE_HOLDS : applesOn(i), moved = !!(t.off || t.lift), key = `${n}|${moved ? `${t.x},${t.z},${t.lift || 0}` : ''}`;
+  if (a.shown === key) return;
+  a.shown = key;
+  const m4 = new THREE.Matrix4();
+  for (let k = 0; k < APPLE_HOLDS; k++) {
+    const o = (a.start + k) * 16;
+    if (k < n) { m4.fromArray(mesh.userData.base, o); shifted(t, m4).toArray(mesh.instanceMatrix.array, o); }
+    else NO_TREE.toArray(mesh.instanceMatrix.array, o);
+  }
+  mesh.instanceMatrix.needsUpdate = true;
+  if (moved) mesh.computeBoundingSphere();
+}
+
+/* ---------- clearing land in your camp (0.2.9, Luke) ----------
+   A bush dug up (a berry bush or one with no berries) or grass cleared is gone from there till the wild grows it back
+   (the server keeps when: world.cleared). Hidden, not tapped, and out of the way; back = it's there again. Trees and
+   rocks have their own states for it (gone). */
+export function drawShrub(t) {
+  for (const p of t.parts) for (const mesh of [p.full, p.simple]) {
+    if (!mesh) continue;
+    p.saved = p.saved || {};
+    if (!p.saved[mesh.uuid]) { const m4 = new THREE.Matrix4(); mesh.getMatrixAt(p.idx, m4); p.saved[mesh.uuid] = m4; }
+    mesh.setMatrixAt(p.idx, t.cleared && !game.freshLook ? NO_TREE : shifted(t, p.saved[mesh.uuid]));
+    mesh.instanceMatrix.needsUpdate = true;
+  }
+}
+export function setCleared(what, i, plant, on = true) {
+  if (what === 'plant') { setPlantCleared(plant, i, on); return; }
+  const t = what === 'shrub' ? wildBushes[i] : what === 'bush' ? berryBushes[i] : null;
+  if (!t) return;
+  const u = what === 'bush' ? t.userData : t, x = what === 'bush' ? t.position.x : t.x, z = what === 'bush' ? t.position.z : t.z, r = u.r;
+  if (!!u.cleared === !!on || u.removed) return;
+  u.cleared = !!on;
+  if (what === 'bush') { bushBase(t); drawBushAt(t); } else drawShrub(t);
+  const proxy = what === 'bush' ? t : t.proxy;
+  if (proxy) { const j = interactive.indexOf(proxy); if (on && j >= 0) interactive.splice(j, 1); if (!on && j < 0) interactive.push(proxy); }
+  if (on) removeSpotNear(x, z); else addSpot(x, z, r, WALK_THROUGH);
+  game.clearCellsNear(x, z, r + 1);
+}
+// the whole world's cleared things from the server ({ 'bush:3': when, 'shrub:12': when, 'tallGrass:7': when })
+export function useCleared(list) {
+  const on = new Set(Object.keys(list || {}));
+  berryBushes.forEach((b, i) => setCleared('bush', i, null, on.has(`bush:${i}`)));
+  wildBushes.forEach((t, i) => setCleared('shrub', i, null, on.has(`shrub:${i}`)));
+  for (const [kind, P] of Object.entries(plants)) for (const c of P.clumps) setCleared('plant', c.i, kind, on.has(`${kind}:${c.i}`));
+}
+// every second or so: young trees a little bigger, apples grown back (loop.js); the untouched look shows everything
+export function drawNature() {
+  for (const t of trees) if (t.state === 'young' && Math.abs((t.drawnSize || 0) - (game.freshLook ? 1 : youngSize(t))) > 0.01) showParts(t, true);
+  for (const i of APPLES.keys()) drawApples(i);
+}
+export function drawClearedLook() {
+  for (const b of berryBushes) if (b.userData.cleared) { bushBase(b); drawBushAt(b); }
+  for (const t of wildBushes) if (t.cleared) drawShrub(t);
 }

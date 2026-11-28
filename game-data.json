@@ -1,6 +1,6 @@
 {
   "_generated": "Made from content/*.json by python3 tools/worlds.py test-build. Edit those files, not this one.",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "build": 1,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
@@ -132,7 +132,8 @@
     "tend": 1,
     "fish": 3,
     "dig": 8,
-    "plant": 2
+    "plant": 2,
+    "clear": 8
   },
   "chopping": {
     "tool": "stone-axe",
@@ -1809,6 +1810,35 @@
       },
       "places": "basic-shelter",
       "startInWorld": 0
+    },
+    "apple": {
+      "name": "Apple",
+      "about": "Picked from apple trees. Eat one to feel less hungry, or cut it open for apple seeds.",
+      "plural": "Apples",
+      "weight": 2,
+      "look": {
+        "shape": "ball",
+        "size": 0.07,
+        "colour": "#c23b2e",
+        "leaf": "#5f8a3c"
+      },
+      "startInWorld": 0,
+      "eat": {
+        "hunger": 20
+      }
+    },
+    "apple-seeds": {
+      "name": "Apple seeds",
+      "about": "Cut from an apple. Plant them on a farm field in your camp, with the squares round it empty, and an apple tree grows in about a day.",
+      "plural": "Apple seeds",
+      "weight": 1,
+      "group": "Misc",
+      "look": {
+        "shape": "seeds",
+        "size": 0.05,
+        "colour": "#5b3a24"
+      },
+      "startInWorld": 0
     }
   },
   "recipes": [
@@ -2045,6 +2075,19 @@
         "basic-shelter": 1
       },
       "about": "Three logs for the frame, sticks leaned on for a roof, tied with twine"
+    },
+    {
+      "id": "apple-seeds",
+      "needs": {
+        "apple": 1
+      },
+      "keeps": {
+        "sharp-stone": 1
+      },
+      "makes": {
+        "apple-seeds": 1
+      },
+      "about": "Cut an apple open for its seeds with a sharp stone (you keep the stone)"
     }
   ],
   "placeables": {
@@ -2166,6 +2209,18 @@
       "toolHarvest": {
         "berry": 2
       }
+    },
+    "appleTree": {
+      "name": "Apple tree",
+      "action": "Pick apples",
+      "verb": "Picking apples",
+      "seconds": 2,
+      "harvest": {
+        "apple": 1
+      },
+      "holds": 4,
+      "regrowHours": 24,
+      "pose": "pick"
     }
   },
   "away": {
@@ -2568,6 +2623,22 @@
   },
   "devlog": [
     {
+      "version": "0.2.9",
+      "date": "2026-11-28",
+      "added": [
+        "Apple trees: pick their apples, or chop one down for logs and its stump grows back",
+        "Apple seeds: cut an apple with a sharp stone, then grow an apple tree on a farm field",
+        "Clear land in your camp: dig up stumps and bushes, clear grass, break up boulders"
+      ],
+      "improved": [
+        "The wild grows back by itself, as thick as it started, and never inside a camp",
+        "New things never pop up near anyone, and new trees grow up from small",
+        "A broken rock comes back somewhere new in the wild, not in the same spot",
+        "Sticks and stones no longer turn up inside camps or right next to you",
+        "Remove stump is now Dig up stump, and only in your own camp"
+      ]
+    },
+    {
       "version": "0.2.8",
       "date": "2026-11-28",
       "improved": [
@@ -2866,15 +2937,6 @@
       "step": 0.01
     },
     {
-      "id": "rockBackHours",
-      "name": "A broken rock comes back every",
-      "group": "Respawn times",
-      "unit": "h",
-      "min": 0.1,
-      "max": 240,
-      "step": 0.1
-    },
-    {
       "id": "fadeDays",
       "name": "Things left on the ground fade after (0: never)",
       "group": "Respawn times",
@@ -2882,6 +2944,60 @@
       "min": 0,
       "max": 365,
       "step": 1
+    },
+    {
+      "id": "wildTreeHours",
+      "name": "The wild grows a tree back every",
+      "group": "The wild",
+      "unit": "h",
+      "min": 0.1,
+      "max": 240,
+      "step": 0.1
+    },
+    {
+      "id": "wildBushHours",
+      "name": "The wild grows a bush back every",
+      "group": "The wild",
+      "unit": "h",
+      "min": 0.1,
+      "max": 240,
+      "step": 0.1
+    },
+    {
+      "id": "wildGrassHours",
+      "name": "The wild grows tall grass back every",
+      "group": "The wild",
+      "unit": "h",
+      "min": 0.1,
+      "max": 240,
+      "step": 0.1
+    },
+    {
+      "id": "wildBoulderHours",
+      "name": "A boulder comes back every",
+      "group": "The wild",
+      "unit": "h",
+      "min": 0.1,
+      "max": 240,
+      "step": 0.1
+    },
+    {
+      "id": "rockBackHours",
+      "name": "A broken rock comes back every",
+      "group": "The wild",
+      "unit": "h",
+      "min": 0.1,
+      "max": 240,
+      "step": 0.1
+    },
+    {
+      "id": "wildGrowsBackTo",
+      "name": "The wild grows back to",
+      "group": "The wild",
+      "unit": "%",
+      "min": 0,
+      "max": 100,
+      "step": 5
     },
     {
       "id": "cropGrowHours",
@@ -2940,6 +3056,59 @@
       "growHours": 24,
       "plantSeconds": 3,
       "like": "berryBush"
+    },
+    "apple-tree": {
+      "name": "Apple tree",
+      "seed": "apple-seeds",
+      "on": "field",
+      "growHours": 24,
+      "plantSeconds": 3,
+      "like": "appleTree",
+      "tree": {
+        "stumpBackHours": 24
+      },
+      "room": 1
+    }
+  },
+  "appleTrees": {
+    "count": 24,
+    "nearStart": 3,
+    "seed": 5501
+  },
+  "clearing": {
+    "bush": {
+      "action": "Dig up bush",
+      "verb": "Digging up a bush",
+      "tool": "stone-hoe",
+      "seconds": 8,
+      "gives": {
+        "stick": 1
+      }
+    },
+    "boulder": {
+      "action": "Break up boulder",
+      "verb": "Breaking up a boulder",
+      "tool": "stone-pickaxe",
+      "seconds": 20,
+      "gives": {
+        "stone": 6
+      }
+    },
+    "tallGrass": {
+      "action": "Clear grass",
+      "verb": "Clearing grass",
+      "tool": "stone-hoe",
+      "seconds": 3
+    }
+  },
+  "wild": {
+    "awayFromPeople": 15,
+    "growsBackTo": 100,
+    "everyHours": {
+      "tree": 2,
+      "bush": 2,
+      "boulder": 12,
+      "tallGrass": 0.5
     }
   }
 }

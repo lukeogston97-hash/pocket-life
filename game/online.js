@@ -7,11 +7,11 @@ import { game, share } from './links.js';
 import { barUsed, starText, tidyBar } from './rules.js';
 import { DATA, hash, mat, scene, SETTINGS, TEST_BUILD, V, VERSION } from './core.js';
 import { groundY, heightAt, POND, pondShape, squareDist, WALK_LIMIT, WATER_Y } from './land.js';
-import { berryBushes, interactive, oldStumps, rocks, roomAt, spots, trees } from './nature.js';
+import { berryBushes, interactive, oldStumps, rocks, roomAt, spots, trees, wildBushes } from './nature.js';
 import { PLANTS, plants, setPlant } from './plants.js';
 import {
-  bushHolds, drawBerries, moveLayoutThing, removeLayoutThing, removeOldStump, setRockState, setTreeState,
-  useWorldEdits,
+  APPLES, bushHolds, drawBerries, moveLayoutThing, removeLayoutThing, removeOldStump, setApples, setCleared, setRockState,
+  setTreeState, useCleared, useWorldEdits,
 } from './world-build.js';
 import { $, DEFAULT_LOOK, harvests, ITEMS, LOOKS, pickId, SOURCES } from './items.js';
 import { addWorldItem, getItem, removeWorldItem, START_ITEMS, world } from './world-items.js';
@@ -144,6 +144,13 @@ export function goOnline() {
     else if (m.t === 'took') tookBack(m);
     else if (m.t === 'fished') { if (m.caught && ITEMS[m.caught]) showGain(`+1 ${ITEMS[m.caught].name.toLowerCase()}`); else showTag(m.why || 'Nothing bites', headTop(), 2.5); }
     else if (m.t === 'bush') { const b = berryBushes[m.bush]; if (b) { b.userData.count = m.count; b.userData.growFrom = m.growFrom; drawBerries(b); } }
+    else if (m.t === 'apples') setApples(m.idx, m.count, m.growFrom); // an apple picked, or a tree full again (0.2.9)
+    else if (m.t === 'appleNo') { // the server said no: the apple you picked is taken back
+      const kind = Object.keys(((SOURCES.appleTree || {}).harvest) || {})[0];
+      if (kind && takeFromCarry(kind, 1)) { drawHeld(); drawCarry(); }
+      showTag(m.why || 'Someone picked it first', headTop(), 2);
+    }
+    else if (m.t === 'cleared') setCleared(m.what, m.idx, m.plant, !m.back); // dug up or cleared in a camp, or grown back in the wild (0.2.9)
     else if (m.t === 'picked' && !m.ok) {
       if (takeFromCarry(Object.keys((game.BERRY_SOURCE() || {}).harvest || {})[0], you.lastPick || 1)) { drawHeld(); drawCarry(); }
       showTag(m.why || 'Someone picked it first', headTop(), 2);
@@ -312,7 +319,9 @@ export function layoutData() {
   return { bushes: berryBushes.map((b) => (b.userData.from ? at(b.userData.from[0], b.userData.from[1]) : at(b.position.x, b.position.z))), shore, open,
     trees: trees.map(laid), rocks: rocks.map(laid), oldStumps: oldStumps.map(laid),
     boulders: rocks.map((r, i) => (r.boulder ? i : -1)).filter((i) => i >= 0), // which rocks are boulders, so the server needn't take a game's word for it
-    plants: Object.fromEntries(Object.entries(plants).map(([k, P]) => [k, P.clumps.map((c) => at(c.x, c.z))])) };
+    plants: Object.fromEntries(Object.entries(plants).map(([k, P]) => [k, P.clumps.map((c) => at(c.x, c.z))])),
+    apples: [...APPLES.keys()], // which trees are apple trees (0.2.9)
+    shrubs: wildBushes.map((t) => at(t.x, t.z)) }; // bushes with no berries, which can be dug up in a camp (0.2.9)
 }
 function sendLayout() { if (net.sock) net.sock.send(JSON.stringify({ t: 'layout', ...layoutData() })); }
 // The shared world: what lies on the ground and how far each berry bush has grown back.
@@ -335,6 +344,9 @@ function useSharedWorld(w) {
     b.userData.growFrom = s && s[1] != null ? s[1] : null;
     drawBerries(b);
   });
+  const ap = w.apples || {}; // apple trees (0.2.9): what's been picked off each
+  for (const i of APPLES.keys()) setApples(i, ap[i] ? ap[i][0] : null, ap[i] ? ap[i][1] : null);
+  useCleared(w.cleared); // what's been dug up or cleared in camps (0.2.9)
   useWorldEdits(w); // what the admin moved or took out
   for (const t of allTasks()) if (t.type === 'pickup' && !getItem(t.id)) t.gone = true; // queued things that aren't there any more get skipped
 }

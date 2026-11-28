@@ -24,7 +24,7 @@ let recording = null; // while a tree is being placed: [set, chunk, index] of ev
 export const trees = []; // every tree you can walk up to: { x, z, s, parts, state }
 export const oldStumps = []; // the old stumps already in the world when it was made: { x, z, parts, proxy, gone }
 export const rocks = []; // every rock and boulder you can mine (0.2.9): { x, z, r, boulder, parts, proxy, state: whole | mined | gone }
-export const wildBushes = []; // bushes with no berries: { x, z, r, parts }, so they can sit on levelled ground (0.1.18; nothing in the layout moves)
+export const wildBushes = []; // bushes with no berries: { x, z, r, parts }, so they can sit on levelled ground (0.1.18; nothing in the layout moves), and be dug up in a camp (0.2.9)
 export function IM(geo, material, n, shadow = true) {
   const m = new THREE.InstancedMesh(geo, material, n);
   m.count = 0;
@@ -235,7 +235,7 @@ const BARK = ['#7a5c40', '#6f543b', '#86664a', '#6a5a48'];
 
 function broadleaf(x, z, s, o = {}) {
   if (!DRY && !o.far) recording = [];
-  try { broadleafParts(x, z, s, o); } finally { if (recording) { trees.push({ x, z, s, parts: recording, state: 'tree' }); recording = null; } }
+  try { broadleafParts(x, z, s, o); } finally { if (recording) { trees.push({ x, z, s, parts: recording, state: 'tree', tall: !!o.tall }); recording = null; } }
 }
 function pine(x, z, s, o = {}) {
   if (!DRY && !o.far) recording = [];
@@ -457,7 +457,7 @@ function bush(x, z, s = 1, withBerries = true) {
   recording = []; // a bush remembers its drawn copies, so the admin can move or remove a berry bush, and any bush can sit on levelled ground
   for (const m of g.children) drawAlong(drawnTogether.bushes, m);
   if (withBerries) g.userData.parts = recording;
-  else wildBushes.push({ x, z, r: s * 0.85, parts: recording });
+  else { g.userData.shrub = wildBushes.length; wildBushes.push({ x, z, r: s * 0.85, parts: recording, proxy: g }); } // (its tap shape: dug up in a camp, 0.2.9)
   recording = null;
   if (withBerries) {
     // each berry bush remembers which berries are its own, so they can be picked and grow back

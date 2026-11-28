@@ -10,7 +10,7 @@ import {
   berryBushes, noLongerHere, oldStumps, removeSpotNear, rocks, spotKey, spots, trees, WALK_THROUGH, wildBushes,
 } from './nature.js';
 import { plants } from './plants.js';
-import { CHOP, DETAILS, groundMovedUnder, LIFTED, MINE } from './world-build.js';
+import { APPLES, applesOn, CHOP, DETAILS, groundMovedUnder, isApple, LIFTED, MINE, setCleared, setTreeState } from './world-build.js';
 import { buildItem, SOURCES, STAT } from './items.js';
 import { getItem, itemViews, world } from './world-items.js';
 import { heldView, player, ui, you } from './you.js';
@@ -45,7 +45,7 @@ goOnline();
 if (ADMIN_LINK) openAdminLogin(); // the address ended in ?admin (admin-mode.js)
 requestAnimationFrame(frame);
 // for automated checks only: open the page with ?debug to reach the game's state from the browser console
-if (location.search.includes('debug')) window.__pl = { THREE, renderer, groundY, rectOf, groundUnder, startPlacing, turnPlacing, landAsMade, speed, tip, pondShape, pondShapeAt, POND, solidAt, walk, tasks, trees, you, others, net, plants, queueTask, camera, berryBushes, buildItem, layoutData, oldStumps, rocks, placed, placedActions, placedName, stationNear, placing, placeGrid, movePlacing, finishPlacing, cantPlaceAt, startDigging, digActions, fieldActions, fieldState, CROPS, cropK, cropBerriesNow, drawCrop, DETAILS, setFlats, levelPlaced, LIFTED, groundMovedUnder, wildBushes, spots, spotKey, WALK_THROUGH, fuelLeft, isLit, endSit, get player() { return player; }, get heldView() { return heldView; }, get freshLook() { return game.freshLook; }, itemViews, dropGhosts, findPath, freeAt, die, showWelcomeBack, showGoneCard, showMaintenance, hideMaintenance, admin, STAT, SOURCES, CHOP, MINE, world, menuActions, notMineAt, claimMine, claimHere, openSociety, drawSociety, inviteAction, claimAt, sendAct, outbox, goOnline, getItem, peopleDrawn, get glowOn() { return glowOn; }, get adminData() { return { playersData, playerData, inboxData, itemsData, firesData, logData, adminTab }; },
+if (location.search.includes('debug')) window.__pl = { APPLES, applesOn, isApple, setCleared, setTreeState, THREE, renderer, groundY, rectOf, groundUnder, startPlacing, turnPlacing, landAsMade, speed, tip, pondShape, pondShapeAt, POND, solidAt, walk, tasks, trees, you, others, net, plants, queueTask, camera, berryBushes, buildItem, layoutData, oldStumps, rocks, placed, placedActions, placedName, stationNear, placing, placeGrid, movePlacing, finishPlacing, cantPlaceAt, startDigging, digActions, fieldActions, fieldState, CROPS, cropK, cropBerriesNow, drawCrop, DETAILS, setFlats, levelPlaced, LIFTED, groundMovedUnder, wildBushes, spots, spotKey, WALK_THROUGH, fuelLeft, isLit, endSit, get player() { return player; }, get heldView() { return heldView; }, get freshLook() { return game.freshLook; }, itemViews, dropGhosts, findPath, freeAt, die, showWelcomeBack, showGoneCard, showMaintenance, hideMaintenance, admin, STAT, SOURCES, CHOP, MINE, world, menuActions, notMineAt, claimMine, claimHere, openSociety, drawSociety, inviteAction, claimAt, sendAct, outbox, goOnline, getItem, peopleDrawn, get glowOn() { return glowOn; }, get adminData() { return { playersData, playerData, inboxData, itemsData, firesData, logData, adminTab }; },
   ui, controls, openAdminLogin, storedIn, storeWords, storeShowing, // storage (0.2.2)
   placeSpotsShown, frontSpot, // the circles while placing, and a crate's front (0.2.3)
   // what a tap at a spot on the screen would find, and what the admin could do with it (for checks)

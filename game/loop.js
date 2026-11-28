@@ -5,7 +5,7 @@ import { app, camera, reduceMotion, renderer, scene, sun, SUN_OFFSET } from './c
 import { animateWater } from './land.js';
 import { berryBushes } from './nature.js';
 import { drawPlants } from './plants.js';
-import { drawBerries, updateDetails } from './world-build.js';
+import { drawBerries, drawNature, updateDetails } from './world-build.js';
 import { renderCreator } from './people.js';
 import { drawHud, player, ui, updateLabels, you } from './you.js';
 import { applyDaylight, sky, tickStats } from './needs.js';
@@ -49,7 +49,7 @@ function frameStep() {
     game.updateOthers(Math.min(step, 0.05));
     renderWorld(w, h, step);
     hudTimer += step;
-    if (hudTimer > 1) { hudTimer = 0; drawMenu(); applyDaylight(); for (const b of berryBushes) drawBerries(b); drawPlants(); }
+    if (hudTimer > 1) { hudTimer = 0; drawMenu(); applyDaylight(); for (const b of berryBushes) drawBerries(b); drawPlants(); drawNature(); }
   } else if (ui.mode === 'admin') {
     game.adminFrame(dt, raw, w, h);
   } else if (player) {
@@ -66,7 +66,7 @@ function frameStep() {
     controls.update();
     renderWorld(w, h, raw);
     hudTimer += raw;
-    if (hudTimer > 1) { hudTimer = 0; drawHud(); tickStats(); tickTips(); applyDaylight(); for (const b of berryBushes) drawBerries(b); drawPlants(); }
+    if (hudTimer > 1) { hudTimer = 0; drawHud(); tickStats(); tickTips(); applyDaylight(); for (const b of berryBushes) drawBerries(b); drawPlants(); drawNature(); } // (young trees growing, apples growing back: 0.2.9)
   }
 }
 
