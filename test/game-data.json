@@ -1,6 +1,6 @@
 {
   "_generated": "Made from content/*.json by python3 tools/worlds.py test-build. Edit those files, not this one.",
-  "version": "0.2.9",
+  "version": "0.2.10",
   "build": 1,
   "era": 1,
   "server": "wss://pocket-life.misty-glade-6e8e.workers.dev/world",
@@ -2622,6 +2622,13 @@
     }
   },
   "devlog": [
+    {
+      "version": "0.2.10",
+      "date": "2026-11-28",
+      "improved": [
+        "New tagline: a 24/7 online survival world with friends in your pocket"
+      ]
+    },
     {
       "version": "0.2.9",
       "date": "2026-11-28",

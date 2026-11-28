@@ -1,6 +1,8 @@
 # Pocket Life
 
-A "life in your pocket" mobile game. Make your own person, then live a real-time life in a soft low-poly world that starts from nothing. Early prototype.
+A 24/7 online survival world with friends in your pocket.
+
+Make your own person in a soft low-poly world that starts from nothing. Gather, craft and set up camp with friends in one world shared by everyone. Pocket Life is in early access.
 
 **Play:** https://pocketlife.pages.dev/
 

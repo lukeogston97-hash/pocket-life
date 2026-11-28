@@ -1,7 +1,7 @@
 {
   "name": "Pocket Life",
   "short_name": "Pocket Life",
-  "description": "Make your own person and live a real-time life in a soft low-poly world that starts from nothing.",
+  "description": "Make your own person in a 24/7 online survival world that starts from nothing. Gather, craft and set up camp with friends in one world shared by everyone.",
   "start_url": "./",
   "scope": "./",
   "display": "browser",
