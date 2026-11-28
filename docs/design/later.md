@@ -28,4 +28,3 @@ Only what isn't built. Once something is built, its notes move to the file for i
 - Privacy and rules: read it; give a name for who runs the game and an email address if he wants them on it (Feedback is the only way in for now).
 - The address pocketlife.pages.dev reads like a test address (a .com of its own is about USD 10 to 15 a year).
 - The GitHub repo is public, so anyone can read the code and the test link.
-- The tagline: "A real-time life in your pocket" for now.

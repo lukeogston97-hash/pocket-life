@@ -2,6 +2,7 @@
 
 - Decided 24 Nov 2026 (0.1.6). Luke felt the wording across the game had "gone haywire": the same things had different names in different places, a few lines said the opposite of what happened, and some read robotic. He picked camp as the one word, kept Hunger and Thirst, and had it all fixed in one test build.
 - Players are 13+ and mostly on a phone: friendly, clear, full words, like the game talking to them. The short notes style in CLAUDE.md ("Writing for Luke") is for messages to Luke, not for the game.
+- The tagline (Luke, 28 Nov 2026, released with 0.2.9): "A 24/7 online survival world with friends in your pocket", with no full stop. It shows under the name on the loading screen and the main menu, in the share picture (redraw it with tools/tests/pictures.py when the tagline changes) and in the shared link's title. On a phone it splits evenly over two lines (text-wrap: balance), never leaving "pocket" on its own. It was "A real-time life in your pocket". Make your person still says "A version of you, living a real-time life in your pocket."
 
 ## The words for things
 - Camp: a claim and its society are one thing (0.1.5), and players only ever see "camp": "Your camp", "<name>'s camp" (the starting name), Menu > Camp, Invite to camp, End camp, "Light it to start your camp here". The code, the server's internals and the admin still say claim and society.
